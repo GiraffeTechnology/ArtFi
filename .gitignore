@@ -1,0 +1,26 @@
+# Dependencies and builds
+node_modules/
+.pnpm-store/
+.next/
+.turbo/
+dist/
+coverage/
+bin/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Tooling and operating systems
+.DS_Store
+__MACOSX/
+.idea/
+.vscode/
+
+# Local databases and caches
+.data/
