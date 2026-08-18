@@ -1,0 +1,191 @@
+openapi: 3.1.0
+info:
+  title: ArtFi read-only API
+  version: 0.1.0
+  description: Stage 1 Sepolia preview contract. No operation initiates a transaction.
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /v1/config:
+    get:
+      operationId: getConfig
+      responses:
+        "200":
+          description: Safe public runtime configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Config"
+  /v1/assets:
+    get:
+      operationId: listAssets
+      responses:
+        "200":
+          description: Asset catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, total]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Asset"
+                  total:
+                    type: integer
+                    minimum: 0
+  /v1/assets/{slug}:
+    get:
+      operationId: getAsset
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Asset record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/projects:
+    get:
+      operationId: listProjects
+      responses:
+        "200":
+          description: Curated projects
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, total]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Project"
+                  total:
+                    type: integer
+                    minimum: 0
+  /v1/portfolio/{address}:
+    get:
+      operationId: getPortfolio
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^0x[0-9a-fA-F]{40}$"
+      responses:
+        "200":
+          description: Read-only public address portfolio
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Portfolio"
+        "400":
+          $ref: "#/components/responses/Problem"
+components:
+  responses:
+    Problem:
+      description: RFC 9457-style request failure
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Status:
+      type: object
+      required: [service, status, version]
+      properties:
+        service: { type: string }
+        status: { type: string }
+        version: { type: string }
+    Config:
+      type: object
+      required: [api, chainId, mode, network, readOnly]
+      properties:
+        api: { type: string, const: v1 }
+        chainId: { type: integer, const: 11155111 }
+        mode: { type: string, const: preview }
+        network: { type: string, const: sepolia }
+        readOnly: { type: boolean, const: true }
+    Asset:
+      type: object
+      required:
+        [
+          slug,
+          title,
+          artist,
+          year,
+          medium,
+          location,
+          valuationUsd,
+          fractionPriceUsd,
+          totalFractions,
+          availableFractions,
+          status,
+          provenance,
+        ]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        year: { type: integer }
+        medium: { type: string }
+        location: { type: string }
+        valuationUsd: { type: integer, minimum: 1 }
+        fractionPriceUsd: { type: integer, minimum: 1 }
+        totalFractions: { type: integer, minimum: 1 }
+        availableFractions: { type: integer, minimum: 0 }
+        status: { type: string }
+        provenance:
+          type: array
+          items: { type: string }
+    Project:
+      type: object
+      required: [slug, name, curator, location, assetSlugs, description]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        curator: { type: string }
+        location: { type: string }
+        assetSlugs:
+          type: array
+          items: { type: string }
+        description: { type: string }
+    Portfolio:
+      type: object
+      required: [address, chainId, network, positions]
+      properties:
+        address: { type: string }
+        chainId: { type: integer, const: 11155111 }
+        network: { type: string, const: sepolia }
+        positions:
+          type: array
+          items: { type: object }
+    Problem:
+      type: object
+      required: [type, title, status, detail, requestId]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        requestId: { type: string }

@@ -15,7 +15,8 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
-(cd apps/api && go test ./...)
+pnpm test:e2e
+(cd apps/api && go vet ./... && go test -race ./...)
 ```
 
 Changes to smart contracts additionally require unit, fuzz, invariant, integration, and deployment simulation evidence.

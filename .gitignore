@@ -8,6 +8,8 @@ coverage/
 bin/
 *.tsbuildinfo
 next-env.d.ts
+playwright-report/
+test-results/
 
 # Local environment and secrets
 .env

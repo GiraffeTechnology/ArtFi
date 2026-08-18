@@ -45,3 +45,30 @@ jobs:
       - run: gofmt -w . && git diff --exit-code
       - run: go vet ./...
       - run: go test -race ./...
+
+  migration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --wait mysql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000001_stage1_catalog.up.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "2"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000001_stage1_catalog.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "0"
+      - if: always()
+        run: docker compose down -v
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --with-deps --only-shell chromium
+      - run: pnpm test:e2e
