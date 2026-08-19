@@ -6,6 +6,7 @@ const navigation = [
   ["Projects", "/projects"],
   ["RWA Market", "/market/rwa"],
   ["Fractionals", "/market/fractionals"],
+  ["Create RWA", "/create/rwa"],
   ["Portfolio", "/portfolio"],
 ] as const;
 
@@ -30,7 +31,7 @@ export function SiteHeader() {
       </div>
       <div className="testnet-banner">
         <span>Sepolia testnet</span>
-        Read-only product preview · transactions are disabled in Stage 1
+        Read-only catalog · authorized Stage 2 mint only
       </div>
     </header>
   );

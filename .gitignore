@@ -10,6 +10,9 @@ bin/
 next-env.d.ts
 playwright-report/
 test-results/
+packages/contracts/cache/
+packages/contracts/out/
+packages/contracts/broadcast/
 
 # Local environment and secrets
 .env

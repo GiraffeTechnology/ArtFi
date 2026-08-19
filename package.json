@@ -12,7 +12,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "api:generate": "pnpm --filter @giraffetechnology/artfi-api-client generate",
+    "contracts:build": "pnpm --filter @giraffetechnology/artfi-contracts build:contracts",
+    "contracts:format:check": "pnpm --filter @giraffetechnology/artfi-contracts format:check",
+    "contracts:lint": "pnpm --filter @giraffetechnology/artfi-contracts lint:security",
+    "contracts:test": "pnpm --filter @giraffetechnology/artfi-contracts test:contracts",
     "lint": "turbo run lint",
+    "security:secrets": "node scripts/security/check-secrets.mjs",
+    "release:verify-schema": "node scripts/release/verify-release.mjs release/release-candidate.example.json --schema-only",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @giraffetechnology/artfi-web test:e2e",
     "typecheck": "turbo run typecheck"

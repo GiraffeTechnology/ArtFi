@@ -10,6 +10,7 @@ const journeys = [
   ["/market/fractionals", "Understand the position before the transaction."],
   ["/market/fractionals/blue-hour-archive", "Blue Hour Archive"],
   ["/portfolio", "A public-address view, never a custody claim."],
+  ["/create/rwa", "Commit the record before the token."],
 ] as const;
 
 for (const [path, heading] of journeys) {
@@ -20,9 +21,7 @@ for (const [path, heading] of journeys) {
     await expect(
       page.getByRole("heading", { level: 1, name: heading }),
     ).toBeVisible();
-    await expect(
-      page.getByText("transactions are disabled in Stage 1"),
-    ).toBeVisible();
+    await expect(page.getByText("authorized Stage 2 mint only")).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
     expect(
       results.violations.filter((violation) =>
@@ -41,4 +40,17 @@ test("wallet entry point never implies a transaction", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /buy|mint|bid|claim/i }),
   ).toHaveCount(0);
+});
+
+test("RWA creation is wallet and Sepolia gated", async ({ page }) => {
+  await page.goto("/create/rwa");
+  await expect(
+    page.getByText("Connect an external wallet to continue."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Review and mint on Sepolia" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("The application never receives a private key."),
+  ).toBeVisible();
 });

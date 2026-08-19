@@ -1,0 +1,19 @@
+{
+  "chainId": 11155111,
+  "releaseCommit": "",
+  "mainnetApproved": false,
+  "pilot": { "enabled": true, "participantCount": 0, "aggregateCap": "0" },
+  "deployments": [],
+  "artifacts": {
+    "sbomSha256": "",
+    "testEvidenceSha256": "",
+    "rollbackPlanSha256": ""
+  },
+  "independentAudit": {
+    "status": "pending",
+    "reportSha256": "",
+    "auditor": ""
+  },
+  "legalApproval": { "status": "pending", "referenceHash": "" },
+  "goNoGo": { "status": "not-approved", "approvedBy": [], "approvedAt": null }
+}

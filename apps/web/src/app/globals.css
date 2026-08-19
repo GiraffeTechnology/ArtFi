@@ -29,11 +29,14 @@ a {
   text-decoration: none;
 }
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 button:focus-visible,
-a:focus-visible {
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
   outline: 3px solid var(--gold-bright);
   outline-offset: 3px;
 }
@@ -752,6 +755,157 @@ p {
   color: rgb(255 255 255 / 50%);
 }
 
+.create-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+  gap: 30px;
+  align-items: start;
+}
+.rwa-form {
+  padding: 44px;
+  background: var(--white);
+  border: 1px solid var(--line);
+}
+.rwa-form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.rwa-form legend {
+  margin-bottom: 32px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2rem;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+.field-grid label {
+  display: grid;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.field-grid input,
+.field-grid textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.field-grid input {
+  min-height: 48px;
+  padding: 0 14px;
+}
+.field-grid textarea {
+  padding: 14px;
+  resize: vertical;
+}
+.field-grid input:disabled,
+.field-grid textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+.field-span {
+  grid-column: 1 / -1;
+}
+.file-field {
+  padding: 20px;
+  border: 1px dashed #8b7652;
+  background: var(--paper);
+}
+.file-field input {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.file-field small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.form-boundary {
+  margin-top: 26px;
+  padding: 17px 19px;
+  display: grid;
+  gap: 6px;
+  border-left: 3px solid var(--gold);
+  background: var(--paper-deep);
+}
+.form-boundary strong {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+.form-boundary span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.submit-mint {
+  width: 100%;
+  margin-top: 20px;
+  justify-content: center;
+  border: 0;
+  cursor: pointer;
+}
+.submit-mint:disabled {
+  color: #716c62;
+  background: #d8d0c0;
+  cursor: not-allowed;
+}
+.transaction-panel {
+  min-height: 470px;
+  padding: 38px;
+  position: sticky;
+  top: 24px;
+  color: white;
+  background: var(--green);
+}
+.transaction-panel .eyebrow {
+  color: var(--gold-bright);
+}
+.transaction-panel h2 {
+  margin-bottom: 18px;
+  font-size: clamp(2.2rem, 3.4vw, 3.8rem);
+  line-height: 1;
+}
+.transaction-panel > p:not(.eyebrow) {
+  color: rgb(255 255 255 / 72%);
+}
+.transaction-panel ol {
+  margin: 34px 0;
+  padding: 0;
+  list-style-position: inside;
+}
+.transaction-panel li {
+  padding: 14px 0;
+  border-top: 1px solid rgb(255 255 255 / 20%);
+  color: rgb(255 255 255 / 76%);
+  font-size: 0.82rem;
+}
+.transaction-panel .text-link {
+  border-color: var(--gold-bright);
+  color: var(--gold-bright);
+}
+.transaction-panel--error {
+  background: #65372f;
+}
+.transaction-panel--confirmed {
+  background: #1f523a;
+}
+
 .site-footer {
   width: min(1220px, calc(100% - 48px));
   margin: 0 auto;
@@ -785,7 +939,8 @@ p {
   .asset-hero,
   .market-header,
   .project-hero,
-  .record-grid {
+  .record-grid,
+  .create-layout {
     grid-template-columns: 1fr;
   }
   .home-hero {
@@ -929,6 +1084,19 @@ p {
   }
   .governance-preview {
     padding: 30px 24px;
+  }
+  .rwa-form {
+    padding: 30px 22px;
+  }
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+  .field-span {
+    grid-column: auto;
+  }
+  .transaction-panel {
+    min-height: auto;
+    position: static;
   }
   .site-footer {
     padding-block: 35px;

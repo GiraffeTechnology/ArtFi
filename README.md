@@ -6,7 +6,7 @@ This repository is the single source of truth for the rebuilt ArtFi platform.
 
 ## Current status
 
-- Delivery phase: **Stage 1 - Read-only product and wallet connection**
+- Delivery phase: **Stage 2–7 integrated implementation**
 - Allowed chain: **Sepolia only**
 - Mainnet and real-money operation: **not approved**
 - PRD: converted into staged, testable requirements
@@ -17,6 +17,7 @@ This repository is the single source of truth for the rebuilt ArtFi platform.
 apps/
   web/          Next.js user application
   api/          Go API
+  wallet-extension/  Non-custodial Manifest V3 Alpha
 packages/
   contracts/    Solidity contracts and deployment tooling
   api-client/   OpenAPI-generated types and fetch client
@@ -31,6 +32,7 @@ Prerequisites:
 - pnpm 11.22.0
 - Go 1.26.x
 - Docker with Compose
+- Foundry 1.5.x for contract work
 
 ```bash
 cp .env.example .env
@@ -59,10 +61,21 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm test:e2e
+pnpm contracts:format:check
+pnpm contracts:lint
+pnpm contracts:build
+pnpm contracts:test
 (cd apps/api && go vet ./... && go test -race ./...)
 docker compose config
 ```
 
 ## Delivery plan
 
-See [the staged roadmap](docs/ROADMAP.md), [PRD traceability](docs/PRD_TRACEABILITY.md), [Stage 1 acceptance evidence](docs/STAGE_1_ACCEPTANCE.md), and [architecture](docs/ARCHITECTURE.md).
+See [the staged roadmap](docs/ROADMAP.md), [PRD traceability](docs/PRD_TRACEABILITY.md),
+[Stage 1 acceptance evidence](docs/STAGE_1_ACCEPTANCE.md),
+[Stage 2 acceptance evidence](docs/STAGE_2_ACCEPTANCE.md),
+[Stage 3 acceptance evidence](docs/STAGE_3_ACCEPTANCE.md),
+[Stage 4 acceptance evidence](docs/STAGE_4_ACCEPTANCE.md),
+[Stage 5 acceptance evidence](docs/STAGE_5_ACCEPTANCE.md),
+[Stage 6 acceptance evidence](docs/STAGE_6_ACCEPTANCE.md),
+[Stage 7 acceptance evidence](docs/STAGE_7_ACCEPTANCE.md), and [architecture](docs/ARCHITECTURE.md).

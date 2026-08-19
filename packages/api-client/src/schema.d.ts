@@ -100,6 +100,150 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/indexer/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["ingestChainEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/uploads/intents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createUploadIntent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/uploads/{uploadID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put: operations["uploadObject"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/rwa/intents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createMintIntent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/rwa/intents/{intentID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getMintIntent"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/rwa/intents/{intentID}/submission": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["recordMintSubmission"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/vault/intents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["createVaultIntent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/vault/intents/{intentID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getVaultIntent"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/vault/intents/{intentID}/submission": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["recordVaultSubmission"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -118,8 +262,94 @@ export interface components {
       mode: "preview";
       /** @constant */
       network: "sepolia";
+      readOnly: boolean;
+      writeEnabled: boolean;
+      registryAddress?: string;
+      vaultFactoryAddress?: string;
+    };
+    UploadIntentRequest: {
+      fileName: string;
+      /** @enum {string} */
+      contentType: "image/png" | "image/jpeg" | "image/webp";
+      sha256: string;
+      size: number;
+    };
+    UploadIntent: {
+      uploadId: string;
+      uploadUrl: string;
       /** @constant */
-      readOnly: true;
+      method: "PUT";
+      /** Format: date-time */
+      expiresAt: string;
+      /** @constant */
+      maxBytes: 10485760;
+      requiredHeaders: {
+        [key: string]: string;
+      };
+    };
+    MintIntentRequest: {
+      uploadId: string;
+      recipient: string;
+      name: string;
+      artist: string;
+      year: number;
+      medium: string;
+      location: string;
+      description: string;
+    };
+    MintIntent: {
+      intentId: string;
+      requestId: string;
+      recipient: string;
+      registryAddress: string;
+      /** @constant */
+      chainId: 11155111;
+      /** Format: uri */
+      metadataUri: string;
+      metadataSha256: string;
+      /** @constant */
+      contractFunction: "createAsset(bytes32,address,string,bytes32)";
+      contractArguments: string[];
+      /** @enum {string} */
+      status: "prepared" | "submitted" | "confirmed" | "failed";
+      transactionHash?: string;
+      /** Format: date-time */
+      createdAt: string;
+    };
+    VaultIntentRequest: {
+      collectionAddress: string;
+      tokenId: string;
+      vaultName: string;
+      adminAddress: string;
+      pauserAddress: string;
+      fractionalizerAddress: string;
+    };
+    VaultIntent: {
+      intentId: string;
+      requestId: string;
+      factoryAddress: string;
+      collectionAddress: string;
+      tokenId: string;
+      vaultName: string;
+      adminAddress: string;
+      pauserAddress: string;
+      fractionalizerAddress: string;
+      /** @constant */
+      chainId: 11155111;
+      /** @constant */
+      contractFunction: "createVault(bytes32,string,address,uint256,address,address,address)";
+      contractArguments: string[];
+      /** @enum {string} */
+      status:
+        | "prepared"
+        | "submitted"
+        | "created"
+        | "deposited"
+        | "fractionalized"
+        | "failed";
+      transactionHash?: string;
+      /** Format: date-time */
+      createdAt: string;
     };
     Asset: {
       slug: string;
@@ -149,7 +379,29 @@ export interface components {
       chainId: 11155111;
       /** @constant */
       network: "sepolia";
-      positions: Record<string, never>[];
+      positions: {
+        assetToken: string;
+        symbol: string;
+        balance: string;
+        /** Format: date-time */
+        updatedAt: string;
+      }[];
+      transactions: Record<string, never>[];
+      offers: Record<string, never>[];
+      notifications: Record<string, never>[];
+    };
+    ChainEventRequest: {
+      /** @constant */
+      chainId: 11155111;
+      transactionHash: string;
+      logIndex: number;
+      blockNumber: number;
+      blockHash: string;
+      contractAddress: string;
+      eventName: string;
+      payload: Record<string, never>;
+      removed: boolean;
+      confirmations: number;
     };
     Problem: {
       /** Format: uri */
@@ -171,7 +423,9 @@ export interface components {
       };
     };
   };
-  parameters: never;
+  parameters: {
+    IntentID: string;
+  };
   requestBodies: never;
   headers: never;
   pathItems: never;
@@ -220,7 +474,12 @@ export interface operations {
   };
   listAssets: {
     parameters: {
-      query?: never;
+      query?: {
+        q?: string;
+        status?: string;
+        page?: number;
+        pageSize?: number;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -236,6 +495,8 @@ export interface operations {
           "application/json": {
             data: components["schemas"]["Asset"][];
             total: number;
+            page: number;
+            pageSize: number;
           };
         };
       };
@@ -266,7 +527,11 @@ export interface operations {
   };
   listProjects: {
     parameters: {
-      query?: never;
+      query?: {
+        q?: string;
+        page?: number;
+        pageSize?: number;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -282,6 +547,8 @@ export interface operations {
           "application/json": {
             data: components["schemas"]["Project"][];
             total: number;
+            page: number;
+            pageSize: number;
           };
         };
       };
@@ -308,6 +575,271 @@ export interface operations {
         };
       };
       400: components["responses"]["Problem"];
+    };
+  };
+  ingestChainEvent: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Indexer-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ChainEventRequest"];
+      };
+    };
+    responses: {
+      /** @description Replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Canonical event created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+    };
+  };
+  createUploadIntent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["UploadIntentRequest"];
+      };
+    };
+    responses: {
+      /** @description Short-lived digest-bound API upload intent */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UploadIntent"];
+        };
+      };
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  uploadObject: {
+    parameters: {
+      query?: never;
+      header: {
+        "Content-SHA256": string;
+      };
+      path: {
+        uploadID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "image/png": string;
+        "image/jpeg": string;
+        "image/webp": string;
+      };
+    };
+    responses: {
+      /** @description Object digest verified and persisted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+    };
+  };
+  createMintIntent: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MintIntentRequest"];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay of an existing intent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MintIntent"];
+        };
+      };
+      /** @description New immutable metadata and contract-call intent */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MintIntent"];
+        };
+      };
+      409: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+    };
+  };
+  getMintIntent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        intentID: components["parameters"]["IntentID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Mint transaction lifecycle snapshot */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MintIntent"];
+        };
+      };
+      404: components["responses"]["Problem"];
+    };
+  };
+  recordMintSubmission: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        intentID: components["parameters"]["IntentID"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          transactionHash: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Submitted transaction attached idempotently */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MintIntent"];
+        };
+      };
+      409: components["responses"]["Problem"];
+    };
+  };
+  createVaultIntent: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VaultIntentRequest"];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VaultIntent"];
+        };
+      };
+      /** @description New VaultFactory transaction intent */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VaultIntent"];
+        };
+      };
+      409: components["responses"]["Problem"];
+    };
+  };
+  getVaultIntent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        intentID: components["parameters"]["IntentID"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Vault transaction lifecycle snapshot */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VaultIntent"];
+        };
+      };
+      404: components["responses"]["Problem"];
+    };
+  };
+  recordVaultSubmission: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        intentID: components["parameters"]["IntentID"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          transactionHash: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Submitted VaultFactory transaction attached idempotently */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VaultIntent"];
+        };
+      };
     };
   };
 }
