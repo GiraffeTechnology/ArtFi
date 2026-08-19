@@ -73,6 +73,7 @@ docker compose config
 ## Delivery plan
 
 See [the staged roadmap](docs/ROADMAP.md), [PRD traceability](docs/PRD_TRACEABILITY.md),
+[Claude Code acceptance PRD](docs/PRD_CLAUDE_CODE_ACCEPTANCE.md),
 [Stage 1 acceptance evidence](docs/STAGE_1_ACCEPTANCE.md),
 [Stage 2 acceptance evidence](docs/STAGE_2_ACCEPTANCE.md),
 [Stage 3 acceptance evidence](docs/STAGE_3_ACCEPTANCE.md),
