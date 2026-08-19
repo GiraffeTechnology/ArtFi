@@ -114,5 +114,5 @@ jobs:
           node-version: 24.18.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --with-deps --only-shell chromium
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
       - run: pnpm test:e2e
