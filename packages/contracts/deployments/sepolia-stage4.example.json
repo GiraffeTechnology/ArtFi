@@ -1,0 +1,26 @@
+{
+  "chainId": 11155111,
+  "releaseCommit": "",
+  "market": "",
+  "governanceBootstrap": "",
+  "governor": "",
+  "timelock": "",
+  "governanceToken": "",
+  "deploymentTransaction": "",
+  "sourceVerificationUrls": [],
+  "roleEvidence": {
+    "marketAdmin": "",
+    "marketPauser": "",
+    "marketTokenManager": "",
+    "timelockSelfAdmin": false,
+    "governorIsOnlyProposer": false,
+    "governorIsOnlyCanceller": false
+  },
+  "parameters": {
+    "timelockDelaySeconds": 0,
+    "votingDelayBlocks": 0,
+    "votingPeriodBlocks": 0,
+    "proposalThreshold": "",
+    "quorumPercent": 0
+  }
+}

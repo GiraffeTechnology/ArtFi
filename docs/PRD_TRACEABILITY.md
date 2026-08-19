@@ -5,33 +5,44 @@ Status values:
 - `planned`: accepted into the staged roadmap
 - `in-progress`: implementation has started
 - `implemented-in-pr`: code and automated evidence exist on a stage pull request but are not merged
+- `implemented-in-branch`: code and local automated evidence exist on the Stage 2–7 integration branch
 - `evidence-required`: screenshots or prose exist, but code/runtime evidence is missing
 - `gated`: blocked by an explicit security, legal, or operational gate
 
-| ID           | PRD capability                              | Stage | Current status    | Required acceptance evidence                                                                                             |
-| ------------ | ------------------------------------------- | ----: | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| WEB-001      | Home, projects, markets, detail, portfolio  |     1 | implemented-in-pr | 18 desktop/mobile route and accessibility checks                                                                         |
-| WEB-002      | Search, filter, pagination                  |     4 | planned           | API/UI integration and empty/error/loading states                                                                        |
-| WALLET-001   | External wallet connection                  |     1 | in-progress       | Injected wallet, Sepolia enforcement, connect/reconnect/network tests                                                    |
-| RWA-001      | Image upload and metadata                   |     2 | evidence-required | Validated upload, provenance, storage and metadata tests                                                                 |
-| RWA-002      | NFT contract selection and mint             |     2 | evidence-required | Verified contract, receipt, failure and authorization tests                                                              |
-| DAO-001      | Create DAO/Vault                            |     3 | evidence-required | Contract event, persisted record, permission tests                                                                       |
-| DAO-002      | Select, approve, and deposit NFTs           |     3 | evidence-required | Custody invariant and multi-NFT tests                                                                                    |
-| DAO-003      | Fractional token configuration and issue    |     3 | evidence-required | Supply/decimal/role/invariant tests                                                                                      |
-| MARKET-001   | Crowdfunding/order/bid/claim                |     4 | evidence-required | Settlement, refund, expiry and replay tests                                                                              |
-| GOV-001      | Proposal, vote, timelock, execution         |     4 | planned           | Governance lifecycle and permission tests                                                                                |
-| API-001      | Go API, OpenAPI and error contract          |   0-2 | implemented-in-pr | Health, catalog, portfolio, CORS, problem response and generated-client tests                                            |
-| DATA-001     | MySQL persistence and migrations            |     1 | implemented-in-pr | MySQL 8.4 forward/rollback execution produces 2 then 0 catalog tables in local and CI gates                              |
-| DATA-002     | Redis cache and invalidation                |     1 | planned           | Cache consistency and failure-mode tests                                                                                 |
-| STORE-001    | R2-compatible object storage                |     2 | planned           | Integrity, access control and lifecycle tests                                                                            |
-| CONTRACT-001 | NFT factory and asset contracts             |     2 | planned           | Unit, fuzz, invariant, verification evidence                                                                             |
-| CONTRACT-002 | Vault and fractional contracts              |     3 | planned           | Custody, supply, pause and upgrade evidence                                                                              |
-| EXT-001      | ArtFi browser wallet extension              |     5 | gated             | Threat model, security review, browser-store acceptance                                                                  |
-| SEC-001      | Authentication, RBAC and session security   |   2-4 | planned           | Authorization matrix and negative tests                                                                                  |
-| SEC-002      | Independent security audit                  |     7 | gated             | Signed report mapped to release commit and addresses                                                                     |
-| OPS-001      | CI/CD, monitoring, backup, rollback         |   0-7 | in-progress       | Passing pipeline and tested runbooks                                                                                     |
-| COMP-001     | KYC/KYB, AML/sanctions, jurisdiction        |     6 | gated             | Legal/compliance approval and operational tests                                                                          |
-| COMP-002     | Asset title, custody, valuation, redemption |     6 | gated             | Approved operating model and evidence chain                                                                              |
-| RIGHTS-001   | Artwork licensing and attribution           |   1-2 | gated             | Stage 1 uses original CSS placeholders; real catalog media still needs source, license, attribution and takedown records |
+| ID           | PRD capability                                 |                   Stage | Current status        | Required acceptance evidence                                                                                                           |
+| ------------ | ---------------------------------------------- | ----------------------: | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| WEB-001      | Home, projects, markets, detail, portfolio     |                       1 | implemented-in-pr     | 20 desktop/mobile route and accessibility checks plus wallet, brand, chain-gate, and health safety checks                              |
+| WEB-002      | Search, filter, pagination                     |                       4 | implemented-in-branch | API filtering/pagination tests; approved visual shell is bound, while mirror records remain fixtures until runtime-adapter evidence    |
+| WALLET-001   | External wallet connection                     |                       1 | implemented-in-branch | Injected wallet, Sepolia enforcement, connect/reconnect/network tests                                                                  |
+| RWA-001      | Image upload and metadata                      |                       2 | implemented-in-branch | Validated upload, provenance, storage and metadata tests                                                                               |
+| RWA-002      | NFT contract selection and mint                |                       2 | implemented-in-branch | Verified contract, receipt, failure and authorization tests                                                                            |
+| DAO-001      | Create DAO/Vault                               |                       3 | implemented-in-branch | Contract event, persisted record, permission tests                                                                                     |
+| DAO-002      | Select, approve, and deposit NFTs              |                       3 | implemented-in-branch | Custody invariant and replay tests; multi-NFT support remains a Stage 4 extension                                                      |
+| DAO-003      | Fractional token configuration and issue       |                       3 | implemented-in-branch | Supply/decimal/role/invariant tests                                                                                                    |
+| MARKET-001   | ArtFi-operated crowdfunding/order/bid/claim    | Future, post-compliance | gated                 | Compliance strategy, legal approval, independent audit, surveillance controls, and written go/no-go; excluded from current deployment  |
+| MARKET-002   | Approved external marketplace real-time mirror |                       4 | implemented-in-branch | Versioned adapter, OpenSea Stream + REST backfill, source allowlist, dedupe/stale-event tests, read-only API and external deep links   |
+| GOV-001      | Proposal, vote, timelock, execution            |                       4 | implemented-in-branch | Governance lifecycle, Timelock and role tests                                                                                          |
+| API-001      | Go API, OpenAPI and error contract             |                     0-2 | implemented-in-pr     | Health, catalog, portfolio, CORS, problem response and generated-client tests                                                          |
+| DATA-001     | MySQL persistence and migrations               |                     1-3 | implemented-in-branch | MySQL 8.4 forward/rollback and runtime-restart hydration tests                                                                         |
+| DATA-002     | Redis cache and invalidation                   |                       1 | implemented-in-branch | Versioned market/portfolio cache, bounded TTL, invalidation race and Redis failure-mode tests                                          |
+| STORE-001    | R2-compatible object storage                   |                       2 | implemented-in-branch | Integrity, access control and lifecycle tests                                                                                          |
+| CONTRACT-001 | NFT factory and asset contracts                |                       2 | implemented-in-branch | Unit, fuzz, invariant, verification evidence                                                                                           |
+| CONTRACT-002 | Vault and fractional contracts                 |                       3 | implemented-in-branch | Custody, supply, pause, role, replay, and recovery evidence                                                                            |
+| EXT-001      | ArtFi browser wallet extension                 |                       5 | gated                 | Non-custodial Alpha implemented; independent review and browser-store acceptance remain required                                       |
+| SEC-001      | Authentication, RBAC and session security      |                     2-6 | implemented-in-branch | Default-deny operator/indexer boundaries and negative tests; production OIDC remains gated                                             |
+| SEC-002      | Independent security audit                     |                       7 | gated                 | Signed report mapped to release commit and addresses                                                                                   |
+| OPS-001      | CI/CD, monitoring, backup, rollback            |                     0-7 | implemented-in-branch | Passing local gates, release verifier and runbooks; environment drills remain gated                                                    |
+| COMP-001     | KYC/KYB, AML/sanctions, jurisdiction           |                       6 | gated                 | Fail-closed policy/schema implemented; legal/provider approval remains required                                                        |
+| COMP-002     | Asset title, custody, valuation, redemption    |                       6 | gated                 | Evidence schema/runbook implemented; approved operating model remains required                                                         |
+| RIGHTS-001   | Artwork licensing and attribution              |                     1-2 | gated                 | Hash-bound mint-package gate implemented; real media still needs rights evidence, attribution, takedown record and action confirmation |
+| CHARITY-001  | Fixed 100-unit ArtCCH charity editions         |                     2-6 | in-progress           | ERC-1155 fixed-supply tests; 13 deduplicated works; 1,300 total immutable units; `0.01 ETH` recorded price                             |
+| CHARITY-002  | Private master and watermarked holder access   |                     2-6 | in-progress           | No-preview metadata; no unwatermarked web download; distinct hash-bound watermarked holder file and token gate                         |
+| CHARITY-003  | CCHS proceeds and receipt-valuation boundary   |                     2-6 | in-progress           | CCHS wallet/status/policy evidence; issue-time public `ETH/CAD` source and snapshot; ArtFi cannot issue or determine eligible amount   |
+| CHARITY-004  | Sellout-gated physical donation                |                     2-6 | in-progress           | No physical/IP rights; zero distribution balance plus reconciled sellout evidence precedes CCHS physical-donation acceptance evidence  |
 
 No item may be marked complete solely from a screenshot or PRD statement.
+
+Live Sepolia deployment, standards probing, NFT minting, and OpenSea discovery were initially
+deferred and later scheduled for after the pre-chain gates. Their absence does not downgrade
+implemented code or automated evidence, but those runtime checks remain unpassed and must not be
+represented as completed acceptance evidence.

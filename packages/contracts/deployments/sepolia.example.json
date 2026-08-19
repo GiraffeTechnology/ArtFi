@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "chainId": 11155111,
+  "network": "sepolia",
+  "releaseCommit": "REPLACE_AFTER_REVIEW",
+  "deployedAt": "REPLACE_AFTER_DEPLOYMENT",
+  "deployer": "REPLACE_AFTER_DEPLOYMENT",
+  "contracts": {
+    "ArtFiRWA": {
+      "address": "REPLACE_AFTER_DEPLOYMENT",
+      "deploymentTransaction": "REPLACE_AFTER_DEPLOYMENT",
+      "verifiedSource": "REPLACE_AFTER_VERIFICATION"
+    },
+    "RWARegistry": {
+      "address": "REPLACE_AFTER_DEPLOYMENT",
+      "deploymentTransaction": "REPLACE_AFTER_DEPLOYMENT",
+      "verifiedSource": "REPLACE_AFTER_VERIFICATION"
+    }
+  },
+  "roles": {
+    "admin": "REPLACE_WITH_APPROVED_MULTISIG",
+    "registrar": "REPLACE_WITH_APPROVED_REGISTRAR",
+    "pauser": "REPLACE_WITH_APPROVED_PAUSER"
+  }
+}

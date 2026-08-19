@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "chainId": 11155111,
+  "releaseCommit": "",
+  "deploymentTransaction": "",
+  "contractAddress": "",
+  "runtimeBytecodeSha256": "",
+  "sourceVerifiedUrl": "",
+  "roles": {
+    "admin": "",
+    "seriesCreator": "",
+    "donationRecorder": "",
+    "pauser": ""
+  },
+  "constants": {
+    "editionsPerArtwork": 100,
+    "primaryPriceWei": "10000000000000000"
+  },
+  "artfiExchangeEnabled": false,
+  "liveSeriesCreated": false,
+  "standardsProbePassed": false,
+  "recordedAt": ""
+}

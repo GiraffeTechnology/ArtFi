@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -18,11 +21,14 @@ type statusResponse struct {
 }
 
 type configResponse struct {
-	API      string `json:"api"`
-	ChainID  int    `json:"chainId"`
-	Mode     string `json:"mode"`
-	Network  string `json:"network"`
-	ReadOnly bool   `json:"readOnly"`
+	API                 string `json:"api"`
+	ChainID             int    `json:"chainId"`
+	Mode                string `json:"mode"`
+	Network             string `json:"network"`
+	ReadOnly            bool   `json:"readOnly"`
+	RegistryAddress     string `json:"registryAddress,omitempty"`
+	VaultFactoryAddress string `json:"vaultFactoryAddress,omitempty"`
+	WriteEnabled        bool   `json:"writeEnabled"`
 }
 
 type asset struct {
@@ -49,13 +55,6 @@ type project struct {
 	Description string   `json:"description"`
 }
 
-type portfolioResponse struct {
-	Address   string        `json:"address"`
-	ChainID   int           `json:"chainId"`
-	Network   string        `json:"network"`
-	Positions []interface{} `json:"positions"`
-}
-
 type problem struct {
 	Type      string `json:"type"`
 	Title     string `json:"title"`
@@ -78,18 +77,44 @@ var projects = []project{
 }
 
 func NewHandler() http.Handler {
+	return newHandler(newRWAServiceFromEnv())
+}
+
+func newHandler(rwa *rwaService) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", status("ok"))
 	mux.HandleFunc("GET /readyz", status("ready"))
-	mux.HandleFunc("GET /v1/config", getConfig)
+	mux.HandleFunc("GET /v1/config", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSON(writer, http.StatusOK, configResponse{
+			API:                 "v1",
+			ChainID:             sepoliaChainID,
+			Mode:                "preview",
+			Network:             "sepolia",
+			ReadOnly:            !rwa.writeEnabled(),
+			RegistryAddress:     rwa.config.registryAddress,
+			VaultFactoryAddress: rwa.config.vaultFactoryAddress,
+			WriteEnabled:        rwa.writeEnabled(),
+		})
+	})
 	mux.HandleFunc("GET /v1/assets", getAssets)
 	mux.HandleFunc("GET /v1/assets/{slug}", getAsset)
 	mux.HandleFunc("GET /v1/projects", getProjects)
-	mux.HandleFunc("GET /v1/portfolio/{address}", getPortfolio)
-	return middleware(mux)
+	mux.HandleFunc("GET /v1/portfolio/{address}", rwa.getPortfolio)
+	mux.HandleFunc("POST /v1/uploads/intents", rwa.createUploadIntent)
+	mux.HandleFunc("PUT /v1/uploads/{uploadID}", rwa.uploadObject)
+	mux.HandleFunc("POST /v1/rwa/intents", rwa.createMintIntent)
+	mux.HandleFunc("GET /v1/rwa/intents/{intentID}", rwa.getMintIntent)
+	mux.HandleFunc("POST /v1/rwa/intents/{intentID}/submission", rwa.recordSubmission)
+	mux.HandleFunc("POST /v1/vault/intents", rwa.createVaultIntent)
+	mux.HandleFunc("GET /v1/vault/intents/{intentID}", rwa.getVaultIntent)
+	mux.HandleFunc("POST /v1/vault/intents/{intentID}/submission", rwa.recordVaultSubmission)
+	mux.HandleFunc("POST /v1/indexer/events", rwa.ingestChainEvent)
+	mux.HandleFunc("POST /v1/indexer/market-events", rwa.ingestMarketEvent)
+	mux.HandleFunc("GET /v1/market/activity", rwa.getMarketActivity)
+	return middleware(mux, rwa)
 }
 
-func middleware(next http.Handler) http.Handler {
+func middleware(next http.Handler, service *rwaService) http.Handler {
 	allowedOrigin := os.Getenv("ARTFI_WEB_ORIGIN")
 	if allowedOrigin == "" {
 		allowedOrigin = "http://localhost:3000"
@@ -103,11 +128,15 @@ func middleware(next http.Handler) http.Handler {
 		}
 		writer.Header().Set("X-Request-ID", requestID)
 		writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-		writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Request-ID")
-		writer.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Content-SHA256, Idempotency-Key, X-Indexer-Key, X-Request-ID")
+		writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		writer.Header().Set("Vary", "Origin")
 		if request.Method == http.MethodOptions {
 			writer.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if service.operatorProtected(request) && !service.authorizeOperator(request) {
+			writeProblem(writer, request, http.StatusUnauthorized, "Operator authentication failed", "A reviewed, short-lived operator credential is required for this write path.")
 			return
 		}
 
@@ -122,12 +151,27 @@ func status(state string) http.HandlerFunc {
 	}
 }
 
-func getConfig(writer http.ResponseWriter, _ *http.Request) {
-	writeJSON(writer, http.StatusOK, configResponse{API: "v1", ChainID: 11155111, Mode: "preview", Network: "sepolia", ReadOnly: true})
-}
-
-func getAssets(writer http.ResponseWriter, _ *http.Request) {
-	writeJSON(writer, http.StatusOK, map[string]interface{}{"data": assets, "total": len(assets)})
+func getAssets(writer http.ResponseWriter, request *http.Request) {
+	query := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("q")))
+	status := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("status")))
+	filtered := make([]asset, 0, len(assets))
+	for _, candidate := range assets {
+		searchable := strings.ToLower(candidate.Title + " " + candidate.Artist + " " + candidate.Medium + " " + candidate.Location)
+		if query != "" && !strings.Contains(searchable, query) {
+			continue
+		}
+		if status != "" && strings.ToLower(candidate.Status) != status {
+			continue
+		}
+		filtered = append(filtered, candidate)
+	}
+	sort.Slice(filtered, func(left, right int) bool { return filtered[left].Title < filtered[right].Title })
+	page, pageSize := pagination(request)
+	start := min((page-1)*pageSize, len(filtered))
+	end := min(start+pageSize, len(filtered))
+	writeJSON(writer, http.StatusOK, map[string]interface{}{
+		"data": filtered[start:end], "total": len(filtered), "page": page, "pageSize": pageSize,
+	})
 }
 
 func getAsset(writer http.ResponseWriter, request *http.Request) {
@@ -141,17 +185,36 @@ func getAsset(writer http.ResponseWriter, request *http.Request) {
 	writeProblem(writer, request, http.StatusNotFound, "Asset not found", "No asset record matches the requested slug.")
 }
 
-func getProjects(writer http.ResponseWriter, _ *http.Request) {
-	writeJSON(writer, http.StatusOK, map[string]interface{}{"data": projects, "total": len(projects)})
+func getProjects(writer http.ResponseWriter, request *http.Request) {
+	query := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("q")))
+	filtered := make([]project, 0, len(projects))
+	for _, candidate := range projects {
+		searchable := strings.ToLower(candidate.Name + " " + candidate.Curator + " " + candidate.Location + " " + candidate.Description)
+		if query == "" || strings.Contains(searchable, query) {
+			filtered = append(filtered, candidate)
+		}
+	}
+	page, pageSize := pagination(request)
+	start := min((page-1)*pageSize, len(filtered))
+	end := min(start+pageSize, len(filtered))
+	writeJSON(writer, http.StatusOK, map[string]interface{}{
+		"data": filtered[start:end], "total": len(filtered), "page": page, "pageSize": pageSize,
+	})
 }
 
-func getPortfolio(writer http.ResponseWriter, request *http.Request) {
-	address := request.PathValue("address")
-	if !addressPattern.MatchString(address) {
-		writeProblem(writer, request, http.StatusBadRequest, "Invalid address", "The portfolio address must be a 20-byte hexadecimal Ethereum address.")
-		return
+func pagination(request *http.Request) (int, int) {
+	page, err := strconv.Atoi(request.URL.Query().Get("page"))
+	if err != nil || page < 1 {
+		page = 1
 	}
-	writeJSON(writer, http.StatusOK, portfolioResponse{Address: address, ChainID: 11155111, Network: "sepolia", Positions: []interface{}{}})
+	pageSize, err := strconv.Atoi(request.URL.Query().Get("pageSize"))
+	if err != nil || pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	return page, pageSize
 }
 
 func writeProblem(writer http.ResponseWriter, request *http.Request, statusCode int, title, detail string) {

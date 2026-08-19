@@ -14,8 +14,8 @@ export default function FractionalMarketPage() {
           <h1>Understand the position before the transaction.</h1>
         </div>
         <p>
-          Prices and availability are representative fixtures. Buying, bidding,
-          and claiming remain disabled until Stages 3–4.
+          Prices and availability are representative fixtures. ArtFi does not
+          create, sign, match, custody, or settle marketplace orders.
         </p>
       </header>
       <div className="filter-bar" aria-label="Current fractional filters">

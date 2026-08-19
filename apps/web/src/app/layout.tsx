@@ -9,8 +9,8 @@ import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
   title: {
-    default: "ArtFi | Art with a verifiable record",
-    template: "%s | ArtFi",
+    default: "ArtCCH:ArtFi | Art with a verifiable record",
+    template: "%s | ArtCCH:ArtFi",
   },
   description:
     "A Sepolia-first, auditable platform for real-world art assets and shared ownership.",
@@ -26,14 +26,10 @@ export default function RootLayout({
           <SiteHeader />
           {children}
           <footer className="site-footer">
-            <div>
-              <span className="brand">ArtFi</span>
-              <p>Evidence before claims. Testnet before value.</p>
-            </div>
-            <div>
-              <a href="https://github.com/GiraffeTechnology/ArtFi">GitHub</a>
-              <a href="https://sepolia.etherscan.io">Sepolia explorer</a>
-            </div>
+            <p>
+              ArtCCH:ArtFi · Where living traditions become contemporary art.
+            </p>
+            <p>Technical support: Giraffe ArtFi Corp.</p>
           </footer>
         </Providers>
       </body>

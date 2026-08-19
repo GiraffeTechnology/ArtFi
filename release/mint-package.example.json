@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "chainId": 11155111,
+  "recipient": "0x0000000000000000000000000000000000000000",
+  "marketplaceMode": "external-mirror",
+  "artfiExchangeEnabled": false,
+  "artwork": {
+    "title": "Replace with the authorized work title",
+    "creator": "Replace with the credited creator",
+    "file": "artwork.png",
+    "mimeType": "image/png",
+    "sha256": "",
+    "uri": "https://assets.example/rwa/images/<sha256>/artwork.png"
+  },
+  "rights": {
+    "rightsHolder": "Replace with the rights holder",
+    "basis": "creator",
+    "evidenceFile": "rights-evidence.pdf",
+    "evidenceSha256": "",
+    "attribution": "Replace with the public attribution",
+    "nftMintAuthorized": false,
+    "marketplaceListingEligible": false,
+    "listingActionConfirmed": false,
+    "expiresAt": null
+  },
+  "metadata": { "description": "", "attributes": [] }
+}
