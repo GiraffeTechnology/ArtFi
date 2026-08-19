@@ -5,8 +5,9 @@ mainnet approval has occurred.
 
 ## Delivered and verified
 
-- Market participation/payment caps default to zero and are consumed on fixed orders, bids, and
-  offerings; the cap-bypass negative test passes with the full market/governance suite (7/7).
+- The release manifest requires `marketplaceMode=external-mirror`, an approved non-empty source
+  allowlist, and `artfiExchangeEnabled=false`; schema validation fails closed otherwise.
+- Future ArtFi exchange code remains non-deployed and outside current release routes.
 - Release manifest template binds Sepolia, exact commit, deployments, bytecode, SBOM, tests,
   rollback, independent audit, legal approval, pilot cap, and separated go/no-go evidence.
 - Release verifier supports non-authorizing schema checks and a full mode that fails closed on any

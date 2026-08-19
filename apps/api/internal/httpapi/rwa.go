@@ -70,22 +70,23 @@ type mintIntent struct {
 }
 
 type rwaService struct {
-	mu               sync.RWMutex
-	config           rwaConfig
-	store            objectStore
-	uploads          map[string]*uploadSession
-	intents          map[string]*mintIntent
-	intentByKey      map[string]string
-	vaultIntents     map[string]*vaultIntent
-	vaultIntentByKey map[string]string
-	now              func() time.Time
-	db               persistenceDB
-	requireDB        bool
-	indexerKeyHash   [32]byte
-	indexerEnabled   bool
-	operatorKeyHash  [32]byte
-	operatorEnabled  bool
-	requireOperator  bool
+	mu                 sync.RWMutex
+	config             rwaConfig
+	store              objectStore
+	uploads            map[string]*uploadSession
+	intents            map[string]*mintIntent
+	intentByKey        map[string]string
+	vaultIntents       map[string]*vaultIntent
+	vaultIntentByKey   map[string]string
+	now                func() time.Time
+	db                 persistenceDB
+	requireDB          bool
+	indexerKeyHash     [32]byte
+	indexerEnabled     bool
+	operatorKeyHash    [32]byte
+	operatorEnabled    bool
+	requireOperator    bool
+	marketplaceSources map[string]struct{}
 }
 
 type uploadIntentRequest struct {
@@ -130,6 +131,7 @@ func newRWAServiceFromEnv() *rwaService {
 	service := newRWAService(config, store)
 	service.requireDB = true
 	service.requireOperator = true
+	service.marketplaceSources = parseMarketplaceSources(os.Getenv("ARTFI_MARKETPLACE_ALLOWLIST"))
 	if operatorToken := strings.TrimSpace(os.Getenv("ARTFI_OPERATOR_BEARER_TOKEN")); operatorToken != "" {
 		service.operatorKeyHash = sha256.Sum256([]byte(operatorToken))
 		service.operatorEnabled = true
@@ -144,14 +146,15 @@ func newRWAServiceFromEnv() *rwaService {
 
 func newRWAService(config rwaConfig, store objectStore) *rwaService {
 	return &rwaService{
-		config:           config,
-		store:            store,
-		uploads:          make(map[string]*uploadSession),
-		intents:          make(map[string]*mintIntent),
-		intentByKey:      make(map[string]string),
-		vaultIntents:     make(map[string]*vaultIntent),
-		vaultIntentByKey: make(map[string]string),
-		now:              func() time.Time { return time.Now().UTC() },
+		config:             config,
+		store:              store,
+		uploads:            make(map[string]*uploadSession),
+		intents:            make(map[string]*mintIntent),
+		intentByKey:        make(map[string]string),
+		vaultIntents:       make(map[string]*vaultIntent),
+		vaultIntentByKey:   make(map[string]string),
+		marketplaceSources: map[string]struct{}{"opensea": {}},
+		now:                func() time.Time { return time.Now().UTC() },
 	}
 }
 

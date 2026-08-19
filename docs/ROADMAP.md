@@ -84,22 +84,25 @@ Exit gate:
 - Supply, decimals, permissions, pause, and recovery rules are documented and tested.
 - No privileged action is controlled by an undocumented EOA.
 
-## Stage 4 - Market, bids, claims, portfolio, and governance
+## Stage 4 - External market mirror, portfolio, and governance
 
-Goal: deliver complete user-facing asset participation and DAO operation.
+Goal: deliver read-only visibility into approved external marketplaces and DAO operation without
+operating an ArtFi exchange.
 
 Scope:
 
 - Search, filter, pagination, project and asset detail.
-- Crowdfunding/order/bid/claim flows with expiry, cancellation, refund, and settlement.
-- Portfolio, transaction history, offers, and notifications.
+- Versioned marketplace-adapter boundary with OpenSea Stream events and REST backfill.
+- Read-only listings, sales, transfers, cancellations, offers, and notifications with source
+  attribution and external-market deep links.
+- Portfolio and transaction history.
 - DAO proposal, voting, quorum, timelock, execution, and treasury visibility.
 - Indexing and reconciliation for on-chain events.
 
 Exit gate:
 
-- Money and token flows reconcile against chain receipts.
-- Cancellation, refund, reorg, duplicate event, and partial failure tests pass.
+- Stream ordering, duplicate delivery, REST gap recovery, stale event, and partial failure tests pass.
+- The ArtFi API cannot create, sign, fulfill, custody, match, or settle external orders.
 - Governance permissions and timelocks are independently reviewed.
 
 ## Stage 5 - ArtFi wallet extension alpha
@@ -136,6 +139,14 @@ Exit gate:
 - Legal and compliance sign-off is recorded.
 - Recovery objectives are tested.
 - All P0/P1 findings are closed or formally accepted by accountable owners.
+
+## Future gated stage - ArtFi exchange
+
+An ArtFi-operated exchange is explicitly outside Stages 0-7. Candidate contract code may remain
+under security regression, but no deployment, route, user flow, or release flag may enable it.
+Development may resume only after the compliance strategy, legal approval, independent audit,
+transaction-monitoring controls, sanctions screening, market-surveillance model, and written
+go/no-go evidence have all passed the release verifier.
 
 ## Stage 7 - Independent audit and controlled launch
 

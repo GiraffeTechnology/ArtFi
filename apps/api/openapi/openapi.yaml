@@ -155,6 +155,58 @@ paths:
           }
         "401": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+  /v1/indexer/market-events:
+    post:
+      operationId: ingestExternalMarketEvent
+      description: Credential-gated ingestion for normalized, read-only events from approved marketplaces.
+      parameters:
+        - name: X-Indexer-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalMarketEventRequest"
+      responses:
+        "201": { description: External marketplace event mirrored }
+        "200": { description: Idempotent replay accepted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /v1/market/activity:
+    get:
+      operationId: getExternalMarketActivity
+      description: Read-only activity mirrored from approved external marketplaces; execution remains external.
+      parameters:
+        - name: source
+          in: query
+          schema: { type: string, default: opensea }
+        - name: contract
+          in: query
+          schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Attributed external marketplace activity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, schemaVersion, source, execution, custody]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ExternalMarketActivity"
+                  schemaVersion: { type: string, const: "1" }
+                  source: { type: string }
+                  execution: { type: string, const: external-deeplink-only }
+                  custody: { type: boolean, const: false }
+        "400": { $ref: "#/components/responses/Problem" }
   /v1/uploads/intents:
     post:
       operationId: createUploadIntent
@@ -610,6 +662,48 @@ components:
         payload: { type: object }
         removed: { type: boolean }
         confirmations: { type: integer, minimum: 0 }
+    ExternalMarketEventRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          schemaVersion,
+          source,
+          eventType,
+          eventFamily,
+          entityKey,
+          version,
+          chain,
+          eventTimestamp,
+          payload,
+        ]
+      properties:
+        schemaVersion: { type: string, const: "1" }
+        source: { type: string, pattern: "^[a-z][a-z0-9-]{1,31}$" }
+        eventType: { type: string, maxLength: 48 }
+        eventFamily: { type: string, enum: [order, sale, transfer, metadata] }
+        entityKey: { type: string, maxLength: 196 }
+        version: { type: integer, minimum: 1 }
+        chain: { type: string, pattern: "^[a-z][a-z0-9-]{1,31}$" }
+        collectionSlug: { type: string, maxLength: 160 }
+        orderHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+        transactionHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+        contractAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        tokenId: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+        makerAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        price: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+        paymentTokenAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        paymentSymbol: { type: string, maxLength: 16 }
+        marketplaceUrl: { type: string, format: uri }
+        eventTimestamp: { type: string, format: date-time }
+        payload: { type: object }
+    ExternalMarketActivity:
+      allOf:
+        - $ref: "#/components/schemas/ExternalMarketEventRequest"
+        - type: object
+          required: [eventId]
+          properties:
+            eventId: { type: string, pattern: "^[0-9a-f]{64}$" }
     Problem:
       type: object
       required: [type, title, status, detail, requestId]

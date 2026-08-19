@@ -116,6 +116,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/indexer/market-events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Credential-gated ingestion for normalized, read-only events from approved marketplaces. */
+    post: operations["ingestExternalMarketEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/market/activity": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Read-only activity mirrored from approved external marketplaces; execution remains external. */
+    get: operations["getExternalMarketActivity"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/uploads/intents": {
     parameters: {
       query?: never;
@@ -403,6 +437,34 @@ export interface components {
       removed: boolean;
       confirmations: number;
     };
+    ExternalMarketEventRequest: {
+      /** @constant */
+      schemaVersion: "1";
+      source: string;
+      eventType: string;
+      /** @enum {string} */
+      eventFamily: "order" | "sale" | "transfer" | "metadata";
+      entityKey: string;
+      version: number;
+      chain: string;
+      collectionSlug?: string;
+      orderHash?: string;
+      transactionHash?: string;
+      contractAddress?: string;
+      tokenId?: string;
+      makerAddress?: string;
+      price?: string;
+      paymentTokenAddress?: string;
+      paymentSymbol?: string;
+      /** Format: uri */
+      marketplaceUrl?: string;
+      /** Format: date-time */
+      eventTimestamp: string;
+      payload: Record<string, never>;
+    };
+    ExternalMarketActivity: components["schemas"]["ExternalMarketEventRequest"] & {
+      eventId: string;
+    };
     Problem: {
       /** Format: uri */
       type: string;
@@ -608,6 +670,73 @@ export interface operations {
       };
       401: components["responses"]["Problem"];
       409: components["responses"]["Problem"];
+    };
+  };
+  ingestExternalMarketEvent: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Indexer-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExternalMarketEventRequest"];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay accepted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description External marketplace event mirrored */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+    };
+  };
+  getExternalMarketActivity: {
+    parameters: {
+      query?: {
+        source?: string;
+        contract?: string;
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Attributed external marketplace activity */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            data: components["schemas"]["ExternalMarketActivity"][];
+            /** @constant */
+            schemaVersion: "1";
+            source: string;
+            /** @constant */
+            execution: "external-deeplink-only";
+            /** @constant */
+            custody: false;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
     };
   };
   createUploadIntent: {

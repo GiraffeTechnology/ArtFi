@@ -11,29 +11,55 @@ ALTER TABLE chain_events
     DROP INDEX idx_chain_event_block,
     ADD INDEX idx_chain_event_block (chain_id, block_number, removed);
 
-CREATE TABLE market_listings (
-    listing_id VARCHAR(78) PRIMARY KEY,
-    seller_address CHAR(42) NOT NULL,
-    asset_token CHAR(42) NOT NULL,
-    payment_token CHAR(42) NOT NULL,
-    amount_remaining VARCHAR(78) NOT NULL,
-    unit_price VARCHAR(78) NOT NULL,
-    listing_kind ENUM('fixed', 'auction') NOT NULL,
-    status ENUM('active', 'settled', 'cancelled') NOT NULL,
-    starts_at BIGINT UNSIGNED NOT NULL,
-    ends_at BIGINT UNSIGNED NOT NULL,
-    updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+CREATE TABLE external_market_events (
+    event_id CHAR(64) PRIMARY KEY,
+    schema_version VARCHAR(8) NOT NULL,
+    source VARCHAR(32) NOT NULL,
+    event_type VARCHAR(48) NOT NULL,
+    event_family ENUM('order', 'sale', 'transfer', 'metadata') NOT NULL,
+    entity_key VARCHAR(196) NOT NULL,
+    event_version BIGINT UNSIGNED NOT NULL,
+    chain_name VARCHAR(32) NOT NULL,
+    collection_slug VARCHAR(160) NULL,
+    order_hash CHAR(66) NULL,
+    transaction_hash CHAR(66) NULL,
+    contract_address CHAR(42) NULL,
+    token_id VARCHAR(78) NULL,
+    maker_address CHAR(42) NULL,
+    price VARCHAR(78) NULL,
+    payment_token_address CHAR(42) NULL,
+    payment_symbol VARCHAR(16) NULL,
+    marketplace_url VARCHAR(512) NULL,
+    event_timestamp TIMESTAMP(6) NOT NULL,
+    payload JSON NOT NULL,
+    payload_hash BINARY(32) NOT NULL,
+    received_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    UNIQUE KEY uq_external_market_version (source, event_family, entity_key, event_version, event_type),
+    KEY idx_external_market_asset (source, chain_name, contract_address, token_id, event_timestamp),
+    KEY idx_external_market_activity (source, event_timestamp, received_at)
 );
 
-CREATE TABLE market_offers (
-    offer_id CHAR(32) PRIMARY KEY,
-    listing_id VARCHAR(78) NOT NULL,
-    bidder_address CHAR(42) NOT NULL,
-    amount VARCHAR(78) NOT NULL,
-    status ENUM('active', 'outbid', 'won', 'refunded') NOT NULL,
-    transaction_hash CHAR(66) NOT NULL UNIQUE,
-    created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    KEY idx_market_offer_bidder (bidder_address, status)
+CREATE TABLE external_market_orders (
+    source VARCHAR(32) NOT NULL,
+    chain_name VARCHAR(32) NOT NULL,
+    order_hash CHAR(66) NOT NULL,
+    event_version BIGINT UNSIGNED NOT NULL,
+    status ENUM('active', 'cancelled', 'invalidated', 'fulfilled') NOT NULL,
+    collection_slug VARCHAR(160) NULL,
+    contract_address CHAR(42) NULL,
+    token_id VARCHAR(78) NULL,
+    maker_address CHAR(42) NULL,
+    price VARCHAR(78) NULL,
+    payment_token_address CHAR(42) NULL,
+    payment_symbol VARCHAR(16) NULL,
+    marketplace_url VARCHAR(512) NULL,
+    event_timestamp TIMESTAMP(6) NOT NULL,
+    fulfilled_at TIMESTAMP(6) NULL,
+    fulfillment_transaction_hash CHAR(66) NULL,
+    payload JSON NOT NULL,
+    updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (source, chain_name, order_hash),
+    KEY idx_external_order_asset (source, chain_name, contract_address, token_id, status)
 );
 
 CREATE TABLE portfolio_deltas (

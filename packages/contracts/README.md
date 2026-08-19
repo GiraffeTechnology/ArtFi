@@ -12,7 +12,8 @@ Stage 2 and Stage 3 provide the deliberately narrow Sepolia write paths:
 - `VaultFactory`: atomic custody and token issuance with request idempotency and one-vault-per-NFT
   enforcement.
 - `DeployStage3.s.sol`: Sepolia-only vault-factory deployment and role-handoff script.
-- `ArtFiMarket`: escrowed fixed-price, auction, offering, refund, claim, and pull-payment settlement.
+- `ArtFiMarket`: future exchange candidate retained for security regression only; it is excluded from
+  current deployment and release paths until the compliance launch gate is approved.
 - `ArtFiGovernor`: token-vote governance with quorum and mandatory Timelock execution.
 - `ArtFiGovernanceBootstrap`: atomic role configuration that leaves the Timelock self-administered.
 - `DeployStage4.s.sol`: Sepolia-only market and governance deployment.

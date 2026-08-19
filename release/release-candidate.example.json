@@ -2,6 +2,9 @@
   "chainId": 11155111,
   "releaseCommit": "",
   "mainnetApproved": false,
+  "marketplaceMode": "external-mirror",
+  "artfiExchangeEnabled": false,
+  "approvedMarketplaceSources": ["opensea"],
   "pilot": { "enabled": true, "participantCount": 0, "aggregateCap": "0" },
   "deployments": [],
   "artifacts": {

@@ -3,8 +3,8 @@ DROP TABLE IF EXISTS governance_proposals;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS account_transactions;
 DROP TABLE IF EXISTS portfolio_deltas;
-DROP TABLE IF EXISTS market_offers;
-DROP TABLE IF EXISTS market_listings;
+DROP TABLE IF EXISTS external_market_orders;
+DROP TABLE IF EXISTS external_market_events;
 
 ALTER TABLE chain_events
     DROP INDEX idx_chain_event_block,

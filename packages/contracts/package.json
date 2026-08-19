@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build:contracts": "forge build --sizes",
+    "build:contracts": "forge build src --sizes",
     "format": "forge fmt",
     "format:check": "forge fmt --check",
     "lint:security": "forge lint --severity high",

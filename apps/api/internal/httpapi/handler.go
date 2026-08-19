@@ -109,6 +109,8 @@ func newHandler(rwa *rwaService) http.Handler {
 	mux.HandleFunc("GET /v1/vault/intents/{intentID}", rwa.getVaultIntent)
 	mux.HandleFunc("POST /v1/vault/intents/{intentID}/submission", rwa.recordVaultSubmission)
 	mux.HandleFunc("POST /v1/indexer/events", rwa.ingestChainEvent)
+	mux.HandleFunc("POST /v1/indexer/market-events", rwa.ingestMarketEvent)
+	mux.HandleFunc("GET /v1/market/activity", rwa.getMarketActivity)
 	return middleware(mux, rwa)
 }
 

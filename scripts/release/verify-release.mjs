@@ -13,6 +13,16 @@ if (manifest.chainId !== 11_155_111 || manifest.mainnetApproved !== false) {
     "release candidates must remain Sepolia-only and mainnet-disabled",
   );
 }
+if (
+  manifest.marketplaceMode !== "external-mirror" ||
+  manifest.artfiExchangeEnabled !== false ||
+  !Array.isArray(manifest.approvedMarketplaceSources) ||
+  manifest.approvedMarketplaceSources.length === 0
+) {
+  throw new Error(
+    "this release must remain an approved-source external mirror with the ArtFi exchange disabled",
+  );
+}
 if (!manifest.pilot?.enabled || !Array.isArray(manifest.deployments)) {
   throw new Error("a capped pilot and deployment array are required");
 }

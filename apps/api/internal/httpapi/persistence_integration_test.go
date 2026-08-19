@@ -180,6 +180,119 @@ func TestMySQLChainEventDedupeConflictAndReorg(t *testing.T) {
 	}
 }
 
+func TestMySQLExternalMarketMirrorDedupeAndOrdering(t *testing.T) {
+	dsn := os.Getenv("ARTFI_INTEGRATION_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("ARTFI_INTEGRATION_MYSQL_DSN is not set")
+	}
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, statement := range []string{"DELETE FROM external_market_orders", "DELETE FROM external_market_events"} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer db.Exec("DELETE FROM external_market_orders")
+	defer db.Exec("DELETE FROM external_market_events")
+
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	service.db = db
+	service.indexerKeyHash = sha256.Sum256([]byte("external-market-indexer-key"))
+	service.indexerEnabled = true
+	handler := newHandler(service)
+	orderHash := "0x" + strings.Repeat("d", 64)
+	body := map[string]any{
+		"schemaVersion":   "1",
+		"source":          "opensea",
+		"eventType":       "item_listed",
+		"eventFamily":     "order",
+		"entityKey":       orderHash,
+		"version":         7,
+		"chain":           "ethereum",
+		"collectionSlug":  "artfi-test",
+		"orderHash":       orderHash,
+		"contractAddress": "0x1111111111111111111111111111111111111111",
+		"tokenId":         "42",
+		"makerAddress":    "0x2222222222222222222222222222222222222222",
+		"price":           "1000000000000000",
+		"paymentSymbol":   "ETH",
+		"marketplaceUrl":  "https://opensea.io/assets/ethereum/0x1111111111111111111111111111111111111111/42",
+		"eventTimestamp":  "2026-08-19T04:00:00Z",
+		"payload":         map[string]any{"order_hash": orderHash},
+	}
+	unauthorized := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-events", body, map[string]string{"X-Indexer-Key": "wrong"})
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized, got %d", unauthorized.Code)
+	}
+	headers := map[string]string{"X-Indexer-Key": "external-market-indexer-key"}
+	created := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-events", body, headers)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create mirror event: status=%d body=%s", created.Code, created.Body.String())
+	}
+	replay := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-events", body, headers)
+	if replay.Code != http.StatusOK {
+		t.Fatalf("replay mirror event: status=%d body=%s", replay.Code, replay.Body.String())
+	}
+
+	body["eventType"] = "item_cancelled"
+	body["version"] = 8
+	body["eventTimestamp"] = "2026-08-19T04:00:01Z"
+	cancelled := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-events", body, headers)
+	if cancelled.Code != http.StatusCreated {
+		t.Fatalf("cancel mirror event: status=%d body=%s", cancelled.Code, cancelled.Body.String())
+	}
+	body["eventType"] = "item_listed"
+	body["version"] = 6
+	body["eventTimestamp"] = "2026-08-19T03:59:59Z"
+	stale := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-events", body, headers)
+	if stale.Code != http.StatusCreated {
+		t.Fatalf("stale mirror event should remain auditable: status=%d body=%s", stale.Code, stale.Body.String())
+	}
+	var status string
+	var version uint64
+	if err := db.QueryRow("SELECT status, event_version FROM external_market_orders WHERE source = 'opensea' AND chain_name = 'ethereum' AND order_hash = ?", orderHash).Scan(&status, &version); err != nil {
+		t.Fatal(err)
+	}
+	if status != "cancelled" || version != 8 {
+		t.Fatalf("stale event overwrote canonical order: status=%s version=%d", status, version)
+	}
+	body["eventType"] = "item_sold"
+	body["eventFamily"] = "sale"
+	body["version"] = 1
+	body["transactionHash"] = "0x" + strings.Repeat("e", 64)
+	body["eventTimestamp"] = "2026-08-19T04:00:02Z"
+	sold := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-events", body, headers)
+	if sold.Code != http.StatusCreated {
+		t.Fatalf("sale mirror event: status=%d body=%s", sold.Code, sold.Body.String())
+	}
+	body["eventType"] = "item_listed"
+	body["eventFamily"] = "order"
+	body["version"] = 99
+	body["eventTimestamp"] = "2026-08-19T04:00:03Z"
+	lateListing := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-events", body, headers)
+	if lateListing.Code != http.StatusCreated {
+		t.Fatalf("late listing remains auditable: status=%d body=%s", lateListing.Code, lateListing.Body.String())
+	}
+	var fulfilledAt, fulfillmentTransactionHash string
+	if err := db.QueryRow(`
+		SELECT status, event_version, DATE_FORMAT(fulfilled_at, '%Y-%m-%dT%H:%i:%s.%fZ'), fulfillment_transaction_hash
+		FROM external_market_orders
+		WHERE source = 'opensea' AND chain_name = 'ethereum' AND order_hash = ?`, orderHash).
+		Scan(&status, &version, &fulfilledAt, &fulfillmentTransactionHash); err != nil {
+		t.Fatal(err)
+	}
+	if status != "fulfilled" || version != 8 || fulfilledAt == "" || fulfillmentTransactionHash != body["transactionHash"] {
+		t.Fatalf("fulfilled order was not terminal: status=%s version=%d fulfilledAt=%s tx=%s", status, version, fulfilledAt, fulfillmentTransactionHash)
+	}
+	activity := requestWithHandler(t, handler, http.MethodGet, "/v1/market/activity?source=opensea&limit=10")
+	if activity.Code != http.StatusOK || !strings.Contains(activity.Body.String(), "external-deeplink-only") {
+		t.Fatalf("market activity boundary missing: status=%d body=%s", activity.Code, activity.Body.String())
+	}
+}
+
 func requestWithHandler(t *testing.T, handler http.Handler, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, nil)
@@ -191,6 +304,8 @@ func requestWithHandler(t *testing.T, handler http.Handler, method, path string)
 func cleanupPersistenceTables(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
 	for _, statement := range []string{
+		"DELETE FROM external_market_orders",
+		"DELETE FROM external_market_events",
 		"DELETE FROM chain_events",
 		"DELETE FROM fractionalizations",
 		"DELETE FROM vaults",
