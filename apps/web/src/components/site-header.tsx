@@ -1,24 +1,29 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { WalletButton } from "./wallet-button";
 
 const navigation = [
-  ["Projects", "/projects"],
-  ["RWA Market", "/market/rwa"],
-  ["Fractionals", "/market/fractionals"],
-  ["Create RWA", "/create/rwa"],
-  ["Portfolio", "/portfolio"],
+  ["Overview", "/"],
+  ["Market mirror", "/market/rwa"],
+  ["Wallet", "/portfolio"],
+  ["DAO", "/dao"],
 ] as const;
 
 export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="header-inner">
-        <Link className="brand" href="/" aria-label="ArtFi home">
-          <span className="brand-mark" aria-hidden="true">
-            A
-          </span>
-          <span>ArtFi</span>
+        <Link className="brand" href="/" aria-label="ArtCCH ArtFi home">
+          <Image
+            alt="ArtCCH"
+            className="brand-logo"
+            height={38}
+            priority
+            src="/brand/artcch-logo-master.svg"
+            width={152}
+          />
+          <span>: ArtFi</span>
         </Link>
         <nav className="primary-nav" aria-label="Primary navigation">
           {navigation.map(([label, href]) => (
@@ -27,11 +32,23 @@ export function SiteHeader() {
             </Link>
           ))}
         </nav>
-        <WalletButton />
+        <div className="desktop-wallet">
+          <WalletButton />
+        </div>
+        <details className="mobile-menu">
+          <summary>Menu</summary>
+          <nav aria-label="Mobile navigation">
+            {navigation.map(([label, href]) => (
+              <Link href={href} key={href}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+        </details>
       </div>
       <div className="testnet-banner">
-        <span>Sepolia testnet</span>
-        Read-only catalog · authorized Stage 2 mint only
+        <span>Testnet / read-only</span>
+        No custody · No in-app order execution · External marketplace data
       </div>
     </header>
   );

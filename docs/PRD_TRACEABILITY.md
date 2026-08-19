@@ -11,8 +11,8 @@ Status values:
 
 | ID           | PRD capability                                 |                   Stage | Current status        | Required acceptance evidence                                                                                                           |
 | ------------ | ---------------------------------------------- | ----------------------: | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| WEB-001      | Home, projects, markets, detail, portfolio     |                       1 | implemented-in-pr     | 18 desktop/mobile route and accessibility checks                                                                                       |
-| WEB-002      | Search, filter, pagination                     |                       4 | implemented-in-branch | API filtering/pagination tests; legacy UI binding remains in integrated debugging                                                      |
+| WEB-001      | Home, projects, markets, detail, portfolio     |                       1 | implemented-in-pr     | 20 desktop/mobile route and accessibility checks plus wallet, brand, chain-gate, and health safety checks                              |
+| WEB-002      | Search, filter, pagination                     |                       4 | implemented-in-branch | API filtering/pagination tests; approved visual shell is bound, while mirror records remain fixtures until runtime-adapter evidence    |
 | WALLET-001   | External wallet connection                     |                       1 | implemented-in-branch | Injected wallet, Sepolia enforcement, connect/reconnect/network tests                                                                  |
 | RWA-001      | Image upload and metadata                      |                       2 | implemented-in-branch | Validated upload, provenance, storage and metadata tests                                                                               |
 | RWA-002      | NFT contract selection and mint                |                       2 | implemented-in-branch | Verified contract, receipt, failure and authorization tests                                                                            |
@@ -35,6 +35,10 @@ Status values:
 | COMP-001     | KYC/KYB, AML/sanctions, jurisdiction           |                       6 | gated                 | Fail-closed policy/schema implemented; legal/provider approval remains required                                                        |
 | COMP-002     | Asset title, custody, valuation, redemption    |                       6 | gated                 | Evidence schema/runbook implemented; approved operating model remains required                                                         |
 | RIGHTS-001   | Artwork licensing and attribution              |                     1-2 | gated                 | Hash-bound mint-package gate implemented; real media still needs rights evidence, attribution, takedown record and action confirmation |
+| CHARITY-001  | Fixed 100-unit ArtCCH charity editions         |                     2-6 | in-progress           | ERC-1155 fixed-supply tests; 13 deduplicated works; 1,300 total immutable units; `0.01 ETH` recorded price                             |
+| CHARITY-002  | Private master and watermarked holder access   |                     2-6 | in-progress           | No-preview metadata; no unwatermarked web download; distinct hash-bound watermarked holder file and token gate                         |
+| CHARITY-003  | CCHS proceeds and receipt-valuation boundary   |                     2-6 | in-progress           | CCHS wallet/status/policy evidence; issue-time public `ETH/CAD` source and snapshot; ArtFi cannot issue or determine eligible amount   |
+| CHARITY-004  | Sellout-gated physical donation                |                     2-6 | in-progress           | No physical/IP rights; zero distribution balance plus reconciled sellout evidence precedes CCHS physical-donation acceptance evidence  |
 
 No item may be marked complete solely from a screenshot or PRD statement.
 

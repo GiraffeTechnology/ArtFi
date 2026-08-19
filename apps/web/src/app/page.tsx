@@ -1,126 +1,82 @@
+import Image from "next/image";
 import Link from "next/link";
 
-import { ArtworkCard } from "@/components/artwork-card";
-import { ArtworkVisual } from "@/components/artwork-visual";
-import { artworks, formatUsd, projects } from "@/lib/catalog";
+import { MarketMirrorCard } from "@/components/market-mirror-card";
+import { WalletButton } from "@/components/wallet-button";
+import { artworks } from "@/lib/catalog";
 
-const featured = artworks[0];
+const modules = [
+  {
+    detail: "Live listings and sale signals from compliant external venues.",
+    href: "/market/rwa",
+    label: "External link only",
+    number: "01",
+    title: "Market mirror",
+  },
+  {
+    detail: "Public-address portfolio and testnet network visibility.",
+    href: "/portfolio",
+    label: "No private-key custody",
+    number: "02",
+    title: "Wallet",
+  },
+  {
+    detail: "Proposal, quorum, treasury and role transparency.",
+    href: "/dao",
+    label: "Execution interface reserved",
+    number: "03",
+    title: "DAO",
+  },
+] as const;
 
 export default function Home() {
   return (
-    <main>
-      <section className="home-hero page-shell">
-        <div className="home-hero__copy">
-          <p className="eyebrow">Verified art infrastructure</p>
-          <h1>Art ownership, with the record attached.</h1>
-          <p className="lede">
-            Explore curated works, inspect provenance, and connect a wallet to
-            preview your ArtFi portfolio on Sepolia. Every action is staged,
-            reviewable, and testnet-only.
+    <main className="approved-overview page-shell">
+      <section className="overview-hero">
+        <div className="overview-hero__copy">
+          <p className="approved-eyebrow">ArtCCH / ArtFi</p>
+          <h1>Art, provenance, and transparent ownership.</h1>
+          <p className="overview-hero__lede">
+            策展艺术资产的可信入口：查看来源、连接外部钱包，并在一个界面中理解市场与治理。
           </p>
-          <div className="actions">
-            <Link className="primary" href="/market/rwa">
-              Explore RWA market
-            </Link>
-            <Link className="secondary" href="/projects">
-              View projects
-            </Link>
+          <div className="overview-actions">
+            <a
+              className="external-button"
+              href="https://opensea.io"
+              rel="noreferrer"
+              target="_blank"
+            >
+              <Image
+                alt=""
+                height={16}
+                src="/brand/external-link.svg"
+                width={16}
+              />
+              View on OpenSea
+            </a>
+            <WalletButton />
           </div>
-          <dl className="hero-metrics">
-            <div>
-              <dt>Curated projects</dt>
-              <dd>{projects.length}</dd>
-            </div>
-            <div>
-              <dt>Documented works</dt>
-              <dd>{artworks.length}</dd>
-            </div>
-            <div>
-              <dt>Network</dt>
-              <dd>Sepolia</dd>
-            </div>
-          </dl>
         </div>
-        <Link className="featured-work" href={`/market/rwa/${featured.slug}`}>
-          <ArtworkVisual accent={featured.accent} label={featured.title} />
-          <div className="featured-work__caption">
-            <div>
-              <span>Featured record</span>
-              <strong>{featured.title}</strong>
-            </div>
-            <div>
-              <span>Independent valuation</span>
-              <strong>{formatUsd(featured.valuationUsd)}</strong>
-            </div>
-          </div>
-        </Link>
+        <MarketMirrorCard artwork={artworks[0]} />
       </section>
 
-      <section className="editorial-band">
-        <div className="page-shell editorial-band__inner">
-          <p className="eyebrow">A legible asset journey</p>
-          <h2>From curatorial record to governed participation.</h2>
-          <div className="journey-grid">
-            {[
-              [
-                "01",
-                "Inspect",
-                "Review origin, material, location, condition, and custody context.",
-              ],
-              [
-                "02",
-                "Connect",
-                "Use a standard browser wallet with Sepolia network enforcement.",
-              ],
-              [
-                "03",
-                "Participate",
-                "Preview fractional positions without enabling write transactions.",
-              ],
-              [
-                "04",
-                "Govern",
-                "Understand the proposal and treasury model before it is activated.",
-              ],
-            ].map(([number, title, description]) => (
-              <article key={number}>
-                <span>{number}</span>
-                <h3>{title}</h3>
-                <p>{description}</p>
+      <section
+        className="module-overview"
+        aria-labelledby="module-overview-title"
+      >
+        <h2 id="module-overview-title">Three transparent layers</h2>
+        <div className="module-overview__grid">
+          {modules.map((module) => (
+            <Link href={module.href} key={module.number}>
+              <article>
+                <span>{module.number}</span>
+                <h3>{module.title}</h3>
+                <p>{module.detail}</p>
+                <strong>{module.label}</strong>
               </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="page-shell section-block">
-        <div className="section-heading section-heading--row">
-          <div>
-            <p className="eyebrow">Current records</p>
-            <h2>Works with context, not just a token.</h2>
-          </div>
-          <Link className="text-link" href="/market/rwa">
-            Browse all works <span aria-hidden="true">→</span>
-          </Link>
-        </div>
-        <div className="artwork-grid">
-          {artworks.slice(0, 3).map((artwork) => (
-            <ArtworkCard artwork={artwork} key={artwork.slug} />
+            </Link>
           ))}
         </div>
-      </section>
-
-      <section className="page-shell safety-panel">
-        <div>
-          <p className="eyebrow">Stage 1 release boundary</p>
-          <h2>Wallet-aware. Transaction-free.</h2>
-        </div>
-        <p>
-          This release reads public wallet and testnet data only. Minting,
-          deposits, sales, bids, claims, and governance execution remain
-          disabled until their contracts and controls pass later-stage review
-          gates.
-        </p>
       </section>
     </main>
   );

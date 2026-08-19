@@ -115,12 +115,16 @@ ArtCCH:ArtFi 将艺术品的作品记录、权利证据、NFT、Vault、份额�
 
 ### 5.3 RWA、元数据与 NFT
 
-| ID         | 强制需求                           | Claude Code 验收条件                                                                                       |
-| ---------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| RWA-001    | 作品、所有权、来源、权利和媒体记录 | 必填字段、MIME、大小、内容哈希、重复、损坏和未授权上传测试通过；对象存储访问策略与生命周期有证据           |
-| RWA-002    | 可复现、不可变的 NFT 元数据        | 从持久化记录可重建相同元数据和哈希；媒体/元数据 URL 可公开读取但不能静默变更；含测试网及无真实产权转移声明 |
-| RWA-003    | NFT 工厂与铸造                     | 未授权、暂停、重复承诺、失败回执和成功事件测试通过；源码、编译设置、bytecode hash 和部署清单可追溯         |
-| RIGHTS-001 | 权利证据是铸造硬门禁               | 缺少权利主体、授权范围、期限、地域、署名、下架流程或哈希绑定时必须拒绝铸造包；隐私协议不得提交 Git         |
+| ID          | 强制需求                           | Claude Code 验收条件                                                                                                                                                                                                                          |
+| ----------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RWA-001     | 作品、所有权、来源、权利和媒体记录 | 必填字段、MIME、大小、内容哈希、重复、损坏和未授权上传测试通过；对象存储访问策略与生命周期有证据                                                                                                                                              |
+| RWA-002     | 可复现、不可变的 NFT 元数据        | 从持久化记录可重建相同元数据和哈希；媒体/元数据 URL 可公开读取但不能静默变更；含测试网及无真实产权转移声明                                                                                                                                    |
+| RWA-003     | NFT 工厂与铸造                     | 未授权、暂停、重复承诺、失败回执和成功事件测试通过；源码、编译设置、bytecode hash 和部署清单可追溯                                                                                                                                            |
+| RIGHTS-001  | 权利证据是铸造硬门禁               | 缺少权利主体、授权范围、期限、地域、署名、下架流程或哈希绑定时必须拒绝铸造包；隐私协议不得提交 Git                                                                                                                                            |
+| CHARITY-001 | 首批固定慈善版供应                 | `UNIT-A01/04/05/11/14/15/16/17/20/21/22/23/24` 共 13 件；重复 A16 只计一次；每件一个 ERC-1155 token ID，一次性铸造且永远固定 100 枚，记录单价 `0.01 ETH`；不存在追加铸造或外部销毁入口                                                        |
+| CHARITY-002 | 私密原图和唯一持有人权益           | 公共 metadata 无作品 `image`/预览；任何网站不得提供无水印高清图；唯一权益为持币校验后的高清有水印下载且不提供浏览器预览；master 与 holder 文件必须哈希不同                                                                                    |
+| CHARITY-003 | CCHS 收益和收据边界                | 100% 初始发行收益指向 CCHS 确认钱包；持有人直接联系 CCHS；ArtFi 不开票、不决定或承诺 eligible amount；CCHS 收据金额政策锁定为开票时点、CCHS 批准公开来源的 `ETH/CAD` 市场价并保留时间、价格、来源和快照哈希，缺少 CCHS 书面确认时 fail closed |
+| CHARITY-004 | 实物映射和售罄后捐赠               | NFT 不传递实物所有权、占有、赎回、版权、复制或商业使用权；原发行钱包余额为 0 且外部售罄证据完成后才可记录售罄；仅售罄后才可记录 CCHS 实物捐赠接收证据                                                                                         |
 
 ### 5.4 Vault、份额化与治理
 
@@ -208,6 +212,8 @@ pnpm security:secrets
 pnpm release:verify-schema
 pnpm mint:verify-schema
 pnpm mint:verifier:test
+pnpm charity-edition:verify-schema
+pnpm charity-edition:verifier:test
 (cd apps/api && go vet ./... && go test -race ./...)
 docker compose config
 ```
@@ -225,7 +231,8 @@ docker compose config
 ### 8.1 预上链验收
 
 以下项目应在没有测试 ETH 的情况下完成：编译、合约尺寸、unit/fuzz/invariant、无广播部署模拟、
-部署脚本语法、chain ID/角色/余额 fail-closed 预检、secret 扫描和 mint-package schema 校验。
+部署脚本语法、chain ID/角色/余额 fail-closed 预检、secret 扫描、mint-package schema 和
+charity-edition package schema/负向校验。
 
 ### 8.2 真实 Sepolia 运行
 
@@ -244,6 +251,20 @@ AccessControl、pause、Timelock、Vault custody、fixed supply、replay 和 una
   不得伪称 OpenSea 已接受。
 - 上架是独立的显式授权动作，执行前再次确认 collection、token ID、价格、币种、期限、版税和
   钱包签名。本文不自动授权上架。
+
+### 8.4 首批 ArtCCH 慈善版
+
+- 首批输入中的 `UNIT-A16-000.png` 重复项必须按相同源文件去重，最终为 13 个 token ID、
+  1,300 个不可增发单位。
+- 该批次是 ERC-1155 固定版，不得被一般 ERC-721 测试作品流程替代；`ArtFiCharityEditions`
+  必须独立通过 ERC-165、ERC-1155、metadata、fixed supply、pause、权限、重复作品/哈希和
+  售罄后捐赠顺序测试。
+- OpenSea 发现验证不得以发布作品预览或无水印 master 为代价。公共 metadata 必须无作品
+  `image` 字段；OpenSea 显示通用缺图状态可以作为符合隐私要求的结果。
+- 在 CCHS 法定名称、CRA 注册号、收款钱包、收据估值/holder advantage 政策和实物接收流程
+  获得书面证据前，媒体上传、metadata 发布、部署、创建系列、上架和收据声明均为 `BLOCKED`。
+- CCHS 收据金额采用开票时点公开市场 `ETH/CAD` 价格是产品要求，但只有 CCHS 可以确定并
+  签发 eligible amount。ArtFi 只能保存或展示 CCHS 批准的来源、时间、汇率和快照证据。
 
 ## 9. 当前必须保持的 Gate
 

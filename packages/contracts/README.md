@@ -5,7 +5,12 @@ Stage 2 and Stage 3 provide the deliberately narrow Sepolia write paths:
 - `ArtFiRWA`: immutable-metadata ERC-721 with explicit minter/admin/pauser roles.
 - `RWARegistry`: validates content-addressed metadata, enforces request idempotency, records
   the immutable commitment, and atomically mints the NFT.
+- `ArtFiCharityEditions`: an ERC-1155 charity-edition boundary that creates exactly 100 units per
+  artwork in one transaction, exposes no additional mint or burn path, and hash-records the
+  reconciled sellout and later CCHS physical-donation acceptance.
 - `DeployStage2.s.sol`: Sepolia-only role-handoff script that leaves no deployer mint role.
+- `DeployCharityEditions.s.sol`: separately gated, opt-in Sepolia deployment for the fixed charity
+  editions; it assigns only the final admin, series-creator, donation-recorder, and pauser roles.
 - `ArtFiVault`: single-asset ERC-721 custody with pause controls and recovery disabled after
   fractionalization.
 - `FractionalToken`: immutable fixed-supply ERC-20 with explicit admin and pauser roles.
@@ -31,8 +36,8 @@ forge test --match-path test/MarketGovernance.t.sol --gas-report
 ```
 
 The tests cover authorization, pause/recovery, metadata constraints, idempotency conflicts,
-custody, fixed fractional supply, one-vault-per-NFT, fuzzed commitments, and registry/vault supply
-invariants.
+custody, fixed fractional supply, fixed 100-unit charity editions, sellout-before-donation ordering,
+one-vault-per-NFT, fuzzed commitments, and registry/vault/edition supply invariants.
 
 ## Deployment gate
 

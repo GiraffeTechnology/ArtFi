@@ -12,6 +12,13 @@ required=(
   ARTFI_VAULT_CREATOR
 )
 
+if [[ "${ARTFI_DEPLOY_CHARITY_EDITIONS:-false}" == "true" ]]; then
+  required+=(
+    ARTFI_EDITION_CREATOR
+    ARTFI_DONATION_RECORDER
+  )
+fi
+
 for variable in "${required[@]}"; do
   if [[ -z "${!variable:-}" ]]; then
     printf 'missing required deployment setting: %s\n' "$variable" >&2

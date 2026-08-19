@@ -8,18 +8,24 @@ export const metadata: Metadata = { title: "Portfolio" };
 
 export default function PortfolioPage() {
   return (
-    <main className="page-shell page-main">
-      <header className="page-intro page-intro--compact">
-        <p className="eyebrow">Portfolio</p>
-        <h1>A public-address view, never a custody claim.</h1>
+    <main className="approved-page page-shell">
+      <div className="module-banner">
+        <span>Wallet / read-only</span>
+        <strong>No custody · No signature for viewing</strong>
+      </div>
+      <header className="approved-page__header">
+        <p className="approved-eyebrow">Wallet</p>
+        <h1>Your public portfolio.</h1>
+        <p>
+          Connect a standard external wallet to read public Sepolia state. ArtFi
+          never receives a private key or seed phrase.
+        </p>
       </header>
       <PortfolioWallet />
       <section className="section-block section-block--compact">
         <div className="section-heading">
-          <p className="eyebrow">Illustrative watchlist</p>
-          <h2>
-            Positions will appear here after later-stage contracts are verified.
-          </h2>
+          <p className="approved-eyebrow">Visible positions</p>
+          <h2>Public records associated with this address.</h2>
         </div>
         <div className="artwork-grid artwork-grid--two">
           {artworks.slice(0, 2).map((artwork) => (

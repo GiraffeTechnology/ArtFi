@@ -7,7 +7,7 @@
     "format": "forge fmt",
     "format:check": "forge fmt --check",
     "lint:security": "forge lint --severity high",
-    "test:contracts": "forge test -vvv",
+    "test:contracts": "forge test --force -vvv",
     "test:gas": "forge test --gas-report"
   },
   "dependencies": {

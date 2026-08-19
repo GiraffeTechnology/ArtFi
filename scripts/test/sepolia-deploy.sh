@@ -20,6 +20,13 @@ forge script script/DeployStage2.s.sol:DeployStage2 \
 forge script script/DeployStage3.s.sol:DeployStage3 \
   --rpc-url "$ARTFI_RPC_URL" "${wallet_args[@]}" "${verify_args[@]}" --broadcast --slow
 
+if [[ "${ARTFI_DEPLOY_CHARITY_EDITIONS:-false}" == "true" ]]; then
+  : "${ARTFI_EDITION_CREATOR:?ARTFI_EDITION_CREATOR is required}"
+  : "${ARTFI_DONATION_RECORDER:?ARTFI_DONATION_RECORDER is required}"
+  forge script script/DeployCharityEditions.s.sol:DeployCharityEditions \
+    --rpc-url "$ARTFI_RPC_URL" "${wallet_args[@]}" "${verify_args[@]}" --broadcast --slow
+fi
+
 if [[ "${ARTFI_DEPLOY_GOVERNANCE:-false}" == "true" ]]; then
   : "${ARTFI_GOVERNANCE_TOKEN:?ARTFI_GOVERNANCE_TOKEN is required}"
   : "${ARTFI_TIMELOCK_DELAY_SECONDS:?ARTFI_TIMELOCK_DELAY_SECONDS is required}"

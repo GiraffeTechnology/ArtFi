@@ -1,7 +1,6 @@
-import type { CSSProperties } from "react";
+import Image from "next/image";
 
 export function ArtworkVisual({
-  accent,
   label,
   compact = false,
 }: Readonly<{
@@ -9,21 +8,20 @@ export function ArtworkVisual({
   label: string;
   compact?: boolean;
 }>) {
-  const style = {
-    "--visual-a": accent[0],
-    "--visual-b": accent[1],
-  } as CSSProperties;
-
   return (
     <div
       className={`artwork-visual${compact ? " artwork-visual--compact" : ""}`}
-      style={style}
       role="img"
-      aria-label={`Original abstract placeholder for ${label}`}
+      aria-label={`Rights-cleared artwork area for ${label}`}
     >
-      <span className="visual-plane visual-plane--one" />
-      <span className="visual-plane visual-plane--two" />
-      <span className="visual-grain" />
+      <Image
+        alt=""
+        className="artwork-visual__mark"
+        height={180}
+        src="/brand/artwork-a.svg"
+        width={160}
+      />
+      <span className="artwork-visual__label">Rights-cleared artwork</span>
     </div>
   );
 }

@@ -1,31 +1,34 @@
 import type { Metadata } from "next";
 
-import { ArtworkCard } from "@/components/artwork-card";
+import { MarketMirrorCard } from "@/components/market-mirror-card";
 import { artworks } from "@/lib/catalog";
 
-export const metadata: Metadata = { title: "RWA Market" };
+export const metadata: Metadata = { title: "Market mirror" };
 
 export default function RwaMarketPage() {
   return (
-    <main className="page-shell page-main">
-      <header className="market-header">
-        <div>
-          <p className="eyebrow">RWA market</p>
-          <h1>Documented works, ready for inspection.</h1>
-        </div>
+    <main className="approved-page page-shell">
+      <div className="module-banner">
+        <span>External market mirror</span>
+        <strong>Orders execute on OpenSea</strong>
+      </div>
+      <header className="approved-page__header">
+        <p className="approved-eyebrow">Market mirror</p>
+        <h1>Live market signals.</h1>
         <p>
-          Stage 1 shows representative, validated metadata only. Valuations are
-          fixtures and no work is offered for purchase.
+          Read-only listings and sale context from approved external venues.
+          ArtFi does not create, sign, match, custody or settle marketplace
+          orders.
         </p>
       </header>
       <div className="filter-bar" aria-label="Current catalog filters">
-        <span>All works</span>
-        <span>6 records</span>
-        <span>Sort: recently documented</span>
+        <span>All mirrored records</span>
+        <span>{artworks.length} records</span>
+        <span>Source: OpenSea</span>
       </div>
-      <div className="artwork-grid">
+      <div className="market-mirror-grid">
         {artworks.map((artwork) => (
-          <ArtworkCard artwork={artwork} key={artwork.slug} />
+          <MarketMirrorCard artwork={artwork} key={artwork.slug} />
         ))}
       </div>
     </main>
