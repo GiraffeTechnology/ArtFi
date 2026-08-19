@@ -54,3 +54,16 @@ test("RWA creation is wallet and Sepolia gated", async ({ page }) => {
     page.getByText("The application never receives a private key."),
   ).toBeVisible();
 });
+
+test("production health endpoint reports the enforced operating mode", async ({
+  request,
+}) => {
+  const response = await request.get("/api/health");
+  expect(response.ok()).toBe(true);
+  await expect(response.json()).resolves.toEqual({
+    chainId: 11155111,
+    marketplaceMode: "external-mirror",
+    service: "artfi-web",
+    status: "ok",
+  });
+});

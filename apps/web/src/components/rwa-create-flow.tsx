@@ -33,9 +33,7 @@ type MintIntent = {
   status: string;
 };
 
-const apiURL = (
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
-).replace(/\/$/, "");
+const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
 const labels: Record<FlowStatus, string> = {
   idle: "Ready for review",

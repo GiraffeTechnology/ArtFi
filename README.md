@@ -81,5 +81,6 @@ See [the staged roadmap](docs/ROADMAP.md), [PRD traceability](docs/PRD_TRACEABIL
 [Stage 6 acceptance evidence](docs/STAGE_6_ACCEPTANCE.md),
 [Stage 7 acceptance evidence](docs/STAGE_7_ACCEPTANCE.md),
 [pre-chain deployment evidence](docs/PRECHAIN_DEPLOYMENT_EVIDENCE.md),
+[UI deployment contract](docs/UI_DEPLOYMENT_CONTRACT.md),
 [Sepolia/OpenSea validation status](docs/TESTNET_MARKETPLACE_VALIDATION.md), and
 [architecture](docs/ARCHITECTURE.md).
