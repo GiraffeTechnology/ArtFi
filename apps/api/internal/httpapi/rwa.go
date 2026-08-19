@@ -80,6 +80,7 @@ type rwaService struct {
 	vaultIntentByKey   map[string]string
 	now                func() time.Time
 	db                 persistenceDB
+	cache              cacheStore
 	requireDB          bool
 	indexerKeyHash     [32]byte
 	indexerEnabled     bool
@@ -141,6 +142,7 @@ func newRWAServiceFromEnv() *rwaService {
 		service.indexerEnabled = true
 	}
 	service.attachPersistence(strings.TrimSpace(os.Getenv("MYSQL_DSN")))
+	service.attachCache(strings.TrimSpace(os.Getenv("REDIS_URL")))
 	return service
 }
 

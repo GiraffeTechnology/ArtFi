@@ -89,6 +89,7 @@ func (service *rwaService) ingestChainEvent(writer http.ResponseWriter, request 
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Indexer persistence unavailable", "The event could not be stored durably.")
 		return
 	}
+	service.invalidatePortfolioCache(request.Context(), input)
 	writeJSON(writer, status, map[string]any{"status": "recorded", "removed": input.Removed})
 }
 
@@ -209,6 +210,11 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		writeJSON(writer, http.StatusOK, response)
 		return
 	}
+	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "portfolio:"+address, "", &response)
+	if cacheHit {
+		writeJSON(writer, http.StatusOK, response)
+		return
+	}
 	rows, err := service.db.QueryContext(request.Context(), `
 		SELECT asset_token, symbol, direction, amount,
 		       DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%sZ')
@@ -257,5 +263,6 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		position.Balance = balances[token].String()
 		response.Positions = append(response.Positions, *position)
 	}
+	service.storeCachedJSON(request.Context(), cacheToken, response)
 	writeJSON(writer, http.StatusOK, response)
 }

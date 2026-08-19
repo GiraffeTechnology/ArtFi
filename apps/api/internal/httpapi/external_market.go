@@ -77,6 +77,14 @@ type marketActivity struct {
 	Payload             map[string]any `json:"payload"`
 }
 
+type marketActivityResponse struct {
+	Data          []marketActivity `json:"data"`
+	SchemaVersion string           `json:"schemaVersion"`
+	Source        string           `json:"source"`
+	Execution     string           `json:"execution"`
+	Custody       bool             `json:"custody"`
+}
+
 func parseMarketplaceSources(value string) map[string]struct{} {
 	result := map[string]struct{}{}
 	if strings.TrimSpace(value) == "" {
@@ -127,6 +135,7 @@ func (service *rwaService) ingestMarketEvent(writer http.ResponseWriter, request
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The normalized event could not be stored durably.")
 		return
 	}
+	service.bumpCacheNamespace(request.Context(), "market")
 	writeJSON(writer, status, map[string]any{"eventId": hex.EncodeToString(eventID[:]), "status": "mirrored"})
 }
 
@@ -312,6 +321,20 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 			return
 		}
 	}
+	contract := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("contract")))
+	if contract != "" && !addressPattern.MatchString(contract) {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid contract", "Contract must be a 20-byte Ethereum address.")
+		return
+	}
+	response := marketActivityResponse{
+		Data: []marketActivity{}, SchemaVersion: "1", Source: source,
+		Execution: "external-deeplink-only", Custody: false,
+	}
+	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "market", request.URL.Query().Encode(), &response)
+	if cacheHit {
+		writeJSON(writer, http.StatusOK, response)
+		return
+	}
 	query := `
 		SELECT event_id, schema_version, source, event_type, event_family, entity_key,
 		       event_version, chain_name, COALESCE(collection_slug, ''), COALESCE(order_hash, ''),
@@ -321,11 +344,7 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		       DATE_FORMAT(event_timestamp, '%Y-%m-%dT%H:%i:%s.%fZ'), payload
 		FROM external_market_events WHERE source = ?`
 	args := []any{source}
-	if contract := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("contract"))); contract != "" {
-		if !addressPattern.MatchString(contract) {
-			writeProblem(writer, request, http.StatusBadRequest, "Invalid contract", "Contract must be a 20-byte Ethereum address.")
-			return
-		}
+	if contract != "" {
 		query += " AND contract_address = ?"
 		args = append(args, contract)
 	}
@@ -359,8 +378,7 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity query was interrupted.")
 		return
 	}
-	writeJSON(writer, http.StatusOK, map[string]any{
-		"data": items, "schemaVersion": "1", "source": source,
-		"execution": "external-deeplink-only", "custody": false,
-	})
+	response.Data = items
+	service.storeCachedJSON(request.Context(), cacheToken, response)
+	writeJSON(writer, http.StatusOK, response)
 }
