@@ -8,7 +8,7 @@ cd "$repo_root/packages/contracts"
 
 wallet_args=(
   --account "$ARTFI_DEPLOYER_ACCOUNT"
-  --password "$ARTFI_KEYSTORE_PASSWORD_FILE"
+  --password-file "$ARTFI_KEYSTORE_PASSWORD_FILE"
 )
 verify_args=()
 if [[ -n "${ETHERSCAN_API_KEY:-}" ]]; then

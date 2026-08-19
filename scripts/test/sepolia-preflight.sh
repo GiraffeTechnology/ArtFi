@@ -30,7 +30,11 @@ if [[ "$chain_id" != "11155111" ]]; then
   exit 1
 fi
 
-account_address="$(cast wallet address --account "$ARTFI_DEPLOYER_ACCOUNT" --password "$ARTFI_KEYSTORE_PASSWORD_FILE")"
+account_address="$(
+  cast wallet address \
+    --account "$ARTFI_DEPLOYER_ACCOUNT" \
+    --password-file "$ARTFI_KEYSTORE_PASSWORD_FILE"
+)"
 if [[ "${account_address,,}" != "${DEPLOYER_ADDRESS,,}" ]]; then
   printf 'refusing deployment: DEPLOYER_ADDRESS does not match the selected keystore account\n' >&2
   exit 1

@@ -16,6 +16,7 @@
     "contracts:format:check": "pnpm --filter @giraffetechnology/artfi-contracts format:check",
     "contracts:lint": "pnpm --filter @giraffetechnology/artfi-contracts lint:security",
     "contracts:test": "pnpm --filter @giraffetechnology/artfi-contracts test:contracts",
+    "contracts:deploy-tooling:check": "node scripts/test/verify-sepolia-tooling.mjs",
     "lint": "turbo run lint",
     "security:secrets": "node scripts/security/check-secrets.mjs",
     "release:verify-schema": "node scripts/release/verify-release.mjs release/release-candidate.example.json --schema-only",
