@@ -3,6 +3,19 @@
 This strategy produces test evidence only. Mainnet, real assets, real value, ArtFi order execution,
 and exchange operation remain disabled.
 
+## Current execution status
+
+The initial live Sepolia run was deferred, then rescheduled by product-owner direction for after
+all pre-chain deployment gates. No test ETH has been obtained, no contract has been broadcast, no
+token has been minted, and no OpenSea discovery or listing claim has been made. Local contract,
+API, migration, UI, and adapter tests remain valid development evidence, but they do not substitute
+for either live evidence track below.
+
+The deployment, standards-probe, mint, and marketplace-validation tooling stays available for a
+future evidence run. Execution requires a funded test-only signer, the approved Singapore egress,
+chain ID `11155111`, immutable test metadata with documented artwork rights, and a recorded
+go/no-go for the live run.
+
 ## Track A - Ethereum deployability and standards
 
 1. Pin the exact release commit, Solidity compiler, optimizer settings, chain ID `11155111`, role

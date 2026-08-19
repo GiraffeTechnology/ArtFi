@@ -9,6 +9,7 @@ This repository is the single source of truth for the rebuilt ArtFi platform.
 - Delivery phase: **Stage 2–7 integrated implementation**
 - Allowed chain: **Sepolia only**
 - Mainnet and real-money operation: **not approved**
+- Live Sepolia/OpenSea evidence run: **pending after pre-chain gates; not claimed as passed**
 - PRD: converted into staged, testable requirements
 
 ## Workspace
@@ -78,4 +79,6 @@ See [the staged roadmap](docs/ROADMAP.md), [PRD traceability](docs/PRD_TRACEABIL
 [Stage 4 acceptance evidence](docs/STAGE_4_ACCEPTANCE.md),
 [Stage 5 acceptance evidence](docs/STAGE_5_ACCEPTANCE.md),
 [Stage 6 acceptance evidence](docs/STAGE_6_ACCEPTANCE.md),
-[Stage 7 acceptance evidence](docs/STAGE_7_ACCEPTANCE.md), and [architecture](docs/ARCHITECTURE.md).
+[Stage 7 acceptance evidence](docs/STAGE_7_ACCEPTANCE.md),
+[Sepolia/OpenSea validation status](docs/TESTNET_MARKETPLACE_VALIDATION.md), and
+[architecture](docs/ARCHITECTURE.md).

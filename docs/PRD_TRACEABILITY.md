@@ -37,3 +37,8 @@ Status values:
 | RIGHTS-001   | Artwork licensing and attribution              |                     1-2 | gated                 | Stage 1 uses original CSS placeholders; real catalog media still needs source, license, attribution and takedown records              |
 
 No item may be marked complete solely from a screenshot or PRD statement.
+
+Live Sepolia deployment, standards probing, NFT minting, and OpenSea discovery were initially
+deferred and later scheduled for after the pre-chain gates. Their absence does not downgrade
+implemented code or automated evidence, but those runtime checks remain unpassed and must not be
+represented as completed acceptance evidence.
