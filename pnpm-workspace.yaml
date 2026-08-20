@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  bufferutil: true
+  keccak: true
+  unrs-resolver: true
+  utf-8-validate: true
+
+peerDependencyRules:
+  allowedVersions:
+    "use-sync-external-store>react": "19"

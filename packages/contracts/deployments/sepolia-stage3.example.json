@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "chainId": 11155111,
+  "network": "sepolia",
+  "releaseCommit": "REPLACE_AFTER_REVIEW",
+  "contracts": {
+    "VaultFactory": {
+      "address": "REPLACE_AFTER_DEPLOYMENT",
+      "deploymentTransaction": "REPLACE_AFTER_DEPLOYMENT",
+      "verifiedSource": "REPLACE_AFTER_VERIFICATION"
+    }
+  },
+  "roles": {
+    "admin": "REPLACE_WITH_APPROVED_MULTISIG",
+    "creator": "REPLACE_WITH_APPROVED_CREATOR",
+    "pauser": "REPLACE_WITH_APPROVED_PAUSER"
+  },
+  "invariants": {
+    "oneVaultPerNft": true,
+    "oneFixedSupplyPerVault": true,
+    "recoveryAfterFractionalization": false
+  }
+}

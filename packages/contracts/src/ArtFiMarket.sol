@@ -1,0 +1,407 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.30;
+
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+/// @title ArtFi testnet market
+/// @notice Escrowed fixed-price, auction, and capped offering settlement with pull-based refunds.
+contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant TOKEN_MANAGER_ROLE = keccak256("TOKEN_MANAGER_ROLE");
+
+    enum ListingKind {
+        FixedPrice,
+        Auction
+    }
+
+    enum State {
+        None,
+        Active,
+        Settled,
+        Cancelled
+    }
+
+    struct Listing {
+        address seller;
+        IERC20 assetToken;
+        IERC20 paymentToken;
+        uint256 amountRemaining;
+        uint256 unitPrice;
+        uint48 startsAt;
+        uint48 endsAt;
+        ListingKind kind;
+        State state;
+        address highestBidder;
+        uint256 highestBid;
+    }
+
+    struct Offering {
+        address seller;
+        IERC20 assetToken;
+        IERC20 paymentToken;
+        uint256 tokenAmount;
+        uint256 allocatedTokens;
+        uint256 minRaise;
+        uint256 hardCap;
+        uint256 raised;
+        uint48 startsAt;
+        uint48 endsAt;
+        State state;
+        bool successful;
+    }
+
+    error ActiveBidExists();
+    error AmountUnavailable();
+    error IdempotencyConflict(bytes32 requestId);
+    error InvalidConfiguration();
+    error InvalidState();
+    error NotAuthorized();
+    error OfferingNotSuccessful();
+    error OfferingSuccessful();
+    error PilotCapExceeded();
+    error TokenNotAllowed();
+    error TransferAmountMismatch();
+    error ZeroAddress();
+
+    event ListingCreated(
+        bytes32 indexed requestId, uint256 indexed listingId, address indexed seller
+    );
+    event FixedOrderFilled(
+        uint256 indexed listingId, address indexed buyer, uint256 amount, uint256 payment
+    );
+    event BidPlaced(uint256 indexed listingId, address indexed bidder, uint256 amount);
+    event ListingSettled(uint256 indexed listingId, address indexed buyer, uint256 payment);
+    event ListingCancelled(uint256 indexed listingId);
+    event OfferingCreated(
+        bytes32 indexed requestId, uint256 indexed offeringId, address indexed seller
+    );
+    event Contribution(
+        uint256 indexed offeringId, address indexed contributor, uint256 payment, uint256 allocation
+    );
+    event OfferingFinalized(uint256 indexed offeringId, bool successful, uint256 raised);
+    event OfferingClaimed(uint256 indexed offeringId, address indexed account, uint256 amount);
+    event OfferingRefunded(uint256 indexed offeringId, address indexed account, uint256 amount);
+    event CreditWithdrawn(address indexed account, address indexed token, uint256 amount);
+    event TokenPermissionUpdated(address indexed token, bool assetAllowed, bool paymentAllowed);
+    event PilotCapUpdated(address indexed account, address indexed paymentToken, uint256 cap);
+
+    mapping(address token => bool allowed) public allowedAssetToken;
+    mapping(address token => bool allowed) public allowedPaymentToken;
+    mapping(uint256 listingId => Listing) public listings;
+    mapping(uint256 offeringId => Offering) public offerings;
+    mapping(uint256 offeringId => mapping(address account => uint256)) public contributions;
+    mapping(uint256 offeringId => mapping(address account => uint256)) public allocations;
+    mapping(address account => mapping(address token => uint256)) public credits;
+    mapping(address account => mapping(address paymentToken => uint256)) public pilotPaymentCap;
+    mapping(address account => mapping(address paymentToken => uint256)) public pilotPaymentUsed;
+
+    mapping(bytes32 requestId => uint256 recordId) private _listingByRequest;
+    mapping(bytes32 requestId => bytes32 intentHash) private _listingIntent;
+    mapping(bytes32 requestId => uint256 recordId) private _offeringByRequest;
+    mapping(bytes32 requestId => bytes32 intentHash) private _offeringIntent;
+    uint256 private _nextListingId = 1;
+    uint256 private _nextOfferingId = 1;
+
+    constructor(address admin, address pauser, address tokenManager) {
+        if (admin == address(0) || pauser == address(0) || tokenManager == address(0)) {
+            revert ZeroAddress();
+        }
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(PAUSER_ROLE, pauser);
+        _grantRole(TOKEN_MANAGER_ROLE, tokenManager);
+    }
+
+    function setTokenPermission(address token, bool assetAllowed, bool paymentAllowed)
+        external
+        onlyRole(TOKEN_MANAGER_ROLE)
+    {
+        if (token == address(0)) revert ZeroAddress();
+        allowedAssetToken[token] = assetAllowed;
+        allowedPaymentToken[token] = paymentAllowed;
+        emit TokenPermissionUpdated(token, assetAllowed, paymentAllowed);
+    }
+
+    function setPilotCap(address account, address paymentToken, uint256 cap)
+        external
+        onlyRole(TOKEN_MANAGER_ROLE)
+    {
+        if (account == address(0) || paymentToken == address(0)) revert ZeroAddress();
+        pilotPaymentCap[account][paymentToken] = cap;
+        emit PilotCapUpdated(account, paymentToken, cap);
+    }
+
+    function createListing(
+        bytes32 requestId,
+        IERC20 assetToken,
+        IERC20 paymentToken,
+        uint256 amount,
+        uint256 unitPrice,
+        uint48 startsAt,
+        uint48 endsAt,
+        ListingKind kind
+    ) external whenNotPaused nonReentrant returns (uint256 listingId) {
+        if (
+            requestId == bytes32(0) || amount == 0 || unitPrice == 0 || startsAt >= endsAt
+                || endsAt <= block.timestamp
+        ) {
+            revert InvalidConfiguration();
+        }
+        if (!allowedAssetToken[address(assetToken)] || !allowedPaymentToken[address(paymentToken)])
+        {
+            revert TokenNotAllowed();
+        }
+        bytes32 intentHash = keccak256(
+            abi.encode(
+                msg.sender, assetToken, paymentToken, amount, unitPrice, startsAt, endsAt, kind
+            )
+        );
+        listingId = _listingByRequest[requestId];
+        if (listingId != 0) {
+            if (_listingIntent[requestId] != intentHash) revert IdempotencyConflict(requestId);
+            return listingId;
+        }
+        listingId = _nextListingId++;
+        _listingByRequest[requestId] = listingId;
+        _listingIntent[requestId] = intentHash;
+        listings[listingId] = Listing(
+            msg.sender,
+            assetToken,
+            paymentToken,
+            amount,
+            unitPrice,
+            startsAt,
+            endsAt,
+            kind,
+            State.Active,
+            address(0),
+            0
+        );
+        _pullExact(assetToken, msg.sender, amount);
+        emit ListingCreated(requestId, listingId, msg.sender);
+    }
+
+    function buyFixed(uint256 listingId, uint256 amount) external whenNotPaused nonReentrant {
+        Listing storage listing = listings[listingId];
+        _requireLive(listing);
+        if (
+            listing.kind != ListingKind.FixedPrice || amount == 0
+                || amount > listing.amountRemaining
+        ) revert AmountUnavailable();
+        uint256 payment = amount * listing.unitPrice;
+        _consumePilotCap(msg.sender, address(listing.paymentToken), payment);
+        _pullExact(listing.paymentToken, msg.sender, payment);
+        listing.amountRemaining -= amount;
+        credits[listing.seller][address(listing.paymentToken)] += payment;
+        if (listing.amountRemaining == 0) listing.state = State.Settled;
+        listing.assetToken.safeTransfer(msg.sender, amount);
+        emit FixedOrderFilled(listingId, msg.sender, amount, payment);
+    }
+
+    function placeBid(uint256 listingId, uint256 bidAmount) external whenNotPaused nonReentrant {
+        Listing storage listing = listings[listingId];
+        _requireLive(listing);
+        if (
+            listing.kind != ListingKind.Auction || bidAmount < listing.unitPrice
+                || bidAmount <= listing.highestBid
+        ) {
+            revert InvalidConfiguration();
+        }
+        _consumePilotCap(msg.sender, address(listing.paymentToken), bidAmount);
+        _pullExact(listing.paymentToken, msg.sender, bidAmount);
+        if (listing.highestBidder != address(0)) {
+            credits[listing.highestBidder][address(listing.paymentToken)] += listing.highestBid;
+        }
+        listing.highestBidder = msg.sender;
+        listing.highestBid = bidAmount;
+        emit BidPlaced(listingId, msg.sender, bidAmount);
+    }
+
+    function settleAuction(uint256 listingId) external nonReentrant {
+        Listing storage listing = listings[listingId];
+        if (
+            listing.state != State.Active || listing.kind != ListingKind.Auction
+                || block.timestamp < listing.endsAt
+        ) {
+            revert InvalidState();
+        }
+        listing.state = State.Settled;
+        uint256 amount = listing.amountRemaining;
+        listing.amountRemaining = 0;
+        if (listing.highestBidder == address(0)) {
+            listing.assetToken.safeTransfer(listing.seller, amount);
+            emit ListingSettled(listingId, address(0), 0);
+            return;
+        }
+        credits[listing.seller][address(listing.paymentToken)] += listing.highestBid;
+        listing.assetToken.safeTransfer(listing.highestBidder, amount);
+        emit ListingSettled(listingId, listing.highestBidder, listing.highestBid);
+    }
+
+    function cancelListing(uint256 listingId) external whenNotPaused nonReentrant {
+        Listing storage listing = listings[listingId];
+        if (listing.state != State.Active || listing.seller != msg.sender) revert NotAuthorized();
+        if (listing.highestBidder != address(0)) revert ActiveBidExists();
+        listing.state = State.Cancelled;
+        uint256 amount = listing.amountRemaining;
+        listing.amountRemaining = 0;
+        listing.assetToken.safeTransfer(listing.seller, amount);
+        emit ListingCancelled(listingId);
+    }
+
+    function createOffering(
+        bytes32 requestId,
+        IERC20 assetToken,
+        IERC20 paymentToken,
+        uint256 tokenAmount,
+        uint256 minRaise,
+        uint256 hardCap,
+        uint48 startsAt,
+        uint48 endsAt
+    ) external whenNotPaused nonReentrant returns (uint256 offeringId) {
+        if (
+            requestId == bytes32(0) || tokenAmount == 0 || minRaise == 0 || minRaise > hardCap
+                || startsAt >= endsAt || endsAt <= block.timestamp
+        ) {
+            revert InvalidConfiguration();
+        }
+        if (!allowedAssetToken[address(assetToken)] || !allowedPaymentToken[address(paymentToken)]) revert TokenNotAllowed();
+        bytes32 intentHash = keccak256(
+            abi.encode(
+                msg.sender,
+                assetToken,
+                paymentToken,
+                tokenAmount,
+                minRaise,
+                hardCap,
+                startsAt,
+                endsAt
+            )
+        );
+        offeringId = _offeringByRequest[requestId];
+        if (offeringId != 0) {
+            if (_offeringIntent[requestId] != intentHash) revert IdempotencyConflict(requestId);
+            return offeringId;
+        }
+        offeringId = _nextOfferingId++;
+        _offeringByRequest[requestId] = offeringId;
+        _offeringIntent[requestId] = intentHash;
+        offerings[offeringId] = Offering(
+            msg.sender,
+            assetToken,
+            paymentToken,
+            tokenAmount,
+            0,
+            minRaise,
+            hardCap,
+            0,
+            startsAt,
+            endsAt,
+            State.Active,
+            false
+        );
+        _pullExact(assetToken, msg.sender, tokenAmount);
+        emit OfferingCreated(requestId, offeringId, msg.sender);
+    }
+
+    function contribute(uint256 offeringId, uint256 payment) external whenNotPaused nonReentrant {
+        Offering storage offering = offerings[offeringId];
+        if (
+            offering.state != State.Active || block.timestamp < offering.startsAt
+                || block.timestamp >= offering.endsAt || payment == 0
+                || offering.raised + payment > offering.hardCap
+        ) {
+            revert InvalidState();
+        }
+        uint256 allocation = payment * offering.tokenAmount / offering.hardCap;
+        if (allocation == 0) revert InvalidConfiguration();
+        _consumePilotCap(msg.sender, address(offering.paymentToken), payment);
+        _pullExact(offering.paymentToken, msg.sender, payment);
+        offering.raised += payment;
+        offering.allocatedTokens += allocation;
+        contributions[offeringId][msg.sender] += payment;
+        allocations[offeringId][msg.sender] += allocation;
+        emit Contribution(offeringId, msg.sender, payment, allocation);
+    }
+
+    function finalizeOffering(uint256 offeringId) external nonReentrant {
+        Offering storage offering = offerings[offeringId];
+        if (offering.state != State.Active || block.timestamp < offering.endsAt) {
+            revert InvalidState();
+        }
+        offering.state = State.Settled;
+        offering.successful = offering.raised >= offering.minRaise;
+        if (offering.successful) {
+            credits[offering.seller][address(offering.paymentToken)] += offering.raised;
+            uint256 unsold = offering.tokenAmount - offering.allocatedTokens;
+            if (unsold != 0) offering.assetToken.safeTransfer(offering.seller, unsold);
+        } else {
+            offering.assetToken.safeTransfer(offering.seller, offering.tokenAmount);
+        }
+        emit OfferingFinalized(offeringId, offering.successful, offering.raised);
+    }
+
+    function claimOffering(uint256 offeringId) external nonReentrant {
+        Offering storage offering = offerings[offeringId];
+        if (offering.state != State.Settled || !offering.successful) {
+            revert OfferingNotSuccessful();
+        }
+        uint256 amount = allocations[offeringId][msg.sender];
+        if (amount == 0) revert AmountUnavailable();
+        allocations[offeringId][msg.sender] = 0;
+        offering.assetToken.safeTransfer(msg.sender, amount);
+        emit OfferingClaimed(offeringId, msg.sender, amount);
+    }
+
+    function refundOffering(uint256 offeringId) external nonReentrant {
+        Offering storage offering = offerings[offeringId];
+        if (offering.state != State.Settled || offering.successful) revert OfferingSuccessful();
+        uint256 amount = contributions[offeringId][msg.sender];
+        if (amount == 0) revert AmountUnavailable();
+        contributions[offeringId][msg.sender] = 0;
+        offering.paymentToken.safeTransfer(msg.sender, amount);
+        emit OfferingRefunded(offeringId, msg.sender, amount);
+    }
+
+    function withdrawCredit(IERC20 token) external nonReentrant {
+        uint256 amount = credits[msg.sender][address(token)];
+        if (amount == 0) revert AmountUnavailable();
+        credits[msg.sender][address(token)] = 0;
+        token.safeTransfer(msg.sender, amount);
+        emit CreditWithdrawn(msg.sender, address(token), amount);
+    }
+
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
+    }
+
+    function _requireLive(Listing storage listing) private view {
+        if (
+            listing.state != State.Active || block.timestamp < listing.startsAt
+                || block.timestamp >= listing.endsAt
+        ) revert InvalidState();
+    }
+
+    function _pullExact(IERC20 token, address from, uint256 amount) private {
+        uint256 beforeBalance = token.balanceOf(address(this));
+        token.safeTransferFrom(from, address(this), amount);
+        if (token.balanceOf(address(this)) - beforeBalance != amount) {
+            revert TransferAmountMismatch();
+        }
+    }
+
+    function _consumePilotCap(address account, address paymentToken, uint256 amount) private {
+        uint256 nextUsed = pilotPaymentUsed[account][paymentToken] + amount;
+        if (nextUsed > pilotPaymentCap[account][paymentToken]) revert PilotCapExceeded();
+        pilotPaymentUsed[account][paymentToken] = nextUsed;
+    }
+}

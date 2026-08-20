@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "chainId": 11155111,
+  "standard": "ERC-1155",
+  "marketplaceMode": "external-mirror",
+  "artfiExchangeEnabled": false,
+  "series": {
+    "artworkId": "UNIT-A01",
+    "editions": 100,
+    "unitPriceWei": "10000000000000000",
+    "currency": "ETH",
+    "immutableSupply": true,
+    "distributionWallet": "0x0000000000000000000000000000000000000000"
+  },
+  "artwork": {
+    "title": "Replace with the authorized work title",
+    "creator": "Michael Yip's team",
+    "rightsHolder": "ArtCCH",
+    "masterFile": "UNIT-A01-000.png",
+    "masterMimeType": "image/png",
+    "masterSha256": "",
+    "publicArtworkPreview": false,
+    "publicArtworkUri": null,
+    "unwatermarkedWebDownload": false
+  },
+  "holderAsset": {
+    "watermarkedFile": "UNIT-A01-000-watermarked.png",
+    "watermarkedMimeType": "image/png",
+    "watermarkedSha256": "",
+    "highResolution": true,
+    "watermarked": true,
+    "delivery": "token-gated-download",
+    "preview": false
+  },
+  "rights": {
+    "basis": "assignment",
+    "evidenceFile": "rights-evidence.pdf",
+    "evidenceSha256": "",
+    "attribution": "Copyright ArtCCH. Created by Michael Yip's team.",
+    "nftMintAuthorized": false,
+    "marketplaceListingEligible": false,
+    "listingActionConfirmed": false,
+    "expiresAt": null
+  },
+  "physicalArtwork": {
+    "mapped": true,
+    "conveysPhysicalTitle": false,
+    "redeemable": false,
+    "donationTrigger": "primary-sellout-100",
+    "donationRecipient": "CCHS",
+    "donationAcceptanceEvidenceRequired": true
+  },
+  "fundraising": {
+    "beneficiary": "CCHS",
+    "beneficiaryWebsite": "https://cchsc.ca",
+    "proceedsPercent": 100,
+    "receiptIssuer": "CCHS",
+    "holderContactsCchsDirectly": true,
+    "artfiIssuesReceipt": false,
+    "artfiDeterminesEligibleAmount": false,
+    "receiptValuationPolicy": "cchs-issue-date-eth-cad-public-market-rate",
+    "receiptRateTimestampBasis": "cchs-receipt-issued-at",
+    "receiptRatePair": "ETH/CAD",
+    "receiptRateSourceSelection": "CCHS-approved-public-market-source",
+    "receiptRateSnapshotSha256Required": true,
+    "officialReceiptAmountDeterminedBy": "CCHS",
+    "ethCadPriceEvidenceRequired": true,
+    "charityStatusConfirmed": false,
+    "cchsPolicyConfirmed": false,
+    "cchsEvidenceFile": "cchs-status-and-policy-evidence.pdf",
+    "cchsEvidenceSha256": ""
+  },
+  "metadata": {
+    "description": "Fixed ArtCCH charity edition. No artwork preview. No physical title, redemption, copyright, commercial-use, or reproduction rights. Verified holders may access a watermarked high-resolution copy.",
+    "attributes": []
+  }
+}

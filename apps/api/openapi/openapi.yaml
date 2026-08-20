@@ -1,0 +1,715 @@
+openapi: 3.1.0
+info:
+  title: ArtFi API
+  version: 0.4.0
+  description: Stage 4 Sepolia preview contract. Wallet intents never hold private keys; authenticated indexer writes are durable and replay-safe.
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+  /v1/config:
+    get:
+      operationId: getConfig
+      responses:
+        "200":
+          description: Safe public runtime configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Config"
+  /v1/assets:
+    get:
+      operationId: listAssets
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - { name: status, in: query, schema: { type: string, maxLength: 40 } }
+        - {
+            name: page,
+            in: query,
+            schema: { type: integer, minimum: 1, default: 1 },
+          }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+      responses:
+        "200":
+          description: Asset catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, total, page, pageSize]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Asset"
+                  total:
+                    type: integer
+                    minimum: 0
+                  page: { type: integer, minimum: 1 }
+                  pageSize: { type: integer, minimum: 1, maximum: 100 }
+  /v1/assets/{slug}:
+    get:
+      operationId: getAsset
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Asset record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/projects:
+    get:
+      operationId: listProjects
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - {
+            name: page,
+            in: query,
+            schema: { type: integer, minimum: 1, default: 1 },
+          }
+        - {
+            name: pageSize,
+            in: query,
+            schema: { type: integer, minimum: 1, maximum: 100, default: 20 },
+          }
+      responses:
+        "200":
+          description: Curated projects
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, total, page, pageSize]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Project"
+                  total:
+                    type: integer
+                    minimum: 0
+                  page: { type: integer, minimum: 1 }
+                  pageSize: { type: integer, minimum: 1, maximum: 100 }
+  /v1/portfolio/{address}:
+    get:
+      operationId: getPortfolio
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^0x[0-9a-fA-F]{40}$"
+      responses:
+        "200":
+          description: Read-only public address portfolio
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Portfolio"
+        "400":
+          $ref: "#/components/responses/Problem"
+  /v1/indexer/events:
+    post:
+      operationId: ingestChainEvent
+      parameters:
+        - name: X-Indexer-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChainEventRequest"
+      responses:
+        "201": { description: Canonical event created }
+        "200":
+          {
+            description: Replay,
+            confirmation update,
+            removal,
+            or reorg replacement recorded,
+          }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /v1/indexer/market-events:
+    post:
+      operationId: ingestExternalMarketEvent
+      description: Credential-gated ingestion for normalized, read-only events from approved marketplaces.
+      parameters:
+        - name: X-Indexer-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalMarketEventRequest"
+      responses:
+        "201": { description: External marketplace event mirrored }
+        "200": { description: Idempotent replay accepted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /v1/market/activity:
+    get:
+      operationId: getExternalMarketActivity
+      description: Read-only activity mirrored from approved external marketplaces; execution remains external.
+      parameters:
+        - name: source
+          in: query
+          schema: { type: string, default: opensea }
+        - name: contract
+          in: query
+          schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Attributed external marketplace activity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, schemaVersion, source, execution, custody]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ExternalMarketActivity"
+                  schemaVersion: { type: string, const: "1" }
+                  source: { type: string }
+                  execution: { type: string, const: external-deeplink-only }
+                  custody: { type: boolean, const: false }
+        "400": { $ref: "#/components/responses/Problem" }
+  /v1/uploads/intents:
+    post:
+      operationId: createUploadIntent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadIntentRequest"
+      responses:
+        "201":
+          description: Short-lived digest-bound API upload intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadIntent"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /v1/uploads/{uploadID}:
+    put:
+      operationId: uploadObject
+      parameters:
+        - name: uploadID
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[0-9a-f]{32}$" }
+        - name: Content-SHA256
+          in: header
+          required: true
+          schema: { type: string, pattern: "^[0-9a-f]{64}$" }
+      requestBody:
+        required: true
+        content:
+          image/png: { schema: { type: string, format: binary } }
+          image/jpeg: { schema: { type: string, format: binary } }
+          image/webp: { schema: { type: string, format: binary } }
+      responses:
+        "204": { description: Object digest verified and persisted }
+        "400":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/rwa/intents:
+    post:
+      operationId: createMintIntent
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MintIntentRequest"
+      responses:
+        "201":
+          description: New immutable metadata and contract-call intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MintIntent"
+        "200":
+          description: Idempotent replay of an existing intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MintIntent"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+  /v1/rwa/intents/{intentID}:
+    get:
+      operationId: getMintIntent
+      parameters:
+        - $ref: "#/components/parameters/IntentID"
+      responses:
+        "200":
+          description: Mint transaction lifecycle snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MintIntent"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/rwa/intents/{intentID}/submission:
+    post:
+      operationId: recordMintSubmission
+      parameters:
+        - $ref: "#/components/parameters/IntentID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transactionHash]
+              properties:
+                transactionHash:
+                  { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+      responses:
+        "200":
+          description: Submitted transaction attached idempotently
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MintIntent"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /v1/vault/intents:
+    post:
+      operationId: createVaultIntent
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultIntentRequest"
+      responses:
+        "201":
+          description: New VaultFactory transaction intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultIntent"
+        "200":
+          description: Idempotent replay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultIntent"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /v1/vault/intents/{intentID}:
+    get:
+      operationId: getVaultIntent
+      parameters:
+        - $ref: "#/components/parameters/IntentID"
+      responses:
+        "200":
+          description: Vault transaction lifecycle snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultIntent"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /v1/vault/intents/{intentID}/submission:
+    post:
+      operationId: recordVaultSubmission
+      parameters:
+        - $ref: "#/components/parameters/IntentID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transactionHash]
+              properties:
+                transactionHash:
+                  { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+      responses:
+        "200":
+          description: Submitted VaultFactory transaction attached idempotently
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultIntent"
+components:
+  parameters:
+    IntentID:
+      name: intentID
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[0-9a-f]{32}$" }
+  responses:
+    Problem:
+      description: RFC 9457-style request failure
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Status:
+      type: object
+      required: [service, status, version]
+      properties:
+        service: { type: string }
+        status: { type: string }
+        version: { type: string }
+    Config:
+      type: object
+      required: [api, chainId, mode, network, readOnly, writeEnabled]
+      properties:
+        api: { type: string, const: v1 }
+        chainId: { type: integer, const: 11155111 }
+        mode: { type: string, const: preview }
+        network: { type: string, const: sepolia }
+        readOnly: { type: boolean }
+        writeEnabled: { type: boolean }
+        registryAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        vaultFactoryAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+    UploadIntentRequest:
+      type: object
+      additionalProperties: false
+      required: [fileName, contentType, sha256, size]
+      properties:
+        fileName: { type: string, minLength: 1, maxLength: 120 }
+        contentType: { type: string, enum: [image/png, image/jpeg, image/webp] }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        size: { type: integer, minimum: 1, maximum: 10485760 }
+    UploadIntent:
+      type: object
+      required:
+        [uploadId, uploadUrl, method, expiresAt, maxBytes, requiredHeaders]
+      properties:
+        uploadId: { type: string, pattern: "^[0-9a-f]{32}$" }
+        uploadUrl: { type: string }
+        method: { type: string, const: PUT }
+        expiresAt: { type: string, format: date-time }
+        maxBytes: { type: integer, const: 10485760 }
+        requiredHeaders:
+          type: object
+          additionalProperties: { type: string }
+    MintIntentRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [uploadId, recipient, name, artist, year, medium, location, description]
+      properties:
+        uploadId: { type: string, pattern: "^[0-9a-f]{32}$" }
+        recipient: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        artist: { type: string, minLength: 2, maxLength: 120 }
+        year: { type: integer, minimum: 1000 }
+        medium: { type: string, minLength: 2, maxLength: 160 }
+        location: { type: string, minLength: 2, maxLength: 160 }
+        description: { type: string, minLength: 20, maxLength: 2000 }
+    MintIntent:
+      type: object
+      required:
+        [
+          intentId,
+          requestId,
+          recipient,
+          registryAddress,
+          chainId,
+          metadataUri,
+          metadataSha256,
+          contractFunction,
+          contractArguments,
+          status,
+          createdAt,
+        ]
+      properties:
+        intentId: { type: string, pattern: "^[0-9a-f]{32}$" }
+        requestId: { type: string, pattern: "^0x[0-9a-f]{64}$" }
+        recipient: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        registryAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        chainId: { type: integer, const: 11155111 }
+        metadataUri: { type: string, format: uri, pattern: "^https://" }
+        metadataSha256: { type: string, pattern: "^0x[0-9a-f]{64}$" }
+        contractFunction:
+          { type: string, const: "createAsset(bytes32,address,string,bytes32)" }
+        contractArguments:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: string }
+        status: { type: string, enum: [prepared, submitted, confirmed, failed] }
+        transactionHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+        createdAt: { type: string, format: date-time }
+    VaultIntentRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          collectionAddress,
+          tokenId,
+          vaultName,
+          adminAddress,
+          pauserAddress,
+          fractionalizerAddress,
+        ]
+      properties:
+        collectionAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        tokenId: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+        vaultName: { type: string, minLength: 2, maxLength: 80 }
+        adminAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        pauserAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        fractionalizerAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+    VaultIntent:
+      type: object
+      required:
+        [
+          intentId,
+          requestId,
+          factoryAddress,
+          collectionAddress,
+          tokenId,
+          vaultName,
+          adminAddress,
+          pauserAddress,
+          fractionalizerAddress,
+          chainId,
+          contractFunction,
+          contractArguments,
+          status,
+          createdAt,
+        ]
+      properties:
+        intentId: { type: string, pattern: "^[0-9a-f]{32}$" }
+        requestId: { type: string, pattern: "^0x[0-9a-f]{64}$" }
+        factoryAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        collectionAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        tokenId: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+        vaultName: { type: string }
+        adminAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        pauserAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        fractionalizerAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        chainId: { type: integer, const: 11155111 }
+        contractFunction:
+          {
+            type: string,
+            const: "createVault(bytes32,string,address,uint256,address,address,address)",
+          }
+        contractArguments:
+          type: array
+          minItems: 7
+          maxItems: 7
+          items: { type: string }
+        status:
+          {
+            type: string,
+            enum:
+              [prepared, submitted, created, deposited, fractionalized, failed],
+          }
+        transactionHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+        createdAt: { type: string, format: date-time }
+    Asset:
+      type: object
+      required:
+        [
+          slug,
+          title,
+          artist,
+          year,
+          medium,
+          location,
+          valuationUsd,
+          fractionPriceUsd,
+          totalFractions,
+          availableFractions,
+          status,
+          provenance,
+        ]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        year: { type: integer }
+        medium: { type: string }
+        location: { type: string }
+        valuationUsd: { type: integer, minimum: 1 }
+        fractionPriceUsd: { type: integer, minimum: 1 }
+        totalFractions: { type: integer, minimum: 1 }
+        availableFractions: { type: integer, minimum: 0 }
+        status: { type: string }
+        provenance:
+          type: array
+          items: { type: string }
+    Project:
+      type: object
+      required: [slug, name, curator, location, assetSlugs, description]
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        curator: { type: string }
+        location: { type: string }
+        assetSlugs:
+          type: array
+          items: { type: string }
+        description: { type: string }
+    Portfolio:
+      type: object
+      required:
+        [
+          address,
+          chainId,
+          network,
+          positions,
+          transactions,
+          offers,
+          notifications,
+        ]
+      properties:
+        address: { type: string }
+        chainId: { type: integer, const: 11155111 }
+        network: { type: string, const: sepolia }
+        positions:
+          type: array
+          items:
+            type: object
+            required: [assetToken, symbol, balance, updatedAt]
+            properties:
+              assetToken: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+              symbol: { type: string, maxLength: 12 }
+              balance: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+              updatedAt: { type: string, format: date-time }
+        transactions:
+          type: array
+          items: { type: object }
+        offers:
+          type: array
+          items: { type: object }
+        notifications:
+          type: array
+          items: { type: object }
+    ChainEventRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          chainId,
+          transactionHash,
+          logIndex,
+          blockNumber,
+          blockHash,
+          contractAddress,
+          eventName,
+          payload,
+          removed,
+          confirmations,
+        ]
+      properties:
+        chainId: { type: integer, const: 11155111 }
+        transactionHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+        logIndex: { type: integer, minimum: 0 }
+        blockNumber: { type: integer, minimum: 0 }
+        blockHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+        contractAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        eventName: { type: string, minLength: 2, maxLength: 80 }
+        payload: { type: object }
+        removed: { type: boolean }
+        confirmations: { type: integer, minimum: 0 }
+    ExternalMarketEventRequest:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          schemaVersion,
+          source,
+          eventType,
+          eventFamily,
+          entityKey,
+          version,
+          chain,
+          eventTimestamp,
+          payload,
+        ]
+      properties:
+        schemaVersion: { type: string, const: "1" }
+        source: { type: string, pattern: "^[a-z][a-z0-9-]{1,31}$" }
+        eventType: { type: string, maxLength: 48 }
+        eventFamily: { type: string, enum: [order, sale, transfer, metadata] }
+        entityKey: { type: string, maxLength: 196 }
+        version: { type: integer, minimum: 1 }
+        chain: { type: string, pattern: "^[a-z][a-z0-9-]{1,31}$" }
+        collectionSlug: { type: string, maxLength: 160 }
+        orderHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+        transactionHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
+        contractAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        tokenId: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+        makerAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        price: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+        paymentTokenAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        paymentSymbol: { type: string, maxLength: 16 }
+        marketplaceUrl: { type: string, format: uri }
+        eventTimestamp: { type: string, format: date-time }
+        payload: { type: object }
+    ExternalMarketActivity:
+      allOf:
+        - $ref: "#/components/schemas/ExternalMarketEventRequest"
+        - type: object
+          required: [eventId]
+          properties:
+            eventId: { type: string, pattern: "^[0-9a-f]{64}$" }
+    Problem:
+      type: object
+      required: [type, title, status, detail, requestId]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        requestId: { type: string }
