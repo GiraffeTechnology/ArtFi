@@ -51,7 +51,7 @@ metadata was uploaded, and no OpenSea listing was created.
 - Five down migrations produced exactly 0 tables. The unique test database was dropped, the
   isolated Redis database was cleared, and the Redis service started for this test was stopped.
 - Dependency download used a recorded, temporary SSH SOCKS PID through the approved Singapore
-  exit `8.219.77.22`. The exact process was terminated, port `11082` was confirmed closed, and all
+  host. The exact process was terminated, port `11082` was confirmed closed, and all
   task-specific dependency caches and bridge artifacts were removed.
 
 ## Charity-edition and artwork gates
@@ -64,10 +64,11 @@ metadata was uploaded, and no OpenSea listing was created.
   the only holder asset is a distinct high-resolution watermarked file behind ownership checking.
 - Schema-only validation and full positive/negative charity-package regression tests passed.
 - The package rejects changed supply, public preview, unwatermarked download, master/holder hash
-  reuse, less than 100% CCHS proceeds, transfer-date or non-`ETH/CAD` receipt valuation, missing
+  reuse, less than 100% CCHS proceeds, receipt-issue-date or non-`ETH/CAD` receipt valuation, missing
   rate evidence, ArtFi receipt-amount control, physical title transfer, or stale listing approval.
-- Product policy records the CCHS receipt amount using a CCHS-approved public `ETH/CAD` market rate
-  at the receipt-issue time. CCHS remains the only receipt issuer and eligible-amount decision-maker.
+- Product policy records a CCHS-approved public `ETH/CAD` fair-market-value snapshot when CCHS
+  receives the gift. CCHS remains the only receipt issuer and the only party that determines the
+  gift date, valuation method, holder advantage, and eligible amount.
 
 ## Security and prohibited-action checks
 
@@ -81,7 +82,7 @@ metadata was uploaded, and no OpenSea listing was created.
 
 1. CCHS legal name, CRA registration number, current charity evidence, confirmed Sepolia and later
    production beneficiary wallets.
-2. CCHS written confirmation of the direct-holder receipt workflow, issue-time `ETH/CAD` source
+2. CCHS written confirmation of the direct-holder receipt workflow, donation-date `ETH/CAD` source
    policy, holder-advantage valuation, and post-sellout physical-artwork acceptance.
 3. Formal title/attribution and hash-bound mint, metadata, listing, and takedown authorization for
    each of the 13 works.

@@ -50,6 +50,13 @@ function cacheTranslation(key: string, value: string): void {
   cache.set(key, value);
 }
 
+function translationDomainHint(targetLanguage: UiLocale): string {
+  const productContext =
+    "ArtCCH ArtFi digital art, NFT, Ethereum, DAO, wallet and external marketplace mirror";
+  if (targetLanguage !== "zh-Hant") return productContext;
+  return `${productContext}. MANDATORY: Traditional Chinese only; use traditional characters such as 連接、錢包、管理、數位、資產; never output simplified Chinese.`;
+}
+
 async function translateText(sourceText: string, targetLanguage: UiLocale) {
   if (
     !isTranslatableSource(sourceText) ||
@@ -70,8 +77,7 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
         source_text: sourceText,
         source_language: sourceLanguageFor(sourceText),
         target_language: targetLanguage,
-        domain_hint:
-          "ArtCCH ArtFi digital art, NFT, Ethereum, DAO, wallet and external marketplace mirror",
+        domain_hint: translationDomainHint(targetLanguage),
       }),
       cache: "no-store",
       signal: controller.signal,

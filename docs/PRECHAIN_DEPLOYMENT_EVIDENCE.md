@@ -11,8 +11,8 @@ disabled and is not part of the deployment package. Governance deployment remain
 
 ## Verified environment
 
-- Execution host: `abcdyi`, using the existing `privoxy.service` bridge at `127.0.0.1:8118`.
-- Verified egress: Singapore `8.219.77.22`.
+- Execution host: `abcdyi`, using the existing `privoxy.service` loopback bridge.
+- Verified egress: the approved Singapore host; its address remains in server-local configuration only.
 - Verified RPC chain ID: Sepolia `11155111` (`0xaa36a7`).
 - Test-only signer: `0xFa67da006Fc31b00e3a8ED94098230F895b0FAd8`.
 - Keystore decryption and signer-address matching passed using Foundry `--password-file`; neither
