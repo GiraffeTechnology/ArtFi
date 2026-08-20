@@ -20,7 +20,6 @@ export async function POST(request: Request) {
     };
     if (
       !isUiLocale(body.target_language) ||
-      body.target_language === "en" ||
       !Array.isArray(body.texts) ||
       body.texts.length === 0 ||
       body.texts.length > MAX_TEXTS ||
@@ -38,7 +37,7 @@ export async function POST(request: Request) {
     const texts = body.texts as string[];
     const result = await translatePageTexts(texts, body.target_language);
     return Response.json({
-      source_language: "en",
+      source_language: "auto",
       target_language: body.target_language,
       ...result,
     });

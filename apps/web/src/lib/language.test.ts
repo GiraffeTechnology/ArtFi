@@ -4,7 +4,9 @@ import {
   htmlLangFor,
   isTranslatableSource,
   isUiLocale,
+  needsTranslation,
   protectedTermsIntact,
+  sourceLanguageFor,
   uiLocaleOptions,
 } from "./language";
 
@@ -32,6 +34,18 @@ describe("ArtFi language contract", () => {
     expect(isTranslatableSource("https://opensea.io/assets/example")).toBe(
       false,
     );
+    expect(isTranslatableSource("连接外部钱包。 ")).toBe(true);
+    expect(isTranslatableSource("ウォレットを接続します。 ")).toBe(true);
+  });
+
+  it("detects source copy and translates only when needed", () => {
+    expect(sourceLanguageFor("Live market signals.")).toBe("en");
+    expect(sourceLanguageFor("连接外部钱包。")).toBe("zh");
+    expect(sourceLanguageFor("ウォレットを接続します。")).toBe("ja");
+    expect(needsTranslation("Live market signals.", "en")).toBe(false);
+    expect(needsTranslation("连接外部钱包。", "en")).toBe(true);
+    expect(needsTranslation("连接外部钱包。", "zh-Hant")).toBe(true);
+    expect(needsTranslation("ウォレットを接続します。", "ja")).toBe(false);
   });
 
   it("fails closed when protected brand and protocol terms are damaged", () => {

@@ -1,6 +1,7 @@
 export const uiLocales = ["en", "zh", "zh-Hant", "ja"] as const;
 
 export type UiLocale = (typeof uiLocales)[number];
+export type SourceLanguage = "en" | "zh" | "ja";
 
 export const uiLocaleOptions: ReadonlyArray<{
   label: string;
@@ -39,7 +40,11 @@ export function htmlLangFor(locale: UiLocale): string {
 
 export function isTranslatableSource(value: string): boolean {
   const text = value.trim();
-  if (text.length < 2 || text.length > 600 || !/[A-Za-z]/.test(text)) {
+  if (
+    text.length < 2 ||
+    text.length > 600 ||
+    !/[A-Za-z\u3400-\u9fff\u3040-\u30ff]/.test(text)
+  ) {
     return false;
   }
   if (
@@ -50,6 +55,18 @@ export function isTranslatableSource(value: string): boolean {
     return false;
   }
   return true;
+}
+
+export function sourceLanguageFor(value: string): SourceLanguage {
+  if (/[\u3040-\u30ff]/.test(value)) return "ja";
+  if (/[\u3400-\u9fff]/.test(value)) return "zh";
+  return "en";
+}
+
+export function needsTranslation(value: string, target: UiLocale): boolean {
+  const source = sourceLanguageFor(value);
+  if (target === "zh-Hant") return true;
+  return source !== target;
 }
 
 export function protectedTermsIntact(
