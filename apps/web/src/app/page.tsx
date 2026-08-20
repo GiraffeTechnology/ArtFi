@@ -37,7 +37,9 @@ export default function Home() {
           <p className="approved-eyebrow">ArtCCH / ArtFi</p>
           <h1>Art, provenance, and transparent ownership.</h1>
           <p className="overview-hero__lede">
-            策展艺术资产的可信入口：查看来源、连接外部钱包，并在一个界面中理解市场与治理。
+            A trusted entry point for curated art assets: inspect provenance,
+            connect an external wallet, and understand markets and governance in
+            one interface.
           </p>
           <div className="overview-actions">
             <a

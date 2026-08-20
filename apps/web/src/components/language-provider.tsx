@@ -14,6 +14,7 @@ import {
   htmlLangFor,
   isTranslatableSource,
   isUiLocale,
+  needsTranslation,
   type UiLocale,
 } from "@/lib/language";
 
@@ -100,10 +101,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     const root = document.body;
     restoreOriginals(root);
 
-    if (locale === "en") {
-      return;
-    }
-
     const controller = new AbortController();
     let disposed = false;
     let timer: number | undefined;
@@ -117,7 +114,11 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         const nodes = collectTextNodes(root);
         const sources = [
           ...new Set(nodes.map((node) => originals.get(node)!.trim())),
-        ];
+        ].filter((source) => needsTranslation(source, locale));
+        if (sources.length === 0) {
+          if (!disposed) setStatus("idle");
+          return;
+        }
         let degraded = false;
 
         for (let offset = 0; offset < sources.length; offset += 32) {
@@ -199,7 +200,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, [locale, pathname]);
 
   const value = useMemo(
-    () => ({ locale, setLocale, status: locale === "en" ? "idle" : status }),
+    () => ({ locale, setLocale, status }),
     [locale, setLocale, status],
   );
 
