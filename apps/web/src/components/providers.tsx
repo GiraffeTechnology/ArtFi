@@ -7,6 +7,8 @@ import { WagmiProvider } from "wagmi";
 
 import { wagmiConfig } from "@/lib/wagmi";
 
+import { LanguageProvider } from "./language-provider";
+
 export function Providers({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -15,7 +17,9 @@ export function Providers({
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider modalSize="compact">{children}</RainbowKitProvider>
+        <RainbowKitProvider modalSize="compact">
+          <LanguageProvider>{children}</LanguageProvider>
+        </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

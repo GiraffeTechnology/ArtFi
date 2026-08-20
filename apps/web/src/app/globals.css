@@ -1126,18 +1126,67 @@ p {
   border-bottom: 1px solid var(--line);
 }
 .brand {
-  gap: 18px;
+  gap: 2px;
   align-items: flex-start;
   font-family: Inter, Arial, sans-serif;
-  font-size: 20px;
-  font-weight: 500;
-  line-height: 24px;
   white-space: nowrap;
 }
 .brand-logo {
-  width: 152px;
-  height: 38px;
+  width: 88px;
+  height: 22px;
   object-fit: contain;
+}
+.brand-product {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: -0.02em;
+}
+.brand-trademark {
+  margin: -1px 1px 0 -1px;
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 7px;
+  font-weight: 500;
+  line-height: 9px;
+  letter-spacing: 0.04em;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.language-switcher {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+.language-switcher__icon {
+  color: var(--wall-red);
+  font-family: "Noto Serif SC", "Yu Mincho", serif;
+  font-size: 14px;
+  line-height: 1;
+}
+.language-switcher select {
+  min-width: 32px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+}
+.language-switcher--loading {
+  opacity: 0.62;
+}
+.language-switcher--unavailable {
+  border-color: rgb(147 39 44 / 45%);
 }
 .primary-nav {
   gap: 28px;
@@ -1544,13 +1593,25 @@ p {
     min-height: 64px;
   }
   .brand {
-    gap: 10px;
-    font-size: 15px;
-    line-height: 18px;
+    gap: 2px;
   }
   .brand-logo {
-    width: 104px;
-    height: 26px;
+    width: 80px;
+    height: 20px;
+  }
+  .brand-product {
+    font-size: 18px;
+    line-height: 20px;
+  }
+  .language-switcher {
+    min-height: 34px;
+    padding-inline: 6px;
+  }
+  .language-switcher__icon {
+    display: none;
+  }
+  .header-actions {
+    gap: 9px;
   }
   .testnet-banner {
     min-height: 53px;

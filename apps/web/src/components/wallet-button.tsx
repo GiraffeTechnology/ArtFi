@@ -47,7 +47,7 @@ export function WalletButton() {
             type="button"
           >
             <span className="wallet-dot" aria-hidden="true" />
-            {account.displayName}
+            <span data-no-translate>{account.displayName}</span>
           </button>
         );
       }}

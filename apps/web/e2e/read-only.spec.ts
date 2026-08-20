@@ -49,8 +49,12 @@ test("approved brand identity and attribution boundaries are present", async ({
   await page.goto("/");
   await expect(page.getByRole("img", { name: "ArtCCH" })).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "ArtCCH ArtFi home" }),
-  ).toContainText(": ArtFi");
+    page.getByRole("link", { name: "ArtCCH TM: ArtFi home" }),
+  ).toContainText("：ArtFi");
+  await expect(page.getByLabel("Language / 语言")).toHaveValue("en");
+  await expect(page.getByLabel("Language / 语言").locator("option")).toHaveText(
+    ["EN", "简", "繁", "日"],
+  );
   await expect(
     page.getByText("Technical support: Giraffe ArtFi Corp."),
   ).toHaveCount(1);
