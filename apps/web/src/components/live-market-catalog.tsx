@@ -308,4 +308,3 @@ function formatObserved(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? "Unknown" : parsed.toLocaleString();
 }
-
