@@ -48,7 +48,6 @@ export default function Home() {
             one interface.
           </p>
           <div className="overview-actions">
-            <span className="mirror-badge">OpenSea information mirror</span>
             <WalletButton />
           </div>
         </div>
