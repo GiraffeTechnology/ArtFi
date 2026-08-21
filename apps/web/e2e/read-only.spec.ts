@@ -53,6 +53,8 @@ test("approved brand identity and attribution boundaries are present", async ({
   await expect(
     page.getByRole("link", { name: "ArtCCH TM: ArtFi home" }),
   ).toContainText("：ArtFi");
+  // WEB-001: the homepage action area contains actions, not a redundant mirror-status badge.
+  await expect(page.locator(".overview-actions .mirror-badge")).toHaveCount(0);
   const languageSelector = page.getByRole("combobox", {
     name: "Language",
   });
