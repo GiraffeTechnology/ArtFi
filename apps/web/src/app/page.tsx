@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import { MarketMirrorCard } from "@/components/market-mirror-card";
@@ -9,7 +8,7 @@ const modules = [
   {
     detail: "Live listings and sale signals from compliant external venues.",
     href: "/market/rwa",
-    label: "External link only",
+    label: "Read-only mirror",
     number: "01",
     title: "Market mirror",
   },
@@ -49,20 +48,7 @@ export default function Home() {
             one interface.
           </p>
           <div className="overview-actions">
-            <a
-              className="external-button"
-              href="https://opensea.io"
-              rel="noreferrer"
-              target="_blank"
-            >
-              <Image
-                alt=""
-                height={16}
-                src="/brand/external-link.svg"
-                width={16}
-              />
-              View on OpenSea
-            </a>
+            <span className="mirror-badge">OpenSea information mirror</span>
             <WalletButton />
           </div>
         </div>
