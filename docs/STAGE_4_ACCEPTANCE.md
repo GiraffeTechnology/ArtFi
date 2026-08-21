@@ -15,8 +15,19 @@ It does not operate an ArtFi exchange.
   remain auditable but cannot reactivate a fulfilled order.
 - Durable external event/order projections with original payload, source attribution, idempotency,
   stale-version rejection, and HTTPS deep links back to the executing marketplace.
-- Public read-only activity API. The adapter capability contract hard-codes order creation,
-  fulfillment, custody, signing, matching, and settlement as unavailable.
+- Public read-only activity API plus a deduplicated, paginated runtime NFT catalog. Fixtures are
+  never substituted when the external source is empty or unavailable.
+- Fail-closed external fulfillment orchestration requests unsigned OpenSea transaction data only
+  for a currently active mirrored order. It validates the source, protocol address, HTTPS deep
+  link, fulfiller, destination, same chain, calldata, decimal/hex value agreement, single-call
+  shape, and listing-value ceiling before asking the user to review the wallet call.
+- Durable market intents use idempotency and the explicit
+  `initiated/awaiting-wallet/submitted/accepted/rejected/pending/confirmed/failed/cancelled`
+  state vocabulary. OpenSea sale, cancellation, invalidation, and revalidation events reconcile
+  the result without allowing stale events to overwrite terminal state.
+- The adapter itself still cannot create or fulfill orders. ArtFi never receives a signing key and
+  does not operate an orderbook, match, custody, fulfill, or settle; OpenSea/Seaport and the user's
+  external wallet remain authoritative.
 - `FractionalToken` EIP-712 delegation and historical vote checkpoints.
 - OpenZeppelin-based Governor with proposal threshold, quorum, voting window, mandatory Timelock
   queue/execution, and atomic bootstrap that leaves no bootstrap administrator.
@@ -38,11 +49,11 @@ It does not operate an ArtFi exchange.
 - Governance tests prove Timelock self-administration, Governor-only proposer/canceller roles, and
   removal of the bootstrap administrator.
 - MySQL integration tests cover indexer authentication, identical replay, payload conflict,
-  transfer projection, event removal, reorg replacement, and restart persistence.
-- MySQL migration sequence: Stage 1–4 `14` tables; Stage 4 rollback `7`; Stage 3 rollback `5`;
-  Stage 2 rollback `2`; full rollback `0`.
-- The legacy UI is intentionally retained; contract action binding and visual iteration are part of
-  the final integrated debugging pass requested for this delivery.
+  transfer projection, event removal, reorg replacement, restart persistence, runtime NFT catalog,
+  fulfillment idempotency, unsafe-plan rejection boundaries, wallet submission, sale confirmation,
+  and full rollback. The current seven-migration sequence creates `26` tables and rolls back to `0`.
+- The approved visual structure is retained. The RWA market route now binds to runtime records;
+  legacy projects and fractional previews remain explicitly labelled fixtures.
 
 ## External exit gates still required
 
@@ -53,6 +64,10 @@ It does not operate an ArtFi exchange.
   availability, and data-retention assumptions.
 - Complete licensed-asset, jurisdiction, investor eligibility, and payment-token approvals before
   any real asset or value is accepted.
+- Keep both `ARTFI_EXTERNAL_TRADE_ENABLED` and `NEXT_PUBLIC_EXTERNAL_TRADE_ENABLED` false until an
+  independent review approves the exact OpenSea terms, chain, collection, payment token, limits,
+  monitoring, incident response, and user disclosures. Code tests use a mock upstream only and are
+  not live OpenSea execution evidence.
 
 OpenSea Stream is used only for approved mainnet marketplace activity because the current SDK does
 not support testnets. Sepolia asset discovery is a separate NFT metadata/API validation track; it

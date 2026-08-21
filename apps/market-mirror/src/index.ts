@@ -1,11 +1,14 @@
 import type { NormalizedMarketEvent } from "./adapter.js";
 import { eventFingerprint, OpenSeaAdapter } from "./opensea.js";
+import { assertSinPublicChainExecution } from "./runtime-boundary.js";
 
 function required(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
   return value;
 }
+
+assertSinPublicChainExecution();
 
 const apiURL = required("ARTFI_API_URL").replace(/\/$/, "");
 const indexerKey = required("ARTFI_INDEXER_SHARED_KEY");

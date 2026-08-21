@@ -27,8 +27,25 @@ type LanguageContextValue = {
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 const languageStorageKey = "artfi-ui-language";
+// The translation pipeline may serialize primary translation and proofreading.
+// Keep each page request bounded, then render the page progressively.
+const translationRequestBatchSize = 4;
 const originals = new WeakMap<Text, string>();
+const originalAttributes = new WeakMap<Element, Map<string, string>>();
+const originalPageTitles = new Map<string, string>();
 const translatedCache = new Map<string, string>();
+const translatableAttributes = [
+  "aria-label",
+  "alt",
+  "placeholder",
+  "title",
+] as const;
+
+type AttributeBinding = {
+  element: Element;
+  name: (typeof translatableAttributes)[number] | "content";
+  original: string;
+};
 
 function collectTextNodes(root: HTMLElement): Text[] {
   const nodes: Text[] = [];
@@ -63,11 +80,62 @@ function renderTranslatedText(original: string, translated: string): string {
   return `${leading}${translated}${trailing}`;
 }
 
-function restoreOriginals(root: HTMLElement) {
+function collectAttributeBindings(root: HTMLElement): AttributeBinding[] {
+  const bindings: AttributeBinding[] = [];
+  const elements = [root, ...root.querySelectorAll("*")];
+  for (const element of elements) {
+    if (element.closest("[data-no-translate]")) continue;
+    for (const name of translatableAttributes) {
+      const current = element.getAttribute(name);
+      if (!current) continue;
+      const originalsForElement =
+        originalAttributes.get(element) ?? new Map<string, string>();
+      if (!originalAttributes.has(element)) {
+        originalAttributes.set(element, originalsForElement);
+      }
+      const original = originalsForElement.get(name) ?? current;
+      if (!originalsForElement.has(name))
+        originalsForElement.set(name, original);
+      if (isTranslatableSource(original)) {
+        bindings.push({ element, name, original });
+      }
+    }
+  }
+
+  const description = document.querySelector('meta[name="description"]');
+  const currentDescription = description?.getAttribute("content");
+  if (description && currentDescription) {
+    const originalsForElement =
+      originalAttributes.get(description) ?? new Map<string, string>();
+    if (!originalAttributes.has(description)) {
+      originalAttributes.set(description, originalsForElement);
+    }
+    const original = originalsForElement.get("content") ?? currentDescription;
+    if (!originalsForElement.has("content")) {
+      originalsForElement.set("content", original);
+    }
+    if (isTranslatableSource(original)) {
+      bindings.push({ element: description, name: "content", original });
+    }
+  }
+  return bindings;
+}
+
+function restoreOriginals(root: HTMLElement, pathname: string) {
   for (const node of collectTextNodes(root)) {
     const original = originals.get(node);
     if (original !== undefined && node.data !== original) node.data = original;
   }
+  for (const binding of collectAttributeBindings(root)) {
+    if (binding.element.getAttribute(binding.name) !== binding.original) {
+      binding.element.setAttribute(binding.name, binding.original);
+    }
+  }
+  const originalTitle = originalPageTitles.get(pathname) ?? document.title;
+  if (!originalPageTitles.has(pathname)) {
+    originalPageTitles.set(pathname, originalTitle);
+  }
+  document.title = originalTitle;
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
@@ -78,6 +146,11 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(languageStorageKey);
+      if (saved === "zh-Hant") {
+        window.localStorage.setItem(languageStorageKey, "zht");
+        const timer = window.setTimeout(() => updateLocale("zht"), 0);
+        return () => window.clearTimeout(timer);
+      }
       if (isUiLocale(saved)) {
         const timer = window.setTimeout(() => updateLocale(saved), 0);
         return () => window.clearTimeout(timer);
@@ -99,7 +172,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = htmlLangFor(locale);
     const root = document.body;
-    restoreOriginals(root);
+    restoreOriginals(root, pathname);
 
     const controller = new AbortController();
     let disposed = false;
@@ -112,8 +185,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       setStatus("loading");
       try {
         const nodes = collectTextNodes(root);
+        const attributes = collectAttributeBindings(root);
+        const pageTitle = originalPageTitles.get(pathname) ?? document.title;
         const sources = [
-          ...new Set(nodes.map((node) => originals.get(node)!.trim())),
+          ...new Set([
+            ...nodes.map((node) => originals.get(node)!.trim()),
+            ...attributes.map((binding) => binding.original.trim()),
+            pageTitle.trim(),
+          ]),
         ].filter((source) => needsTranslation(source, locale));
         if (sources.length === 0) {
           if (!disposed) setStatus("idle");
@@ -121,8 +200,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         }
         let degraded = false;
 
-        for (let offset = 0; offset < sources.length; offset += 32) {
-          const chunk = sources.slice(offset, offset + 32);
+        for (
+          let offset = 0;
+          offset < sources.length;
+          offset += translationRequestBatchSize
+        ) {
+          const chunk = sources.slice(
+            offset,
+            offset + translationRequestBatchSize,
+          );
           const missing = chunk.filter(
             (source) => !translatedCache.has(`${locale}\u0000${source}`),
           );
@@ -168,6 +254,17 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             if (translated)
               node.data = renderTranslatedText(original, translated);
           }
+          for (const binding of attributes) {
+            const translated = translatedCache.get(
+              `${locale}\u0000${binding.original.trim()}`,
+            );
+            if (translated)
+              binding.element.setAttribute(binding.name, translated);
+          }
+          const translatedTitle = translatedCache.get(
+            `${locale}\u0000${pageTitle.trim()}`,
+          );
+          if (translatedTitle) document.title = translatedTitle;
         }
         if (!disposed) setStatus(degraded ? "unavailable" : "ready");
       } catch (error) {
@@ -175,7 +272,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           !disposed &&
           !(error instanceof DOMException && error.name === "AbortError")
         ) {
-          restoreOriginals(root);
+          restoreOriginals(root, pathname);
           setStatus("unavailable");
         }
       } finally {

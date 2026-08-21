@@ -1,14 +1,30 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [preflight, deploy, charityProbe] = await Promise.all([
-  readFile(new URL("./sepolia-preflight.sh", import.meta.url), "utf8"),
-  readFile(new URL("./sepolia-deploy.sh", import.meta.url), "utf8"),
-  readFile(
-    new URL("./sepolia-charity-editions-probe.sh", import.meta.url),
-    "utf8",
-  ),
-]);
+const [preflight, deploy, standardsProbe, charityProbe, environmentExample] =
+  await Promise.all([
+    readFile(new URL("./sepolia-preflight.sh", import.meta.url), "utf8"),
+    readFile(new URL("./sepolia-deploy.sh", import.meta.url), "utf8"),
+    readFile(new URL("./sepolia-standards-probe.sh", import.meta.url), "utf8"),
+    readFile(
+      new URL("./sepolia-charity-editions-probe.sh", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../../.env.example", import.meta.url), "utf8"),
+  ]);
+
+for (const [name, script] of [
+  ["sepolia-preflight.sh", preflight],
+  ["sepolia-deploy.sh", deploy],
+  ["sepolia-standards-probe.sh", standardsProbe],
+  ["sepolia-charity-editions-probe.sh", charityProbe],
+]) {
+  assert.match(
+    script,
+    /require-sin-public-chain\.sh/,
+    `${name} must fail closed outside the SIN execution zone`,
+  );
+}
 
 for (const [name, script] of [
   ["sepolia-preflight.sh", preflight],
@@ -41,6 +57,16 @@ assert.match(
   charityProbe,
   /11155111/,
   "charity probe must enforce Sepolia chain ID",
+);
+assert.match(
+  environmentExample,
+  /^ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE=$/m,
+  "the execution zone must not have a repository default",
+);
+assert.match(
+  environmentExample,
+  /^ARTFI_RPC_URL=$/m,
+  "the public RPC URL must not have a repository default",
 );
 assert.match(charityProbe, /0xd9b67a26/, "charity probe must check ERC-1155");
 assert.match(

@@ -3,13 +3,16 @@ import "server-only";
 import {
   isTranslatableSource,
   needsTranslation,
+  proofreaderWarningsAreSafe,
   protectedTermsIntact,
-  sourceLanguageFor,
+  translationSourceFor,
+  translationTargetFor,
   type UiLocale,
 } from "./language";
 
 type UpstreamTranslation = {
   model?: unknown;
+  proofreader?: unknown;
   provider?: unknown;
   translated_text?: unknown;
   warnings?: unknown;
@@ -53,7 +56,7 @@ function cacheTranslation(key: string, value: string): void {
 function translationDomainHint(targetLanguage: UiLocale): string {
   const productContext =
     "ArtCCH ArtFi digital art, NFT, Ethereum, DAO, wallet and external marketplace mirror";
-  if (targetLanguage !== "zh-Hant") return productContext;
+  if (targetLanguage !== "zht") return productContext;
   return `${productContext}. MANDATORY: Traditional Chinese only; use traditional characters such as 連接、錢包、管理、數位、資產; never output simplified Chinese.`;
 }
 
@@ -70,13 +73,17 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), translationTimeoutMs());
   try {
+    const sourceLanguage = translationSourceFor(sourceText, targetLanguage);
+    if (sourceLanguage === null) {
+      throw new Error("AUTHORITATIVE_ENGLISH_SOURCE_REQUIRED");
+    }
     const response = await fetch(languageEndpoint("/v1/translate"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         source_text: sourceText,
-        source_language: sourceLanguageFor(sourceText),
-        target_language: targetLanguage,
+        source_language: sourceLanguage,
+        target_language: translationTargetFor(targetLanguage),
         domain_hint: translationDomainHint(targetLanguage),
       }),
       cache: "no-store",
@@ -95,7 +102,7 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
       typeof body.model !== "string" ||
       !body.model.trim() ||
       !Array.isArray(body.warnings) ||
-      body.warnings.length > 0 ||
+      !proofreaderWarningsAreSafe(body.proofreader, body.warnings) ||
       !protectedTermsIntact(sourceText, translated)
     ) {
       throw new Error("INVALID_TRANSLATION_RESPONSE");

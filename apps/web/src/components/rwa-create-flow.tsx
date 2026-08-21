@@ -1,16 +1,19 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import type { Address, Hex } from "viem";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { parseEventLogs, type Address, type Hex } from "viem";
 import {
   useAccount,
   useChainId,
   usePublicClient,
+  useSignMessage,
   useWriteContract,
 } from "wagmi";
 
 import { rwaRegistryAbi } from "@/lib/contracts";
 import { supportedChain } from "@/lib/wagmi";
+
+import { NFTWalletImport } from "./nft-wallet-import";
 
 type FlowStatus =
   | "idle"
@@ -33,7 +36,22 @@ type MintIntent = {
   status: string;
 };
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+type OperatorStatus =
+  "checking" | "unauthenticated" | "verifying" | "authenticated";
+
+type MintedAsset = {
+  collectionAddress: Address;
+  tokenId: string;
+};
+
+type DiscoveryResult = {
+  checkId: string;
+  result: "discovered" | "not-found" | "unsupported-chain";
+  discovered: boolean;
+  marketplaceUrl?: string;
+  evidenceSha256: string;
+  observedAt: string;
+};
 
 const labels: Record<FlowStatus, string> = {
   idle: "Ready for review",
@@ -51,24 +69,123 @@ export function RwaCreateFlow() {
   const chainId = useChainId();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { signMessageAsync } = useSignMessage();
   const idempotencyKey = useRef(crypto.randomUUID());
   const [status, setStatus] = useState<FlowStatus>("idle");
   const [message, setMessage] = useState(
     "Review every field before asking your wallet to sign.",
   );
   const [transactionHash, setTransactionHash] = useState<Hex>();
+  const [operatorStatus, setOperatorStatus] =
+    useState<OperatorStatus>("checking");
+  const [operatorAddress, setOperatorAddress] = useState<string>();
+  const [mintedAsset, setMintedAsset] = useState<MintedAsset>();
+  const [discovery, setDiscovery] = useState<DiscoveryResult>();
+  const [discoveryPending, setDiscoveryPending] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      if (!address || chainId !== supportedChain.id) {
+        if (!cancelled) {
+          setOperatorAddress(undefined);
+          setOperatorStatus("unauthenticated");
+        }
+        return;
+      }
+      try {
+        const response = await fetch("/api/operator/auth/session", {
+          cache: "no-store",
+        });
+        const body = (await response.json()) as {
+          authenticated?: boolean;
+          address?: string;
+        };
+        const matches =
+          response.ok &&
+          body.authenticated === true &&
+          body.address?.toLowerCase() === address.toLowerCase();
+        if (!cancelled) {
+          setOperatorAddress(matches ? body.address : undefined);
+          setOperatorStatus(matches ? "authenticated" : "unauthenticated");
+        }
+      } catch {
+        if (!cancelled) {
+          setOperatorAddress(undefined);
+          setOperatorStatus("unauthenticated");
+        }
+      }
+    };
+    void check();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, chainId]);
 
   const canSubmit =
     isConnected &&
     chainId === supportedChain.id &&
+    operatorStatus === "authenticated" &&
+    operatorAddress?.toLowerCase() === address?.toLowerCase() &&
     status !== "confirming" &&
     status !== "awaiting-wallet";
   const boundary = useMemo(() => {
     if (!isConnected) return "Connect an external wallet to continue.";
     if (chainId !== supportedChain.id)
       return "Switch the wallet network to Sepolia.";
-    return "The connected account must hold REGISTRAR_ROLE on the reviewed registry contract.";
-  }, [chainId, isConnected]);
+    if (operatorStatus === "checking")
+      return "Checking the current administrator-wallet session.";
+    if (operatorStatus !== "authenticated")
+      return "Verify that this wallet currently holds REGISTRAR_ROLE on the reviewed registry contract.";
+    return "REGISTRAR_ROLE is verified on Sepolia. The browser never receives the operator API credential.";
+  }, [chainId, isConnected, operatorStatus]);
+
+  async function verifyOperator() {
+    if (!address || chainId !== supportedChain.id) return;
+    try {
+      setOperatorStatus("verifying");
+      setStatus("idle");
+      setMessage(
+        "Sign the administrator challenge. It creates no transaction and transfers no rights.",
+      );
+      const challenge = await fetchJSON<{
+        address: string;
+        message: string;
+      }>("/api/operator/auth/challenge", {
+        method: "POST",
+        body: JSON.stringify({ address }),
+      });
+      if (challenge.address.toLowerCase() !== address.toLowerCase()) {
+        throw new Error("The administrator challenge address does not match.");
+      }
+      const signature = await signMessageAsync({ message: challenge.message });
+      const session = await fetchJSON<{
+        authenticated: boolean;
+        address: string;
+      }>("/api/operator/auth/verify", {
+        method: "POST",
+        body: JSON.stringify({ address, signature }),
+      });
+      if (
+        !session.authenticated ||
+        session.address.toLowerCase() !== address.toLowerCase()
+      ) {
+        throw new Error("The administrator session could not be verified.");
+      }
+      setOperatorAddress(session.address);
+      setOperatorStatus("authenticated");
+      setMessage("Administrator wallet verified. Review the asset record.");
+    } catch (error) {
+      setOperatorAddress(undefined);
+      setOperatorStatus("unauthenticated");
+      setStatus("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The administrator wallet could not be verified.",
+      );
+    }
+  }
 
   async function submit(formData: FormData) {
     if (!address || !canSubmit || !publicClient) return;
@@ -81,6 +198,8 @@ export function RwaCreateFlow() {
 
     try {
       setTransactionHash(undefined);
+      setMintedAsset(undefined);
+      setDiscovery(undefined);
       setStatus("hashing");
       setMessage("Computing the SHA-256 commitment in this browser.");
       const digest = await sha256Hex(await file.arrayBuffer());
@@ -90,7 +209,7 @@ export function RwaCreateFlow() {
         "The API will reject any byte that differs from the reviewed digest.",
       );
       const upload = await fetchJSON<{ uploadId: string; uploadUrl: string }>(
-        "/v1/uploads/intents",
+        "/api/operator/v1/uploads/intents",
         {
           method: "POST",
           body: JSON.stringify({
@@ -101,7 +220,7 @@ export function RwaCreateFlow() {
           }),
         },
       );
-      const uploadResponse = await fetch(apiURL + upload.uploadUrl, {
+      const uploadResponse = await fetch(`/api/operator${upload.uploadUrl}`, {
         method: "PUT",
         headers: { "Content-Type": file.type, "Content-SHA256": digest },
         body: file,
@@ -112,20 +231,23 @@ export function RwaCreateFlow() {
       setMessage(
         "Creating content-addressed metadata and deterministic contract arguments.",
       );
-      const intent = await fetchJSON<MintIntent>("/v1/rwa/intents", {
-        method: "POST",
-        headers: { "Idempotency-Key": idempotencyKey.current },
-        body: JSON.stringify({
-          uploadId: upload.uploadId,
-          recipient: address,
-          name: formData.get("name"),
-          artist: formData.get("artist"),
-          year: Number(formData.get("year")),
-          medium: formData.get("medium"),
-          location: formData.get("location"),
-          description: formData.get("description"),
-        }),
-      });
+      const intent = await fetchJSON<MintIntent>(
+        "/api/operator/v1/rwa/intents",
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": idempotencyKey.current },
+          body: JSON.stringify({
+            uploadId: upload.uploadId,
+            recipient: address,
+            name: formData.get("name"),
+            artist: formData.get("artist"),
+            year: Number(formData.get("year")),
+            medium: formData.get("medium"),
+            location: formData.get("location"),
+            description: formData.get("description"),
+          }),
+        },
+      );
       if (
         intent.chainId !== supportedChain.id ||
         intent.recipient.toLowerCase() !== address.toLowerCase()
@@ -150,10 +272,13 @@ export function RwaCreateFlow() {
         ],
       });
       setTransactionHash(hash);
-      await fetchJSON(`/v1/rwa/intents/${intent.intentId}/submission`, {
-        method: "POST",
-        body: JSON.stringify({ transactionHash: hash }),
-      });
+      await fetchJSON(
+        `/api/operator/v1/rwa/intents/${intent.intentId}/submission`,
+        {
+          method: "POST",
+          body: JSON.stringify({ transactionHash: hash }),
+        },
+      );
 
       setStatus("confirming");
       setMessage(
@@ -166,9 +291,36 @@ export function RwaCreateFlow() {
       if (receipt.status !== "success")
         throw new Error("The Sepolia transaction reverted.");
 
+      const createdEvents = parseEventLogs({
+        abi: rwaRegistryAbi,
+        eventName: "AssetCreated",
+        logs: receipt.logs.filter(
+          (log) =>
+            log.address.toLowerCase() === intent.registryAddress.toLowerCase(),
+        ),
+        strict: true,
+      });
+      const created = createdEvents.find(
+        (event) =>
+          event.args.requestId.toLowerCase() ===
+            intent.requestId.toLowerCase() &&
+          event.args.recipient.toLowerCase() === address.toLowerCase(),
+      );
+      if (!created)
+        throw new Error("The confirmed asset event is missing or mismatched.");
+      const collectionAddress = await publicClient.readContract({
+        abi: rwaRegistryAbi,
+        address: intent.registryAddress,
+        functionName: "nft",
+      });
+      setMintedAsset({
+        collectionAddress,
+        tokenId: created.args.tokenId.toString(),
+      });
+
       setStatus("confirmed");
       setMessage(
-        "The registry commitment and NFT mint are confirmed. Index reconciliation follows in Stage 3.",
+        "The registry commitment and NFT mint are confirmed. OpenSea discovery is a separate evidence check.",
       );
       idempotencyKey.current = crypto.randomUUID();
     } catch (error) {
@@ -178,6 +330,35 @@ export function RwaCreateFlow() {
           ? error.message
           : "The mint flow could not be completed.",
       );
+    }
+  }
+
+  async function checkDiscovery() {
+    if (!mintedAsset || operatorStatus !== "authenticated") return;
+    try {
+      setDiscoveryPending(true);
+      const result = await fetchJSON<DiscoveryResult>(
+        "/api/operator/v1/rwa/discovery-checks",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            source: "opensea",
+            chain: "sepolia",
+            contractAddress: mintedAsset.collectionAddress,
+            tokenId: mintedAsset.tokenId,
+          }),
+        },
+      );
+      setDiscovery(result);
+    } catch (error) {
+      setStatus("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "OpenSea discovery could not be checked.",
+      );
+    } finally {
+      setDiscoveryPending(false);
     }
   }
 
@@ -248,6 +429,24 @@ export function RwaCreateFlow() {
           <strong>Authorization boundary</strong>
           <span>{boundary}</span>
         </div>
+        {isConnected && chainId === supportedChain.id ? (
+          <button
+            className="secondary"
+            type="button"
+            disabled={
+              operatorStatus === "checking" ||
+              operatorStatus === "verifying" ||
+              operatorStatus === "authenticated"
+            }
+            onClick={() => void verifyOperator()}
+          >
+            {operatorStatus === "authenticated"
+              ? "Administrator wallet verified"
+              : operatorStatus === "verifying"
+                ? "Verifying administrator wallet…"
+                : "Verify administrator wallet"}
+          </button>
+        ) : null}
         <button
           className="primary submit-mint"
           type="submit"
@@ -280,6 +479,57 @@ export function RwaCreateFlow() {
             View transaction ↗
           </a>
         ) : null}
+        {mintedAsset ? (
+          <>
+            <NFTWalletImport
+              collectionAddress={mintedAsset.collectionAddress}
+              standard="ERC-721"
+              tokenId={mintedAsset.tokenId}
+            />
+            <div className="form-boundary" role="status">
+              <strong>
+                NFT {shortAddress(mintedAsset.collectionAddress)} / #
+                {mintedAsset.tokenId}
+              </strong>
+              <span>
+                OpenSea discovery, DAO deposit and listing are independent from
+                mint confirmation.
+              </span>
+              <button
+                className="secondary"
+                type="button"
+                disabled={discoveryPending}
+                onClick={() => void checkDiscovery()}
+              >
+                {discoveryPending
+                  ? "Checking OpenSea discovery…"
+                  : "Check OpenSea discovery"}
+              </button>
+              {discovery ? (
+                <span>
+                  {discovery.discovered
+                    ? `Discovered at ${new Date(discovery.observedAt).toLocaleString()}.`
+                    : discovery.result === "unsupported-chain"
+                      ? "OpenSea currently reports this chain as unsupported. No acceptance is claimed."
+                      : "Not discovered at the recorded check time. No acceptance is claimed."}
+                </span>
+              ) : null}
+              {discovery?.discovered && discovery.marketplaceUrl ? (
+                <a
+                  className="text-link"
+                  href={discovery.marketplaceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Verify discovered NFT on OpenSea ↗
+                </a>
+              ) : null}
+              <a className="text-link" href="/dao">
+                Continue to Vault and DAO verification →
+              </a>
+            </div>
+          </>
+        ) : null}
       </aside>
     </div>
   );
@@ -293,7 +543,7 @@ async function sha256Hex(value: ArrayBuffer) {
 }
 
 async function fetchJSON<T>(path: string, init: RequestInit): Promise<T> {
-  const response = await fetch(apiURL + path, {
+  const response = await fetch(path, {
     ...init,
     headers: { "Content-Type": "application/json", ...init.headers },
   });

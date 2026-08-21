@@ -7,6 +7,7 @@ import { WalletButton } from "./wallet-button";
 const navigation = [
   ["Overview", "/"],
   ["Market mirror", "/market/rwa"],
+  ["Mint", "/create/rwa"],
   ["Wallet", "/portfolio"],
   ["DAO", "/dao"],
 ] as const;
@@ -62,7 +63,8 @@ export function SiteHeader() {
       </div>
       <div className="testnet-banner">
         <span>Testnet / read-only</span>
-        No custody · No in-app order execution · External marketplace data
+        No custody · External marketplace execution only · Attributed runtime
+        data
       </div>
     </header>
   );

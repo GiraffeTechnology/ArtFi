@@ -263,6 +263,44 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		position.Balance = balances[token].String()
 		response.Positions = append(response.Positions, *position)
 	}
+	transactionRows, err := service.db.QueryContext(request.Context(), `
+		SELECT LOWER(transaction_hash), event_name, block_number,
+		       CASE WHEN removed THEN 'removed'
+		            WHEN confirmed THEN 'confirmed' ELSE 'pending' END,
+		       DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%sZ')
+		FROM chain_events
+		WHERE chain_id = ? AND (
+		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.from'))) = ? OR
+		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.to'))) = ? OR
+		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.owner'))) = ? OR
+		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.recipient'))) = ? OR
+		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.distributionWallet'))) = ?
+		)
+		ORDER BY block_number DESC, log_index DESC
+		LIMIT 100`, sepoliaChainID, address, address, address, address, address)
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio transaction history could not be queried.")
+		return
+	}
+	defer transactionRows.Close()
+	for transactionRows.Next() {
+		var entry portfolioEntry
+		if err := transactionRows.Scan(
+			&entry.TransactionHash,
+			&entry.EventName,
+			&entry.BlockNumber,
+			&entry.Status,
+			&entry.ObservedAt,
+		); err != nil {
+			writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio transaction history could not be decoded.")
+			return
+		}
+		response.Transactions = append(response.Transactions, entry)
+	}
+	if err := transactionRows.Err(); err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio transaction history was interrupted.")
+		return
+	}
 	service.storeCachedJSON(request.Context(), cacheToken, response)
 	writeJSON(writer, http.StatusOK, response)
 }

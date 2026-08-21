@@ -12,6 +12,13 @@ export const rwaRegistryAbi = [
     outputs: [{ name: "tokenId", type: "uint256" }],
   },
   {
+    type: "function",
+    name: "nft",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
     type: "event",
     name: "AssetCreated",
     anonymous: false,
@@ -22,6 +29,220 @@ export const rwaRegistryAbi = [
       { indexed: false, name: "creator", type: "address" },
       { indexed: false, name: "metadataHash", type: "bytes32" },
       { indexed: false, name: "metadataURI", type: "string" },
+    ],
+  },
+] as const;
+
+export const charityEditionsAbi = [
+  {
+    type: "function",
+    name: "SERIES_CREATOR_ROLE",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "EDITIONS_PER_ARTWORK",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "PRIMARY_PRICE_WEI",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "seriesCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "paused",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "hasRole",
+    stateMutability: "view",
+    inputs: [
+      { name: "role", type: "bytes32" },
+      { name: "account", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "id", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "totalSupply",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "createSeries",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "artworkId", type: "bytes32" },
+      { name: "masterArtworkHash", type: "bytes32" },
+      { name: "metadataHash", type: "bytes32" },
+      { name: "distributionWallet", type: "address" },
+      { name: "metadataURI", type: "string" },
+    ],
+    outputs: [{ name: "tokenId", type: "uint256" }],
+  },
+  {
+    type: "event",
+    name: "SeriesCreated",
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "tokenId", type: "uint256" },
+      { indexed: true, name: "artworkId", type: "bytes32" },
+      { indexed: true, name: "masterArtworkHash", type: "bytes32" },
+      { indexed: false, name: "distributionWallet", type: "address" },
+      { indexed: false, name: "metadataHash", type: "bytes32" },
+      { indexed: false, name: "metadataURI", type: "string" },
+    ],
+  },
+] as const;
+
+export const vaultFactoryAbi = [
+  {
+    type: "function",
+    name: "CREATOR_ROLE",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "hasRole",
+    stateMutability: "view",
+    inputs: [
+      { name: "role", type: "bytes32" },
+      { name: "account", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "paused",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "createVault",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "requestId", type: "bytes32" },
+      { name: "vaultName", type: "string" },
+      { name: "collection", type: "address" },
+      { name: "tokenId", type: "uint256" },
+      { name: "admin", type: "address" },
+      { name: "pauser", type: "address" },
+      { name: "fractionalizer", type: "address" },
+    ],
+    outputs: [{ name: "vault", type: "address" }],
+  },
+  {
+    type: "event",
+    name: "VaultCreated",
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "requestId", type: "bytes32" },
+      { indexed: true, name: "vault", type: "address" },
+      { indexed: true, name: "collection", type: "address" },
+      { indexed: false, name: "tokenId", type: "uint256" },
+      { indexed: false, name: "vaultName", type: "string" },
+    ],
+  },
+] as const;
+
+export const erc721VaultApprovalAbi = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "owner", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "getApproved",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "operator", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "tokenId", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+export const artFiVaultAbi = [
+  {
+    type: "function",
+    name: "deposit",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "fractionalize",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "name", type: "string" },
+      { name: "symbol", type: "string" },
+      { name: "supply", type: "uint256" },
+      { name: "recipient", type: "address" },
+    ],
+    outputs: [{ name: "token", type: "address" }],
+  },
+  {
+    type: "event",
+    name: "NFTDeposited",
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "collection", type: "address" },
+      { indexed: true, name: "tokenId", type: "uint256" },
+      { indexed: true, name: "owner", type: "address" },
+    ],
+  },
+  {
+    type: "event",
+    name: "Fractionalized",
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "token", type: "address" },
+      { indexed: true, name: "recipient", type: "address" },
+      { indexed: false, name: "supply", type: "uint256" },
     ],
   },
 ] as const;

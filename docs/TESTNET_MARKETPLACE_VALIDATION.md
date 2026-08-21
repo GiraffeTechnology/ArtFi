@@ -6,10 +6,17 @@ and exchange operation remain disabled.
 ## Current execution status
 
 The initial live Sepolia run was deferred, then rescheduled by product-owner direction for after
-all pre-chain deployment gates. No test ETH has been obtained, no contract has been broadcast, no
-token has been minted, and no OpenSea discovery or listing claim has been made. Local contract,
-API, migration, UI, and adapter tests remain valid development evidence, but they do not substitute
-for either live evidence track below.
+all pre-chain deployment gates. Two test-only wallets have received faucet ETH, but no contract has
+been broadcast, no token has been minted, and no OpenSea discovery or listing claim has been made.
+Local contract, API, migration, UI, and adapter tests remain valid development evidence, but they
+do not substitute for either live evidence track below.
+
+Named public test roles:
+
+- `ArtFi1`: `0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089` — initial mint and holding wallet.
+- `ArtFi2`: `0xDE3c1D455c2CCe1bAcf1e70aAC7fA3B8cCb1ec2B` — asset-transfer receiving wallet.
+
+No private key or local key-file path is part of this evidence record.
 
 The deployment, standards-probe, mint, and marketplace-validation tooling stays available for a
 future evidence run. Execution requires a funded test-only signer, the approved Singapore egress,

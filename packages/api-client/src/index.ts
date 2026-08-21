@@ -2,6 +2,7 @@ import type { components } from "./schema";
 
 export type ArtFiConfig = components["schemas"]["Config"];
 export type Asset = components["schemas"]["Asset"];
+export type MintedNFT = components["schemas"]["MintedNFT"];
 export type Project = components["schemas"]["Project"];
 export type Portfolio = components["schemas"]["Portfolio"];
 export type Problem = components["schemas"]["Problem"];
@@ -30,6 +31,10 @@ export function createArtFiClient(
   return {
     config: () => request<ArtFiConfig>("/v1/config"),
     assets: () => request<{ data: Asset[]; total: number }>("/v1/assets"),
+    mintedNFTs: () =>
+      request<{ data: MintedNFT[]; total: number; chainId: 11155111 }>(
+        "/v1/nfts",
+      ),
     asset: (slug: string) =>
       request<Asset>(`/v1/assets/${encodeURIComponent(slug)}`),
     projects: () => request<{ data: Project[]; total: number }>("/v1/projects"),
