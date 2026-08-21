@@ -54,7 +54,7 @@ test("approved brand identity and attribution boundaries are present", async ({
     page.getByRole("link", { name: "ArtCCH TM: ArtFi home" }),
   ).toContainText("：ArtFi");
   const languageSelector = page.getByRole("combobox", {
-    name: "Language: English",
+    name: "Language",
   });
   await expect(languageSelector).toHaveValue("en");
   await expect(languageSelector.locator("option")).toHaveText([
@@ -70,9 +70,42 @@ test("approved brand identity and attribution boundaries are present", async ({
   await expect(
     languageSelector.getByRole("option", { name: "Français" }),
   ).toHaveCount(1);
-  await expect(
-    page.getByText("Technical support: Giraffe ArtFi Corp."),
-  ).toHaveCount(1);
+  await expect(page.locator(".language-switcher__icon")).toHaveCount(0);
+  expect(
+    await languageSelector.evaluate(
+      (element) => getComputedStyle(element).appearance,
+    ),
+  ).not.toBe("none");
+  await expect(page.locator(".technical-support__label")).toHaveText(
+    "Technical support:",
+  );
+  await expect(page.locator(".technical-support__name")).toHaveText(
+    "Giraffe ArtFi Corp.",
+  );
+  const supportMark = page.locator(".technical-support__mark");
+  await expect(supportMark).toBeVisible();
+  const supportLogo = supportMark.locator("img");
+  await expect(supportLogo).toHaveCount(1);
+  await expect(supportLogo).toHaveAttribute("src", /giraffe-head-color\.png/);
+  const supportMetrics = await page.evaluate(() => {
+    const mark = document.querySelector<HTMLElement>(
+      ".technical-support__mark",
+    );
+    const name = document.querySelector<HTMLElement>(
+      ".technical-support__name",
+    );
+    if (!mark || !name) return null;
+    return {
+      alignItems: getComputedStyle(mark.parentElement!).alignItems,
+      diameter: mark.getBoundingClientRect().width,
+      nameFontSize: Number.parseFloat(getComputedStyle(name).fontSize),
+    };
+  });
+  expect(supportMetrics).not.toBeNull();
+  expect(supportMetrics!.alignItems).toBe("center");
+  expect(supportMetrics!.diameter).toBeLessThanOrEqual(
+    supportMetrics!.nameFontSize * 2,
+  );
   await expect(page.getByText(/Bazaar/i)).toHaveCount(0);
 });
 
@@ -98,7 +131,7 @@ test("eight-language selection persists and translates dynamic accessible copy",
   });
 
   await page.goto("/dao");
-  const selector = page.getByRole("combobox", { name: "Language: English" });
+  const selector = page.getByRole("combobox", { name: "Language" });
   await selector.selectOption("fr");
   await expect(page.locator("html")).toHaveAttribute("lang", "fr");
   await expect(page.getByRole("heading", { level: 1 })).toContainText(
@@ -112,14 +145,12 @@ test("eight-language selection persists and translates dynamic accessible copy",
   await expect(page).toHaveTitle(/\[FR\]/);
 
   await page.reload();
-  await expect(
-    page.getByRole("combobox", { name: "Language: Français" }),
-  ).toHaveValue("fr");
+  await expect(page.getByRole("combobox", { name: "Language" })).toHaveValue(
+    "fr",
+  );
   await expect(page.locator("html")).toHaveAttribute("lang", "fr");
 
-  await page
-    .getByRole("combobox", { name: "Language: Français" })
-    .selectOption("zht");
+  await page.getByRole("combobox", { name: "Language" }).selectOption("zht");
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-Hant");
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -221,10 +252,11 @@ test("approved brand assets are served by the standalone runtime", async ({
   for (const path of [
     "/brand/artcch-logo-master.svg",
     "/brand/artwork-a.svg",
+    "/brand/giraffe-head-color.png",
   ]) {
     const response = await request.get(path);
     expect(response.ok()).toBe(true);
-    expect(response.headers()["content-type"]).toContain("image/svg+xml");
+    expect(response.headers()["content-type"]).toContain("image/");
   }
 });
 

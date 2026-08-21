@@ -15,6 +15,7 @@ import {
   isTranslatableSource,
   isUiLocale,
   needsTranslation,
+  translationSourceFor,
   type UiLocale,
 } from "@/lib/language";
 
@@ -41,6 +42,44 @@ const translatableAttributes = [
   "title",
 ] as const;
 
+function translationCacheKey(locale: UiLocale, source: string): string {
+  return `artfi-translation:${locale}:${source}`;
+}
+
+function cachedTranslation(locale: UiLocale, source: string): string | null {
+  const memoryKey = `${locale}\u0000${source}`;
+  const inMemory = translatedCache.get(memoryKey);
+  if (inMemory) return inMemory;
+  try {
+    const persisted = window.sessionStorage.getItem(
+      translationCacheKey(locale, source),
+    );
+    if (persisted) {
+      translatedCache.set(memoryKey, persisted);
+      return persisted;
+    }
+  } catch {
+    // Session caching is optional.
+  }
+  return null;
+}
+
+function cacheTranslation(
+  locale: UiLocale,
+  source: string,
+  translated: string,
+): void {
+  translatedCache.set(`${locale}\u0000${source}`, translated);
+  try {
+    window.sessionStorage.setItem(
+      translationCacheKey(locale, source),
+      translated,
+    );
+  } catch {
+    // Session caching is optional.
+  }
+}
+
 type AttributeBinding = {
   element: Element;
   name: (typeof translatableAttributes)[number] | "content";
@@ -56,7 +95,7 @@ function collectTextNodes(root: HTMLElement): Text[] {
       if (
         !parent ||
         parent.closest(
-          "[data-no-translate], script, style, noscript, code, pre, svg, canvas, textarea, input",
+          "[data-no-translate], [data-translation-skip], select, option, script, style, noscript, code, pre, svg, canvas, textarea, input",
         )
       ) {
         return NodeFilter.FILTER_REJECT;
@@ -84,7 +123,12 @@ function collectAttributeBindings(root: HTMLElement): AttributeBinding[] {
   const bindings: AttributeBinding[] = [];
   const elements = [root, ...root.querySelectorAll("*")];
   for (const element of elements) {
-    if (element.closest("[data-no-translate]")) continue;
+    if (
+      element.closest(
+        "[data-no-translate], [data-translation-skip], select, option",
+      )
+    )
+      continue;
     for (const name of translatableAttributes) {
       const current = element.getAttribute(name);
       if (!current) continue;
@@ -183,6 +227,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       if (disposed || translating) return;
       translating = true;
       setStatus("loading");
+      root.setAttribute("aria-busy", "true");
       try {
         const nodes = collectTextNodes(root);
         const attributes = collectAttributeBindings(root);
@@ -193,7 +238,11 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             ...attributes.map((binding) => binding.original.trim()),
             pageTitle.trim(),
           ]),
-        ].filter((source) => needsTranslation(source, locale));
+        ].filter(
+          (source) =>
+            needsTranslation(source, locale) &&
+            translationSourceFor(source, locale) !== null,
+        );
         if (sources.length === 0) {
           if (!disposed) setStatus("idle");
           return;
@@ -210,7 +259,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             offset + translationRequestBatchSize,
           );
           const missing = chunk.filter(
-            (source) => !translatedCache.has(`${locale}\u0000${source}`),
+            (source) => !cachedTranslation(locale, source),
           );
           if (missing.length > 0) {
             const response = await fetch("/api/language/v1/translate-page", {
@@ -237,10 +286,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             missing.forEach((source, index) => {
               const translated = translations[index];
               if (translated.trim() && translated.trim() !== source) {
-                translatedCache.set(
-                  `${locale}\u0000${source}`,
-                  translated.trim(),
-                );
+                cacheTranslation(locale, source, translated.trim());
               }
             });
           }
@@ -248,22 +294,21 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           for (const node of nodes) {
             const original = originals.get(node);
             if (!original) continue;
-            const translated = translatedCache.get(
-              `${locale}\u0000${original.trim()}`,
-            );
-            if (translated)
-              node.data = renderTranslatedText(original, translated);
+            const translated = cachedTranslation(locale, original.trim());
+            if (translated) {
+              const nextValue = renderTranslatedText(original, translated);
+              if (node.data !== nextValue) node.data = nextValue;
+            }
           }
           for (const binding of attributes) {
-            const translated = translatedCache.get(
-              `${locale}\u0000${binding.original.trim()}`,
+            const translated = cachedTranslation(
+              locale,
+              binding.original.trim(),
             );
             if (translated)
               binding.element.setAttribute(binding.name, translated);
           }
-          const translatedTitle = translatedCache.get(
-            `${locale}\u0000${pageTitle.trim()}`,
-          );
+          const translatedTitle = cachedTranslation(locale, pageTitle.trim());
           if (translatedTitle) document.title = translatedTitle;
         }
         if (!disposed) setStatus(degraded ? "unavailable" : "ready");
@@ -277,15 +322,26 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         }
       } finally {
         translating = false;
+        if (!disposed) root.removeAttribute("aria-busy");
       }
     }
 
     const observer = new MutationObserver((mutations) => {
-      if (!mutations.some((mutation) => mutation.addedNodes.length > 0)) return;
+      if (
+        !mutations.some(
+          (mutation) =>
+            mutation.type === "characterData" || mutation.addedNodes.length > 0,
+        )
+      )
+        return;
       window.clearTimeout(timer);
       timer = window.setTimeout(translateVisiblePage, 80);
     });
-    observer.observe(root, { childList: true, subtree: true });
+    observer.observe(root, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
     void translateVisiblePage();
 
     return () => {

@@ -1,28 +1,23 @@
 "use client";
 
-import {
-  accessibleLanguageNameFor,
-  uiLocaleOptions,
-  type UiLocale,
-} from "@/lib/language";
+import { uiLocaleOptions, type UiLocale } from "@/lib/language";
 
 import { useLanguage } from "./language-provider";
 
 export function LanguageSwitcher() {
-  const { locale, setLocale, status } = useLanguage();
+  const { locale, setLocale } = useLanguage();
+  const controlLabel =
+    locale === "zh" || locale === "zht" ? "语言" : "Language";
 
   return (
     <label
-      className={`language-switcher language-switcher--${status}`}
+      className="language-switcher"
       data-no-translate
+      data-translation-skip
     >
-      <span className="sr-only">Language / 语言</span>
-      <span className="language-switcher__icon" aria-hidden="true">
-        文
-      </span>
+      <span className="sr-only">{controlLabel}</span>
       <select
-        aria-label={`Language: ${accessibleLanguageNameFor(locale)}`}
-        aria-busy={status === "loading"}
+        aria-label={controlLabel}
         onChange={(event) => setLocale(event.target.value as UiLocale)}
         value={locale}
       >
