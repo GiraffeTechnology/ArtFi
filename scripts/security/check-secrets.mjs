@@ -33,6 +33,17 @@ for (const file of files) {
   for (const [name, pattern] of rules) {
     if (pattern.test(contents)) findings.push(`${file}: ${name}`);
   }
+  for (const candidate of contents.matchAll(
+    /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g,
+  )) {
+    const octets = candidate[0].split(".").map(Number);
+    if (octets.some((octet) => octet > 255)) continue;
+    const isLoopback = octets[0] === 127;
+    const isUnspecified = octets.every((octet) => octet === 0);
+    if (!isLoopback && !isUnspecified) {
+      findings.push(`${file}: plaintext server IPv4 address`);
+    }
+  }
 }
 
 if (findings.length > 0) {

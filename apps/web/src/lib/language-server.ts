@@ -2,7 +2,9 @@ import "server-only";
 
 import {
   isTranslatableSource,
+  needsTranslation,
   protectedTermsIntact,
+  sourceLanguageFor,
   type UiLocale,
 } from "./language";
 
@@ -48,8 +50,19 @@ function cacheTranslation(key: string, value: string): void {
   cache.set(key, value);
 }
 
+function translationDomainHint(targetLanguage: UiLocale): string {
+  const productContext =
+    "ArtCCH ArtFi digital art, NFT, Ethereum, DAO, wallet and external marketplace mirror";
+  if (targetLanguage !== "zh-Hant") return productContext;
+  return `${productContext}. MANDATORY: Traditional Chinese only; use traditional characters such as 連接、錢包、管理、數位、資產; never output simplified Chinese.`;
+}
+
 async function translateText(sourceText: string, targetLanguage: UiLocale) {
-  if (!isTranslatableSource(sourceText)) return sourceText;
+  if (
+    !isTranslatableSource(sourceText) ||
+    !needsTranslation(sourceText, targetLanguage)
+  )
+    return sourceText;
   const key = `${targetLanguage}\u0000${sourceText}`;
   const cached = cache.get(key);
   if (cached) return cached;
@@ -62,10 +75,9 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         source_text: sourceText,
-        source_language: "en",
+        source_language: sourceLanguageFor(sourceText),
         target_language: targetLanguage,
-        domain_hint:
-          "ArtCCH ArtFi digital art, NFT, Ethereum, DAO, wallet and external marketplace mirror",
+        domain_hint: translationDomainHint(targetLanguage),
       }),
       cache: "no-store",
       signal: controller.signal,
@@ -97,7 +109,7 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
 
 export async function translatePageTexts(
   texts: ReadonlyArray<string>,
-  targetLanguage: Exclude<UiLocale, "en">,
+  targetLanguage: UiLocale,
 ): Promise<{ degraded: boolean; translations: string[] }> {
   const translations = [...texts];
   let degraded = false;
