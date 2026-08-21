@@ -34,7 +34,7 @@ changes alone cannot rewrite a compiled `NEXT_PUBLIC_*` value.
 1. Pin the image to the exact Git commit or digest; never deploy `latest`.
 2. Bind the container only to a private interface or loopback behind the approved proxy.
 3. Verify `/api/health`, every legacy UI route, static assets, wallet connection without signing,
-   Sepolia enforcement, CSP/security headers, and the absence of ArtFi buy/bid/claim execution.
+   Sepolia enforcement for project writes, CSP/security headers, and the absence of any ArtFi-operated orderbook, matching, custody, fulfillment, or settlement. External fulfillment remains separately gated and wallet-confirmed.
 4. Route `/v1/*` only after the API health check and origin policy pass.
 5. Roll back by image digest if health, accessibility, API routing, or wallet-chain checks fail.
 

@@ -68,6 +68,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/nfts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Runtime Sepolia mint catalog projected from canonical chain events. */
+    get: operations["listMintedNFTs"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/projects": {
     parameters: {
       query?: never;
@@ -142,6 +159,106 @@ export interface paths {
     };
     /** @description Read-only activity mirrored from approved external marketplaces; execution remains external. */
     get: operations["getExternalMarketActivity"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/market/assets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Paginated, deduplicated NFT catalog derived only from attributed external-market runtime events. */
+    get: operations["getExternalMarketAssets"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/market/intents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Build an unsigned, same-chain OpenSea fulfillment plan. The external wallet and OpenSea/Seaport retain signing and execution. */
+    post: operations["createExternalMarketIntent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/market/intents/{intentID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getExternalMarketIntent"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/market/intents/{intentID}/submission": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations["recordExternalMarketSubmission"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/governance/config": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Sepolia RWA DAO addresses and immutable policy thresholds. Disabled unless every address is valid. */
+    get: operations["getGovernanceConfig"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/governance/proposals": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Durable chain-indexed governance proposals. No fixture fallback is permitted. */
+    get: operations["getGovernanceProposals"];
     put?: never;
     post?: never;
     delete?: never;
@@ -230,6 +347,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/rwa/discovery-checks": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Operator-authenticated, server-side OpenSea NFT discovery check. The API key and raw upstream payload remain private; the result and payload digest are recorded durably. */
+    post: operations["checkOpenSeaDiscovery"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/vault/intents": {
     parameters: {
       query?: never;
@@ -301,6 +435,54 @@ export interface components {
       registryAddress?: string;
       vaultFactoryAddress?: string;
     };
+    GovernanceConfig: {
+      actionRegistryAddress?: string;
+      approvalPpm: {
+        /** @constant */
+        marketMigration: 500000;
+        /** @constant */
+        physicalAction: 666667;
+        /** @constant */
+        forcedBuyout: 800000;
+      };
+      /** @constant */
+      chainId: 11155111;
+      enabled: boolean;
+      governorAddress?: string;
+      /** @constant */
+      membershipAuthority: "onchain-rwa-token-snapshot";
+      /** @constant */
+      proposalThresholdPpm: 100000;
+      tokenAddress?: string;
+      vaultAddress?: string;
+    };
+    GovernanceProposal: {
+      actionTarget: string;
+      /** @enum {integer} */
+      approvalNumerator: 500000 | 666667 | 800000;
+      /** @constant */
+      approvalDenominator: 1000000;
+      evidenceHash?: string;
+      /** Format: uri */
+      evidenceUri?: string;
+      governorAddress: string;
+      proposalId: string;
+      /** @enum {string} */
+      proposalKind: "market_migration" | "physical_action" | "forced_buyout";
+      proposerAddress: string;
+      rwaVerified: boolean;
+      /** @enum {string} */
+      status:
+        | "pending"
+        | "active"
+        | "defeated"
+        | "succeeded"
+        | "queued"
+        | "executed"
+        | "cancelled";
+      voteStart: number;
+      voteEnd: number;
+    };
     UploadIntentRequest: {
       fileName: string;
       /** @enum {string} */
@@ -350,6 +532,32 @@ export interface components {
       /** Format: date-time */
       createdAt: string;
     };
+    OpenSeaDiscoveryRequest: {
+      /** @constant */
+      source: "opensea";
+      chain: string;
+      contractAddress: string;
+      tokenId: string;
+    };
+    OpenSeaDiscoveryResult: {
+      checkId: string;
+      /** @constant */
+      source: "opensea";
+      chain: string;
+      contractAddress: string;
+      tokenId: string;
+      /** @enum {string} */
+      result: "discovered" | "not-found" | "unsupported-chain";
+      discovered: boolean;
+      collection?: string;
+      tokenStandard?: string;
+      /** Format: uri */
+      marketplaceUrl?: string;
+      evidenceSha256: string;
+      upstreamStatus: number;
+      /** Format: date-time */
+      observedAt: string;
+    };
     VaultIntentRequest: {
       collectionAddress: string;
       tokenId: string;
@@ -398,6 +606,19 @@ export interface components {
       availableFractions: number;
       status: string;
       provenance: string[];
+    };
+    MintedNFT: {
+      /** @enum {string} */
+      standard: "ERC-721" | "ERC-1155";
+      collectionAddress: string;
+      tokenId: string;
+      holderAddress?: string;
+      /** Format: uri */
+      metadataUri?: string;
+      transactionHash: string;
+      blockNumber: number;
+      /** Format: date-time */
+      observedAt: string;
     };
     Project: {
       slug: string;
@@ -464,6 +685,67 @@ export interface components {
     };
     ExternalMarketActivity: components["schemas"]["ExternalMarketEventRequest"] & {
       eventId: string;
+    };
+    ExternalMarketAsset: {
+      source: string;
+      chain: string;
+      contractAddress: string;
+      tokenId: string;
+      collectionSlug?: string;
+      latestEventType: string;
+      /** Format: date-time */
+      latestEventTimestamp: string;
+      orderHash?: string;
+      /** @enum {string} */
+      orderStatus?: "active" | "cancelled" | "invalidated" | "fulfilled";
+      price?: string;
+      paymentSymbol?: string;
+      /** Format: uri */
+      marketplaceUrl?: string;
+    };
+    ExternalMarketIntentRequest: {
+      /** @constant */
+      source: "opensea";
+      /** @constant */
+      action: "fulfill-listing";
+      chain: string;
+      orderHash: string;
+      walletAddress: string;
+    };
+    ExternalMarketTransaction: {
+      chain: string;
+      to: string;
+      data: string;
+      value: string;
+      valueHex?: string;
+    };
+    ExternalMarketIntent: components["schemas"]["ExternalMarketIntentRequest"] & {
+      intentId: string;
+      contractAddress: string;
+      tokenId: string;
+      /** @enum {string} */
+      status:
+        | "initiated"
+        | "awaiting-wallet"
+        | "submitted"
+        | "accepted"
+        | "rejected"
+        | "pending"
+        | "confirmed"
+        | "failed"
+        | "cancelled";
+      /** Format: uri */
+      marketplaceUrl: string;
+      transactions: components["schemas"]["ExternalMarketTransaction"][];
+      transactionHash?: string;
+      externalTransactionHash?: string;
+      failureCode?: string;
+      /** Format: date-time */
+      externalEventTimestamp?: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
     };
     Problem: {
       /** Format: uri */
@@ -585,6 +867,38 @@ export interface operations {
         };
       };
       404: components["responses"]["Problem"];
+    };
+  };
+  listMintedNFTs: {
+    parameters: {
+      query?: {
+        page?: number;
+        pageSize?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Indexed ERC-721 and ERC-1155 mint records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            data: components["schemas"]["MintedNFT"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @constant */
+            chainId: 11155111;
+            /** @constant */
+            runtime: true;
+          };
+        };
+      };
     };
   };
   listProjects: {
@@ -739,6 +1053,181 @@ export interface operations {
       400: components["responses"]["Problem"];
     };
   };
+  getExternalMarketAssets: {
+    parameters: {
+      query?: {
+        source?: string;
+        contract?: string;
+        page?: number;
+        pageSize?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Complete runtime-backed page of mirrored NFTs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            data: components["schemas"]["ExternalMarketAsset"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @constant */
+            schemaVersion: "1";
+            source: string;
+            /** @constant */
+            runtime: true;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+    };
+  };
+  createExternalMarketIntent: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExternalMarketIntentRequest"];
+      };
+    };
+    responses: {
+      /** @description Idempotent replay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExternalMarketIntent"];
+        };
+      };
+      /** @description Safe unsigned transaction plan prepared for external-wallet review */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExternalMarketIntent"];
+        };
+      };
+      409: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getExternalMarketIntent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        intentID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current state reconciled from wallet submission and external-market events */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExternalMarketIntent"];
+        };
+      };
+      404: components["responses"]["Problem"];
+    };
+  };
+  recordExternalMarketSubmission: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        intentID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          transactionHash: string;
+        };
+      };
+    };
+    responses: {
+      /** @description External-wallet submission recorded for authoritative event reconciliation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExternalMarketIntent"];
+        };
+      };
+      409: components["responses"]["Problem"];
+    };
+  };
+  getGovernanceConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Governance deployment configuration */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GovernanceConfig"];
+        };
+      };
+    };
+  };
+  getGovernanceProposals: {
+    parameters: {
+      query?: {
+        limit?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Indexed governance proposal records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            data: components["schemas"]["GovernanceProposal"][];
+            /** @constant */
+            membershipAuthority: "onchain-rwa-token-snapshot";
+            /** @constant */
+            schemaVersion: "1";
+          };
+        };
+      };
+      503: components["responses"]["Problem"];
+    };
+  };
   createUploadIntent: {
     parameters: {
       query?: never;
@@ -882,6 +1371,34 @@ export interface operations {
         };
       };
       409: components["responses"]["Problem"];
+    };
+  };
+  checkOpenSeaDiscovery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["OpenSeaDiscoveryRequest"];
+      };
+    };
+    responses: {
+      /** @description Discovery evidence recorded, including explicit not-found or unsupported-chain outcomes */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OpenSeaDiscoveryResult"];
+        };
+      };
+      401: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      502: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
     };
   };
   createVaultIntent: {

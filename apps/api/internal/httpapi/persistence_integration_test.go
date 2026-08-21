@@ -152,6 +152,39 @@ func TestMySQLChainEventDedupeConflictAndReorg(t *testing.T) {
 	if len(projected.Positions) != 1 || projected.Positions[0].Balance != "7" {
 		t.Fatalf("transfer was not projected: %+v", projected.Positions)
 	}
+	if len(projected.Transactions) != 1 || projected.Transactions[0].EventName != "Transfer" || projected.Transactions[0].Status != "confirmed" {
+		t.Fatalf("transaction history was not projected: %+v", projected.Transactions)
+	}
+	mintBody := map[string]any{
+		"chainId":         11155111,
+		"transactionHash": "0x" + strings.Repeat("d", 64),
+		"logIndex":        3,
+		"blockNumber":     12346,
+		"blockHash":       "0x" + strings.Repeat("e", 64),
+		"contractAddress": "0x1111111111111111111111111111111111111111",
+		"eventName":       "AssetCreated",
+		"payload": map[string]any{
+			"collectionAddress": "0x1111111111111111111111111111111111111111",
+			"tokenId":           "7",
+			"recipient":         "0x2222222222222222222222222222222222222222",
+			"metadataURI":       "https://example.test/metadata/7.json",
+		},
+		"removed":       false,
+		"confirmations": 3,
+	}
+	mintCreated := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/events", mintBody, headers)
+	if mintCreated.Code != http.StatusCreated {
+		t.Fatalf("create mint event: status=%d body=%s", mintCreated.Code, mintCreated.Body.String())
+	}
+	catalog := requestWithHandler(t, handler, http.MethodGet, "/v1/nfts?page=1&pageSize=20")
+	var indexed struct {
+		Data  []mintedNFT `json:"data"`
+		Total int         `json:"total"`
+	}
+	decode(t, catalog, &indexed)
+	if indexed.Total != 1 || len(indexed.Data) != 1 || indexed.Data[0].Standard != "ERC-721" || indexed.Data[0].TokenID != "7" {
+		t.Fatalf("minted NFT catalog was not projected: %+v", indexed)
+	}
 	replay := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/events", body, headers)
 	if replay.Code != http.StatusOK {
 		t.Fatalf("replay event: status=%d body=%s", replay.Code, replay.Body.String())
@@ -293,6 +326,120 @@ func TestMySQLExternalMarketMirrorDedupeAndOrdering(t *testing.T) {
 	}
 }
 
+func TestMySQLExternalTradeIntentUsesOpenSeaPlanAndReconcilesResult(t *testing.T) {
+	dsn := os.Getenv("ARTFI_INTEGRATION_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("ARTFI_INTEGRATION_MYSQL_DSN is not set")
+	}
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, statement := range []string{
+		"DELETE FROM marketplace_discovery_checks",
+		"DELETE FROM external_market_intents",
+		"DELETE FROM external_market_orders",
+		"DELETE FROM external_market_events",
+	} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer db.Exec("DELETE FROM external_market_intents")
+	defer db.Exec("DELETE FROM external_market_orders")
+	defer db.Exec("DELETE FROM external_market_events")
+
+	orderHash := "0x" + strings.Repeat("1", 64)
+	transactionHash := "0x" + strings.Repeat("2", 64)
+	protocolAddress := "0x3333333333333333333333333333333333333333"
+	mockOpenSea := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.URL.Path != "/api/v2/listings/cross_chain_fulfillment_data" ||
+			request.Header.Get("X-API-Key") != "test-opensea-key" {
+			t.Fatalf("unexpected OpenSea request: %s %s", request.Method, request.URL.Path)
+		}
+		writeJSON(writer, http.StatusOK, map[string]any{
+			"transactions": []map[string]string{{
+				"chain": "ethereum", "to": protocolAddress, "data": "0x1234",
+				"value": "1000000000000000", "value_hex": "0x038d7ea4c68000",
+			}},
+		})
+	}))
+	defer mockOpenSea.Close()
+
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	service.db = db
+	service.indexerKeyHash = sha256.Sum256([]byte("trade-intent-indexer-key"))
+	service.indexerEnabled = true
+	service.externalTradeEnabled = true
+	service.openseaAPIKey = "test-opensea-key"
+	service.openseaAPIBaseURL = mockOpenSea.URL
+	handler := newHandler(service)
+	listed := map[string]any{
+		"schemaVersion": "1", "source": "opensea", "eventType": "item_listed",
+		"eventFamily": "order", "entityKey": orderHash, "version": 1,
+		"chain": "ethereum", "collectionSlug": "artfi-test", "orderHash": orderHash,
+		"contractAddress": "0x4444444444444444444444444444444444444444",
+		"tokenId":         "42", "makerAddress": "0x5555555555555555555555555555555555555555",
+		"price": "1000000000000000", "paymentSymbol": "ETH",
+		"marketplaceUrl": "https://opensea.io/assets/ethereum/0x4444444444444444444444444444444444444444/42",
+		"eventTimestamp": "2026-08-19T05:00:00Z",
+		"payload":        map[string]any{"order_hash": orderHash, "protocol_address": protocolAddress},
+	}
+	indexed := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-events", listed,
+		map[string]string{"X-Indexer-Key": "trade-intent-indexer-key"})
+	if indexed.Code != http.StatusCreated {
+		t.Fatalf("index listing: status=%d body=%s", indexed.Code, indexed.Body.String())
+	}
+	catalog := requestWithHandler(t, handler, http.MethodGet, "/v1/market/assets?source=opensea&pageSize=100")
+	if catalog.Code != http.StatusOK || !strings.Contains(catalog.Body.String(), `"total":1`) ||
+		!strings.Contains(catalog.Body.String(), orderHash) {
+		t.Fatalf("runtime catalog missing listing: status=%d body=%s", catalog.Code, catalog.Body.String())
+	}
+
+	intentRequest := map[string]any{
+		"source": "opensea", "action": "fulfill-listing", "chain": "ethereum",
+		"orderHash": orderHash, "walletAddress": "0x6666666666666666666666666666666666666666",
+	}
+	created := jsonRequest(t, handler, http.MethodPost, "/v1/market/intents", intentRequest,
+		map[string]string{"Idempotency-Key": "trade-intent-idempotency-key"})
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create trade intent: status=%d body=%s", created.Code, created.Body.String())
+	}
+	var intent marketIntent
+	decode(t, created, &intent)
+	if intent.Status != "awaiting-wallet" || len(intent.Transactions) != 1 ||
+		intent.Transactions[0].To != protocolAddress {
+		t.Fatalf("unsafe or incomplete transaction plan: %+v", intent)
+	}
+	replay := jsonRequest(t, handler, http.MethodPost, "/v1/market/intents", intentRequest,
+		map[string]string{"Idempotency-Key": "trade-intent-idempotency-key"})
+	if replay.Code != http.StatusOK {
+		t.Fatalf("idempotent intent replay: status=%d body=%s", replay.Code, replay.Body.String())
+	}
+	submitted := jsonRequest(t, handler, http.MethodPost, "/v1/market/intents/"+intent.IntentID+"/submission",
+		map[string]any{"transactionHash": transactionHash}, nil)
+	if submitted.Code != http.StatusOK || !strings.Contains(submitted.Body.String(), `"status":"submitted"`) {
+		t.Fatalf("record trade submission: status=%d body=%s", submitted.Code, submitted.Body.String())
+	}
+
+	listed["eventType"] = "item_sold"
+	listed["eventFamily"] = "sale"
+	listed["version"] = 2
+	listed["transactionHash"] = transactionHash
+	listed["eventTimestamp"] = "2026-08-19T05:00:02Z"
+	sold := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-events", listed,
+		map[string]string{"X-Indexer-Key": "trade-intent-indexer-key"})
+	if sold.Code != http.StatusCreated {
+		t.Fatalf("reconcile sale: status=%d body=%s", sold.Code, sold.Body.String())
+	}
+	result := requestWithHandler(t, handler, http.MethodGet, "/v1/market/intents/"+intent.IntentID)
+	if result.Code != http.StatusOK || !strings.Contains(result.Body.String(), `"status":"confirmed"`) ||
+		!strings.Contains(result.Body.String(), transactionHash) {
+		t.Fatalf("confirmed result missing: status=%d body=%s", result.Code, result.Body.String())
+	}
+}
+
 func requestWithHandler(t *testing.T, handler http.Handler, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, nil)
@@ -304,6 +451,7 @@ func requestWithHandler(t *testing.T, handler http.Handler, method, path string)
 func cleanupPersistenceTables(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
 	for _, statement := range []string{
+		"DELETE FROM external_market_intents",
 		"DELETE FROM external_market_orders",
 		"DELETE FROM external_market_events",
 		"DELETE FROM chain_events",

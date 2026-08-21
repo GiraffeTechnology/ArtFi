@@ -10,8 +10,8 @@ const journeys = [
   ["/market/fractionals", "Understand the position before the transaction."],
   ["/market/fractionals/blue-hour-archive", "Blue Hour Archive"],
   ["/portfolio", "Your public portfolio."],
-  ["/dao", "Governance, made legible."],
-  ["/create/rwa", "Commit the record before the token."],
+  ["/dao", "The holders govern the corresponding physical asset."],
+  ["/create/rwa", "Mint, verify, and route the token."],
 ] as const;
 
 for (const [path, heading] of journeys) {
@@ -22,7 +22,9 @@ for (const [path, heading] of journeys) {
     await expect(
       page.getByRole("heading", { level: 1, name: heading }),
     ).toBeVisible();
-    await expect(page.getByText("No in-app order execution")).toBeVisible();
+    await expect(
+      page.getByText("External marketplace execution only"),
+    ).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
     expect(
       results.violations.filter((violation) =>
@@ -51,14 +53,80 @@ test("approved brand identity and attribution boundaries are present", async ({
   await expect(
     page.getByRole("link", { name: "ArtCCH TM: ArtFi home" }),
   ).toContainText("：ArtFi");
-  await expect(page.getByLabel("Language / 语言")).toHaveValue("en");
-  await expect(page.getByLabel("Language / 语言").locator("option")).toHaveText(
-    ["EN", "简", "繁", "日"],
-  );
+  const languageSelector = page.getByRole("combobox", {
+    name: "Language: English",
+  });
+  await expect(languageSelector).toHaveValue("en");
+  await expect(languageSelector.locator("option")).toHaveText([
+    "EN",
+    "简",
+    "繁",
+    "FR",
+    "ES",
+    "DE",
+    "한",
+    "日",
+  ]);
+  await expect(
+    languageSelector.getByRole("option", { name: "Français" }),
+  ).toHaveCount(1);
   await expect(
     page.getByText("Technical support: Giraffe ArtFi Corp."),
   ).toHaveCount(1);
   await expect(page.getByText(/Bazaar/i)).toHaveCount(0);
+});
+
+test("eight-language selection persists and translates dynamic accessible copy", async ({
+  page,
+}) => {
+  await page.route("**/api/language/v1/translate-page", async (route) => {
+    const request = route.request().postDataJSON() as {
+      target_language: string;
+      texts: string[];
+    };
+    await route.fulfill({
+      contentType: "application/json",
+      json: {
+        degraded: false,
+        source_language: "en",
+        target_language: request.target_language,
+        translations: request.texts.map(
+          (text) => `[${request.target_language.toUpperCase()}] ${text}`,
+        ),
+      },
+    });
+  });
+
+  await page.goto("/dao");
+  const selector = page.getByRole("combobox", { name: "Language: English" });
+  await selector.selectOption("fr");
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "[FR] The holders govern the corresponding physical asset.",
+  );
+  await expect(
+    page.locator(
+      '[aria-label="[FR] DAO ownership verification and governance"]',
+    ),
+  ).toHaveCount(1);
+  await expect(page).toHaveTitle(/\[FR\]/);
+
+  await page.reload();
+  await expect(
+    page.getByRole("combobox", { name: "Language: Français" }),
+  ).toHaveValue("fr");
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr");
+
+  await page
+    .getByRole("combobox", { name: "Language: Français" })
+    .selectOption("zht");
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-Hant");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".mobile-menu summary").click();
+  await expect(page.locator(".mobile-menu nav a").first()).toContainText(
+    "[ZHT]",
+  );
 });
 
 test("RWA creation is wallet and Sepolia gated", async ({ page }) => {
@@ -72,6 +140,72 @@ test("RWA creation is wallet and Sepolia gated", async ({ page }) => {
   await expect(
     page.getByText("The application never receives a private key."),
   ).toBeVisible();
+  await expect(page.getByRole("tab", { name: /ERC-721/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.getByRole("tab", { name: /ERC-1155/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Package ready for review" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Review and mint ERC-1155 on Sepolia" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("No artwork master is uploaded here."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: "All indexed ERC-721 and ERC-1155 NFTs.",
+    }),
+  ).toBeVisible();
+});
+
+test("wallet page exposes the fail-closed DAO linkage module", async ({
+  page,
+}) => {
+  await page.goto("/portfolio");
+  await expect(
+    page.getByRole("heading", {
+      name: "Link the holder wallet to its asset DAO.",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Open DAO verification" }),
+  ).toHaveAttribute("href", "/dao");
+  await expect(
+    page.getByText("Displaying an NFT in a wallet is not enough."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Runtime positions and history" }),
+  ).toBeVisible();
+});
+
+test("DAO page preserves the four-step creation flow without unlimited approval", async ({
+  page,
+}) => {
+  await page.goto("/dao");
+  await expect(
+    page.getByRole("heading", {
+      name: "Create the asset DAO in four controlled steps.",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Step 1 · Create Vault" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("No collection-wide approval is requested."),
+  ).toBeVisible();
+  await expect(page.getByText(/setApprovalForAll/i)).toHaveCount(0);
+});
+
+test("market mirror exposes functional search, filters and sort controls", async ({
+  page,
+}) => {
+  await page.goto("/market/rwa");
+  await expect(page.getByRole("searchbox", { name: "Search" })).toBeVisible();
+  await expect(page.getByLabel("Listing status")).toHaveValue("all");
+  await expect(page.getByLabel("Sort")).toHaveValue("newest");
 });
 
 test("production health endpoint reports the enforced operating mode", async ({

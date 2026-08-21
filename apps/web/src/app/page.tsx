@@ -14,17 +14,24 @@ const modules = [
     title: "Market mirror",
   },
   {
+    detail: "Authorized ERC-721 records and fixed ERC-1155 edition controls.",
+    href: "/create/rwa",
+    label: "External wallet confirmation",
+    number: "02",
+    title: "Mint",
+  },
+  {
     detail: "Public-address portfolio and testnet network visibility.",
     href: "/portfolio",
     label: "No private-key custody",
-    number: "02",
+    number: "03",
     title: "Wallet",
   },
   {
     detail: "Proposal, quorum, treasury and role transparency.",
     href: "/dao",
     label: "Execution interface reserved",
-    number: "03",
+    number: "04",
     title: "DAO",
   },
 ] as const;
@@ -66,7 +73,7 @@ export default function Home() {
         className="module-overview"
         aria-labelledby="module-overview-title"
       >
-        <h2 id="module-overview-title">Three transparent layers</h2>
+        <h2 id="module-overview-title">Four controlled layers</h2>
         <div className="module-overview__grid">
           {modules.map((module) => (
             <Link href={module.href} key={module.number}>

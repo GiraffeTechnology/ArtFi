@@ -279,6 +279,9 @@ func (service *rwaService) persistMarketEvent(request *http.Request, input marke
 			return 0, err
 		}
 	}
+	if err := reconcileMarketIntents(tx, input, eventTimestamp); err != nil {
+		return 0, err
+	}
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}

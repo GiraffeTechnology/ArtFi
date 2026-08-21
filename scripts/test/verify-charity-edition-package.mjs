@@ -82,8 +82,8 @@ const packageBase = {
     holderContactsCchsDirectly: true,
     artfiIssuesReceipt: false,
     artfiDeterminesEligibleAmount: false,
-    receiptValuationPolicy: "cchs-issue-date-eth-cad-public-market-rate",
-    receiptRateTimestampBasis: "cchs-receipt-issued-at",
+    receiptValuationPolicy: "cchs-donation-date-eth-cad-public-market-rate",
+    receiptRateTimestampBasis: "cchs-gift-received-at",
     receiptRatePair: "ETH/CAD",
     receiptRateSourceSelection: "CCHS-approved-public-market-source",
     receiptRateSnapshotSha256Required: true,
@@ -125,9 +125,11 @@ for (const mutate of [
   (value) => (value.artwork.unwatermarkedWebDownload = true),
   (value) => (value.holderAsset.watermarkedSha256 = value.artwork.masterSha256),
   (value) => (value.fundraising.proceedsPercent = 99),
-  (value) => (value.fundraising.receiptValuationPolicy = "eth-transfer-date"),
   (value) =>
-    (value.fundraising.receiptRateTimestampBasis = "eth-transferred-at"),
+    (value.fundraising.receiptValuationPolicy =
+      "cchs-issue-date-eth-cad-public-market-rate"),
+  (value) =>
+    (value.fundraising.receiptRateTimestampBasis = "cchs-receipt-issued-at"),
   (value) => (value.fundraising.receiptRatePair = "ETH/USD"),
   (value) => (value.fundraising.receiptRateSnapshotSha256Required = false),
   (value) => (value.fundraising.officialReceiptAmountDeterminedBy = "ArtFi"),

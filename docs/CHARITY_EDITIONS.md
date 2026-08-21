@@ -25,13 +25,13 @@ must route them to the CCHS-confirmed beneficiary wallet. Holders contact CCHS d
 official Canadian donation receipt. ArtFi does not issue a receipt, determine the eligible amount,
 or promise a tax credit.
 
-The product requirement is that the CCHS-issued receipt amount uses a public-market ETH/CAD rate at
-the receipt-issue time. The evidence record preserves the ETH transfer time, CCHS
-receipt-confirmation time, receipt-issue time, CCHS-approved public source, quoted ETH/CAD price,
-provider timestamp, and snapshot digest. ArtFi must not calculate, override, or promise an eligible
-amount; it may only reproduce an amount and evidence supplied or approved by CCHS. Release still
-requires CCHS's written confirmation that this method and the fair-market value of every holder
-advantage comply with its CRA obligations.
+The receipt valuation policy uses a reasonable public-market ETH/CAD fair market value when CCHS
+actually receives the gift. The evidence record preserves the ETH transfer and CCHS-received times,
+receipt-confirmation and issue times, CCHS-approved public source, quoted ETH/CAD price, provider
+timestamp, and snapshot digest. CCHS alone must decide the gift date, fair market value, every
+holder advantage, and eligible amount in accordance with applicable law. ArtFi may only reproduce
+an amount and evidence supplied or approved by CCHS. Release still requires CCHS's written
+confirmation of the final method.
 
 ## Package verification
 

@@ -33,6 +33,44 @@ func TestConfigIsSepoliaReadOnly(t *testing.T) {
 	}
 }
 
+func TestGovernanceConfigFailsClosedWithoutAddresses(t *testing.T) {
+	t.Setenv("ARTFI_DAO_ACTIONS_ADDRESS", "")
+	t.Setenv("ARTFI_GOVERNOR_ADDRESS", "")
+	t.Setenv("ARTFI_GOVERNANCE_TOKEN_ADDRESS", "")
+	t.Setenv("ARTFI_RWA_VAULT_ADDRESS", "")
+	recorder := request(t, http.MethodGet, "/v1/governance/config")
+	var response governanceConfigResponse
+	decode(t, recorder, &response)
+	if response.Enabled || response.MembershipAuthority != "onchain-rwa-token-snapshot" || response.ProposalThresholdPPM != 100_000 {
+		t.Fatalf("unsafe governance config: %+v", response)
+	}
+	if response.ApprovalPPM["marketMigration"] != 500_000 || response.ApprovalPPM["physicalAction"] != 666_667 || response.ApprovalPPM["forcedBuyout"] != 800_000 {
+		t.Fatalf("unexpected governance thresholds: %+v", response.ApprovalPPM)
+	}
+}
+
+func TestGovernanceConfigEnablesOnlyWithCompleteValidAddresses(t *testing.T) {
+	t.Setenv("ARTFI_DAO_ACTIONS_ADDRESS", "0x1111111111111111111111111111111111111111")
+	t.Setenv("ARTFI_GOVERNOR_ADDRESS", "0x2222222222222222222222222222222222222222")
+	t.Setenv("ARTFI_GOVERNANCE_TOKEN_ADDRESS", "0x3333333333333333333333333333333333333333")
+	t.Setenv("ARTFI_RWA_VAULT_ADDRESS", "0x4444444444444444444444444444444444444444")
+	recorder := request(t, http.MethodGet, "/v1/governance/config")
+	var response governanceConfigResponse
+	decode(t, recorder, &response)
+	if !response.Enabled || response.ChainID != sepoliaChainID {
+		t.Fatalf("complete governance config was not enabled: %+v", response)
+	}
+}
+
+func TestGovernanceProposalIndexFailsClosedWithoutDatabase(t *testing.T) {
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	recorder := httptest.NewRecorder()
+	newHandler(service).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/governance/proposals", nil))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected unavailable proposal index, got %d", recorder.Code)
+	}
+}
+
 func TestAssetLookup(t *testing.T) {
 	recorder := request(t, http.MethodGet, "/v1/assets/blue-hour-archive")
 	var response asset
@@ -104,6 +142,78 @@ func TestOperatorWritesFailClosedAndUseConstantCredentialBoundary(t *testing.T) 
 	})
 	if authorized.Code == http.StatusUnauthorized {
 		t.Fatal("valid operator credential was rejected")
+	}
+}
+
+func TestOpenSeaDiscoveryVerifiesSupportedChainAndExactNFT(t *testing.T) {
+	contract := "0x1111111111111111111111111111111111111111"
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("X-API-Key") != "discovery-test-key" {
+			t.Fatal("OpenSea API key was not sent server-side")
+		}
+		switch request.URL.Path {
+		case "/api/v2/chains":
+			writeJSON(writer, http.StatusOK, map[string]any{
+				"chains": []map[string]string{{"chain": "sepolia"}},
+			})
+		case "/api/v2/chain/sepolia/contract/" + contract + "/nfts/42":
+			writeJSON(writer, http.StatusOK, map[string]any{
+				"nft": map[string]string{
+					"identifier":     "42",
+					"collection":     "artcch-test",
+					"token_standard": "erc721",
+				},
+			})
+		default:
+			t.Fatalf("unexpected OpenSea discovery path: %s", request.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	service.openseaAPIKey = "discovery-test-key"
+	service.openseaAPIBaseURL = upstream.URL
+	response := jsonRequest(t, newHandler(service), http.MethodPost, "/v1/rwa/discovery-checks", map[string]string{
+		"source": "opensea", "chain": "sepolia", "contractAddress": contract, "tokenId": "42",
+	}, nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("discovery check: status=%d body=%s", response.Code, response.Body.String())
+	}
+	var result openSeaDiscoveryResponse
+	decode(t, response, &result)
+	if !result.Discovered || result.Result != "discovered" || result.TokenStandard != "erc721" ||
+		result.EvidenceSHA256 == "" || !strings.HasPrefix(result.MarketplaceURL, "https://opensea.io/") {
+		t.Fatalf("unsafe discovery result: %+v", result)
+	}
+}
+
+func TestOpenSeaDiscoveryRecordsUnsupportedChainWithoutNFTClaim(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/api/v2/chains" {
+			t.Fatalf("unsupported chain must not trigger NFT lookup: %s", request.URL.Path)
+		}
+		writeJSON(writer, http.StatusOK, map[string]any{
+			"chains": []map[string]string{{"chain": "ethereum"}},
+		})
+	}))
+	defer upstream.Close()
+
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	service.openseaAPIKey = "discovery-test-key"
+	service.openseaAPIBaseURL = upstream.URL
+	response := jsonRequest(t, newHandler(service), http.MethodPost, "/v1/rwa/discovery-checks", map[string]string{
+		"source":          "opensea",
+		"chain":           "sepolia",
+		"contractAddress": "0x1111111111111111111111111111111111111111",
+		"tokenId":         "42",
+	}, nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("unsupported chain check: status=%d body=%s", response.Code, response.Body.String())
+	}
+	var result openSeaDiscoveryResponse
+	decode(t, response, &result)
+	if result.Discovered || result.Result != "unsupported-chain" || result.MarketplaceURL != "" {
+		t.Fatalf("unsupported chain was misrepresented: %+v", result)
 	}
 }
 

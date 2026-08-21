@@ -1,5 +1,14 @@
 # Security and operations runbook
 
+## Production data source
+
+- Production MySQL must use the confirmed CTYun route documented in
+  `docs/CTYUN_MYSQL_DEPLOYMENT_CONTRACT.md`.
+- The MySQL container in `docker-compose.yml` is development/CI-only.
+- Production remains configuration-gated until the CTYun schema, least-privilege principal, TLS,
+  secret injection, migrations, backup, and restore evidence are approved.
+- Never bypass the abcdyi loopback tunnel or commit/print the resolved `MYSQL_DSN`.
+
 ## Availability and recovery targets
 
 - Pilot target: RPO 15 minutes for MySQL and object metadata; RTO 4 hours.

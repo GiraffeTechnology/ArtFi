@@ -83,11 +83,11 @@ artwork preview, and forbids any unwatermarked web download. It is explicitly ma
   confirms the beneficiary/distribution wallet in writing.
 - Holders contact CCHS directly regarding an official Canadian donation receipt. ArtFi does not
   issue the receipt, determine the eligible amount, or guarantee a tax credit.
-- Product policy requires the public-market ETH/CAD rate at the CCHS receipt-issue time. The
-  evidence schema binds the `ETH/CAD` pair, CCHS-approved public source selection, provider and issue
-  timestamps, quoted rate, and snapshot hash. ArtFi cannot calculate or override the eligible
-  amount. Release requires CCHS written confirmation of the final valuation and holder-advantage
-  treatment.
+- Product policy values ETH in CAD when CCHS actually receives the gift. The evidence schema binds
+  the `ETH/CAD` pair, CCHS-approved public source selection, provider and CCHS-received timestamps,
+  quoted rate, and snapshot hash. It does not itself determine the eligible amount. CCHS alone
+  decides the legally relevant gift date, valuation method, holder-advantage treatment, and
+  eligible amount. Release requires CCHS written confirmation of the final method.
 - NFT ownership conveys no physical title, possession, redemption, copyright, commercial-use, or
   reproduction right.
 - ArtCCH retains the physical work until all 100 primary subscriptions are independently reconciled.

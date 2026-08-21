@@ -70,24 +70,28 @@ type mintIntent struct {
 }
 
 type rwaService struct {
-	mu                 sync.RWMutex
-	config             rwaConfig
-	store              objectStore
-	uploads            map[string]*uploadSession
-	intents            map[string]*mintIntent
-	intentByKey        map[string]string
-	vaultIntents       map[string]*vaultIntent
-	vaultIntentByKey   map[string]string
-	now                func() time.Time
-	db                 persistenceDB
-	cache              cacheStore
-	requireDB          bool
-	indexerKeyHash     [32]byte
-	indexerEnabled     bool
-	operatorKeyHash    [32]byte
-	operatorEnabled    bool
-	requireOperator    bool
-	marketplaceSources map[string]struct{}
+	mu                   sync.RWMutex
+	config               rwaConfig
+	store                objectStore
+	uploads              map[string]*uploadSession
+	intents              map[string]*mintIntent
+	intentByKey          map[string]string
+	vaultIntents         map[string]*vaultIntent
+	vaultIntentByKey     map[string]string
+	now                  func() time.Time
+	db                   persistenceDB
+	cache                cacheStore
+	requireDB            bool
+	indexerKeyHash       [32]byte
+	indexerEnabled       bool
+	operatorKeyHash      [32]byte
+	operatorEnabled      bool
+	requireOperator      bool
+	marketplaceSources   map[string]struct{}
+	openseaAPIKey        string
+	externalTradeEnabled bool
+	marketHTTPClient     *http.Client
+	openseaAPIBaseURL    string
 }
 
 type uploadIntentRequest struct {
@@ -133,6 +137,14 @@ func newRWAServiceFromEnv() *rwaService {
 	service.requireDB = true
 	service.requireOperator = true
 	service.marketplaceSources = parseMarketplaceSources(os.Getenv("ARTFI_MARKETPLACE_ALLOWLIST"))
+	// Public-chain and marketplace egress is allowed only from the SIN execution zone.
+	// CTYun backend processes therefore stay fail-closed even if a key is injected by mistake.
+	if strings.TrimSpace(os.Getenv("ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE")) == "sin" {
+		service.openseaAPIKey = strings.TrimSpace(os.Getenv("OPENSEA_API_KEY"))
+		service.externalTradeEnabled = strings.EqualFold(strings.TrimSpace(os.Getenv("ARTFI_EXTERNAL_TRADE_ENABLED")), "true")
+	} else {
+		service.marketHTTPClient = nil
+	}
 	if operatorToken := strings.TrimSpace(os.Getenv("ARTFI_OPERATOR_BEARER_TOKEN")); operatorToken != "" {
 		service.operatorKeyHash = sha256.Sum256([]byte(operatorToken))
 		service.operatorEnabled = true
@@ -156,6 +168,8 @@ func newRWAService(config rwaConfig, store objectStore) *rwaService {
 		vaultIntents:       make(map[string]*vaultIntent),
 		vaultIntentByKey:   make(map[string]string),
 		marketplaceSources: map[string]struct{}{"opensea": {}},
+		marketHTTPClient:   &http.Client{Timeout: 12 * time.Second},
+		openseaAPIBaseURL:  "https://api.opensea.io",
 		now:                func() time.Time { return time.Now().UTC() },
 	}
 }

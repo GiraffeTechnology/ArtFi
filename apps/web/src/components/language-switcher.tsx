@@ -1,6 +1,10 @@
 "use client";
 
-import { uiLocaleOptions, type UiLocale } from "@/lib/language";
+import {
+  accessibleLanguageNameFor,
+  uiLocaleOptions,
+  type UiLocale,
+} from "@/lib/language";
 
 import { useLanguage } from "./language-provider";
 
@@ -17,13 +21,18 @@ export function LanguageSwitcher() {
         文
       </span>
       <select
-        aria-label="Language / 语言"
+        aria-label={`Language: ${accessibleLanguageNameFor(locale)}`}
         aria-busy={status === "loading"}
         onChange={(event) => setLocale(event.target.value as UiLocale)}
         value={locale}
       >
         {uiLocaleOptions.map((option) => (
-          <option key={option.locale} value={option.locale}>
+          <option
+            aria-label={option.accessibleName}
+            key={option.locale}
+            lang={option.htmlLang}
+            value={option.locale}
+          >
             {option.label}
           </option>
         ))}

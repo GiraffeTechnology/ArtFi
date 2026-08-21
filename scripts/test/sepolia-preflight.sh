@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$repo_root/scripts/lib/require-sin-public-chain.sh"
+
 required=(
   ARTFI_RPC_URL
   ARTFI_DEPLOYER_ACCOUNT

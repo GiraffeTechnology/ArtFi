@@ -2,11 +2,15 @@
 pragma solidity 0.8.30;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {IGovernor} from "@openzeppelin/contracts/governance/IGovernor.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
+import {ArtFiDAOActions, IArtFiBuyoutPriceVerifier} from "../src/ArtFiDAOActions.sol";
 import {ArtFiGovernor} from "../src/ArtFiGovernor.sol";
 import {ArtFiGovernanceBootstrap} from "../src/ArtFiGovernanceBootstrap.sol";
 import {ArtFiMarket} from "../src/ArtFiMarket.sol";
+import {ArtFiVault} from "../src/ArtFiVault.sol";
 import {FractionalToken} from "../src/FractionalToken.sol";
 
 interface Stage4Vm {
@@ -23,11 +27,27 @@ contract MarketToken is ERC20 {
     }
 }
 
-contract GovernedBox {
-    uint256 public value;
+contract GovernanceNFT is ERC721 {
+    constructor() ERC721("Governed RWA", "GRWA") {}
 
-    function setValue(uint256 nextValue) external {
-        value = nextValue;
+    function mint(address recipient, uint256 tokenId) external {
+        _mint(recipient, tokenId);
+    }
+}
+
+contract AcceptingBuyoutVerifier is IArtFiBuyoutPriceVerifier {
+    bool public accept = true;
+
+    function setAccept(bool value) external {
+        accept = value;
+    }
+
+    function verifyBuyoutPrice(address, uint256, uint48, uint48, uint8, uint32, bytes32)
+        external
+        view
+        returns (bool)
+    {
+        return accept;
     }
 }
 
@@ -194,16 +214,22 @@ contract MarketGovernanceTest {
     }
 
     function testGovernanceProposalVoteQueueAndExecute() public {
-        FractionalToken votes = new FractionalToken(
-            "Governance Fractions", "GOVF", address(this), 100 ether, address(this), address(this)
-        );
+        (
+            ArtFiVault vault,
+            FractionalToken votes,
+            ArtFiGovernanceBootstrap bootstrap,
+            AcceptingBuyoutVerifier verifier
+        ) = _deployGovernance(100 ether);
+        require(address(vault.fractionalToken()) == address(votes), "vault token mismatch");
+        require(address(verifier) != address(0), "verifier missing");
         votes.delegate(address(this));
         VM.roll(block.number + 1);
 
-        ArtFiGovernanceBootstrap bootstrap =
-            new ArtFiGovernanceBootstrap(votes, 2, 1, 5, 1 ether, 4);
         TimelockController timelock = bootstrap.timelock();
         ArtFiGovernor governor = bootstrap.governor();
+        ArtFiDAOActions actions = bootstrap.actionRegistry();
+        require(governor.proposalThreshold() == 10 ether, "proposal threshold not 10 percent");
+        require(governor.rwaEligible(), "RWA eligibility failed");
         require(
             timelock.hasRole(timelock.DEFAULT_ADMIN_ROLE(), address(timelock)),
             "timelock self admin"
@@ -220,21 +246,324 @@ contract MarketGovernanceTest {
             "governor canceller role"
         );
 
-        GovernedBox box = new GovernedBox();
         address[] memory targets = new address[](1);
-        targets[0] = address(box);
+        targets[0] = address(actions);
         uint256[] memory values = new uint256[](1);
         bytes[] memory calls = new bytes[](1);
-        calls[0] = abi.encodeCall(box.setValue, (42));
-        string memory description = "Set governed value";
+        bytes32 marketHash = keccak256("approved-market");
+        calls[0] = abi.encodeCall(
+            actions.recordMarketMigration, (marketHash, keccak256("evidence"), "ipfs://evidence")
+        );
+        string memory description = "Move trading visibility to an approved market";
 
-        uint256 proposalId = governor.propose(targets, values, calls, description);
+        uint256 proposalId = governor.proposeWithKind(
+            targets, values, calls, description, ArtFiGovernor.ProposalKind.MarketMigration
+        );
         VM.roll(block.number + 2);
         governor.castVote(proposalId, 1);
         VM.roll(block.number + 6);
         governor.queue(targets, values, calls, keccak256(bytes(description)));
         VM.warp(block.timestamp + 3);
         governor.execute(targets, values, calls, keccak256(bytes(description)));
-        require(box.value() == 42, "governance execution failed");
+        require(actions.destinationMarketHash() == marketHash, "governance execution failed");
+    }
+
+    function testProposalRequiresTenPercentSnapshotOwnership() public {
+        (, FractionalToken votes, ArtFiGovernanceBootstrap bootstrap,) =
+            _deployGovernance(100 ether);
+        ArtFiGovernor governor = bootstrap.governor();
+        ArtFiDAOActions actions = bootstrap.actionRegistry();
+        require(votes.transfer(BUYER_A, 9 ether), "transfer A failed");
+        require(votes.transfer(BUYER_B, 10 ether), "transfer B failed");
+        VM.prank(BUYER_A);
+        votes.delegate(BUYER_A);
+        VM.prank(BUYER_B);
+        votes.delegate(BUYER_B);
+        VM.roll(block.number + 1);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calls) =
+            _marketMigrationCall(actions, keccak256("threshold"));
+        VM.prank(BUYER_A);
+        (bool belowThreshold,) = address(governor)
+            .call(
+                abi.encodeCall(
+                    governor.proposeWithKind,
+                    (
+                        targets,
+                        values,
+                        calls,
+                        "Nine percent cannot propose",
+                        ArtFiGovernor.ProposalKind.MarketMigration
+                    )
+                )
+            );
+        require(!belowThreshold, "sub-threshold holder proposed");
+
+        VM.prank(BUYER_B);
+        uint256 proposalId = governor.proposeWithKind(
+            targets,
+            values,
+            calls,
+            "Ten percent can propose",
+            ArtFiGovernor.ProposalKind.MarketMigration
+        );
+        require(proposalId != 0, "threshold holder proposal missing");
+    }
+
+    function testApprovalIsStrictlyGreaterThanClassThreshold() public {
+        (, FractionalToken votes, ArtFiGovernanceBootstrap bootstrap,) =
+            _deployGovernance(100 ether);
+        ArtFiGovernor governor = bootstrap.governor();
+        ArtFiDAOActions actions = bootstrap.actionRegistry();
+        require(votes.transfer(BUYER_A, 50 ether), "transfer A failed");
+        require(votes.transfer(BUYER_B, 50 ether), "transfer B failed");
+        VM.prank(BUYER_A);
+        votes.delegate(BUYER_A);
+        VM.prank(BUYER_B);
+        votes.delegate(BUYER_B);
+        VM.roll(block.number + 1);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calls) =
+            _marketMigrationCall(actions, keccak256("exact-half"));
+        VM.prank(BUYER_A);
+        uint256 proposalId = governor.proposeWithKind(
+            targets,
+            values,
+            calls,
+            "Exactly half must fail",
+            ArtFiGovernor.ProposalKind.MarketMigration
+        );
+        VM.roll(block.number + 2);
+        VM.prank(BUYER_A);
+        governor.castVote(proposalId, 1);
+        VM.roll(block.number + 6);
+        require(
+            governor.state(proposalId) == IGovernor.ProposalState.Defeated,
+            "exactly 50 percent passed"
+        );
+    }
+
+    function testProposalKindCannotBypassRequiredAction() public {
+        (, FractionalToken votes, ArtFiGovernanceBootstrap bootstrap,) =
+            _deployGovernance(100 ether);
+        ArtFiGovernor governor = bootstrap.governor();
+        ArtFiDAOActions actions = bootstrap.actionRegistry();
+        votes.delegate(address(this));
+        VM.roll(block.number + 1);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calls) =
+            _marketMigrationCall(actions, keccak256("mislabeled"));
+        (bool ok,) = address(governor)
+            .call(
+                abi.encodeCall(
+                    governor.proposeWithKind,
+                    (
+                        targets,
+                        values,
+                        calls,
+                        "Cannot label market migration as buyout",
+                        ArtFiGovernor.ProposalKind.ForcedBuyout
+                    )
+                )
+            );
+        require(!ok, "proposal classification bypassed");
+    }
+
+    function testSnapshotPreventsTransferredVotingPowerFromBeingCountedTwice() public {
+        (, FractionalToken votes, ArtFiGovernanceBootstrap bootstrap,) =
+            _deployGovernance(100 ether);
+        ArtFiGovernor governor = bootstrap.governor();
+        ArtFiDAOActions actions = bootstrap.actionRegistry();
+        require(votes.transfer(BUYER_A, 60 ether), "transfer A failed");
+        VM.prank(BUYER_A);
+        votes.delegate(BUYER_A);
+        VM.roll(block.number + 1);
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory calls) =
+            _marketMigrationCall(actions, keccak256("snapshot-transfer"));
+        VM.prank(BUYER_A);
+        uint256 proposalId = governor.proposeWithKind(
+            targets,
+            values,
+            calls,
+            "Transferred voting power must not count twice",
+            ArtFiGovernor.ProposalKind.MarketMigration
+        );
+        VM.roll(block.number + 2);
+        VM.prank(BUYER_A);
+        require(votes.transfer(BUYER_B, 60 ether), "post-snapshot transfer failed");
+        VM.prank(BUYER_B);
+        votes.delegate(BUYER_B);
+
+        VM.prank(BUYER_A);
+        governor.castVote(proposalId, 1);
+        VM.prank(BUYER_B);
+        governor.castVote(proposalId, 1);
+        (, uint256 forVotes,) = governor.proposalVotes(proposalId);
+        require(forVotes == 60 ether, "transferred votes counted twice");
+
+        VM.prank(BUYER_A);
+        (bool votedTwice,) =
+            address(governor).call(abi.encodeCall(governor.castVote, (proposalId, uint8(1))));
+        require(!votedTwice, "same address voted twice");
+    }
+
+    function testPhysicalActionIsStrictlyGreaterThan666667Ppm() public {
+        (, FractionalToken votes, ArtFiGovernanceBootstrap bootstrap,) =
+            _deployGovernance(1_000_000 ether);
+        ArtFiDAOActions actions = bootstrap.actionRegistry();
+        bytes memory callData = abi.encodeCall(
+            actions.requestPhysicalAction,
+            (
+                ArtFiDAOActions.PhysicalAction.WarehouseTransfer,
+                keccak256("warehouse-evidence"),
+                "ipfs://warehouse-evidence"
+            )
+        );
+        _assertExactApprovalFails(
+            votes,
+            bootstrap.governor(),
+            actions,
+            callData,
+            ArtFiGovernor.ProposalKind.PhysicalAction,
+            666_667 ether
+        );
+    }
+
+    function testForcedBuyoutIsStrictlyGreaterThan80Percent() public {
+        (, FractionalToken votes, ArtFiGovernanceBootstrap bootstrap,) =
+            _deployGovernance(1_000_000 ether);
+        ArtFiDAOActions actions = bootstrap.actionRegistry();
+        ArtFiDAOActions.ForcedBuyoutTerms memory terms = ArtFiDAOActions.ForcedBuyoutTerms({
+            unitPriceWei: 1 ether,
+            t0: uint48(block.timestamp),
+            observationStart: 0,
+            pricingRule: ArtFiDAOActions.BuyoutPricingRule.LastTenActualTrades,
+            tradeCount: 10,
+            evidenceHash: keccak256("buyout-boundary-evidence"),
+            evidenceURI: "ipfs://buyout-boundary-evidence"
+        });
+        _assertExactApprovalFails(
+            votes,
+            bootstrap.governor(),
+            actions,
+            abi.encodeCall(actions.initiateForcedBuyout, (terms)),
+            ArtFiGovernor.ProposalKind.ForcedBuyout,
+            800_000 ether
+        );
+    }
+
+    function testBuyoutPriceEvidenceFailsClosed() public {
+        (
+            ,
+            FractionalToken votes,
+            ArtFiGovernanceBootstrap bootstrap,
+            AcceptingBuyoutVerifier verifier
+        ) = _deployGovernance(100 ether);
+        ArtFiGovernor governor = bootstrap.governor();
+        ArtFiDAOActions actions = bootstrap.actionRegistry();
+        votes.delegate(address(this));
+        VM.roll(block.number + 1);
+        verifier.setAccept(false);
+
+        ArtFiDAOActions.ForcedBuyoutTerms memory terms = ArtFiDAOActions.ForcedBuyoutTerms({
+            unitPriceWei: 1 ether,
+            t0: uint48(block.timestamp),
+            observationStart: 0,
+            pricingRule: ArtFiDAOActions.BuyoutPricingRule.LastTenActualTrades,
+            tradeCount: 10,
+            evidenceHash: keccak256("ten-trade-vwap"),
+            evidenceURI: "ipfs://buyout-evidence"
+        });
+        address[] memory targets = new address[](1);
+        targets[0] = address(actions);
+        uint256[] memory values = new uint256[](1);
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = abi.encodeCall(actions.initiateForcedBuyout, (terms));
+        string memory description = "Evidence-gated forced buyout";
+        uint256 proposalId = governor.proposeWithKind(
+            targets, values, calls, description, ArtFiGovernor.ProposalKind.ForcedBuyout
+        );
+        VM.roll(block.number + 2);
+        governor.castVote(proposalId, 1);
+        VM.roll(block.number + 6);
+        governor.queue(targets, values, calls, keccak256(bytes(description)));
+        VM.warp(block.timestamp + 3);
+        (bool executed,) = address(governor)
+            .call(
+                abi.encodeCall(
+                    governor.execute, (targets, values, calls, keccak256(bytes(description)))
+                )
+            );
+        require(!executed, "invalid buyout price evidence executed");
+    }
+
+    function _deployGovernance(uint256 supply)
+        private
+        returns (
+            ArtFiVault vault,
+            FractionalToken votes,
+            ArtFiGovernanceBootstrap bootstrap,
+            AcceptingBuyoutVerifier verifier
+        )
+    {
+        GovernanceNFT nft = new GovernanceNFT();
+        nft.mint(address(this), 1);
+        vault = new ArtFiVault(
+            "Governed RWA Vault", nft, 1, address(this), address(this), address(this)
+        );
+        nft.approve(address(vault), 1);
+        vault.deposit();
+        votes = FractionalToken(
+            vault.fractionalize("Governance Fractions", "GOVF", supply, address(this))
+        );
+        verifier = new AcceptingBuyoutVerifier();
+        bootstrap = new ArtFiGovernanceBootstrap(vault, verifier, 2, 1, 5, 4);
+    }
+
+    function _marketMigrationCall(ArtFiDAOActions actions, bytes32 marketHash)
+        private
+        pure
+        returns (address[] memory targets, uint256[] memory values, bytes[] memory calls)
+    {
+        targets = new address[](1);
+        targets[0] = address(actions);
+        values = new uint256[](1);
+        calls = new bytes[](1);
+        calls[0] = abi.encodeCall(
+            actions.recordMarketMigration, (marketHash, keccak256("evidence"), "ipfs://evidence")
+        );
+    }
+
+    function _assertExactApprovalFails(
+        FractionalToken votes,
+        ArtFiGovernor governor,
+        ArtFiDAOActions actions,
+        bytes memory callData,
+        ArtFiGovernor.ProposalKind kind,
+        uint256 exactVotes
+    ) private {
+        require(votes.transfer(BUYER_A, exactVotes), "boundary transfer failed");
+        VM.prank(BUYER_A);
+        votes.delegate(BUYER_A);
+        VM.roll(block.number + 1);
+
+        address[] memory targets = new address[](1);
+        targets[0] = address(actions);
+        uint256[] memory values = new uint256[](1);
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = callData;
+        VM.prank(BUYER_A);
+        uint256 proposalId = governor.proposeWithKind(
+            targets, values, calls, "Exact class threshold must fail", kind
+        );
+        VM.roll(block.number + 2);
+        VM.prank(BUYER_A);
+        governor.castVote(proposalId, 1);
+        VM.roll(block.number + 6);
+        require(
+            governor.state(proposalId) == IGovernor.ProposalState.Defeated,
+            "exact class threshold passed"
+        );
     }
 }

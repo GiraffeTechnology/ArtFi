@@ -19,9 +19,13 @@ Stage 2 and Stage 3 provide the deliberately narrow Sepolia write paths:
 - `DeployStage3.s.sol`: Sepolia-only vault-factory deployment and role-handoff script.
 - `ArtFiMarket`: future exchange candidate retained for security regression only; it is excluded from
   current deployment and release paths until the compliance launch gate is approved.
-- `ArtFiGovernor`: token-vote governance with quorum and mandatory Timelock execution.
-- `ArtFiGovernanceBootstrap`: atomic role configuration that leaves the Timelock self-administered.
-- `DeployStage4.s.sol`: Sepolia-only market and governance deployment.
+- `ArtFiGovernor`: one-Vault RWA governance with historical vote snapshots, a fixed 10% proposal
+  threshold, selector-bound proposal classes, and mandatory Timelock execution.
+- `ArtFiDAOActions`: evidence-gated, Timelock-only action registry for market migration, physical
+  assistance requests, shared failure-cost records, and independently verified buyout terms.
+- `ArtFiGovernanceBootstrap`: atomic RWA binding and role configuration that leaves the Timelock
+  self-administered and gives ArtCCH no voting override.
+- `DeployStage4.s.sol`: Sepolia-only RWA governance deployment. It does not deploy `ArtFiMarket`.
 
 ## Commands
 
@@ -37,7 +41,9 @@ forge test --match-path test/MarketGovernance.t.sol --gas-report
 
 The tests cover authorization, pause/recovery, metadata constraints, idempotency conflicts,
 custody, fixed fractional supply, fixed 100-unit charity editions, sellout-before-donation ordering,
-one-vault-per-NFT, fuzzed commitments, and registry/vault/edition supply invariants.
+one-vault-per-NFT, snapshot rights validation, exact governance thresholds, proposal-class
+anti-downgrade, buyout evidence failure, fuzzed commitments, and registry/vault/edition supply
+invariants.
 
 ## Deployment gate
 

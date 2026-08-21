@@ -113,9 +113,8 @@ if (
   manifest.fundraising?.artfiIssuesReceipt !== false ||
   manifest.fundraising?.artfiDeterminesEligibleAmount !== false ||
   manifest.fundraising?.receiptValuationPolicy !==
-    "cchs-issue-date-eth-cad-public-market-rate" ||
-  manifest.fundraising?.receiptRateTimestampBasis !==
-    "cchs-receipt-issued-at" ||
+    "cchs-donation-date-eth-cad-public-market-rate" ||
+  manifest.fundraising?.receiptRateTimestampBasis !== "cchs-gift-received-at" ||
   manifest.fundraising?.receiptRatePair !== "ETH/CAD" ||
   manifest.fundraising?.receiptRateSourceSelection !==
     "CCHS-approved-public-market-source" ||
@@ -125,7 +124,7 @@ if (
   typeof manifest.fundraising?.cchsEvidenceFile !== "string"
 ) {
   throw new Error(
-    "CCHS must receive all proceeds and remain the sole receipt decision-maker using its approved public issue-date ETH/CAD evidence",
+    "CCHS must receive all proceeds and remain the sole receipt decision-maker using approved public donation-received-time ETH/CAD evidence",
   );
 }
 if (

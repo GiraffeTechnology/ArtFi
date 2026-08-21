@@ -1,33 +1,44 @@
 import type { Metadata } from "next";
 
+import { DaoCreationFlow } from "@/components/dao-creation-flow";
+import { DaoGovernance } from "@/components/dao-governance";
+
 export const metadata: Metadata = { title: "DAO" };
 
-const governanceFacts = [
-  ["Proposal", "014", "Approve conservation reserve"],
-  ["Participation", "68.4%", "Quorum met"],
-  ["Timelock", "48h", "Execution remains reserved"],
+const governanceRules = [
+  ["Propose", "≥10%", "Delegated snapshot ownership"],
+  ["Market migration", ">50%", "Strictly over total snapshot supply"],
+  [
+    "Physical action",
+    ">66.6667%",
+    "Warehouse, auction, sale or custodian notice",
+  ],
+  [
+    "Forced buyout",
+    ">80%",
+    "Oracle-verified 30-day VWAP or last 10 actual trades",
+  ],
 ] as const;
 
 export default function DaoPage() {
   return (
     <main className="approved-page approved-page--dao page-shell">
       <div className="module-banner">
-        <span>DAO / transparency mode</span>
-        <strong>Execution interface reserved</strong>
+        <span>DAO / Sepolia governance</span>
+        <strong>RWA ownership verification required</strong>
       </div>
       <header className="approved-page__header">
-        <p className="approved-eyebrow">Governance</p>
-        <h1>Governance, made legible.</h1>
+        <p className="approved-eyebrow">Asset-owner governance</p>
+        <h1>The holders govern the corresponding physical asset.</h1>
         <p>
-          Proposal, quorum, timelock, treasury and role state are visible here.
-          This interface does not submit votes or execute proposals.
+          ArtCCH provides the asset-management interface but does not vote for
+          holders. Membership, proposal rights and voting weight are verified
+          from the NFT-backed Vault and its fractional token snapshots.
         </p>
       </header>
-      <section
-        className="governance-grid"
-        aria-label="Read-only governance state"
-      >
-        {governanceFacts.map(([label, value, detail]) => (
+
+      <section className="governance-grid" aria-label="DAO approval rules">
+        {governanceRules.map(([label, value, detail]) => (
           <article key={label}>
             <span>{label}</span>
             <strong>{value}</strong>
@@ -35,15 +46,18 @@ export default function DaoPage() {
           </article>
         ))}
       </section>
-      <section className="treasury-strip" aria-label="Treasury preview">
-        <div>
-          <span>Treasury</span>
-          <strong>$1.84M</strong>
-        </div>
-        <p>
-          Illustrative Sepolia fixture · no funds controlled by this interface
-        </p>
-      </section>
+
+      <DaoCreationFlow />
+
+      <DaoGovernance
+        deployment={{
+          actionRegistryAddress:
+            process.env.NEXT_PUBLIC_ARTFI_DAO_ACTIONS_ADDRESS,
+          governorAddress: process.env.NEXT_PUBLIC_ARTFI_GOVERNOR_ADDRESS,
+          tokenAddress: process.env.NEXT_PUBLIC_ARTFI_GOVERNANCE_TOKEN_ADDRESS,
+          vaultAddress: process.env.NEXT_PUBLIC_ARTFI_RWA_VAULT_ADDRESS,
+        }}
+      />
     </main>
   );
 }

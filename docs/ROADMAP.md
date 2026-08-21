@@ -7,6 +7,9 @@
 - A later stage may be researched early, but cannot be release-eligible until all earlier exit gates pass.
 - Sepolia is the only allowed chain until Stage 7.
 - Regulatory, security, and custody gates can stop delivery regardless of feature completion.
+- All automated/operator public-chain RPC, deployment, indexer, explorer and OpenSea work runs only
+  in the SIN execution zone. abcdyi performs offline builds/tests; AIVAN performs translation; the
+  CTYun API/MySQL tier receives normalized evidence and does not connect directly to public chains.
 
 ## Stage 0 - Foundation
 
@@ -97,6 +100,11 @@ Scope:
   attribution and external-market deep links.
 - Portfolio and transaction history.
 - DAO proposal, voting, quorum, timelock, execution, and treasury visibility.
+- Wallet-control signature and RWA fractional-token snapshot rights validation.
+- Selector-bound proposal classes with strict approval against total snapshot supply: market
+  migration `>50%`, physical actions `>66.6667%`, and forced buyout initiation `>80%`.
+- Evidence-gated buyout-price verification. Automated debit, forced closeout, and production
+  buyout settlement remain outside this stage until detailed rules and legal/security approval.
 - Indexing and reconciliation for on-chain events.
 
 Exit gate:
@@ -104,6 +112,7 @@ Exit gate:
 - Stream ordering, duplicate delivery, REST gap recovery, stale event, and partial failure tests pass.
 - The ArtFi API cannot create, sign, fulfill, custody, match, or settle external orders.
 - Governance permissions and timelocks are independently reviewed.
+- RWA custody, proposal threshold, snapshot voting and every exact approval boundary are tested.
 
 ## Stage 5 - ArtFi wallet extension alpha
 

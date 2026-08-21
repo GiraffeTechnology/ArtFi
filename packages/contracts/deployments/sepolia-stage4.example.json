@@ -5,7 +5,10 @@
   "governanceBootstrap": "",
   "governor": "",
   "timelock": "",
+  "rwaVault": "",
   "governanceToken": "",
+  "actionRegistry": "",
+  "buyoutPriceVerifier": "",
   "deploymentTransaction": "",
   "sourceVerificationUrls": [],
   "roleEvidence": {
@@ -14,13 +17,19 @@
     "marketTokenManager": "",
     "timelockSelfAdmin": false,
     "governorIsOnlyProposer": false,
-    "governorIsOnlyCanceller": false
+    "governorIsOnlyCanceller": false,
+    "rwaEligibilityVerified": false,
+    "proposalThresholdIsTenPercent": false,
+    "buyoutVerifierConfigured": false
   },
   "parameters": {
     "timelockDelaySeconds": 0,
     "votingDelayBlocks": 0,
     "votingPeriodBlocks": 0,
-    "proposalThreshold": "",
+    "proposalThresholdPpm": 100000,
+    "marketMigrationApprovalPpm": 500000,
+    "physicalActionApprovalPpm": 666667,
+    "forcedBuyoutApprovalPpm": 800000,
     "quorumPercent": 0
   }
 }

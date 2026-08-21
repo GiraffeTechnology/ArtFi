@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
-import { ArtworkCard } from "@/components/artwork-card";
+import { PortfolioRecords } from "@/components/portfolio-records";
 import { PortfolioWallet } from "@/components/portfolio-wallet";
-import { artworks } from "@/lib/catalog";
+import { WalletDaoLink } from "@/components/wallet-dao-link";
 
 export const metadata: Metadata = { title: "Portfolio" };
 
@@ -22,17 +22,8 @@ export default function PortfolioPage() {
         </p>
       </header>
       <PortfolioWallet />
-      <section className="section-block section-block--compact">
-        <div className="section-heading">
-          <p className="approved-eyebrow">Visible positions</p>
-          <h2>Public records associated with this address.</h2>
-        </div>
-        <div className="artwork-grid artwork-grid--two">
-          {artworks.slice(0, 2).map((artwork) => (
-            <ArtworkCard artwork={artwork} fractional key={artwork.slug} />
-          ))}
-        </div>
-      </section>
+      <WalletDaoLink />
+      <PortfolioRecords />
     </main>
   );
 }
