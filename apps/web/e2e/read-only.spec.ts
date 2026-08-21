@@ -23,7 +23,7 @@ for (const [path, heading] of journeys) {
       page.getByRole("heading", { level: 1, name: heading }),
     ).toBeVisible();
     await expect(
-      page.getByText("External marketplace execution only"),
+      page.getByText("External market information mirror only"),
     ).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
     expect(
@@ -206,6 +206,26 @@ test("market mirror exposes functional search, filters and sort controls", async
   await expect(page.getByRole("searchbox", { name: "Search" })).toBeVisible();
   await expect(page.getByLabel("Listing status")).toHaveValue("all");
   await expect(page.getByLabel("Sort")).toHaveValue("newest");
+  await expect(page.getByText("OpenSea information mirror only")).toBeVisible();
+  await expect(page.locator('a[href*="opensea" i]')).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: /prepare external purchase|connect wallet to trade|confirm in external wallet/i,
+    }),
+  ).toHaveCount(0);
+});
+
+test("approved brand assets are served by the standalone runtime", async ({
+  request,
+}) => {
+  for (const path of [
+    "/brand/artcch-logo-master.svg",
+    "/brand/artwork-a.svg",
+  ]) {
+    const response = await request.get(path);
+    expect(response.ok()).toBe(true);
+    expect(response.headers()["content-type"]).toContain("image/svg+xml");
+  }
 });
 
 test("production health endpoint reports the enforced operating mode", async ({
