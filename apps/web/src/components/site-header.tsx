@@ -7,7 +7,6 @@ import { WalletButton } from "./wallet-button";
 const navigation = [
   ["Overview", "/"],
   ["Market mirror", "/market/rwa"],
-  ["Mint", "/create/rwa"],
   ["Wallet", "/portfolio"],
   ["DAO", "/dao"],
 ] as const;
@@ -63,9 +62,10 @@ export function SiteHeader() {
       </div>
       <div className="testnet-banner">
         <span>Testnet / read-only</span>
-        No custody · External market information mirror only · Attributed runtime
-        data
+        No custody · External market information mirror only · Attributed
+        runtime data
       </div>
     </header>
   );
 }
+
