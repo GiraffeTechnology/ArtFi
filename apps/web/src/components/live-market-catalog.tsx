@@ -256,7 +256,8 @@ export function LiveMarketCatalog() {
                   ) : null}
                 </dl>
                 <p className="market-gate">
-                  Source attributed to OpenSea · no external link or trade action
+                  Source attributed to OpenSea · no external link or trade
+                  action
                 </p>
               </div>
             </article>
