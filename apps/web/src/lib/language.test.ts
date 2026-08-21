@@ -28,7 +28,7 @@ describe("ArtFi language contract", () => {
         ["ja", "日"],
       ],
     );
-    expect(htmlLangFor("zh")).toBe("zh-Hans");
+    expect(htmlLangFor("zh")).toBe("zh-CN");
     expect(htmlLangFor("zht")).toBe("zh-Hant");
     expect(translationTargetFor("zht")).toBe("zh-Hant");
     expect(accessibleLanguageNameFor("ko")).toBe("한국어");

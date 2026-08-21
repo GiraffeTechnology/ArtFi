@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 import "@rainbow-me/rainbowkit/styles.css";
@@ -29,7 +30,26 @@ export default function RootLayout({
             <p>
               ArtCCH:ArtFi · Where living traditions become contemporary art.
             </p>
-            <p>Technical support: Giraffe ArtFi Corp.</p>
+            <p
+              className="technical-support"
+              data-no-translate
+              data-translation-skip
+            >
+              <span className="technical-support__label">
+                Technical support:
+              </span>
+              <span className="technical-support__mark" aria-hidden="true">
+                <Image
+                  src="/brand/giraffe-head-color.png"
+                  width={40}
+                  height={40}
+                  alt=""
+                />
+              </span>
+              <span className="technical-support__name">
+                Giraffe ArtFi Corp.
+              </span>
+            </p>
           </footer>
         </Providers>
       </body>

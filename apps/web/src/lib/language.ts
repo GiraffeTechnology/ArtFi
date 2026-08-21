@@ -32,7 +32,7 @@ export const uiLocaleOptions: ReadonlyArray<{
     accessibleName: "简体中文",
     label: "简",
     locale: "zh",
-    htmlLang: "zh-Hans",
+    htmlLang: "zh-CN",
     translationTarget: "zh",
   },
   {
