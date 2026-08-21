@@ -63,7 +63,7 @@ export function SiteHeader() {
       </div>
       <div className="testnet-banner">
         <span>Testnet / read-only</span>
-        No custody · External marketplace execution only · Attributed runtime
+        No custody · External market information mirror only · Attributed runtime
         data
       </div>
     </header>
