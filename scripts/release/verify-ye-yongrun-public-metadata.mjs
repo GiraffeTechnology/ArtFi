@@ -7,9 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "../..");
-const webRequire = createRequire(
-  join(repositoryRoot, "apps/web/package.json"),
-);
+const webRequire = createRequire(join(repositoryRoot, "apps/web/package.json"));
 const { keccak256, stringToHex } = webRequire("viem");
 const batchDirectory = join(
   repositoryRoot,

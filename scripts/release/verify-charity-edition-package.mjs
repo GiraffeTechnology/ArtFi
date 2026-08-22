@@ -121,8 +121,9 @@ if (
   typeof manifest.physicalArtwork?.directorDeclarationTextZh !== "string" ||
   manifest.physicalArtwork?.directorDeclarationSha256 !==
     authoritativeDirectorDeclarationSha256 ||
-  sha256(Buffer.from(manifest.physicalArtwork.directorDeclarationTextZh, "utf8")) !==
-    authoritativeDirectorDeclarationSha256 ||
+  sha256(
+    Buffer.from(manifest.physicalArtwork.directorDeclarationTextZh, "utf8"),
+  ) !== authoritativeDirectorDeclarationSha256 ||
   typeof manifest.physicalArtwork?.directorDeclarationAcceptedForRelease !==
     "boolean" ||
   manifest.physicalArtwork?.soleProjectLegalBasis !== true ||
@@ -130,7 +131,8 @@ if (
   manifest.physicalArtwork?.confidentialOriginalLocation !== "CCHS office" ||
   manifest.physicalArtwork?.confidentialReviewOnlyUponLawfulProcess !== true ||
   manifest.physicalArtwork
-    ?.confidentialUnderlyingDocumentsMayBeUploadedToPublicNetworkOrAi !== false ||
+    ?.confidentialUnderlyingDocumentsMayBeUploadedToPublicNetworkOrAi !==
+    false ||
   manifest.physicalArtwork?.donationTrigger !== "primary-sellout-100" ||
   manifest.physicalArtwork?.donationRecipient !== "CCHS" ||
   manifest.physicalArtwork?.ownerAfterCompletedDonation !== "CCHS" ||

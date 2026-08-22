@@ -6,9 +6,7 @@
   "standard": "ERC-1155",
   "packageCount": 37,
   "totalUnits": 3700,
-  "excludedArtworkIds": [
-    "UNIT-A02"
-  ],
+  "excludedArtworkIds": ["UNIT-A02"],
   "inscriptionSha256": "1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01",
   "publicBaseURL": "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun",
   "series": [

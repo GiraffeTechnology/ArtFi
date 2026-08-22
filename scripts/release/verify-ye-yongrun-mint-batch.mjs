@@ -32,8 +32,9 @@ const directorDeclarationSha256 =
   "ab8f2f3189528881f8c4f9a254bb93167fdf4027d44a345d2267e24fcfe4b416";
 const includedArtworkIds = [
   "UNIT-A01",
-  ...Array.from({ length: 36 }, (_, offset) =>
-    `UNIT-A${String(offset + 3).padStart(2, "0")}`,
+  ...Array.from(
+    { length: 36 },
+    (_, offset) => `UNIT-A${String(offset + 3).padStart(2, "0")}`,
   ),
 ];
 
@@ -42,7 +43,10 @@ const intentText = readFileSync(
   "utf8",
 );
 const intent = JSON.parse(intentText);
-const indexText = readFileSync(join(batchDirectory, "package-index.json"), "utf8");
+const indexText = readFileSync(
+  join(batchDirectory, "package-index.json"),
+  "utf8",
+);
 const index = JSON.parse(indexText);
 
 assert(intent.status === "blocked-pre-mint", "intent must remain blocked");
@@ -59,22 +63,32 @@ assert(
 );
 assert(intent.editionsPerArtwork === 100, "intent edition supply must be 100");
 assert(intent.totalUnits === 3700, "intent total units must be 3700");
-assert(intent.initialRecipient.address === artFi1, "intent recipient must be ArtFi1");
-assert(intent.ico.unitPriceWei === "10000000000000000", "ICO price must be 0.01 ETH");
-assert(intent.executionPolicy.sinOnly === true, "SIN-only execution must be required");
+assert(
+  intent.initialRecipient.address === artFi1,
+  "intent recipient must be ArtFi1",
+);
+assert(
+  intent.ico.unitPriceWei === "10000000000000000",
+  "ICO price must be 0.01 ETH",
+);
+assert(
+  intent.executionPolicy.sinOnly === true,
+  "SIN-only execution must be required",
+);
 assert(
   intent.businessAuthorization.formalMintRequested === true &&
     intent.businessAuthorization.openseaPublishingIncluded === false &&
     intent.businessAuthorization.overridesTechnicalOrEvidenceGates === false &&
-    intent.businessAuthorization.executionMayBeginOnlyAfterAllPreflightGatesPass ===
-      true,
+    intent.businessAuthorization
+      .executionMayBeginOnlyAfterAllPreflightGatesPass === true,
   "formal mint authorization must be recorded without overriding preflight gates",
 );
 assert(
   intent.infrastructureAttestation.abcdyiSshRecovered === true &&
-    intent.infrastructureAttestation.sinManagedTunnelActiveAndEnabled === true &&
-    intent.infrastructureAttestation.githubPrivateRepositoryReadThroughSinVerified ===
+    intent.infrastructureAttestation.sinManagedTunnelActiveAndEnabled ===
       true &&
+    intent.infrastructureAttestation
+      .githubPrivateRepositoryReadThroughSinVerified === true &&
     intent.infrastructureAttestation.temporaryProbeCleaned === true,
   "restored infrastructure attestation is required",
 );
@@ -93,15 +107,30 @@ assert(
   ].every((value) => value === false),
   "all execution actions must remain unauthorized",
 );
-assert(intent.artistUndertaking.reportedStatus === "signed", "signed status must be recorded");
-assert(intent.artistUndertaking.artistSigner === "葉永潤", "Artist signer must be recorded");
-assert(intent.artistUndertaking.witness.name === "Michael Yip", "witness must be recorded");
+assert(
+  intent.artistUndertaking.reportedStatus === "signed",
+  "signed status must be recorded",
+);
+assert(
+  intent.artistUndertaking.artistSigner === "葉永潤",
+  "Artist signer must be recorded",
+);
+assert(
+  intent.artistUndertaking.witness.name === "Michael Yip",
+  "witness must be recorded",
+);
 assert(
   intent.artistUndertaking.witness.capacity.startsWith("Director of CCHS"),
   "witness capacity must be recorded",
 );
-assert(intent.artistUndertaking.evidenceFile === null, "missing evidence must not be invented");
-assert(intent.artistUndertaking.evidenceSha256 === null, "missing evidence hash must not be invented");
+assert(
+  intent.artistUndertaking.evidenceFile === null,
+  "missing evidence must not be invented",
+);
+assert(
+  intent.artistUndertaking.evidenceSha256 === null,
+  "missing evidence hash must not be invented",
+);
 assert(
   [
     intent.artistUndertaking.signatureEvidenceVerified,
@@ -110,7 +139,10 @@ assert(
   ].every((value) => value === false),
   "undertaking evidence gates must remain false",
 );
-assert(intent.cchsDirectorDeclaration.declaredBy === "Michael YIP", "CCHS declarant must be recorded");
+assert(
+  intent.cchsDirectorDeclaration.declaredBy === "Michael YIP",
+  "CCHS declarant must be recorded",
+);
 assert(
   intent.cchsDirectorDeclaration.declaredCapacity ===
     "Director of CCHS and authorized representative of CCHS",
@@ -119,8 +151,7 @@ assert(
 assert(
   intent.artistUndertaking.reportedAgreementCounterpartyCapacity.includes(
     "authorized representative of CCHS",
-  ) &&
-    intent.cchsDirectorDeclaration.authorityToActForCchsAsserted === true,
+  ) && intent.cchsDirectorDeclaration.authorityToActForCchsAsserted === true,
   "authority to act for CCHS must be recorded as asserted",
 );
 assert(
@@ -128,15 +159,22 @@ assert(
     intent.cchsDirectorDeclaration.projectPolicyBinding === true,
   "CCHS declaration must bind project policy",
 );
-assert(intent.cchsDirectorDeclaration.cooperationSigned === true, "Artist cooperation must be recorded");
 assert(
-  intent.cchsDirectorDeclaration.physicalWorksReceivedIntoCustodyByCCHS === true &&
+  intent.cchsDirectorDeclaration.cooperationSigned === true,
+  "Artist cooperation must be recorded",
+);
+assert(
+  intent.cchsDirectorDeclaration.physicalWorksReceivedIntoCustodyByCCHS ===
+    true &&
     intent.cchsDirectorDeclaration.custodianBeforeSellout === "CCHS" &&
     intent.cchsDirectorDeclaration.ownerBeforeSellout === "Artist" &&
     intent.cchsDirectorDeclaration.custodyConveysTitle === false,
   "CCHS custody must preserve Artist ownership before sellout",
 );
-assert(intent.cchsDirectorDeclaration.nftConveysPhysicalRights === false, "NFTs must not convey physical rights");
+assert(
+  intent.cchsDirectorDeclaration.nftConveysPhysicalRights === false,
+  "NFTs must not convey physical rights",
+);
 assert(
   [
     intent.cchsDirectorDeclaration.identityAndCapacityDocumentVerified,
@@ -157,12 +195,24 @@ assert(
   "missing CCHS evidence must not be invented",
 );
 
-assert(sha256(readFileSync(descriptionPath)) === descriptionSha256, "description hash mismatch");
+assert(
+  sha256(readFileSync(descriptionPath)) === descriptionSha256,
+  "description hash mismatch",
+);
 const inscriptionBytes = readFileSync(inscriptionPath);
 assert(inscriptionBytes.length === 15_254, "inscription byte length mismatch");
-assert(!inscriptionBytes.subarray(0, 3).equals(Buffer.from("efbbbf", "hex")), "inscription must not have a BOM");
-assert(!inscriptionBytes.includes(0x0d), "inscription must use LF-only line endings");
-assert(sha256(inscriptionBytes) === inscriptionSha256, "inscription hash mismatch");
+assert(
+  !inscriptionBytes.subarray(0, 3).equals(Buffer.from("efbbbf", "hex")),
+  "inscription must not have a BOM",
+);
+assert(
+  !inscriptionBytes.includes(0x0d),
+  "inscription must use LF-only line endings",
+);
+assert(
+  sha256(inscriptionBytes) === inscriptionSha256,
+  "inscription hash mismatch",
+);
 
 const assetFiles = readdirSync(assetDirectory)
   .filter((name) => /^UNIT-A\d{2}-000\.png$/.test(name))
@@ -185,16 +235,28 @@ assert(
   !packageFiles.includes("UNIT-A02.charity-edition.json"),
   "withdrawn UNIT-A02 package must be absent",
 );
-assert(index.status === "blocked-pre-mint", "package index must remain blocked");
-assert(index.packageCount === 37 && index.totalUnits === 3700, "package totals are invalid");
-assert(index.initialRecipient === artFi1, "package index recipient must be ArtFi1");
+assert(
+  index.status === "blocked-pre-mint",
+  "package index must remain blocked",
+);
+assert(
+  index.packageCount === 37 && index.totalUnits === 3700,
+  "package totals are invalid",
+);
+assert(
+  index.initialRecipient === artFi1,
+  "package index recipient must be ArtFi1",
+);
 
 const seenMasterHashes = new Set();
 const masterHashFiles = new Map();
 for (let offset = 0; offset < includedArtworkIds.length; offset += 1) {
   const artworkId = includedArtworkIds[offset];
   const packageName = `${artworkId}.charity-edition.json`;
-  assert(packageFiles[offset] === packageName, `missing package ${packageName}`);
+  assert(
+    packageFiles[offset] === packageName,
+    `missing package ${packageName}`,
+  );
   const packageBytes = readFileSync(join(packageDirectory, packageName));
   const packageText = packageBytes.toString("utf8");
   const manifest = JSON.parse(packageText);
@@ -204,27 +266,69 @@ for (let offset = 0; offset < includedArtworkIds.length; offset += 1) {
   const masterSha256 = sha256(masterBytes);
 
   assert(record.artworkId === artworkId, `${artworkId} index order mismatch`);
-  assert(record.packageFile === packageName, `${artworkId} index package mismatch`);
-  assert(record.packageSha256 === sha256(packageBytes), `${artworkId} package hash mismatch`);
-  assert(record.masterSha256 === masterSha256, `${artworkId} index master hash mismatch`);
+  assert(
+    record.packageFile === packageName,
+    `${artworkId} index package mismatch`,
+  );
+  assert(
+    record.packageSha256 === sha256(packageBytes),
+    `${artworkId} package hash mismatch`,
+  );
+  assert(
+    record.masterSha256 === masterSha256,
+    `${artworkId} index master hash mismatch`,
+  );
   assert(
     record.metadataURI ===
       `https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/${artworkId}.json`,
     `${artworkId} index metadata URI mismatch`,
   );
-  assert(record.editions === 100 && record.distributionWallet === artFi1, `${artworkId} index policy mismatch`);
+  assert(
+    record.editions === 100 && record.distributionWallet === artFi1,
+    `${artworkId} index policy mismatch`,
+  );
   assert(manifest.chainId === 11155111, `${artworkId} must target Sepolia`);
   assert(manifest.standard === "ERC-1155", `${artworkId} must use ERC-1155`);
-  assert(manifest.series.artworkId === artworkId, `${artworkId} manifest ID mismatch`);
-  assert(manifest.series.editions === 100, `${artworkId} edition supply mismatch`);
-  assert(manifest.series.unitPriceWei === "10000000000000000", `${artworkId} price mismatch`);
-  assert(manifest.series.immutableSupply === true, `${artworkId} supply must be immutable`);
-  assert(manifest.series.distributionWallet === artFi1, `${artworkId} recipient mismatch`);
-  assert(manifest.artwork.creator === "Ye Yong Run (葉永潤)", `${artworkId} Artist mismatch`);
-  assert(manifest.artwork.masterSha256 === masterSha256, `${artworkId} master hash mismatch`);
-  assert(manifest.artwork.publicArtworkPreview === false, `${artworkId} preview must be disabled`);
-  assert(manifest.artwork.publicArtworkUri === null, `${artworkId} public URI must be absent`);
-  assert(manifest.artwork.unwatermarkedWebDownload === false, `${artworkId} master download must be disabled`);
+  assert(
+    manifest.series.artworkId === artworkId,
+    `${artworkId} manifest ID mismatch`,
+  );
+  assert(
+    manifest.series.editions === 100,
+    `${artworkId} edition supply mismatch`,
+  );
+  assert(
+    manifest.series.unitPriceWei === "10000000000000000",
+    `${artworkId} price mismatch`,
+  );
+  assert(
+    manifest.series.immutableSupply === true,
+    `${artworkId} supply must be immutable`,
+  );
+  assert(
+    manifest.series.distributionWallet === artFi1,
+    `${artworkId} recipient mismatch`,
+  );
+  assert(
+    manifest.artwork.creator === "Ye Yong Run (葉永潤)",
+    `${artworkId} Artist mismatch`,
+  );
+  assert(
+    manifest.artwork.masterSha256 === masterSha256,
+    `${artworkId} master hash mismatch`,
+  );
+  assert(
+    manifest.artwork.publicArtworkPreview === false,
+    `${artworkId} preview must be disabled`,
+  );
+  assert(
+    manifest.artwork.publicArtworkUri === null,
+    `${artworkId} public URI must be absent`,
+  );
+  assert(
+    manifest.artwork.unwatermarkedWebDownload === false,
+    `${artworkId} master download must be disabled`,
+  );
   assert(
     manifest.holderAsset.preview === false &&
       manifest.holderAsset.generatedPerHolder === true &&
@@ -236,24 +340,57 @@ for (let offset = 0; offset < includedArtworkIds.length; offset += 1) {
     manifest.metadata.publicURI === record.metadataURI,
     `${artworkId} manifest metadata URI mismatch`,
   );
-  assert(manifest.inscription.termsSha256 === inscriptionSha256, `${artworkId} inscription mismatch`);
-  assert(manifest.inscription.termsBytes === 15_254, `${artworkId} inscription byte length mismatch`);
-  assert(manifest.inscription.lineEndings === "LF", `${artworkId} inscription line endings mismatch`);
-  assert(manifest.inscription.bom === false, `${artworkId} inscription BOM mismatch`);
-  assert(manifest.marketplaceMode === "external-mirror", `${artworkId} marketplace mode mismatch`);
-  assert(manifest.artfiExchangeEnabled === false, `${artworkId} exchange must remain disabled`);
-  assert(manifest.rights.nftMintAuthorized === true, `${artworkId} mint authorization missing`);
+  assert(
+    manifest.inscription.termsSha256 === inscriptionSha256,
+    `${artworkId} inscription mismatch`,
+  );
+  assert(
+    manifest.inscription.termsBytes === 15_254,
+    `${artworkId} inscription byte length mismatch`,
+  );
+  assert(
+    manifest.inscription.lineEndings === "LF",
+    `${artworkId} inscription line endings mismatch`,
+  );
+  assert(
+    manifest.inscription.bom === false,
+    `${artworkId} inscription BOM mismatch`,
+  );
+  assert(
+    manifest.marketplaceMode === "external-mirror",
+    `${artworkId} marketplace mode mismatch`,
+  );
+  assert(
+    manifest.artfiExchangeEnabled === false,
+    `${artworkId} exchange must remain disabled`,
+  );
+  assert(
+    manifest.rights.nftMintAuthorized === true,
+    `${artworkId} mint authorization missing`,
+  );
   assert(
     manifest.rights.authorizationBasis ===
-        "formal-mint-authorization-and-cchs-director-declaration" &&
+      "formal-mint-authorization-and-cchs-director-declaration" &&
       manifest.rights.sourceDocumentsConfidential === true &&
       manifest.rights.sourceDocumentsProcessedByAi === false,
     `${artworkId} confidential rights authorization policy mismatch`,
   );
-  assert(manifest.rights.marketplaceListingEligible === false, `${artworkId} listing gate must remain false`);
-  assert(manifest.rights.listingActionConfirmed === false, `${artworkId} listing confirmation must remain false`);
-  assert(manifest.physicalArtwork.legalBasis === "cchs-director-declaration", `${artworkId} legal basis mismatch`);
-  assert(manifest.physicalArtwork.soleProjectLegalBasis === true, `${artworkId} legal basis must be exclusive`);
+  assert(
+    manifest.rights.marketplaceListingEligible === false,
+    `${artworkId} listing gate must remain false`,
+  );
+  assert(
+    manifest.rights.listingActionConfirmed === false,
+    `${artworkId} listing confirmation must remain false`,
+  );
+  assert(
+    manifest.physicalArtwork.legalBasis === "cchs-director-declaration",
+    `${artworkId} legal basis mismatch`,
+  );
+  assert(
+    manifest.physicalArtwork.soleProjectLegalBasis === true,
+    `${artworkId} legal basis must be exclusive`,
+  );
   assert(
     manifest.physicalArtwork.directorDeclarationSha256 ===
       directorDeclarationSha256,
@@ -264,9 +401,11 @@ for (let offset = 0; offset < includedArtworkIds.length; offset += 1) {
     `${artworkId} director declaration must be accepted for release`,
   );
   assert(
-    manifest.physicalArtwork.confidentialUnderlyingDocumentsRequired === false &&
+    manifest.physicalArtwork.confidentialUnderlyingDocumentsRequired ===
+      false &&
       manifest.physicalArtwork.confidentialOriginalLocation === "CCHS office" &&
-      manifest.physicalArtwork.confidentialReviewOnlyUponLawfulProcess === true &&
+      manifest.physicalArtwork.confidentialReviewOnlyUponLawfulProcess ===
+        true &&
       manifest.physicalArtwork
         .confidentialUnderlyingDocumentsMayBeUploadedToPublicNetworkOrAi ===
         false,
@@ -279,7 +418,10 @@ for (let offset = 0; offset < includedArtworkIds.length; offset += 1) {
       manifest.fundraising.publicRegistryVerified === false,
     `${artworkId} CCHS declaration policy mismatch`,
   );
-  assert(!packageText.includes("ffe6d7ce") && !packageText.includes("3e0580de"), `${artworkId} contains a revoked inscription hash`);
+  assert(
+    !packageText.includes("ffe6d7ce") && !packageText.includes("3e0580de"),
+    `${artworkId} contains a revoked inscription hash`,
+  );
   seenMasterHashes.add(masterSha256);
   masterHashFiles.set(masterSha256, [
     ...(masterHashFiles.get(masterSha256) ?? []),
@@ -289,8 +431,14 @@ for (let offset = 0; offset < includedArtworkIds.length; offset += 1) {
 const duplicateGroups = [...masterHashFiles.entries()].filter(
   ([, files]) => files.length > 1,
 );
-assert(seenMasterHashes.size === 37, "release set must contain 37 unique image contents");
-assert(duplicateGroups.length === 0, "release set must not contain duplicate artwork content");
+assert(
+  seenMasterHashes.size === 37,
+  "release set must contain 37 unique image contents",
+);
+assert(
+  duplicateGroups.length === 0,
+  "release set must not contain duplicate artwork content",
+);
 assert(
   intent.assetIntegrityFindings.status === "resolved-by-exclusion" &&
     intent.assetIntegrityFindings.filesExpected === 38 &&
@@ -298,13 +446,20 @@ assert(
     intent.assetIntegrityFindings.uniqueContentSha256Count === 37 &&
     intent.assetIntegrityFindings.includedArtworkCount === 37 &&
     intent.assetIntegrityFindings.includedUniqueContentSha256Count === 37 &&
-    intent.assetIntegrityFindings.duplicateContentDetectedInIncludedSet === false &&
+    intent.assetIntegrityFindings.duplicateContentDetectedInIncludedSet ===
+      false &&
     intent.assetIntegrityFindings.resolutionRequiredBeforeMint === false &&
     intent.assetIntegrityFindings.excludedArtworkIds.join(",") === "UNIT-A02",
   "duplicate artwork finding must be resolved by excluding UNIT-A02",
 );
-assert(!intentText.includes("ffe6d7ce") && !intentText.includes("3e0580de"), "intent contains a revoked inscription hash");
-assert(!indexText.includes("ffe6d7ce") && !indexText.includes("3e0580de"), "index contains a revoked inscription hash");
+assert(
+  !intentText.includes("ffe6d7ce") && !intentText.includes("3e0580de"),
+  "intent contains a revoked inscription hash",
+);
+assert(
+  !indexText.includes("ffe6d7ce") && !indexText.includes("3e0580de"),
+  "index contains a revoked inscription hash",
+);
 
 process.stdout.write(
   `${JSON.stringify({

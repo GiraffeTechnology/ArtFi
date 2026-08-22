@@ -51,10 +51,7 @@
     "duplicateGroups": [
       {
         "artworkIds": ["UNIT-A01", "UNIT-A02"],
-        "files": [
-          "assets/UNIT-A01-000.png",
-          "assets/UNIT-A02-000.png"
-        ],
+        "files": ["assets/UNIT-A01-000.png", "assets/UNIT-A02-000.png"],
         "sharedSha256": "8b3f12a6812c94263bd218898b0b20e3d94945cf5979c1cc18084dcfed1210e3",
         "declaredDescriptions": ["Swimming Shrimp I", "Swimming Shrimp II"],
         "finding": "The two artwork identifiers have distinct descriptions but byte-identical source images. UNIT-A02 is withdrawn; only UNIT-A01 remains in the 37-artwork release set."

@@ -13,9 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "../..");
-const webRequire = createRequire(
-  join(repositoryRoot, "apps/web/package.json"),
-);
+const webRequire = createRequire(join(repositoryRoot, "apps/web/package.json"));
 const { keccak256, stringToHex } = webRequire("viem");
 
 const batchDirectory = join(
@@ -67,8 +65,7 @@ for (let index = 0; index < packageFiles.length; index += 1) {
       encoding: "utf8",
     }),
   );
-  const expectedURI =
-    `https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/${artworkId}.json`;
+  const expectedURI = `https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/${artworkId}.json`;
   if (
     verified.artworkId !== artworkId ||
     manifest.metadata.publicURI !== expectedURI ||
@@ -105,8 +102,7 @@ const index = {
   excludedArtworkIds: ["UNIT-A02"],
   inscriptionSha256:
     "1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01",
-  publicBaseURL:
-    "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun",
+  publicBaseURL: "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun",
   series: records,
 };
 writeFileSync(

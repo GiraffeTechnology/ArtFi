@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,8 +34,7 @@ const directorDeclarationTextZh =
 const directorDeclarationSha256 =
   "ab8f2f3189528881f8c4f9a254bb93167fdf4027d44a345d2267e24fcfe4b416";
 const excludedArtworkIds = new Set(["UNIT-A02"]);
-const metadataBaseUrl =
-  "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun";
+const metadataBaseUrl = "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun";
 
 const sourceText = readFileSync(descriptionPath, "utf8");
 const blocks = [
@@ -61,7 +66,11 @@ for (const block of blocks) {
   if (excludedArtworkIds.has(artworkId)) continue;
   const masterFilename = `${artworkId}-000.png`;
   const masterPath = join(assetDirectory, masterFilename);
-  const title = requiredLine(body, /^(?:建议)?题名：(.+)$/m, `${artworkId} title`);
+  const title = requiredLine(
+    body,
+    /^(?:建议)?题名：(.+)$/m,
+    `${artworkId} title`,
+  );
   const about = requiredLine(
     body,
     /^About the Work: (.+)$/m,
@@ -175,8 +184,7 @@ for (const block of blocks) {
       termsBytes: 15254,
       lineEndings: "LF",
       bom: false,
-      termsFile:
-        "../../../terms/ArtCCH_ArtFi_NFT_Inscription_Terms_EN_v1.txt",
+      termsFile: "../../../terms/ArtCCH_ArtFi_NFT_Inscription_Terms_EN_v1.txt",
       termsSha256: inscriptionSha256,
       embedFullText: true,
       immutable: true,

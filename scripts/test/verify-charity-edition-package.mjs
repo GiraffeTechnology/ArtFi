@@ -177,7 +177,8 @@ for (const mutate of [
   (value) => (value.fundraising.receiptRatePair = "ETH/USD"),
   (value) => (value.fundraising.receiptRateSnapshotSha256Required = false),
   (value) => (value.fundraising.officialReceiptAmountDeterminedBy = "ArtFi"),
-  (value) => (value.fundraising.confirmationBasis = "uploaded-confidential-file"),
+  (value) =>
+    (value.fundraising.confirmationBasis = "uploaded-confidential-file"),
   (value) => (value.fundraising.publicRegistryVerified = true),
   (value) => (value.physicalArtwork.conveysPhysicalTitle = true),
   (value) => (value.physicalArtwork.mapped = true),
@@ -187,16 +188,14 @@ for (const mutate of [
   (value) => (value.physicalArtwork.donationUndertakingBy = "ArtFi"),
   (value) =>
     (value.physicalArtwork.directorDeclarationAcceptedForRelease = false),
-  (value) =>
-    (value.physicalArtwork.directorDeclarationSha256 = "0".repeat(64)),
+  (value) => (value.physicalArtwork.directorDeclarationSha256 = "0".repeat(64)),
   (value) => (value.physicalArtwork.soleProjectLegalBasis = false),
   (value) =>
     (value.physicalArtwork.confidentialUnderlyingDocumentsRequired = true),
   (value) =>
     (value.physicalArtwork.confidentialReviewOnlyUponLawfulProcess = false),
   (value) =>
-    (value.physicalArtwork.confidentialUnderlyingDocumentsMayBeUploadedToPublicNetworkOrAi =
-      true),
+    (value.physicalArtwork.confidentialUnderlyingDocumentsMayBeUploadedToPublicNetworkOrAi = true),
   (value) => (value.physicalArtwork.transferIndependentOfNft = false),
   (value) => (value.inscription.embedFullText = false),
   (value) => (value.inscription.immutable = false),
