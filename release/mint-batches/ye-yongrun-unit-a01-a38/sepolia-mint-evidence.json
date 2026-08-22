@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "status": "minted-sepolia",
+  "recordedAt": "2026-08-22T22:59:51.837Z",
+  "release": {
+    "batchId": "ye-yongrun-unit-a01-a38",
+    "artworkCount": 37,
+    "excludedArtworkIds": ["UNIT-A02"],
+    "editionsPerArtwork": 100,
+    "totalSupply": 3700,
+    "controllingInscriptionSha256": "1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01"
+  },
+  "sourceControl": {
+    "pullRequest": 30,
+    "mergeCommit": "f61f184c4c475d30f9c5fcb881dd9caff8147175",
+    "ciRun": 32600727966,
+    "requiredChecks": ["api", "browser", "contracts", "migration", "web"],
+    "allRequiredChecksPassed": true
+  },
+  "network": {
+    "name": "Sepolia",
+    "chainId": 11155111,
+    "genesisBlockHash": "0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9",
+    "executionRoute": "ArtFiChainBridge/sin/v1"
+  },
+  "deployment": {
+    "contract": "ArtFiCharityEditions",
+    "standard": "ERC-1155",
+    "address": "0xec7d57e6f91fe1d1eE1eC0cb1dF8E869088de104",
+    "transactionHash": "0xfe71d3af964bc58ca2f7c3dcef652e352929f3e1649959e9461b34a08fb0534b",
+    "blockNumber": 11545902,
+    "gasUsed": 2174658,
+    "initCodeKeccak256": "0xf10eca0fcf30d44a9c6ba25970712450005798b36f1c5cd4572135d023174f7e",
+    "runtimeBytes": 9264,
+    "runtimeCodeKeccak256": "0x9d29dcb3c881f4be6828c050a22c90515422d9859213b1e9bd6c7319e7a51e3a",
+    "erc1155Interface": true,
+    "metadataInterface": true,
+    "rolesHeldByArtFi1": [
+      "admin",
+      "seriesCreator",
+      "donationRecorder",
+      "pauser"
+    ]
+  },
+  "distribution": {
+    "walletName": "ArtFi1",
+    "address": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+    "finalPendingNonce": 38,
+    "finalEthBalanceWei": "84960434579612172",
+    "finalVerificationBlock": 11546084,
+    "seriesCount": 37,
+    "aggregateSupply": 3700,
+    "balancesVerified": 37,
+    "everySeriesBalance": 100,
+    "withdrawnA02TokenId": 0
+  },
+  "metadata": {
+    "baseUri": "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun",
+    "documentsVerified": 37,
+    "allHttp200AndJson": true,
+    "allBytesMatchMergeCommit": true,
+    "publicImageFields": 0,
+    "withdrawnA02HttpStatus": 404
+  },
+  "mintTransactions": [
+    {
+      "artworkId": "UNIT-A01",
+      "tokenId": 1,
+      "transactionHash": "0xffb4f2c0668b59cb1518185413bbfacdb60c97576dc56f22f4d6a5e221fe62fb",
+      "blockNumber": 11545984,
+      "gasUsed": 361211
+    },
+    {
+      "artworkId": "UNIT-A03",
+      "tokenId": 2,
+      "transactionHash": "0xe9d8e80a8f4da46cfa7857e2f5d9576f369f58223ad4134da9342f98113cef2a",
+      "blockNumber": 11545999,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A04",
+      "tokenId": 3,
+      "transactionHash": "0x1b775bd1d7fb82caac173417db64ed5b00a6fd836beea93f0163eb27cb7b88c9",
+      "blockNumber": 11546002,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A05",
+      "tokenId": 4,
+      "transactionHash": "0x0f040f0a772dd01a3dbe8539692653287f09dbd7725aa40cf0d6c0e41a72e2ad",
+      "blockNumber": 11546003,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A06",
+      "tokenId": 5,
+      "transactionHash": "0x217f54cfb2e59080b2844982e83cae4664c48d13267bb23ba2801a278d357fc2",
+      "blockNumber": 11546004,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A07",
+      "tokenId": 6,
+      "transactionHash": "0xb58ad5a51a28bfed3f9bb63312b6de213b2cc208009a76932a7fbf1cd150c5eb",
+      "blockNumber": 11546006,
+      "gasUsed": 326999
+    },
+    {
+      "artworkId": "UNIT-A08",
+      "tokenId": 7,
+      "transactionHash": "0x9f4c3a4babee88620a1b371d6eb8a9264a927652167ed2b3856d09d51f39f899",
+      "blockNumber": 11546008,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A09",
+      "tokenId": 8,
+      "transactionHash": "0x011e0eeaead911b4de9d53ea1fe1472308123bc3d4da0f0e621358aa3fdf9d2c",
+      "blockNumber": 11546021,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A10",
+      "tokenId": 9,
+      "transactionHash": "0xa8f25f6ebb701a94cac469e6614a13b3116b69d5fb4b71340944a22ced875fdf",
+      "blockNumber": 11546023,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A11",
+      "tokenId": 10,
+      "transactionHash": "0x0d8f7e3450ac9f6b62cf603f746db83da8ac9e20bb3901064956ae81ef176121",
+      "blockNumber": 11546024,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A12",
+      "tokenId": 11,
+      "transactionHash": "0x24f4d90d9dca0989ab03afcf546c9bdd64cfc2c99fd390f83c8f209c5630914a",
+      "blockNumber": 11546026,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A13",
+      "tokenId": 12,
+      "transactionHash": "0x57b987b775fd237fde29cd5068b82e6f606c8567681bd8708e451add9644cc85",
+      "blockNumber": 11546027,
+      "gasUsed": 326999
+    },
+    {
+      "artworkId": "UNIT-A14",
+      "tokenId": 13,
+      "transactionHash": "0x92e9aedb78276c03cfd91e1f79421a9c57f178eebb9b0b419d678ee4e8eb8da4",
+      "blockNumber": 11546028,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A15",
+      "tokenId": 14,
+      "transactionHash": "0x9fce3678dde828c9e365677be4b12ba683707b52298e1b5809ff3e637c2c6c6b",
+      "blockNumber": 11546029,
+      "gasUsed": 326999
+    },
+    {
+      "artworkId": "UNIT-A16",
+      "tokenId": 15,
+      "transactionHash": "0xbe2f4101f7675364b5534379f7236521dc1e97ab8577e19defb4eb98ad7e7634",
+      "blockNumber": 11546031,
+      "gasUsed": 326987
+    },
+    {
+      "artworkId": "UNIT-A17",
+      "tokenId": 16,
+      "transactionHash": "0x3d959359b67d16b34935f33c39917c208df3fea5cc2fa55769f5397fbb2d5234",
+      "blockNumber": 11546037,
+      "gasUsed": 326987
+    },
+    {
+      "artworkId": "UNIT-A18",
+      "tokenId": 17,
+      "transactionHash": "0xfa1fdf3602386cc26ce8605246d25c169a786ebbb221c65025f3304ea825a396",
+      "blockNumber": 11546038,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A19",
+      "tokenId": 18,
+      "transactionHash": "0x868ab6109e3cef6ee30623142a0e0b07d4e293de5ea4ccf123f71809d85bb3f1",
+      "blockNumber": 11546039,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A20",
+      "tokenId": 19,
+      "transactionHash": "0x294342918808812f266c2d0794a378e4c560368933187cea49b3e5116ef955d6",
+      "blockNumber": 11546041,
+      "gasUsed": 326999
+    },
+    {
+      "artworkId": "UNIT-A21",
+      "tokenId": 20,
+      "transactionHash": "0xbc3d2bb325ff4951f94da6597a9002234bcffc274634775d65bea429ca0ddae2",
+      "blockNumber": 11546042,
+      "gasUsed": 326999
+    },
+    {
+      "artworkId": "UNIT-A22",
+      "tokenId": 21,
+      "transactionHash": "0x1f920b4122710b700738d900915ed462683a5d04805bd6a2a8a789f427746d66",
+      "blockNumber": 11546044,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A23",
+      "tokenId": 22,
+      "transactionHash": "0x107eaecaf93b966746926c3f45a81610dccc1281cc375d94e3efedfd9975cc9c",
+      "blockNumber": 11546045,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A24",
+      "tokenId": 23,
+      "transactionHash": "0x94a227f0c12a4bacde00961c76d1d0ec88f080a466e2284392bd700c0029f1c1",
+      "blockNumber": 11546046,
+      "gasUsed": 326999
+    },
+    {
+      "artworkId": "UNIT-A25",
+      "tokenId": 24,
+      "transactionHash": "0x8b6252e4f9ae83a7b05d9cfb9a3fea09ac791eab9d61c953561b0358dc3ca50f",
+      "blockNumber": 11546052,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A26",
+      "tokenId": 25,
+      "transactionHash": "0x2ba928105e73e738c602f73b2becd4c512816697487c061fc0dd859ecbf58099",
+      "blockNumber": 11546053,
+      "gasUsed": 326999
+    },
+    {
+      "artworkId": "UNIT-A27",
+      "tokenId": 26,
+      "transactionHash": "0xf04db933c1197b867ed9dde7554e2e677a624112e73d5fd0120ff3ca2e576800",
+      "blockNumber": 11546058,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A28",
+      "tokenId": 27,
+      "transactionHash": "0x20820127954c16b3f3d7f66abd8b94975c8cd5a5ee16a5aa6276b1bd3217f617",
+      "blockNumber": 11546059,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A29",
+      "tokenId": 28,
+      "transactionHash": "0x58ef3769a3f5d301bfe7c764e67f207d2cb10e294d12111ab633c13dee6fb435",
+      "blockNumber": 11546061,
+      "gasUsed": 326987
+    },
+    {
+      "artworkId": "UNIT-A30",
+      "tokenId": 29,
+      "transactionHash": "0x7133e9b0abbf9660e7d171621291c0051a035d349bbf20ccc0d643d0dc8aaa37",
+      "blockNumber": 11546062,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A31",
+      "tokenId": 30,
+      "transactionHash": "0x273b1f04ee925157e0b3d5fb11d823aaa162a776aecfb03673f4ae8067ac0d75",
+      "blockNumber": 11546063,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A32",
+      "tokenId": 31,
+      "transactionHash": "0x59d165c9f766eeb8295354d1856a2d2b17f8e2b8de4d5df04fac11acebd6d482",
+      "blockNumber": 11546064,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A33",
+      "tokenId": 32,
+      "transactionHash": "0xad42de99b8ed6e211a3375204d02e98dca309cdb72b295acf53880ec19af0032",
+      "blockNumber": 11546066,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A34",
+      "tokenId": 33,
+      "transactionHash": "0xa47ac90c9f77a4caa817c4ed77e52fdada2837fa8a443b27b97c618432a8b620",
+      "blockNumber": 11546067,
+      "gasUsed": 326999
+    },
+    {
+      "artworkId": "UNIT-A35",
+      "tokenId": 34,
+      "transactionHash": "0x2be40957c96eb16cbb103399c7979099c33d0696fa76d5b1952b8d8d72b019c2",
+      "blockNumber": 11546068,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A36",
+      "tokenId": 35,
+      "transactionHash": "0x3ed8de5737b372f585c367b8d64f9d7b6575c843e96be06adaddf0e845fe1460",
+      "blockNumber": 11546070,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A37",
+      "tokenId": 36,
+      "transactionHash": "0xc310d5c717a088c3ce005b383406425392f7f3e8f4668e3f5d4e90668d34d78c",
+      "blockNumber": 11546071,
+      "gasUsed": 327011
+    },
+    {
+      "artworkId": "UNIT-A38",
+      "tokenId": 37,
+      "transactionHash": "0x8bf265b28540f9d057732cc5a7fbf922c381193fe7df26f5366edc485f1a484c",
+      "blockNumber": 11546076,
+      "gasUsed": 326999
+    }
+  ],
+  "retries": [
+    {
+      "stage": "deployment-broadcast",
+      "outcome": "no duplicate transaction",
+      "detail": "A rate-limited public endpoint rejected the first attempts before the same signed transaction was accepted through the gated Sepolia route."
+    },
+    {
+      "stage": "series-batch-after-UNIT-A01",
+      "outcome": "resumed from verified nonce 2",
+      "detail": "The bridge timed out after UNIT-A01 was confirmed; chain state was verified before resuming."
+    },
+    {
+      "stage": "UNIT-A08-event-indexing",
+      "outcome": "verified after index stabilization",
+      "detail": "The first receipt view omitted the expected event; the stable receipt and contract state later matched exactly before resuming from nonce 8."
+    }
+  ]
+}
