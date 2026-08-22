@@ -22,6 +22,16 @@ packages/contracts/broadcast/
 *.pem
 *.key
 
+# Confidential legal and custody evidence must never enter Git or AI workflows.
+release/private-evidence/
+**/artist-custody-and-sellout-donation-undertaking.pdf
+**/cchs-custody-intake-evidence.*
+
+# Unwatermarked masters, holder downloads, and release evidence stay outside Git.
+release/artworks/**/assets/
+release/mint-batches/**/holder-assets/
+release/mint-batches/**/evidence/
+
 # Tooling and operating systems
 .DS_Store
 __MACOSX/

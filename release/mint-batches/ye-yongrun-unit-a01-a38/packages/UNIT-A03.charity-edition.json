@@ -5,20 +5,20 @@
   "marketplaceMode": "external-mirror",
   "artfiExchangeEnabled": false,
   "series": {
-    "artworkId": "UNIT-A01",
+    "artworkId": "UNIT-A03",
     "editions": 100,
     "unitPriceWei": "10000000000000000",
     "currency": "ETH",
     "immutableSupply": true,
-    "distributionWallet": "0x0000000000000000000000000000000000000000"
+    "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089"
   },
   "artwork": {
-    "title": "Replace with the authorized work title",
-    "creator": "Michael Yip's team",
+    "title": "《传家有道惟存厚，处世无奇但率真》／A Virtuous Family Preserves Kindness; an Honest Life Needs No Artifice",
+    "creator": "Ye Yong Run (葉永潤)",
     "rightsHolder": "ArtCCH",
-    "masterFile": "UNIT-A01-000.png",
+    "masterFile": "../../../artworks/ye-yongrun/unit-a01-a38/assets/UNIT-A03-000.png",
     "masterMimeType": "image/png",
-    "masterSha256": "",
+    "masterSha256": "41e308c0ad6307c79a64dcb0bfd4e377891204348b79e42d1d02163d6d8182c0",
     "publicArtworkPreview": false,
     "publicArtworkUri": null,
     "unwatermarkedWebDownload": false
@@ -37,8 +37,8 @@
     "authorizationBasis": "formal-mint-authorization-and-cchs-director-declaration",
     "sourceDocumentsConfidential": true,
     "sourceDocumentsProcessedByAi": false,
-    "attribution": "Copyright ArtCCH. Created by Michael Yip's team.",
-    "nftMintAuthorized": false,
+    "attribution": "Copyright ArtCCH. Artwork by Ye Yong Run (葉永潤).",
+    "nftMintAuthorized": true,
     "marketplaceListingEligible": false,
     "listingActionConfirmed": false,
     "expiresAt": null
@@ -59,7 +59,7 @@
     "directorDeclarationCapacity": "CCHS Director and authorized representative",
     "directorDeclarationTextZh": "本人Michael YIP是CCHS的Director，并获授权代表CCHS行事。本人已与葉永潤签署合作。列表中全部画作已由CCHS接收代管；代管期间所有权仍归Artist。每件画作对应的100枚NFT完成首次发行并全部售出后，Artist承诺将对应实物画作独立捐赠并转移所有权给CCHS。",
     "directorDeclarationSha256": "ab8f2f3189528881f8c4f9a254bb93167fdf4027d44a345d2267e24fcfe4b416",
-    "directorDeclarationAcceptedForRelease": false,
+    "directorDeclarationAcceptedForRelease": true,
     "soleProjectLegalBasis": true,
     "confidentialUnderlyingDocumentsRequired": false,
     "confidentialOriginalLocation": "CCHS office",
@@ -86,7 +86,7 @@
     "officialReceiptAmountDeterminedBy": "CCHS",
     "ethCadPriceEvidenceRequired": true,
     "charityStatusReportedByAuthorizedDirector": true,
-    "cchsPolicyAcceptedForRelease": false,
+    "cchsPolicyAcceptedForRelease": true,
     "confirmationBasis": "cchs-director-declaration",
     "publicRegistryVerified": false
   },
@@ -99,14 +99,31 @@
     "termsBytes": 15254,
     "lineEndings": "LF",
     "bom": false,
-    "termsFile": "terms/ArtCCH_ArtFi_NFT_Inscription_Terms_EN_v1.txt",
+    "termsFile": "../../../terms/ArtCCH_ArtFi_NFT_Inscription_Terms_EN_v1.txt",
     "termsSha256": "1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01",
     "embedFullText": true,
     "immutable": true
   },
   "metadata": {
-    "publicURI": "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A01.json",
-    "description": "Fixed ArtCCH charity edition. No artwork preview. No physical title, redemption, copyright, commercial-use, or reproduction rights. Verified holders may access a watermarked high-resolution copy.",
-    "attributes": []
+    "publicURI": "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A03.json",
+    "description": "A family maxim is written in black ink on a vermilion ground. The broad horizontals and measured turns draw on clerical-script forms. Its archaic structure complements the text’s emphasis on kindness within the family and honesty in public life, while the black-red contrast gives the work a direct, ceremonial presence. Fixed ArtCCH charity edition. No artwork preview. No physical title, redemption, copyright, commercial-use, or reproduction rights. Verified holders may access a watermarked high-resolution copy.",
+    "attributes": [
+      {
+        "trait_type": "Artist",
+        "value": "Ye Yong Run (葉永潤)"
+      },
+      {
+        "trait_type": "Artwork ID",
+        "value": "UNIT-A03"
+      },
+      {
+        "trait_type": "Decade",
+        "value": "2010s"
+      },
+      {
+        "trait_type": "Frame",
+        "value": "Not included"
+      }
+    ]
   }
 }

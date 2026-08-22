@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 const [manifestPath, mode] = process.argv.slice(2);
 if (!manifestPath) {
   throw new Error(
-    "usage: verify-charity-edition-package.mjs <manifest.json> [--schema-only]",
+    "usage: verify-charity-edition-package.mjs <manifest.json> [--schema-only|--local-assets]",
   );
 }
 
@@ -15,6 +15,11 @@ const manifest = JSON.parse(readFileSync(absoluteManifestPath, "utf8"));
 const hashPattern = /^[0-9a-f]{64}$/;
 const addressPattern = /^0x[0-9a-fA-F]{40}$/;
 const zeroAddress = "0x0000000000000000000000000000000000000000";
+const authoritativeInscriptionSha256 =
+  "1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01";
+const authoritativeInscriptionBytes = 15_254;
+const authoritativeDirectorDeclarationSha256 =
+  "ab8f2f3189528881f8c4f9a254bb93167fdf4027d44a345d2267e24fcfe4b416";
 const allowedBases = new Set([
   "creator",
   "assignment",
@@ -64,20 +69,24 @@ if (
   );
 }
 if (
-  typeof manifest.holderAsset?.watermarkedFile !== "string" ||
-  !allowedMedia.has(manifest.holderAsset?.watermarkedMimeType) ||
   manifest.holderAsset?.highResolution !== true ||
   manifest.holderAsset?.watermarked !== true ||
   manifest.holderAsset?.delivery !== "token-gated-download" ||
+  manifest.holderAsset?.generatedPerHolder !== true ||
+  manifest.holderAsset?.publicUri !== null ||
+  manifest.holderAsset?.unwatermarkedAvailable !== false ||
   manifest.holderAsset?.preview !== false
 ) {
   throw new Error(
-    "the holder asset must be a non-previewed, token-gated watermarked high-resolution file",
+    "holder delivery must be per-holder, token-gated, watermarked, and unavailable publicly",
   );
 }
 if (
   !allowedBases.has(manifest.rights?.basis) ||
-  typeof manifest.rights?.evidenceFile !== "string" ||
+  manifest.rights?.authorizationBasis !==
+    "formal-mint-authorization-and-cchs-director-declaration" ||
+  manifest.rights?.sourceDocumentsConfidential !== true ||
+  manifest.rights?.sourceDocumentsProcessedByAi !== false ||
   typeof manifest.rights?.attribution !== "string" ||
   manifest.rights.attribution.trim().length < 1 ||
   manifest.rights?.listingActionConfirmed !== false
@@ -93,15 +102,44 @@ if (manifest.rights.expiresAt !== null) {
   }
 }
 if (
-  manifest.physicalArtwork?.mapped !== true ||
+  manifest.physicalArtwork?.mapped !== false ||
   manifest.physicalArtwork?.conveysPhysicalTitle !== false ||
   manifest.physicalArtwork?.redeemable !== false ||
+  manifest.physicalArtwork?.includedInNft !== false ||
+  manifest.physicalArtwork?.custodianBeforeSellout !== "CCHS" ||
+  manifest.physicalArtwork?.ownerBeforeSellout !== "Artist" ||
+  manifest.physicalArtwork?.custodyConveysTitle !== false ||
+  manifest.physicalArtwork?.transferIndependentOfNft !== true ||
+  manifest.physicalArtwork?.donationUndertakingBy !== "Artist" ||
+  !new Set(["Artist", "LawfulOwner"]).has(
+    manifest.physicalArtwork?.undertakingSignerRole,
+  ) ||
+  manifest.physicalArtwork?.legalBasis !== "cchs-director-declaration" ||
+  manifest.physicalArtwork?.directorDeclarationDeclaredBy !== "Michael YIP" ||
+  manifest.physicalArtwork?.directorDeclarationCapacity !==
+    "CCHS Director and authorized representative" ||
+  typeof manifest.physicalArtwork?.directorDeclarationTextZh !== "string" ||
+  manifest.physicalArtwork?.directorDeclarationSha256 !==
+    authoritativeDirectorDeclarationSha256 ||
+  sha256(
+    Buffer.from(manifest.physicalArtwork.directorDeclarationTextZh, "utf8"),
+  ) !== authoritativeDirectorDeclarationSha256 ||
+  typeof manifest.physicalArtwork?.directorDeclarationAcceptedForRelease !==
+    "boolean" ||
+  manifest.physicalArtwork?.soleProjectLegalBasis !== true ||
+  manifest.physicalArtwork?.confidentialUnderlyingDocumentsRequired !== false ||
+  manifest.physicalArtwork?.confidentialOriginalLocation !== "CCHS office" ||
+  manifest.physicalArtwork?.confidentialReviewOnlyUponLawfulProcess !== true ||
+  manifest.physicalArtwork
+    ?.confidentialUnderlyingDocumentsMayBeUploadedToPublicNetworkOrAi !==
+    false ||
   manifest.physicalArtwork?.donationTrigger !== "primary-sellout-100" ||
   manifest.physicalArtwork?.donationRecipient !== "CCHS" ||
+  manifest.physicalArtwork?.ownerAfterCompletedDonation !== "CCHS" ||
   manifest.physicalArtwork?.donationAcceptanceEvidenceRequired !== true
 ) {
   throw new Error(
-    "physical title and redemption must be excluded; CCHS donation follows sellout",
+    "the NFT must not bind physical artwork; CCHS custody preserves Artist title until the Artist's separate sellout donation",
   );
 }
 if (
@@ -121,17 +159,43 @@ if (
   manifest.fundraising?.receiptRateSnapshotSha256Required !== true ||
   manifest.fundraising?.officialReceiptAmountDeterminedBy !== "CCHS" ||
   manifest.fundraising?.ethCadPriceEvidenceRequired !== true ||
-  typeof manifest.fundraising?.cchsEvidenceFile !== "string"
+  manifest.fundraising?.charityStatusReportedByAuthorizedDirector !== true ||
+  manifest.fundraising?.cchsPolicyAcceptedForRelease !== true ||
+  manifest.fundraising?.confirmationBasis !== "cchs-director-declaration" ||
+  manifest.fundraising?.publicRegistryVerified !== false
 ) {
   throw new Error(
     "CCHS must receive all proceeds and remain the sole receipt decision-maker using approved public donation-received-time ETH/CAD evidence",
   );
 }
 if (
+  typeof manifest.metadata?.publicURI !== "string" ||
+  !manifest.metadata.publicURI.startsWith(
+    "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A",
+  ) ||
+  !manifest.metadata.publicURI.endsWith(".json") ||
   typeof manifest.metadata?.description !== "string" ||
   !Array.isArray(manifest.metadata?.attributes)
 ) {
   throw new Error("metadata description and attributes are required");
+}
+if (
+  manifest.inscription?.type !== "artcch-artfi-nft-terms" ||
+  manifest.inscription?.version !== "1.0" ||
+  manifest.inscription?.language !== "en" ||
+  manifest.inscription?.controllingLanguage !== "en" ||
+  manifest.inscription?.translationsHaveLegalEffect !== false ||
+  manifest.inscription?.termsBytes !== authoritativeInscriptionBytes ||
+  manifest.inscription?.lineEndings !== "LF" ||
+  manifest.inscription?.bom !== false ||
+  typeof manifest.inscription?.termsFile !== "string" ||
+  manifest.inscription?.termsSha256 !== authoritativeInscriptionSha256 ||
+  manifest.inscription?.embedFullText !== true ||
+  manifest.inscription?.immutable !== true
+) {
+  throw new Error(
+    "an immutable, full-text, SHA-256-bound ArtCCH:ArtFi NFT terms inscription is required",
+  );
 }
 
 if (mode === "--schema-only") {
@@ -144,67 +208,58 @@ if (mode === "--schema-only") {
 if (
   manifest.series.distributionWallet.toLowerCase() === zeroAddress ||
   manifest.rights.nftMintAuthorized !== true ||
-  manifest.rights.marketplaceListingEligible !== true ||
-  manifest.fundraising.charityStatusConfirmed !== true ||
-  manifest.fundraising.cchsPolicyConfirmed !== true ||
-  !hashPattern.test(manifest.artwork.masterSha256 ?? "") ||
-  !hashPattern.test(manifest.holderAsset.watermarkedSha256 ?? "") ||
-  !hashPattern.test(manifest.rights.evidenceSha256 ?? "") ||
-  !hashPattern.test(manifest.fundraising.cchsEvidenceSha256 ?? "")
+  manifest.physicalArtwork.directorDeclarationAcceptedForRelease !== true ||
+  !hashPattern.test(manifest.artwork.masterSha256 ?? "")
 ) {
   throw new Error(
-    "full validation requires a non-zero confirmed wallet and complete authorization evidence",
+    "release validation requires a non-zero wallet, mint authorization, accepted director declaration, and master hash",
   );
 }
 
-const master = verifyFile(
-  manifestDirectory,
-  manifest.artwork.masterFile,
-  manifest.artwork.masterSha256,
-  10 << 20,
-  "master artwork",
-);
-const watermarked = verifyFile(
-  manifestDirectory,
-  manifest.holderAsset.watermarkedFile,
-  manifest.holderAsset.watermarkedSha256,
-  10 << 20,
-  "watermarked holder artwork",
-);
-if (master.sha256 === watermarked.sha256) {
-  throw new Error(
-    "watermarked holder artwork must be distinct from the unwatermarked master",
+if (mode === "--local-assets") {
+  const master = verifyFile(
+    manifestDirectory,
+    manifest.artwork.masterFile,
+    manifest.artwork.masterSha256,
+    10 << 20,
+    "master artwork",
   );
+  if (!matchesMediaSignature(master.data, manifest.artwork.masterMimeType)) {
+    throw new Error(
+      "master artwork signature does not match its declared media type",
+    );
+  }
 }
-if (!matchesMediaSignature(master.data, manifest.artwork.masterMimeType)) {
-  throw new Error(
-    "master artwork signature does not match its declared media type",
-  );
-}
+const inscriptionTerms = verifyFile(
+  manifestDirectory,
+  manifest.inscription.termsFile,
+  manifest.inscription.termsSha256,
+  256 << 10,
+  "NFT terms inscription",
+);
 if (
-  !matchesMediaSignature(
-    watermarked.data,
-    manifest.holderAsset.watermarkedMimeType,
-  )
+  inscriptionTerms.data.length !== authoritativeInscriptionBytes ||
+  inscriptionTerms.data.subarray(0, 3).equals(Buffer.from("efbbbf", "hex")) ||
+  inscriptionTerms.data.includes(0x0d)
 ) {
   throw new Error(
-    "watermarked artwork signature does not match its declared media type",
+    "NFT terms inscription must be exactly 15,254 bytes, LF-only, and have no BOM",
   );
 }
-verifyFile(
-  manifestDirectory,
-  manifest.rights.evidenceFile,
-  manifest.rights.evidenceSha256,
-  25 << 20,
-  "rights evidence",
-);
-verifyFile(
-  manifestDirectory,
-  manifest.fundraising.cchsEvidenceFile,
-  manifest.fundraising.cchsEvidenceSha256,
-  25 << 20,
-  "CCHS status and policy evidence",
-);
+const inscriptionText = inscriptionTerms.data.toString("utf8");
+if (
+  inscriptionText.trim().length < 100 ||
+  inscriptionText.includes("\u0000") ||
+  !inscriptionText.startsWith("ArtCCH:ArtFi NFT Inscription Terms") ||
+  !inscriptionText.includes(
+    "This English text is the sole authoritative and controlling version",
+  ) ||
+  !inscriptionText.includes(
+    "The initial coin offering (ICO) price of each NFT is fixed at 0.01 ETH",
+  )
+) {
+  throw new Error("NFT terms inscription is not valid UTF-8 policy text");
+}
 
 const metadata = {
   name: `${manifest.artwork.title} — fixed charity edition`,
@@ -213,13 +268,18 @@ const metadata = {
   attributes: [
     ...manifest.metadata.attributes,
     { trait_type: "Edition supply", value: 100 },
-    { trait_type: "Primary unit price", value: "0.01 ETH" },
+    { trait_type: "ICO unit price", value: "0.01 ETH" },
     { trait_type: "Artwork preview", value: "Not provided" },
     { trait_type: "Holder file", value: "Watermarked high-resolution" },
     { trait_type: "Physical title", value: "Not conveyed" },
+    { trait_type: "Physical artwork binding", value: "None" },
     {
-      trait_type: "Physical donation trigger",
-      value: "After 100 primary subscriptions",
+      trait_type: "Physical artwork before sellout",
+      value: "CCHS custody; Artist retains ownership",
+    },
+    {
+      trait_type: "Artist sellout donation undertaking",
+      value: "Ownership transfers to CCHS after all 100 editions are sold",
     },
     { trait_type: "Primary proceeds beneficiary", value: "CCHS (100%)" },
   ],
@@ -228,16 +288,36 @@ const metadata = {
     chainId: 11_155_111,
     standard: "ERC-1155",
     artworkId: manifest.series.artworkId,
-    masterArtworkSha256: master.sha256,
-    watermarkedArtworkSha256: watermarked.sha256,
+    masterArtworkSha256: manifest.artwork.masterSha256,
     editions: 100,
     unitPriceWei: "10000000000000000",
     immutableSupply: true,
     publicArtworkPreview: false,
     unwatermarkedWebDownload: false,
+    physicalArtworkMapped: false,
+    preSelloutCustodian: "CCHS",
+    preSelloutOwner: "Artist",
+    custodyConveysTitle: false,
+    donationUndertakingBy: "Artist",
+    directorDeclarationSha256:
+      manifest.physicalArtwork.directorDeclarationSha256,
+    separatePhysicalDonationAfterSellout: true,
     conveysPhysicalTitle: false,
     redeemable: false,
     attribution: manifest.rights.attribution,
+  },
+  inscription: {
+    type: manifest.inscription.type,
+    version: manifest.inscription.version,
+    language: manifest.inscription.language,
+    controllingLanguage: "en",
+    translationsHaveLegalEffect: false,
+    bytes: authoritativeInscriptionBytes,
+    lineEndings: "LF",
+    bom: false,
+    sha256: inscriptionTerms.sha256,
+    immutable: true,
+    text: inscriptionText,
   },
 };
 const canonicalMetadata = JSON.stringify(sortObject(metadata));
@@ -245,8 +325,7 @@ const metadataSha256 = sha256(Buffer.from(canonicalMetadata));
 process.stdout.write(
   `${JSON.stringify({
     artworkId: manifest.series.artworkId,
-    masterArtworkSha256: master.sha256,
-    watermarkedArtworkSha256: watermarked.sha256,
+    masterArtworkSha256: manifest.artwork.masterSha256,
     metadataSha256,
     canonicalMetadata,
   })}\n`,
