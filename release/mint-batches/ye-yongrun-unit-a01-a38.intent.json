@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "batchId": "ye-yongrun-unit-a01-a38",
+  "status": "blocked-pre-mint",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "allowedDefaultTestNetwork": "sepolia",
+  "mainnetAuthorized": false,
+  "tokenStandard": "ERC-1155",
+  "artworkSet": {
+    "prefix": "UNIT-A",
+    "from": 1,
+    "to": 38,
+    "excludedArtworkIds": ["UNIT-A02"],
+    "count": 37
+  },
+  "editionsPerArtwork": 100,
+  "totalUnits": 3700,
+  "initialRecipient": {
+    "walletName": "ArtFi1",
+    "role": "official EVM asset wallet",
+    "address": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089"
+  },
+  "ico": {
+    "unitPriceAsset": "ETH",
+    "unitPriceEth": "0.01",
+    "unitPriceWei": "10000000000000000",
+    "nominalTotalPerArtworkEth": "1",
+    "nominalTotalPerArtworkWei": "1000000000000000000"
+  },
+  "assets": {
+    "directory": "../artworks/ye-yongrun/unit-a01-a38/assets",
+    "filePattern": "UNIT-Axx-000.png",
+    "pngCount": 38,
+    "includedPngCount": 37,
+    "excludedArtworkIds": ["UNIT-A02"],
+    "pngCanonicalAggregateAlgorithm": "SHA-256 over UTF-8 (no BOM) lines sorted by filename, each line filename:lowercase-file-sha256, joined with LF and no final LF",
+    "pngCanonicalAggregateSha256": "99f74e1e2b1f861df94581df7e3f64d68c463f95ce76269d492b33f086d13e43"
+  },
+  "assetIntegrityFindings": {
+    "status": "resolved-by-exclusion",
+    "filesExpected": 38,
+    "filesPresent": 38,
+    "uniqueContentSha256Count": 37,
+    "includedArtworkCount": 37,
+    "includedUniqueContentSha256Count": 37,
+    "duplicateContentDetectedInIncludedSet": false,
+    "resolutionRequiredBeforeMint": false,
+    "excludedArtworkIds": ["UNIT-A02"],
+    "resolution": "UNIT-A02 was withdrawn by the user on 2026-08-23 and is excluded from every release package, metadata record, and mint instruction. Its source file is retained only as an audit artifact.",
+    "duplicateGroups": [
+      {
+        "artworkIds": ["UNIT-A01", "UNIT-A02"],
+        "files": [
+          "assets/UNIT-A01-000.png",
+          "assets/UNIT-A02-000.png"
+        ],
+        "sharedSha256": "8b3f12a6812c94263bd218898b0b20e3d94945cf5979c1cc18084dcfed1210e3",
+        "declaredDescriptions": ["Swimming Shrimp I", "Swimming Shrimp II"],
+        "finding": "The two artwork identifiers have distinct descriptions but byte-identical source images. UNIT-A02 is withdrawn; only UNIT-A01 remains in the 37-artwork release set."
+      }
+    ]
+  },
+  "description": {
+    "path": "../artworks/ye-yongrun/unit-a01-a38/葉永潤_UNIT-A01-A38_作品介绍.txt",
+    "sha256": "fba1afc49bac4db262c23c5565e299bca7c5e9eedbc602169aedca7adc7a7694"
+  },
+  "inscription": {
+    "path": "../terms/ArtCCH_ArtFi_NFT_Inscription_Terms_EN_v1.txt",
+    "language": "en",
+    "controllingLanguage": "en",
+    "translationsHaveLegalEffect": false,
+    "bytes": 15254,
+    "lineEndings": "LF",
+    "bom": false,
+    "sha256": "1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01"
+  },
+  "artistUndertaking": {
+    "reportedStatus": "signed",
+    "artistSigner": "葉永潤",
+    "reportedAgreementCounterparty": "Michael Yip",
+    "reportedAgreementCounterpartyCapacity": "Director of CCHS and declared authorized representative of CCHS",
+    "reportedCommitmentScope": "The 37-artwork release set UNIT-A01 and UNIT-A03 through UNIT-A38; each corresponding physical artwork is donated to CCHS after all 100 corresponding NFTs complete the primary offering and are sold. UNIT-A02 is withdrawn from this release.",
+    "witness": {
+      "name": "Michael Yip",
+      "capacity": "Director of CCHS and declared authorized representative of CCHS"
+    },
+    "evidenceFile": null,
+    "evidenceSha256": null,
+    "signatureEvidenceVerified": false,
+    "witnessCapacityVerified": false,
+    "artworkCoverageVerified": false
+  },
+  "cchsDirectorDeclaration": {
+    "declaredBy": "Michael YIP",
+    "declaredCapacity": "Director of CCHS and authorized representative of CCHS",
+    "authorityToActForCchsAsserted": true,
+    "declarationDate": "2026-08-23",
+    "language": "zh-CN",
+    "declaration": "本人Michael YIP已与葉永潤签署合作。列表中全部画作已由CCHS接收代管；代管期间所有权仍归Artist。每件画作对应的100枚NFT完成首次发行并全部售出后，Artist承诺将对应实物画作独立捐赠并转移所有权给CCHS。",
+    "legalEffectAssertedByDeclarant": true,
+    "projectPolicyBinding": true,
+    "soleProjectLegalBasis": true,
+    "underlyingConfidentialDocumentsRequiredForProjectLegalBasis": false,
+    "underlyingConfidentialDocumentsMayBeUploadedToAi": false,
+    "underlyingConfidentialDocumentsMayBeUploadedToGitOrUnapprovedWebsites": false,
+    "artist": "葉永潤",
+    "cooperationSigned": true,
+    "artworkRange": "UNIT-A01 and UNIT-A03 through UNIT-A38; UNIT-A02 withdrawn",
+    "physicalWorksReceivedIntoCustodyByCCHS": true,
+    "custodianBeforeSellout": "CCHS",
+    "ownerBeforeSellout": "Artist",
+    "custodyConveysTitle": false,
+    "donationTrigger": "each artwork's initial 100-NFT issuance is fully sold",
+    "postTriggerTransfer": "Artist separately donates ownership of the corresponding physical artwork to CCHS",
+    "nftConveysPhysicalRights": false,
+    "identityAndCapacityDocumentVerified": false,
+    "corporateRegistryVerified": false,
+    "boardOrDelegatedAuthorityVerified": false,
+    "sourceInstrumentVerified": false,
+    "custodyIntakeVerified": false,
+    "sourceInstrumentFile": null,
+    "sourceInstrumentSha256": null,
+    "custodyIntakeFile": null,
+    "custodyIntakeSha256": null
+  },
+  "physicalCustody": {
+    "reportedStatus": "all-listed-artworks-received-by-CCHS-for-custody",
+    "reportedArtworkRange": "UNIT-A01 and UNIT-A03 through UNIT-A38; UNIT-A02 withdrawn",
+    "reportedArtworkCount": 37,
+    "custodian": "CCHS",
+    "ownerDuringCustody": "Artist",
+    "custodyConveysTitle": false,
+    "custodyIntakeEvidenceFile": null,
+    "custodyIntakeEvidenceSha256": null,
+    "custodyIntakeVerified": false
+  },
+  "confidentialEvidencePolicy": {
+    "classification": "confidential",
+    "appliesToUnderlyingAgreementAndCustodyDocuments": true,
+    "authoritativeOriginalLocation": "CCHS office",
+    "reviewPermittedOnlyUponLawfulProcess": true,
+    "reviewMode": "controlled review by authorized persons without upload to a public network environment",
+    "uploadToAiServicesAllowed": false,
+    "uploadToGitRepositoryAllowed": false,
+    "uploadToAnyPublicNetworkEnvironmentAllowed": false,
+    "aiReadingTranscriptionQuotationOrSummaryAllowed": false,
+    "scansPhotosExcerptsOrTranscriptsMayBeUploaded": false,
+    "storeOriginalAtCchsOfficeOnly": true,
+    "projectMayStoreDirectorDeclarationAndMinimumHashMetadataOnly": true
+  },
+  "businessAuthorization": {
+    "formalMintRequested": true,
+    "recordedDate": "2026-08-23",
+    "scope": "37 artworks: UNIT-A01 and UNIT-A03 through UNIT-A38; 100 ERC-1155 units per artwork; initial recipient ArtFi1; UNIT-A02 withdrawn",
+    "openseaPublishingIncluded": false,
+    "overridesTechnicalOrEvidenceGates": false,
+    "executionMayBeginOnlyAfterAllPreflightGatesPass": true
+  },
+  "infrastructureAttestation": {
+    "verifiedAt": "2026-08-23T04:13:00+08:00",
+    "managedBy": "全服务器",
+    "abcdyiSshRecovered": true,
+    "sinManagedTunnelActiveAndEnabled": true,
+    "githubPrivateRepositoryReadThroughSinVerified": true,
+    "temporaryProbeCleaned": true,
+    "sepoliaRpcVerifiedThroughSin": false,
+    "artFi1BalanceAndNonceVerified": false,
+    "signingAndBroadcastVerified": false
+  },
+  "executionPolicy": {
+    "sinOnly": true,
+    "signingAuthorized": false,
+    "mintingAuthorized": false,
+    "broadcastAuthorized": false,
+    "openseaPublishingAuthorized": false
+  },
+  "releaseBlockers": [
+    "Confirm the target network and chain ID; Sepolia is the only default test network and mainnet requires separate written approval.",
+    "Using the restored SIN-managed channel, complete one same-session Sepolia RPC chain-ID, ArtFi1 balance/nonce/gas, signer, and signing/broadcast preflight; public-chain execution itself is not yet verified.",
+    "Verify every generator, package index, metadata record, and mint instruction contains exactly 37 artworks and excludes withdrawn UNIT-A02; retain the duplicate source file only as an audit artifact.",
+    "Bind the release policy to the Michael YIP CCHS Director declaration as the sole project legal basis; confidential underlying agreements and custody records must not be requested, uploaded, or processed by AI.",
+    "Complete per-artwork rights evidence, immutable metadata, and distinct watermarked holder-file verification.",
+    "Complete CCHS, beneficiary, governance, legal, and release approvals.",
+    "Run the authoritative contract, API, web, release-package, secret, IP, and CI gates."
+  ]
+}

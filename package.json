@@ -22,10 +22,11 @@
     "release:verify-schema": "node scripts/release/verify-release.mjs release/release-candidate.example.json --schema-only",
     "mint:verify-schema": "node scripts/release/verify-mint-package.mjs release/mint-package.example.json --schema-only",
     "mint:verifier:test": "node scripts/test/verify-mint-package.mjs",
-    "wallet:test-local": "node scripts/local/test-wallet.mjs self-test",
-    "wallet:test-local:test": "node --test scripts/local/test-wallet.test.mjs",
+    "wallet:artfi1-offline:self-test": "node scripts/local/artfi1-offline-signer.mjs self-test",
+    "wallet:artfi1-offline:test": "node --test scripts/local/artfi1-offline-signer.test.mjs",
     "charity-edition:verify-schema": "node scripts/release/verify-charity-edition-package.mjs release/charity-edition-package.example.json --schema-only",
     "charity-edition:verifier:test": "node scripts/test/verify-charity-edition-package.mjs",
+    "charity-edition:ye-yongrun:verify": "node scripts/release/verify-ye-yongrun-public-metadata.mjs",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @giraffetechnology/artfi-web test:e2e",
     "typecheck": "turbo run typecheck"

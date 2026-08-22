@@ -1,0 +1,532 @@
+葉永潤作品介绍（UNIT-A01-000.png—UNIT-A38-000.png）
+
+编写与字段规范
+本文件依据以下资料编写：
+1. 香港《文汇报》2025年8月11日报道《香港蝦王書畫家葉永潤 願千家萬戶共享藝術愉悅》；
+2. ArtCCH 艺术家页面及项目后台中 ARTIST-000003／ye-yong-run 的正式艺术家档案；
+3. UNIT-A01-000.png 至 UNIT-A38-000.png 的实际画面。
+
+经只读核查，ArtCCH 后台现有正式作品记录均为陶瓷作品，后台图片与本批38件纸本书画资产没有文件哈希或原始文件名对应关系。因此，下列未能从画面明确确认的作品名称均标注为“建议题名”，属于展陈与编目用编辑性题名，不冒充艺术家原题。
+
+本文件按 Artsy 作品资料的常用字段组织：艺术家、题名、年代、媒材、尺寸、类别、独版属性、签名、装框状态和不重复元数据的简短“作品说明”。Artsy 建议作品说明约100词以内，并避免重复尺寸、媒材和艺术家履历；本文件据此将形式描述、题材和技法控制在简洁、客观的范围内。
+
+尺寸说明：委托方确认，本文件所列厘米尺寸均为未装框作品本体的实测数据，不包含装裱、衬纸、卡纸或外框；英寸尺寸由实测厘米数换算并四舍五入至小数点后一位。书画中的“四尺”在此仅作为作品纸张规格分类，不代表估算尺寸。
+
+艺术家简介
+叶永润，香港东方书画院执行院长、香港书法家协会会员，研习书画逾六十载，尤以水墨虾著称。其书法师从吴子复，在传统中国画笔墨基础上融入对真实物象的长期观察，并借鉴近大远小的空间意识，着重表现虾体的透明质感、弹性与游动姿态。除虾之外，他亦创作竹石、花鸟、山水、熊猫和书法。其创作重视“形神兼备”，既延续中国书画的笔墨传统，也回应当代生活，期望让艺术走入家庭，在日常环境中带来审美愉悦与文化滋养。
+
+Artist Biography
+Ye Yong Run is Executive Director of the Hong Kong Oriental Academy of Painting and Calligraphy and a member of the Hong Kong Calligraphers Association. Active in Chinese ink painting and calligraphy for more than six decades, he is particularly recognized for his depictions of shrimp. He studied calligraphy with Wu Zifu and combines traditional brushwork with sustained observation of living subjects, using tonal and spatial variation to convey translucency, elasticity, and movement. His broader practice includes bamboo, flowers and birds, landscapes, pandas, and calligraphy. Across these subjects, Ye pursues a balance of physical likeness and expressive vitality while seeking to bring Chinese art into everyday life.
+
+01｜UNIT-A01-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《群虾竞游之一》／Swimming Shrimp I
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：纸本作品（Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：群虾纵向穿行于留白之中。淡墨塑造透明、分节的虾身，浓墨点醒头胸、眼与足肢；细长虾须彼此牵引，形成水流般的节奏。不同墨色与尺度建立前后关系，使密集群像仍保持清晰和动势。
+About the Work: A school of shrimp moves vertically through an open field of paper. Pale washes articulate their translucent, segmented bodies, while darker ink defines the heads, eyes, and legs. Sweeping antennae establish a current-like rhythm, and shifts in scale and tone create spatial depth.
+
+02｜UNIT-A02-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《群虾竞游之二》／Swimming Shrimp II
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：纸本作品（Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：游虾在不同高度与角度相互照应。浓墨聚焦眼、足与头部，淡墨写出节节透亮的虾身，长须轻柔交叠并贯穿全幅。近景的力度与远处的轻淡共同建立水中空间。
+About the Work: Shrimp at varying heights and angles respond to one another across the composition. Dark ink concentrates on their eyes, legs, and heads, while lighter washes describe translucent bodies. Overlapping antennae connect the figures and distinguish forceful foreground forms from paler, more distant ones.
+
+03｜UNIT-A03-000.png
+艺术家：叶永润（Ye Yong Run）
+题名：《传家有道惟存厚，处世无奇但率真》／A Virtuous Family Preserves Kindness; an Honest Life Needs No Artifice
+年代：2010年代（2010s）
+媒材：水墨设于红色宣纸（Ink on red xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：书法、纸本作品（Calligraphy, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名（据图像）
+装框：不装框交付（Frame not included）
+作品说明：家训联语以黑墨书于朱红纸面。结字取隶意，横画舒展，转折沉着，古朴字形与“厚道传家、率真处世”的内容相互呼应。黑与红的强烈对照赋予作品庄重、直接的视觉力量。
+About the Work: A family maxim is written in black ink on a vermilion ground. The broad horizontals and measured turns draw on clerical-script forms. Its archaic structure complements the text’s emphasis on kindness within the family and honesty in public life, while the black-red contrast gives the work a direct, ceremonial presence.
+
+04｜UNIT-A04-000.png
+艺术家：叶永润（Ye Yong Run）
+题名：《般若波罗蜜多心经》／Heart Sutra
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：书法、纸本作品（Calligraphy, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：整篇《心经》以规整小字纵横布置，行列清晰。用笔兼具隶书的沉稳与简帛书写的灵动，字距疏密均衡，在长篇经文中维持连贯气息。克制墨色与严谨章法营造安定、澄明的观看体验。
+About the Work: The Heart Sutra is arranged in disciplined rows of small characters. Stable clerical-script structures are balanced by the liveliness of manuscript writing, with even spacing sustaining the cadence of the extended text. Restrained ink and a rigorous layout create a calm, lucid visual field.
+
+05｜UNIT-A05-000.png
+艺术家：叶永润（Ye Yong Run）
+题名：《般若波罗蜜多心经（横幅）》／Heart Sutra (Horizontal)
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 138 cm｜27.2 × 54.3 in
+类别：书法、纸本作品（Calligraphy, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：横幅《心经》以平展开阔的章法组织正文，朱印在墨色之间形成节奏性停顿。字体古雅端正，点画含蓄而有骨力；横向阅读使经文的肃穆与清雅秩序并置。
+About the Work: This horizontal transcription of the Heart Sutra unfolds in an expansive, measured arrangement. Red seals punctuate the black script, whose archaic, upright characters combine restraint with structural strength. The lateral format turns the act of reading into a sustained sequence of visual pauses.
+
+06｜UNIT-A06-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《花开春满》／Spring in Full Bloom
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：山石与繁花沿斜势生长，粉红花簇在墨叶和岩石之间展开，数只小鸟穿梭其间。墨色勾写枝干与石骨，色彩集中于花朵，构成虚实、浓淡和冷暖对照。
+About the Work: Rock, flowering branches, and foliage rise diagonally through the composition as small birds move between clusters of pink blossoms. Ink defines the branches and stone structure, while concentrated color is reserved for the flowers, creating contrasts of density, tone, and temperature.
+
+07｜UNIT-A07-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《大吉有余》／Auspicious Abundance
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：昂首雄鸡占据画面上方，下方游虾以轻灵线条写成。朱红鸡冠与大笔浓墨形成视觉重心，虾须和足肢则拓展空白水域。陆上与水中题材并置，形成一重一轻、刚柔相济的组合。
+About the Work: A crowing rooster anchors the upper register, while shrimp are described below with light, agile lines. The vermilion comb and broad black plumage form a dense focal point; antennae and legs extend into the surrounding blank paper. Terrestrial and aquatic subjects create a deliberate contrast of weight and movement.
+
+08｜UNIT-A08-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《高风亮节》／Lofty Integrity
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：新竹与老干并立，竹叶以撇捺般的笔势层层穿插。墨青色泽在浓淡变化中呈现润泽感，挺拔竹干支撑纵向气势，疏密相间的叶组则带出风中摇曳的节奏。
+About the Work: Young bamboo stands beside older culms, while layered leaves are built from calligraphic strokes. Modulations of ink and blue-green color lend the foliage a moist surface. Upright stems establish the vertical structure, and alternating clusters of dense and sparse leaves suggest movement in the wind.
+
+09｜UNIT-A09-000.png
+艺术家：叶永润（Ye Yong Run）
+题名：《漓江竹韵》／Bamboo Rhythms on the Li River
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：奇峰隔水对峙，云气在远山与江面之间流动；近岸竹丛、桃花和村舍构成前景。青绿设色点染山石与竹叶，水面留白映出峰影，两叶小舟为空阔山水引入人的尺度。
+About the Work: Steep peaks rise across a river as mist moves between distant mountains and the water. Bamboo, peach blossoms, and village houses form the foreground. Blue-green accents enliven rock and foliage, while reserved paper suggests reflections; two small boats introduce a human scale to the expansive landscape.
+
+10｜UNIT-A10-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《荷塘清趣》／Quiet Pleasures of the Lotus Pond
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：宽阔荷叶以泼墨写成，浓墨与石青交融，粉白荷花从叶间探出。一只翠鸟停驻于残梗并俯视水面。粗放荷叶、细劲花茎与较细致的鸟体形成技法和尺度对照。
+About the Work: Broad lotus leaves are rendered in splashed ink mixed with blue-green pigment, while pink and white blossoms emerge between them. A kingfisher perches on a broken stem and looks toward the water. Expansive leaves, taut stems, and the more detailed bird create contrasts of technique and scale.
+
+11｜UNIT-A11-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《雨荷》／Lotus in Rain
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：大片墨荷层层翻卷，粉荷与花苞点缀其间。湿墨表现荷叶的厚重与润泽，花梗以劲线纵横穿插。红、黑对照突出花朵，也赋予纵向构图向上生长的力量。
+About the Work: Large ink-washed lotus leaves overlap and turn across the sheet, punctuated by pink blossoms and buds. Wet ink gives the foliage weight and moisture, while taut stems cross the composition. The red-black contrast isolates the flowers and reinforces the upward movement of the vertical format.
+
+12｜UNIT-A12-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《竹林亲情》／Affection in the Bamboo Grove
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：两只熊猫一上一下攀援嬉戏，上方熊猫倒悬于竹间，下方幼熊仰首呼应。黑白块面概括体态，劲利竹叶与淡墨背景建立前后空间，捕捉亲昵而幽默的瞬间。
+About the Work: Two pandas play at different heights: one hangs upside down among bamboo, while the younger animal looks upward in response. Black-and-white masses summarize their bodies, and sharp bamboo leaves contrast with the pale background, capturing an intimate and humorous moment.
+
+13｜UNIT-A13-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《紫玉凝香》／Fragrant Purple Peony
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 69 cm｜27.2 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：一枝紫牡丹居于斗方中心，花冠层层舒展，紫红由深至浅，暖黄花蕊提亮局部。浓墨与青绿写出厚重枝叶，使集中、简洁的构图围绕单一花头展开。
+About the Work: A single purple peony occupies the center of the square composition. Layered petals shift from deep violet-red to paler tones, with warm yellow stamens providing a small point of light. Dense foliage in black ink and blue-green pigment concentrates attention on the solitary bloom.
+
+14｜UNIT-A14-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《富贵满堂》／Prosperity in Full Bloom
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 138 cm｜27.2 × 54.3 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：数朵红牡丹在横幅中展开，枝叶向两侧延伸，蝴蝶轻舞其上。朱红、胭脂的花瓣与沉稳墨叶形成色彩对照，横向铺陈强化繁花成簇的视觉密度。
+About the Work: Red peonies unfold across a horizontal field as foliage extends to either side and butterflies hover above. Vermilion and carmine petals contrast with dark ink leaves. The lateral arrangement emphasizes the density and breadth of the flowering cluster.
+
+15｜UNIT-A15-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《花开富贵》／Blossoming Prosperity
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：牡丹沿纵轴上下错落，花头大小相间，红粉设色在墨叶之间形成明亮焦点。枝干自然穿插，飞蝶在上方引出轻盈动势，使花卉主题获得纵向节奏。
+About the Work: Peonies alternate in scale along the vertical axis, their red and pink petals forming bright focal points among dark leaves. Interlacing branches structure the ascent, while a butterfly near the upper edge introduces a lighter counter-movement.
+
+16｜UNIT-A16-000.png
+艺术家：叶永润（Ye Yong Run）
+题名：《国色天香》／National Beauty and Heavenly Fragrance
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 138 cm｜27.2 × 54.3 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：红、粉、黄牡丹横向铺展，花姿各异，蝴蝶穿行其间。没骨设色塑造柔软花瓣，浓墨叶片稳定画面重心；多色花头在统一墨叶背景上形成清晰层次。
+About the Work: Red, pink, and yellow peonies spread across the horizontal composition as butterflies move between them. Boneless color washes model the soft petals, while dense ink foliage anchors the arrangement. The varied blossoms remain distinct against the unified dark leaves.
+
+17｜UNIT-A17-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《孔雀富贵》／Peacock and Peonies
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 138 cm｜27.2 × 54.3 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：孔雀立于山石之上，身旁牡丹盛放，后景修竹挺秀。青绿与墨色细致铺陈翎羽，花叶和竹石则以较写意的笔触处理，形成工写相兼的层次。
+About the Work: A peacock stands on a rock beside blooming peonies, with upright bamboo in the background. Blue-green pigment and ink articulate the plumage in detail, while flowers, leaves, and stone are handled more freely. The contrast joins meticulous and expressive modes within one composition.
+
+18｜UNIT-A18-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《荷塘鹤影》／Cranes among Lotus
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 138 cm｜27.2 × 54.3 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：群鹤在荷塘中俯首、顾盼，墨荷翻卷，粉荷从浓淡水墨间显现。长横幅使曲颈与修长腿足形成连续节奏，大块荷叶墨色稳定整体结构。
+About the Work: Cranes bend and turn within a lotus pond as pink blossoms emerge among rolling ink leaves. The long horizontal format allows curved necks and slender legs to form a continuous rhythm, while broad areas of dark foliage stabilize the composition.
+
+19｜UNIT-A19-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《荷香虾趣》／Lotus Fragrance and Playful Shrimp
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：巨幅荷叶与粉荷在上方形成浓重华盖，数只游虾穿行于下方留白。荷梗以劲笔直下，虾须以细线回旋；纵向茎线与弧形长须构成鲜明节奏。
+About the Work: Monumental lotus leaves and pink blossoms form a dense canopy above several shrimp moving through the open lower register. Strong vertical stems descend through the sheet, while fine antennae curl in counterpoint. Straight and arcing lines establish the work’s principal rhythm.
+
+20｜UNIT-A20-000.png
+艺术家：叶永润（Ye Yong Run）
+题名：《兰溪》／Orchid Stream
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：幽兰生于溪石之间，长叶以书法性线条纵横舒展，紫色兰花散布其间。远山以淡墨层叠，前景兰石较为浓重，由墨色差异建立深远空间。
+About the Work: Orchids grow among streamside rocks, their long leaves extending in calligraphic arcs and purple blossoms scattered between them. Distant mountains are layered in pale ink, while the foreground plants and stone are darker, creating depth through tonal contrast.
+
+21｜UNIT-A21-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《佳果满枝》／Bountiful Lychees
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 69 cm｜27.2 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：累累荔枝压满枝头，朱红果实与浓墨叶片形成鲜明对照。果串沿枝势向斗方四周展开，疏密变化表现丰收的重量，同时保留纸面呼吸空间。
+About the Work: Heavy clusters of lychees fill the branches, their vermilion fruit set against dark ink leaves. The bunches extend toward the edges of the square format, using shifts in density to convey weight while preserving areas of open paper.
+
+22｜UNIT-A22-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《荔熟蝉鸣》／Ripe Lychees and Cicada Song
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：荔枝枝条从画面上下相向伸展，果实成串垂落，红艳设色在大片留白中形成焦点。墨叶与苍劲枝干支撑纵向结构，疏密变化平衡果实的丰盈与纸面的清空。
+About the Work: Lychee branches extend toward one another from above and below, with hanging fruit forming vivid red focal points in the open field. Dark leaves and aged branches support the vertical structure, while alternating density balances abundance with expanses of untouched paper.
+
+23｜UNIT-A23-000.png
+艺术家：叶永润（Ye Yong Run）
+题名：《七古·嘉庚颂》／Ode to Tan Kah Kee
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：书法、纸本作品（Calligraphy, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：七古长诗以整齐行列书写，内容追颂陈嘉庚兴学报国、造福桑梓的精神。字体取隶意并兼具简帛书风，横画舒展、结构端严，长篇布局维持清晰节奏。
+About the Work: This seven-character old-style poem commemorates Tan Kah Kee’s commitment to education, public service, and his native community. The script combines clerical forms with the character of early manuscript writing. Broad horizontals and upright structures maintain a clear rhythm across the extended text.
+
+24｜UNIT-A24-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《熊猫戏水》／Panda Wading
+年代：2010年代（2010s）
+媒材：水墨设色设于宣纸（Ink and color on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 138 cm｜27.2 × 54.3 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：一只熊猫从竹林走入浅水并低首观察水面。黑白块面概括动物体态，轻淡水纹和倒影形成由实入虚的空间，远处竹影与岸石构成幽静环境。
+About the Work: A panda steps from a bamboo grove into shallow water and lowers its head toward the surface. Black-and-white masses define the animal, while pale ripples and reflections shift the scene from solid form to atmospheric space. Bamboo and riverbank stones complete the quiet setting.
+
+25｜UNIT-A25-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《竹报平安》／Bamboo Brings Peace
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：粗壮竹干自下而上挺立，新老竹枝交错，密叶仿佛在风中翻动。竹节以中锋写出骨力，叶片则通过浓淡、干湿变化呈现锐度与润泽；仰视构图强化竹林的高耸感。
+About the Work: Thick bamboo culms rise from the lower edge as old and new branches intersect overhead. Centered brushstrokes give the joints structural force, while changes in ink density and moisture make the leaves appear both sharp and rain-washed. The upward viewpoint heightens the grove’s vertical scale.
+
+26｜UNIT-A26-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《清流有味》／Life in Clear Water
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：游虾沿纵幅斜向上升，个体之间距离疏朗，长须穿越留白并提示水流轨迹。淡墨虾身透明轻盈，浓墨头胸和足肢稳定形体；有限笔墨概括方向、速度与前后关系。
+About the Work: Shrimp rise diagonally through the vertical format, spaced at open intervals. Long antennae cross the reserved paper and imply currents. Pale ink makes the bodies light and translucent, while darker heads and legs anchor each form; a limited vocabulary of marks conveys direction, speed, and depth.
+
+27｜UNIT-A27-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《虾游清趣》／Shrimp in Clear Water
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：数只虾在竖幅中聚散有致，或上行、或侧转，以纤细长须彼此呼应。虾身墨色由头部向尾部渐淡，节节分明；果断的足肢线条增强弹性，大面积留白转化为无形水域。
+About the Work: Several shrimp gather and separate within the vertical field, some ascending and others turning sideways. Fine antennae link their movements. Ink fades from head to tail across articulated segments, while decisive leg strokes add spring and tension. Broad areas of blank paper become an implied body of water.
+
+28｜UNIT-A28-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《逐流》／Following the Current
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：群虾集中于纵幅下部并向上延伸，疏密变化形成由聚到散的节奏。浓墨刻画近处个体，淡墨提示远处游虾；交织长须保持清晰脉络，并强化构图的上升动势。
+About the Work: A group of shrimp gathers in the lower part of the vertical sheet and disperses upward. Darker figures occupy the foreground, while paler ones recede. Interwoven antennae remain legible and reinforce the composition’s ascending movement.
+
+29｜UNIT-A29-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《五虾图》／Five Shrimp
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 69 cm｜27.2 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：五只游虾分布于斗方空间，姿态各异，围合成松动而完整的构图。浓墨点染虾头，淡墨分节塑造透明身体；刚劲足肢与柔韧长须形成线条对比。
+About the Work: Five shrimp occupy the square field in varied poses, forming a loose but complete enclosure. Dark ink concentrates in the heads, while pale segmented washes create transparent bodies. Angular legs contrast with long, flexible antennae.
+
+30｜UNIT-A30-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《群虾争先》／Shrimp Vying for the Lead
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 69 cm｜27.2 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：五只虾从不同方向汇聚于中心，长须大幅回旋，形成旋涡般的运动感。黑、灰墨色区分前后层次，虾体转折与足肢伸展各具方向，在斗方内构成紧凑互动。
+About the Work: Five shrimp converge from different directions, their antennae circling across the center to create a vortex-like movement. Black and gray washes separate foreground and background, while turning bodies and extended legs compress the interaction within the square format.
+
+31｜UNIT-A31-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《六顺图之一》／Sixfold Harmony I
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 69 cm｜27.2 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：六只游虾在斗方内上下分布，画面左密右疏，虾须跨越空间形成连续回环。不同墨色赋予虾体远近层次，细足与长钳以劲线写出；数字“六”也为题名引入和顺之意。
+About the Work: Six shrimp are distributed across the square composition, dense at left and open at right. Their antennae loop continuously through the space. Variations in ink establish depth, while fine legs and elongated claws are rendered with firmer lines; the number six informs the title’s reference to harmony.
+
+32｜UNIT-A32-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《六顺图之二》／Sixfold Harmony II
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 69 cm｜27.2 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：群虾呈斜向游动之势，几只聚于下方，一只上行领势，形成开合有度的空间。淡墨虾身带出透明水感，浓墨眼点与头胸成为节奏核心，长须则将动势延伸至画外。
+About the Work: The shrimp move diagonally, with several gathered below and one rising above to lead the composition. Pale bodies evoke transparency in water, while dark eyes and heads form rhythmic accents. Long antennae extend the movement beyond the square field.
+
+33｜UNIT-A33-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《群虾逐浪》／Shrimp Riding the Current
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：群虾沿纵向呈波浪式行进，个体大小与墨色深浅交替，形成有层次的队列。虾须如水纹贯穿上下，连接彼此而不破坏留白，强化连续运动和空间纵深。
+About the Work: Shrimp advance through the vertical format in a wave-like sequence. Alternating scale and ink density produce a layered procession. Antennae run through the sheet like ripples, connecting the figures without closing the open paper and reinforcing continuous movement and depth.
+
+34｜UNIT-A34-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《自在清游》／Swimming at Ease
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：数只虾在竖幅中央相聚而游，上下留白形成宽阔水域。浓淡虾体表现距离与水中光影；长须柔韧飘举，足肢与尾节则刚劲有力，形成刚柔对照。
+About the Work: Several shrimp swim together at the center of the vertical sheet, with open areas above and below suggesting an expansive body of water. Dark and pale figures indicate distance and shifting light. Flexible antennae contrast with the firmer articulation of legs and tails.
+
+35｜UNIT-A35-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《虾戏清波》／Shrimp Playing in Clear Waves
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 138 cm｜27.2 × 54.3 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：横幅群虾首尾相接，自左向右舒展，形成连续的游动节奏。不同姿态的虾或伸展、或转折，长须在空白水域中穿插；横向视野强化从容、连贯的运动感。
+About the Work: Shrimp extend from left to right in a linked horizontal sequence. Some bodies stretch forward while others turn, and their antennae pass through the open field. The panoramic format emphasizes a measured, continuous sense of movement.
+
+36｜UNIT-A36-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《虾趣清游之一》／Aquatic Pleasures I
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：群虾由上部向下聚拢，虾须与足肢形成富有书写性的线网。虾体节段以淡墨连贯，头胸与眼点以浓墨提神；纵向构图轻盈疏朗，兼顾个体姿态与群体呼应。
+About the Work: Shrimp gather downward from the upper register, their antennae and legs forming a calligraphic network. Pale ink connects the body segments, while darker heads and eyes provide focus. The vertical arrangement remains light and open, balancing individual gestures with collective movement.
+
+37｜UNIT-A37-000.png
+艺术家：叶永润（Ye Yong Run）
+建议题名：《虾趣清游之二》／Aquatic Pleasures II
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：138 × 69 cm｜54.3 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：一列游虾贯穿纵幅，疏密起伏鲜明。近处个体墨色沉着、足肢有力，远处则简淡若影；长须跨越不同层次，将分散个体组织成整体。
+About the Work: A column of shrimp traverses the vertical sheet with pronounced shifts between density and openness. Foreground figures are dark and firmly articulated, while distant ones appear as pale traces. Long antennae cross these layers and organize the dispersed forms into a unified movement.
+
+38｜UNIT-A38-000.png
+艺术家：叶永润（Ye Yong Run）
+题名：《虾趣图》／Playful Shrimp
+年代：2010年代（2010s）
+媒材：水墨设于宣纸（Ink on xuan paper）
+尺寸（作品本体实测，不含装裱）：69 × 69 cm｜27.2 × 27.2 in
+类别：绘画、纸本作品（Painting, Work on Paper）
+作品属性：独版（Unique）
+签名：艺术家签名并钤印（据图像）
+装框：不装框交付（Frame not included）
+作品说明：群虾在斗方中央回旋聚集，朝向丰富，形成繁而有序的水中群像。浓淡墨色营造近大远小的层次，虾身透明，足肢劲健，交织长须构成流动曲线。
+About the Work: Shrimp circle and gather at the center of the square field, facing multiple directions in a dense but ordered group. Tonal variation and shifts in scale establish depth. Translucent bodies, angular legs, and interwoven antennae combine into a network of flowing curves.
+
+参考资料
+香港文汇报：《香港蝦王書畫家葉永潤 願千家萬戶共享藝術愉悅》
+https://www.wenweipo.com/a/202508/11/AP6898fab6e4b0ab516546cc5b.html
+
+ArtCCH：叶永润艺术家页面
+https://artcch.cn/zh/artists/ye-yong-run
+
+ArtCCH 公开艺术家对象
+https://www.artcch.cn/api/v1/objects/artist/ARTIST-000003
+
+Artsy Partner Resources：Bulk Import Launch（作品字段说明）
+https://partners.artsy.net/es/product-updates/bulk-import-launch
+
+Artsy Partner Toolkit：The Artwork（作品说明建议控制在约100词，并避免重复页面已有元数据）
+https://partners.artsy.net/wp-content/uploads/2019/04/Artsy_Toolkit_New_Selling_Options.pdf
+
+南海博物馆：《书画尺寸的计算方法》
+https://www.nhmuseum.org/jiao-yu/466.html

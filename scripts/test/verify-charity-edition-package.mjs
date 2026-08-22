@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,18 +9,13 @@ const master = Buffer.concat([
   Buffer.from("89504e470d0a1a0a", "hex"),
   Buffer.from("master"),
 ]);
-const watermarked = Buffer.concat([
-  Buffer.from("89504e470d0a1a0a", "hex"),
-  Buffer.from("watermarked-holder-copy"),
-]);
-const rights = Buffer.from("rights evidence");
-const cchs = Buffer.from(
-  "CCHS registration, wallet, and receipting policy evidence",
+const directorDeclaration =
+  "本人Michael YIP是CCHS的Director，并获授权代表CCHS行事。本人已与葉永潤签署合作。列表中全部画作已由CCHS接收代管；代管期间所有权仍归Artist。每件画作对应的100枚NFT完成首次发行并全部售出后，Artist承诺将对应实物画作独立捐赠并转移所有权给CCHS。";
+const inscriptionTerms = readFileSync(
+  "release/terms/ArtCCH_ArtFi_NFT_Inscription_Terms_EN_v1.txt",
 );
 writeFileSync(join(directory, "master.png"), master);
-writeFileSync(join(directory, "watermarked.png"), watermarked);
-writeFileSync(join(directory, "rights.pdf"), rights);
-writeFileSync(join(directory, "cchs.pdf"), cchs);
+writeFileSync(join(directory, "nft-terms.txt"), inscriptionTerms);
 
 const packageBase = {
   schemaVersion: 1,
@@ -48,30 +43,51 @@ const packageBase = {
     unwatermarkedWebDownload: false,
   },
   holderAsset: {
-    watermarkedFile: "watermarked.png",
-    watermarkedMimeType: "image/png",
-    watermarkedSha256: sha256(watermarked),
     highResolution: true,
     watermarked: true,
     delivery: "token-gated-download",
+    generatedPerHolder: true,
+    publicUri: null,
+    unwatermarkedAvailable: false,
     preview: false,
   },
   rights: {
     basis: "assignment",
-    evidenceFile: "rights.pdf",
-    evidenceSha256: sha256(rights),
+    authorizationBasis:
+      "formal-mint-authorization-and-cchs-director-declaration",
+    sourceDocumentsConfidential: true,
+    sourceDocumentsProcessedByAi: false,
     attribution: "Copyright ArtCCH. Created by Michael Yip's team.",
     nftMintAuthorized: true,
-    marketplaceListingEligible: true,
+    marketplaceListingEligible: false,
     listingActionConfirmed: false,
     expiresAt: null,
   },
   physicalArtwork: {
-    mapped: true,
+    mapped: false,
     conveysPhysicalTitle: false,
     redeemable: false,
+    includedInNft: false,
+    custodianBeforeSellout: "CCHS",
+    ownerBeforeSellout: "Artist",
+    custodyConveysTitle: false,
+    transferIndependentOfNft: true,
+    donationUndertakingBy: "Artist",
+    undertakingSignerRole: "Artist",
+    legalBasis: "cchs-director-declaration",
+    directorDeclarationDeclaredBy: "Michael YIP",
+    directorDeclarationCapacity: "CCHS Director and authorized representative",
+    directorDeclarationTextZh: directorDeclaration,
+    directorDeclarationSha256: sha256(Buffer.from(directorDeclaration, "utf8")),
+    directorDeclarationAcceptedForRelease: true,
+    soleProjectLegalBasis: true,
+    confidentialUnderlyingDocumentsRequired: false,
+    confidentialOriginalLocation: "CCHS office",
+    confidentialReviewOnlyUponLawfulProcess: true,
+    confidentialUnderlyingDocumentsMayBeUploadedToPublicNetworkOrAi: false,
     donationTrigger: "primary-sellout-100",
     donationRecipient: "CCHS",
+    ownerAfterCompletedDonation: "CCHS",
     donationAcceptanceEvidenceRequired: true,
   },
   fundraising: {
@@ -89,12 +105,28 @@ const packageBase = {
     receiptRateSnapshotSha256Required: true,
     officialReceiptAmountDeterminedBy: "CCHS",
     ethCadPriceEvidenceRequired: true,
-    charityStatusConfirmed: true,
-    cchsPolicyConfirmed: true,
-    cchsEvidenceFile: "cchs.pdf",
-    cchsEvidenceSha256: sha256(cchs),
+    charityStatusReportedByAuthorizedDirector: true,
+    cchsPolicyAcceptedForRelease: true,
+    confirmationBasis: "cchs-director-declaration",
+    publicRegistryVerified: false,
+  },
+  inscription: {
+    type: "artcch-artfi-nft-terms",
+    version: "1.0",
+    language: "en",
+    controllingLanguage: "en",
+    translationsHaveLegalEffect: false,
+    termsBytes: 15254,
+    lineEndings: "LF",
+    bom: false,
+    termsFile: "nft-terms.txt",
+    termsSha256: sha256(inscriptionTerms),
+    embedFullText: true,
+    immutable: true,
   },
   metadata: {
+    publicURI:
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A01.json",
     description: "No preview; holder access is watermarked only.",
     attributes: [],
   },
@@ -104,15 +136,25 @@ const manifestPath = join(directory, "package.json");
 writeFileSync(manifestPath, JSON.stringify(packageBase));
 const output = execFileSync(
   process.execPath,
-  ["scripts/release/verify-charity-edition-package.mjs", manifestPath],
+  [
+    "scripts/release/verify-charity-edition-package.mjs",
+    manifestPath,
+    "--local-assets",
+  ],
   { encoding: "utf8" },
 );
 const result = JSON.parse(output);
 if (
   result.masterArtworkSha256 !== sha256(master) ||
-  result.watermarkedArtworkSha256 !== sha256(watermarked) ||
   !/^[0-9a-f]{64}$/.test(result.metadataSha256) ||
-  result.canonicalMetadata.includes('"image"')
+  result.canonicalMetadata.includes('"image"') ||
+  !result.canonicalMetadata.includes('"inscription"') ||
+  !result.canonicalMetadata.includes(
+    `"sha256":"${sha256(inscriptionTerms)}"`,
+  ) ||
+  !result.canonicalMetadata.includes(
+    "Artist's sellout-contingent donation undertaking",
+  )
 ) {
   throw new Error(
     "charity edition verifier did not reproduce private, no-preview metadata",
@@ -123,7 +165,9 @@ for (const mutate of [
   (value) => (value.series.editions = 101),
   (value) => (value.artwork.publicArtworkPreview = true),
   (value) => (value.artwork.unwatermarkedWebDownload = true),
-  (value) => (value.holderAsset.watermarkedSha256 = value.artwork.masterSha256),
+  (value) => (value.holderAsset.publicUri = "https://example.test/file.png"),
+  (value) => (value.holderAsset.generatedPerHolder = false),
+  (value) => (value.rights.sourceDocumentsProcessedByAi = true),
   (value) => (value.fundraising.proceedsPercent = 99),
   (value) =>
     (value.fundraising.receiptValuationPolicy =
@@ -133,7 +177,32 @@ for (const mutate of [
   (value) => (value.fundraising.receiptRatePair = "ETH/USD"),
   (value) => (value.fundraising.receiptRateSnapshotSha256Required = false),
   (value) => (value.fundraising.officialReceiptAmountDeterminedBy = "ArtFi"),
+  (value) => (value.fundraising.confirmationBasis = "uploaded-confidential-file"),
+  (value) => (value.fundraising.publicRegistryVerified = true),
   (value) => (value.physicalArtwork.conveysPhysicalTitle = true),
+  (value) => (value.physicalArtwork.mapped = true),
+  (value) => (value.physicalArtwork.includedInNft = true),
+  (value) => (value.physicalArtwork.ownerBeforeSellout = "CCHS"),
+  (value) => (value.physicalArtwork.custodyConveysTitle = true),
+  (value) => (value.physicalArtwork.donationUndertakingBy = "ArtFi"),
+  (value) =>
+    (value.physicalArtwork.directorDeclarationAcceptedForRelease = false),
+  (value) =>
+    (value.physicalArtwork.directorDeclarationSha256 = "0".repeat(64)),
+  (value) => (value.physicalArtwork.soleProjectLegalBasis = false),
+  (value) =>
+    (value.physicalArtwork.confidentialUnderlyingDocumentsRequired = true),
+  (value) =>
+    (value.physicalArtwork.confidentialReviewOnlyUponLawfulProcess = false),
+  (value) =>
+    (value.physicalArtwork.confidentialUnderlyingDocumentsMayBeUploadedToPublicNetworkOrAi =
+      true),
+  (value) => (value.physicalArtwork.transferIndependentOfNft = false),
+  (value) => (value.inscription.embedFullText = false),
+  (value) => (value.inscription.immutable = false),
+  (value) => (value.inscription.controllingLanguage = "fr"),
+  (value) => (value.inscription.translationsHaveLegalEffect = true),
+  (value) => (value.inscription.termsSha256 = "0".repeat(64)),
   (value) => (value.rights.listingActionConfirmed = true),
 ]) {
   const invalid = structuredClone(packageBase);
