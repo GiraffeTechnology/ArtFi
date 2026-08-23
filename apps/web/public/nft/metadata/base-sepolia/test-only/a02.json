@@ -1,0 +1,46 @@
+{
+  "name": "UNIT-A02 — ArtFi Base Sepolia RWA/DAO Test",
+  "description": "Test-only ERC-1155 representation of UNIT-A02 for Base Sepolia wallet, RWA custody and DAO voting validation. Exactly 100 test units. This asset is isolated from the ArtCCH charity release, has no production or mainnet eligibility, and does not itself convey legal title, redemption, delivery, copyright or commercial-use rights.",
+  "external_url": "https://io.artcch.com/",
+  "attributes": [
+    {
+      "trait_type": "Artwork ID",
+      "value": "UNIT-A02"
+    },
+    {
+      "trait_type": "Artist",
+      "value": "Ye Yong Run (葉永潤)"
+    },
+    {
+      "trait_type": "Network",
+      "value": "Base Sepolia"
+    },
+    {
+      "trait_type": "Purpose",
+      "value": "RWA and DAO test only"
+    },
+    {
+      "trait_type": "Fixed Test Supply",
+      "value": 100
+    },
+    {
+      "trait_type": "Mainnet Eligible",
+      "value": "No"
+    }
+  ],
+  "artfi_test_boundary": {
+    "schema_version": 1,
+    "namespace": "ARTFI/BASE-SEPOLIA/A02/RWA-DAO/V1",
+    "chain_id": 84532,
+    "testnet_only": true,
+    "mainnet_forbidden": true,
+    "production_manifest_eligible": false,
+    "charity_release_member": false,
+    "formal_inscription_applies": false,
+    "physical_artwork_mapped_for_test": true,
+    "conveys_physical_title": false,
+    "redeemable": false,
+    "public_artwork_preview": false,
+    "unwatermarked_download": false
+  }
+}

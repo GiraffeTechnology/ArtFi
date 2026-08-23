@@ -5,3 +5,6 @@ dist
 node_modules
 .pnpm-store
 pnpm-lock.yaml
+# Hash-pinned generated testnet metadata and manifests; regenerate with the release scripts.
+apps/web/public/nft/metadata/base-sepolia/
+release/testnet/base-sepolia/

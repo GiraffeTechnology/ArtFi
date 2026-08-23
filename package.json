@@ -27,6 +27,8 @@
     "charity-edition:verify-schema": "node scripts/release/verify-charity-edition-package.mjs release/charity-edition-package.example.json --schema-only",
     "charity-edition:verifier:test": "node scripts/test/verify-charity-edition-package.mjs",
     "charity-edition:ye-yongrun:verify": "node scripts/release/verify-ye-yongrun-public-metadata.mjs",
+    "base-sepolia:metadata:generate": "node scripts/release/generate-base-sepolia-test-metadata.mjs",
+    "base-sepolia:metadata:verify": "node scripts/release/verify-base-sepolia-test-metadata.mjs",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @giraffetechnology/artfi-web test:e2e",
     "typecheck": "turbo run typecheck"

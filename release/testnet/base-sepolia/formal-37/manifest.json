@@ -1,0 +1,364 @@
+{
+  "schemaVersion": 1,
+  "namespace": "ARTFI/BASE-SEPOLIA/FORMAL-37/PREMAINNET/V1",
+  "status": "predeployment",
+  "network": "Base Sepolia",
+  "chainId": 84532,
+  "testnetOnly": true,
+  "mainnetAuthorized": false,
+  "standard": "ERC-1155",
+  "contract": null,
+  "artworkCount": 37,
+  "editionsPerArtwork": 100,
+  "totalUnits": 3700,
+  "excludedArtworkIds": [
+    "UNIT-A02"
+  ],
+  "initialRecipient": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+  "inscriptionSha256": "1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01",
+  "sourceSepoliaPolicySha256": "2df99ee76b46952cdc18f471c72fe315a0ccbb43e05c54f5d820157480e4d1e5",
+  "publicBaseURL": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun",
+  "series": [
+    {
+      "artworkId": "UNIT-A01",
+      "artworkIdBytes32": "0x98ffae7a6dd2c3cd0988e4d9522ab25a80d563ed5634022124172c83970d4f0f",
+      "masterArtworkHash": "0x8b3f12a6812c94263bd218898b0b20e3d94945cf5979c1cc18084dcfed1210e3",
+      "metadataHash": "0x66bf8199f011c2f31ef8568178f6baa6fc1c8834066c4a1f8ee5710f1a4d1e9c",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A01.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A03",
+      "artworkIdBytes32": "0x0c54e2c21651db262082a04c74bae60fd5b2a4d2803f8cf49f637e4535360239",
+      "masterArtworkHash": "0x41e308c0ad6307c79a64dcb0bfd4e377891204348b79e42d1d02163d6d8182c0",
+      "metadataHash": "0x3bb2c14645f30b184aedb72afad960ee9504435358ec2a37cc6b06399c0146df",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A03.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A04",
+      "artworkIdBytes32": "0x6224138a339b3c3af8ecb6d426d0bcc6b6a833576e07085d6d20eee42b17fea8",
+      "masterArtworkHash": "0x6e08166106617edea6586cb99fe5312163d80946efba596b848b0a176d4cd387",
+      "metadataHash": "0xb4799b08f3864893182d8732671d5282af14dfe787d69addca75943cba8350f3",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A04.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A05",
+      "artworkIdBytes32": "0x9be5d8cf7bb5455d1421ebdd302cfbcadac14137d720ec54e27fc455f86411ae",
+      "masterArtworkHash": "0x7971f048c338aae3efce34db17faad6f01dfc99141bbccd7629c59d112cfe474",
+      "metadataHash": "0x41062faecd4b569ab3b1497d16d30c7fee8d04f29fe0e936730c28a85c007257",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A05.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A06",
+      "artworkIdBytes32": "0xd05fa1982bc3b0cafa375fa0222c46c6fc2e544d4d2f6da9451b26e9342ae845",
+      "masterArtworkHash": "0xad8f62a44192af08f297c45f477e28b2c39c655f7a67e0c48085adcd98890bc3",
+      "metadataHash": "0x83d30633d5fd4c7b097a6f34d94b56c45291832f93319ed3e3592085a02d739b",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A06.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A07",
+      "artworkIdBytes32": "0xb7a029d4032b77ab9f59f3976dbcae48bb68ec17ee42054ab1424e11ecd94bee",
+      "masterArtworkHash": "0x353d635ca00068368e8686cf187e77355cb169c41c5569f6efecd5d81fd55f11",
+      "metadataHash": "0xa1d01522e2746e259eaa6a719ada96d382e1a7330f5089548f7854aadcc5dd80",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A07.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A08",
+      "artworkIdBytes32": "0xd99f048688dd06176cc37d5cf7280a4c29804b39e218052eb1440e0faabe0b54",
+      "masterArtworkHash": "0x5d053f47e47c923979b378f2daea24024e1e43fbb0d8cf7412a2aecb4df03f3a",
+      "metadataHash": "0x55bc3a4f6e95d53739ad43d2fb0bd4b62b62c64c68fa70592e63e29fb90ad68c",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A08.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A09",
+      "artworkIdBytes32": "0x4cadf79be7ab28817941a0f08b2572ebfc8574309bedcd5d18e4e6899967d6fb",
+      "masterArtworkHash": "0xf112ee5d3fbc4bca479ede9b66e8c8293617dd162eb3bffcecce06eef0059a0d",
+      "metadataHash": "0xf555ac4833a143400e282f1392976aa879b5a6096a22c7d28b8370e74237cb45",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A09.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A10",
+      "artworkIdBytes32": "0x43fc7d5c9689b15c8662399891ef84d23ecd06d7266552da038b3bb2a8b959b8",
+      "masterArtworkHash": "0x36d9107d2d68b57b021affcc0c78f82e38bcf9410bbe7d1b9df19274d437d436",
+      "metadataHash": "0x6d6a3021f2982cfe554b8afc1cc71637c6cffd0fe1bce4476053d58c903b4de6",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A10.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A11",
+      "artworkIdBytes32": "0xf1796c14e2c5eba74de4b78b3145d383ee1c5b20e35a016c4f5b176b3e649677",
+      "masterArtworkHash": "0x8dfa0d3314f2b9701c9b6426da2d52292930e5a4e021ffa53b761e8e846171aa",
+      "metadataHash": "0xb882fd81bb4e0916679fa0d842badb02f8fd952af0539caa43804f3a198d9ce2",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A11.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A12",
+      "artworkIdBytes32": "0xaa8e3137e86be79192dec74c5f675f946118752664f177838d9388916adcb5b6",
+      "masterArtworkHash": "0xbad782f88cb72a618e1c28d8e745af6d13d96a795bbd3ac255627bb5e335aa90",
+      "metadataHash": "0x6b7a4fc978857bd03edd3ea69f314bda19a0af21010eb153fe1dc08ec0dfab5f",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A12.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A13",
+      "artworkIdBytes32": "0x8661db6eca1a43ce785d3f2051419fe648a43e308be968b86d590cf34bdfd7f4",
+      "masterArtworkHash": "0xd81920003f10b4d4f7d6cd32e34077eb4c6bf427bc645baab9aa19f01cb9f07d",
+      "metadataHash": "0x2ab7a9dc7a366e6e0bb2c2ab7cf35634caeca0a3e898309d38348c74aa5f10da",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A13.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A14",
+      "artworkIdBytes32": "0xd614f06866faeb071d2af14d2ba7e2b55cb383b75044700810e85cebb0a220af",
+      "masterArtworkHash": "0xe109822c03c0e37aae7e9a566c05d1bdec664acda78683ff3f241c31720b2bed",
+      "metadataHash": "0xb3f9f75823f3aa7f66d7ecb54fc750eb8c2a6c0e5ee182a8ea9a2d6cf0153637",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A14.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A15",
+      "artworkIdBytes32": "0xb9e1314c91cdc7480c3694301e1b8586ffbccdb1f52053bb07e6e6a5ddf49d23",
+      "masterArtworkHash": "0x9ab9e2e98ac6e21c2dcd88d99dc70726069e7497505a193636444331f931ee8d",
+      "metadataHash": "0x7478a0fe16c25a54441804385e28a2b19657610d88f84ff8c68d7375056afe31",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A15.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A16",
+      "artworkIdBytes32": "0x178c8d09488368ea6b07753c0091a202a9afa3d76c7e194c36875c594e1ba3f6",
+      "masterArtworkHash": "0xc0d9fd34150ebe071dc89bb12c7fd98648e44402a4993681a2d5aeee65f7e3ba",
+      "metadataHash": "0x370cfff638b693b99460d872ba01fc637b9d12425f39bb14e365a88bc5cfe67e",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A16.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A17",
+      "artworkIdBytes32": "0x59c1936b880621c722ecc1f2b864035c69922a711450722e30e06ebe7350fcae",
+      "masterArtworkHash": "0x852a7d9c435989762380399edaf80b8a0bbcea4f32185e53e9af164c5b0caa36",
+      "metadataHash": "0xc88df41631a1c5608aa60e5b61f9ab2450967025e85b09c0f6844af270664abd",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A17.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A18",
+      "artworkIdBytes32": "0xcf4385ec4d584d853a5da0f8b36ba1327c22fcb26cf4325c85e5b813ba806185",
+      "masterArtworkHash": "0xb89961a374363ea205868afacee0d0fc48835a232c9109ec091b42c265404885",
+      "metadataHash": "0xefa0ca3caaf2255935bcd6d32b255a2c3d6c734247fe02f6a7a0a5abbd5ff13f",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A18.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A19",
+      "artworkIdBytes32": "0xeabfe2e367945fbf7025eba49560921d6da29257c4ed2fee0b0588b35387f9b9",
+      "masterArtworkHash": "0x303980a829f697c81ea95ee819a19d642bffae03ac52fa7fd6cc43a5817303f3",
+      "metadataHash": "0x8224b0d41ab12c53554b5a185cda616ecb838a24e8faf89ed9ce1be0f7a6cc20",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A19.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A20",
+      "artworkIdBytes32": "0xb79ae06b15624e35eb0919312358e99eac023bc55f08cebef8dfb01dd9811a8c",
+      "masterArtworkHash": "0x5a07c8b260d5d236234af4002a7537b28280525d81bb8122edfa4a2fc6cc7c85",
+      "metadataHash": "0xdbe499b4c542e352c953765a42648b9672d78b574c761d28c9a7bf206cb7fdbb",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A20.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A21",
+      "artworkIdBytes32": "0xe9be2e019f5ca407bca5169f6b2117da003d38b5d47be0b050c335b166509bda",
+      "masterArtworkHash": "0x1f297f4e2a7f7529e31f2b36cd80c779a595e4cf7539edc5d86eac343fd22e2b",
+      "metadataHash": "0x4b4f839acd65ad928bb34f25aeeb1d3e79ab3d2b1f6acea0cd25959ed2e53939",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A21.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A22",
+      "artworkIdBytes32": "0xa273091f23942fe4a40286c74cd4c7c3bf7a0a3185e5135eda6dd16e1216c732",
+      "masterArtworkHash": "0x0bebb189b5e349a2282aa0fd29613cf51c444e9798b827b2eb40967daa5f7bdd",
+      "metadataHash": "0xd2e80a31206008463525c572997e94252a40814af1f276f5d8b9435c43de5f05",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A22.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A23",
+      "artworkIdBytes32": "0xf957254197aa90d51046ef17ddb42019366247be624ff4fbff30b17da1f07581",
+      "masterArtworkHash": "0x1e1e55039c7f8ad606a59caad581f3e48b539a873e566ca5f30f0c32bc01c2f9",
+      "metadataHash": "0x99a1f52925f887f236afcb23c8c68235b1e6b881aa2bd4eb82840ce1ddb98490",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A23.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A24",
+      "artworkIdBytes32": "0x3332307c484d755fb97356b2323c6886e1143a3bd9219e43366bd7867cc04a0a",
+      "masterArtworkHash": "0x82199986608b00d77c95badb3b77ee917da45dd46f9cf8da84f802dbc10f4347",
+      "metadataHash": "0x3117a70831f9bc3f9aa086f00bc9163d3f341b43aeb598d626da1fd587f0cd68",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A24.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A25",
+      "artworkIdBytes32": "0xac8b5f8796760ff7cad1a3b30695f2071f5064a88b7e6f18a58f6ad28c11aae6",
+      "masterArtworkHash": "0x8a5c6b42334bd19a562d830d84b5cb08225be1e9facb3058a57068f1d3371c76",
+      "metadataHash": "0x61098ba6177e69e579441ff60f6e780613e62e8e7027ba6769eb4cc4873deb21",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A25.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A26",
+      "artworkIdBytes32": "0x7f9484cc6ff4534eb54a30555b6ec718c049b962978484146d53e2915d06883e",
+      "masterArtworkHash": "0xe66e6254a690dabfcc48db55d91f7100e7e8439b5da243797b24be7ac95ba4ba",
+      "metadataHash": "0x8b64b7012c9665b41727e0c9546c7cd0e55d4e053cbdab444fc9dcc63b0ffff6",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A26.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A27",
+      "artworkIdBytes32": "0xa03b23d0a4582cb8c9355cfaa6f60955e54fbd928e331b21e43de3234151b0c6",
+      "masterArtworkHash": "0xc3f18a6a83dc0dc0b2c9a402d63cfe4906421d46c551e579f932b18329eb1719",
+      "metadataHash": "0xd73e80b00937e17d70d4d62b2f01a03d2b4e5b7c0f4e514f7baa01cb7e12ab53",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A27.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A28",
+      "artworkIdBytes32": "0x67e1298b6eec80babe314d6d8a478de3a5db879d70e9de0d7ec7382079560495",
+      "masterArtworkHash": "0x862ca917130aca98a47f751a40565233744e7a17d0cf68ecf445e9278c45de92",
+      "metadataHash": "0xa2f36bf2373cf3a07f3a9487605830ae2898c43c7af9aae897e749a3658b6645",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A28.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A29",
+      "artworkIdBytes32": "0xf764a62f968c0dc7dfc2284456245a86d57b003243f03550444cdc6c9dcc7d7f",
+      "masterArtworkHash": "0xcf675cad33c92c45681011644ee65921135a29be47487dc6bc1d091341fb4fa6",
+      "metadataHash": "0x549fbc88c3ce19e60200940c30666042546adb6a6d7d9de2a4f36ab16c4ba028",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A29.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A30",
+      "artworkIdBytes32": "0x44724ad3a1448d60c747e9379b4ed5235c341ad23acb7f76eac98490d62e318c",
+      "masterArtworkHash": "0x7e32f1850e62af5103ba46a5aa997bdb60ace898dbac76c2647d5c408db4f5dd",
+      "metadataHash": "0xfe5b0697754a125f93e1b9a9452a75f08e0cdf6ee00cc6a4d82c1263e3b2a5e7",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A30.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A31",
+      "artworkIdBytes32": "0xdd3467de9301de6278b79eee1cb873bee0fd23d314991c0868eb563c11c21dd2",
+      "masterArtworkHash": "0x503060cc93885ce90f0de8866eddfe5db3e17ae3108b3f6aa6751c758d3749fd",
+      "metadataHash": "0x368ae94306f23fb392e47ba818b5025375cb3b5801e17e85221d9a2db341b913",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A31.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A32",
+      "artworkIdBytes32": "0xf3a63971fe4b48e94fba03f35b689365b797d3cf6f401c7612be7d32fedc5e56",
+      "masterArtworkHash": "0x1ae45be05b54c3e3caaa883c33af94eab2c249704bf921e0fc6031227932798f",
+      "metadataHash": "0x0722411e5e9b5a9a9b0132691377ef7e8f9ad150162d856e2181fdf279a96faf",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A32.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A33",
+      "artworkIdBytes32": "0x06b178d721cc26caf917e08cd0f74fd96c6598c51c9a66022e5516dac5d11415",
+      "masterArtworkHash": "0x35e605c90a29cf512ac87534176cf4b2a8278a70561eb3b7060dc16d5686a182",
+      "metadataHash": "0x6be475dd8b24b9d9682089ac2cad2a8e7c4caa8d6a61ec92997eb4ee6434ee09",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A33.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A34",
+      "artworkIdBytes32": "0x1090a5c8b27272fe0698a50caf990bf2be51edc1ba7e52eedeef864192cade0b",
+      "masterArtworkHash": "0xd46aed3a2d7f95168a65cabfe3a64daf66eedc8a9135a8ba23f8c4b301d7dcdc",
+      "metadataHash": "0xc904e348012e512827d6cfbdc894f9b0febfc4fdaa5a3764375436d9dc3a57c0",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A34.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A35",
+      "artworkIdBytes32": "0x035952cdfee465831678fa1b2bab6cccc9ed0c9fd2ec0f7c7b9cc21ec6549baf",
+      "masterArtworkHash": "0xb0a0c7cf68dd1d3cbf382dade51cca0f11f2be5f2719f9332b43bb719974f5a3",
+      "metadataHash": "0xcc6af4c3a004368e8e95b46e13cddd9cae82e8e60032795483df4548f565866a",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A35.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A36",
+      "artworkIdBytes32": "0x85e2fd0f9624cb20a31d85599b03a4ced572df5b14af03249a6b59db2f3cb170",
+      "masterArtworkHash": "0xca9c9d406526e9a5cb73c1fe506d873f63a69fcb2791966af45dff6ea8416c66",
+      "metadataHash": "0xf416f73340fcde8155ab304bd047df9b35fb297747e71c151d0443c8f9970028",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A36.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A37",
+      "artworkIdBytes32": "0xa3447888f17fe2e6ae58e6163161af9055cd5b55066a28e581a92ec9b9220ca0",
+      "masterArtworkHash": "0xa65c27b1aea970bb0597d845fea611709f55b9cd8e1abf1ce61af35680f65a5c",
+      "metadataHash": "0x986b09a2452ea068d0e72bb6474ff2e6f84b045e18a3a89fd9cbe86280c55776",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A37.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    },
+    {
+      "artworkId": "UNIT-A38",
+      "artworkIdBytes32": "0x006a3598040a3f30d58446ad71a3f051fb804a3f3f73a710a976042364e13869",
+      "masterArtworkHash": "0xfda9541937c3799f88c2aa84dbafd48463ba363ea6aa9e1e6b47f7a1b0d23674",
+      "metadataHash": "0x50957c110cadbe970e144560786e33a88e58ff7157a32338e0c385501aaf72f8",
+      "metadataURI": "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/UNIT-A38.json",
+      "distributionWallet": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+      "editions": 100
+    }
+  ],
+  "execution": {
+    "uniqueNonceCoordinator": "ArtFi task",
+    "signing": "local-offline-only",
+    "rpcAndBroadcast": "ArtFiChainBridge/sin/v1 only",
+    "publicNetworkFromSandboxForbidden": true,
+    "unsignedPayloadPolicy": null,
+    "deploymentEvidence": null
+  }
+}

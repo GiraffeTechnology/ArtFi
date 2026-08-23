@@ -1,7 +1,12 @@
 # ArtCCH:ArtFi RWA DAO governance and rights validation
 
-This policy describes the Sepolia implementation boundary. It is not a production launch,
+This policy describes the testnet implementation boundary. Base Sepolia is the primary validation
+chain and Ethereum Sepolia remains a compatibility baseline. It is not a production launch,
 securities-law opinion, title opinion, or authorization to use real assets or funds.
+
+UNIT-A02 is authorized only in the isolated Base Sepolia namespace documented in
+`A02_BASE_SEPOLIA_DAO_TEST.md`. Its 100 test NFTs, vaulted representative and paired governance
+units must never enter the formal 37-artwork charity set, a production manifest or any mainnet.
 
 ## Authority model
 

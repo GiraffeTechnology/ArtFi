@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "namespace": "ARTFI/BASE-SEPOLIA/A02/RWA-DAO/V1",
+  "status": "predeployment",
+  "network": "Base Sepolia",
+  "chainId": 84532,
+  "testnetOnly": true,
+  "mainnetForbidden": true,
+  "productionEligible": false,
+  "formalReleaseMember": false,
+  "artworkId": "UNIT-A02",
+  "erc1155": {
+    "standard": "ERC-1155",
+    "contract": null,
+    "tokenId": 1,
+    "fixedSupply": 100,
+    "additionalMintingAvailable": false,
+    "initialRecipient": "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089",
+    "buyer": "0xDE3c1D455c2CCe1bAcf1e70aAC7fA3B8cCb1ec2B"
+  },
+  "metadata": {
+    "file": "metadata.json",
+    "sha256": "f1ff8dd095e850ec76d952cd1101d1d9fa186c8aeb6fd16ee035eee35c864042",
+    "uri": "https://io.artcch.com/nft/metadata/base-sepolia/test-only/a02.json",
+    "publicArtworkPreview": false,
+    "formalInscriptionApplies": false
+  },
+  "physicalMapping": {
+    "file": "physical-mapping-declaration.json",
+    "sha256": "62903db216a6bd21088e3e33c7e026e5658b1e997fa2da7cde3b2a0cd2a2f4ec",
+    "rwaRepresentativeContract": null,
+    "rwaRepresentativeTokenId": null,
+    "vault": null,
+    "conveysPhysicalTitle": false,
+    "redeemable": false
+  },
+  "governance": {
+    "token": null,
+    "fixedSupply": "100000000000000000000",
+    "erc1155ToGovernanceUnitRatio": "1:1",
+    "pairedTransferRequiredByTestProcedure": true,
+    "governor": null,
+    "timelock": null,
+    "actionRegistry": null,
+    "proposalThresholdPpm": 100000,
+    "marketMigrationApprovalPpmExclusive": 500000,
+    "physicalActionApprovalPpmExclusive": 666667,
+    "forcedBuyoutApprovalPpmExclusive": 800000,
+    "buyoutEvidenceFile": "buyout-price-evidence.test.json",
+    "buyoutEvidenceSha256": "362b609865b43c66c72e2b31062cf003f5c92d8225d97af7450f4728916071f8",
+    "automaticCloseoutEnabled": false
+  },
+  "execution": {
+    "uniqueNonceCoordinator": "ArtFi task",
+    "signing": "local-offline-only",
+    "rpcAndBroadcast": "ArtFiChainBridge/sin/v1 only",
+    "publicNetworkFromSandboxForbidden": true,
+    "unsignedPayloadPolicy": null,
+    "deploymentEvidence": null
+  }
+}

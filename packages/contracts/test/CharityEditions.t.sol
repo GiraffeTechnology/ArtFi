@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 import {ArtFiCharityEditions} from "../src/ArtFiCharityEditions.sol";
 
@@ -15,6 +16,13 @@ contract UntrustedEditionCaller {
             address(this),
             "ipfs://bafy-charity-edition-a01"
         );
+    }
+
+    function createSeriesBatch(
+        ArtFiCharityEditions editions,
+        ArtFiCharityEditions.SeriesInput[] calldata inputs
+    ) external {
+        editions.createSeriesBatch(inputs);
     }
 }
 
@@ -49,6 +57,103 @@ contract CharityEditionsTest is IERC1155Receiver {
         require(record.masterArtworkHash == MASTER_HASH, "master hash");
         require(record.metadataHash == METADATA_HASH, "metadata hash");
         require(record.distributionWallet == address(this), "distribution wallet");
+        require(
+            editions.CONTROLLING_INSCRIPTION_SHA256()
+                == 0x1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01,
+            "inscription hash"
+        );
+    }
+
+    function testCreatesThirtySevenSeriesAtomically() public {
+        ArtFiCharityEditions.SeriesInput[] memory inputs = _releaseBatch(37);
+        (uint256 firstTokenId, uint256 lastTokenId) = editions.createSeriesBatch(inputs);
+
+        require(firstTokenId == 1, "first token id");
+        require(lastTokenId == 37, "last token id");
+        require(editions.seriesCount() == 37, "series count");
+        require(editions.totalSupply() == 3700, "aggregate supply");
+        require(editions.tokenByArtworkId(keccak256("UNIT-A02")) == 0, "A02 returned");
+
+        for (uint256 i; i < inputs.length; ++i) {
+            uint256 tokenId = i + 1;
+            require(editions.totalSupply(tokenId) == 100, "series supply");
+            require(editions.balanceOf(address(this), tokenId) == 100, "series balance");
+            require(editions.tokenByArtworkId(inputs[i].artworkId) == tokenId, "artwork binding");
+            require(
+                editions.tokenByMasterArtworkHash(inputs[i].masterArtworkHash) == tokenId,
+                "master binding"
+            );
+            require(
+                editions.tokenByMetadataHash(inputs[i].metadataHash) == tokenId, "metadata binding"
+            );
+            require(editions.tokenByMetadataURI(inputs[i].metadataURI) == tokenId, "URI binding");
+        }
+    }
+
+    function testBatchRejectsWithdrawnA02Atomically() public {
+        ArtFiCharityEditions.SeriesInput[] memory inputs = _releaseBatch(3);
+        inputs[2].artworkId = keccak256("UNIT-A02");
+
+        _requireCallFails(
+            abi.encodeCall(editions.createSeriesBatch, (inputs)), "A02 batch accepted"
+        );
+        require(editions.seriesCount() == 0, "A02 changed count");
+        require(editions.totalSupply() == 0, "A02 changed supply");
+    }
+
+    function testBatchDuplicateBindingsRevertCompleteBatch() public {
+        ArtFiCharityEditions.SeriesInput[] memory duplicateArtwork = _releaseBatch(2);
+        duplicateArtwork[1].artworkId = duplicateArtwork[0].artworkId;
+        _requireCallFails(
+            abi.encodeCall(editions.createSeriesBatch, (duplicateArtwork)),
+            "duplicate artwork batch accepted"
+        );
+        require(editions.seriesCount() == 0, "artwork duplicate changed count");
+
+        ArtFiCharityEditions.SeriesInput[] memory duplicateMaster = _releaseBatch(2);
+        duplicateMaster[1].masterArtworkHash = duplicateMaster[0].masterArtworkHash;
+        _requireCallFails(
+            abi.encodeCall(editions.createSeriesBatch, (duplicateMaster)),
+            "duplicate master batch accepted"
+        );
+        require(editions.seriesCount() == 0, "master duplicate changed count");
+
+        ArtFiCharityEditions.SeriesInput[] memory duplicateMetadata = _releaseBatch(2);
+        duplicateMetadata[1].metadataHash = duplicateMetadata[0].metadataHash;
+        _requireCallFails(
+            abi.encodeCall(editions.createSeriesBatch, (duplicateMetadata)),
+            "duplicate metadata batch accepted"
+        );
+        require(editions.seriesCount() == 0, "metadata duplicate changed count");
+
+        ArtFiCharityEditions.SeriesInput[] memory duplicateURI = _releaseBatch(2);
+        duplicateURI[1].metadataURI = duplicateURI[0].metadataURI;
+        _requireCallFails(
+            abi.encodeCall(editions.createSeriesBatch, (duplicateURI)),
+            "duplicate URI batch accepted"
+        );
+        require(editions.seriesCount() == 0, "URI duplicate changed count");
+        require(editions.totalSupply() == 0, "duplicate batch changed supply");
+    }
+
+    function testBatchBoundsAndRecipientAreEnforced() public {
+        ArtFiCharityEditions.SeriesInput[] memory empty = new ArtFiCharityEditions.SeriesInput[](0);
+        _requireCallFails(
+            abi.encodeCall(editions.createSeriesBatch, (empty)), "empty batch accepted"
+        );
+
+        ArtFiCharityEditions.SeriesInput[] memory oversized = _releaseBatch(38);
+        _requireCallFails(
+            abi.encodeCall(editions.createSeriesBatch, (oversized)), "oversized batch accepted"
+        );
+
+        ArtFiCharityEditions.SeriesInput[] memory mismatched = _releaseBatch(2);
+        mismatched[1].distributionWallet = address(0xBEEF);
+        _requireCallFails(
+            abi.encodeCall(editions.createSeriesBatch, (mismatched)),
+            "mixed recipient batch accepted"
+        );
+        require(editions.seriesCount() == 0, "invalid batch changed count");
     }
 
     function testSupportsERC1155AndMetadataInterfaces() public view {
@@ -96,6 +201,12 @@ contract CharityEditionsTest is IERC1155Receiver {
         (bool ok,) = address(untrusted).call(abi.encodeCall(untrusted.createSeries, (editions)));
         require(!ok, "unauthorized creation accepted");
         require(editions.seriesCount() == 0, "unauthorized creation changed state");
+
+        ArtFiCharityEditions.SeriesInput[] memory inputs = _releaseBatch(2);
+        (bool batchOK,) =
+            address(untrusted).call(abi.encodeCall(untrusted.createSeriesBatch, (editions, inputs)));
+        require(!batchOK, "unauthorized batch accepted");
+        require(editions.seriesCount() == 0, "unauthorized batch changed state");
     }
 
     function testSupplyRemainsOneHundredAcrossTransfers() public {
@@ -151,6 +262,10 @@ contract CharityEditionsTest is IERC1155Receiver {
             ),
             "created while paused"
         );
+        ArtFiCharityEditions.SeriesInput[] memory inputs = _releaseBatch(2);
+        _requireCallFails(
+            abi.encodeCall(editions.createSeriesBatch, (inputs)), "batch created while paused"
+        );
         editions.unpause();
 
         uint256 tokenId = _createSeries();
@@ -173,6 +288,13 @@ contract CharityEditionsTest is IERC1155Receiver {
         _requireCreateFails(ARTWORK_ID, MASTER_HASH, bytes32(0), address(this), METADATA_URI);
         _requireCreateFails(ARTWORK_ID, MASTER_HASH, METADATA_HASH, address(0), METADATA_URI);
         _requireCreateFails(ARTWORK_ID, MASTER_HASH, METADATA_HASH, address(this), "http://mutable");
+        _requireCreateFails(
+            editions.WITHDRAWN_ARTWORK_ID(),
+            sha256("withdrawn-master"),
+            sha256("withdrawn-metadata"),
+            address(this),
+            "ipfs://withdrawn-a02"
+        );
     }
 
     function testFuzzTransfersNeverChangeFixedSupply(uint8 rawAmount) public {
@@ -212,6 +334,31 @@ contract CharityEditionsTest is IERC1155Receiver {
             editions.createSeries(
                 ARTWORK_ID, MASTER_HASH, METADATA_HASH, address(this), METADATA_URI
             );
+    }
+
+    function _releaseBatch(uint256 length)
+        private
+        view
+        returns (ArtFiCharityEditions.SeriesInput[] memory inputs)
+    {
+        inputs = new ArtFiCharityEditions.SeriesInput[](length);
+        for (uint256 i; i < length; ++i) {
+            uint256 artworkNumber = i == 0 ? 1 : i + 2;
+            string memory artworkId = string.concat(
+                artworkNumber < 10 ? "UNIT-A0" : "UNIT-A", Strings.toString(artworkNumber)
+            );
+            inputs[i] = ArtFiCharityEditions.SeriesInput({
+                artworkId: keccak256(bytes(artworkId)),
+                masterArtworkHash: sha256(abi.encodePacked("master-", artworkId)),
+                metadataHash: sha256(abi.encodePacked("metadata-", artworkId)),
+                distributionWallet: address(this),
+                metadataURI: string.concat(
+                    "https://io.artcch.com/nft/metadata/base-sepolia/ye-yongrun/",
+                    artworkId,
+                    ".json"
+                )
+            });
+        }
     }
 
     function _requireCreateFails(

@@ -5,6 +5,12 @@ This gate covers the initial ArtCCH charity editions without enabling an ArtFi e
 ## Immutable product rules
 
 - Each approved artwork is one ERC-1155 token ID with exactly `100` units minted once.
+- The approved 37-work test batch is created atomically through `createSeriesBatch`; every artwork
+  ID, master hash, metadata hash and metadata URI must be unique, all units go to one reviewed
+  distribution wallet, and any invalid entry reverts the complete batch. `UNIT-A02` is permanently
+  rejected by this release contract.
+- The controlling English inscription SHA-256 is pinned in contract bytecode as
+  `1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01`.
 - The recorded primary unit price is `0.01 ETH` (`10000000000000000` wei). ArtFi does not create,
   sign, match, fulfil, or settle marketplace orders.
 - The original distribution wallet must have a zero balance and externally reconciled sale evidence
@@ -54,7 +60,13 @@ rights evidence, CCHS status and receipting-policy evidence, the non-zero CCHS-c
 wallet, and marketplace-listing eligibility. `listingActionConfirmed` must remain `false`; a fresh
 action-time confirmation is required for every external listing operation.
 
-Deployment remains opt-in through `ARTFI_DEPLOY_CHARITY_EDITIONS=true`. After deployment, run
-`scripts/test/sepolia-charity-editions-probe.sh` to verify the ERC-1155 and metadata interfaces,
-fixed `100`-unit constant, and `0.01 ETH` recorded primary unit price. Supplying an already-created
-`ARTFI_CHARITY_TOKEN_ID` additionally proves its on-chain total supply is exactly `100`.
+Deployment remains opt-in through `ARTFI_DEPLOY_CHARITY_EDITIONS=true` and is limited by the Forge
+script to Ethereum Sepolia or Base Sepolia. Base Sepolia is the primary pre-mainnet validation chain;
+it does not authorize Base Mainnet. After deployment, run the controlled test-chain probe to verify
+the ERC-1155 and metadata interfaces, the fixed `100`-unit constant, the `0.01 ETH` recorded primary
+price, the 37-series/3,700-unit aggregate supply, unique bindings, the withdrawn A02 rejection and
+the pinned inscription hash.
+
+`UNIT-A02` may be used only in a separate Base Sepolia physical-mapping and DAO test fixture. That
+fixture has its own contract, metadata namespace and deployment manifest, is never accepted by the
+charity-edition release contract, and is prohibited from every production or mainnet manifest.

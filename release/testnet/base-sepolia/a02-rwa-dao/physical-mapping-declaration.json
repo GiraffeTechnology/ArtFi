@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "namespace": "ARTFI/BASE-SEPOLIA/A02/RWA-DAO/V1",
+  "artworkId": "UNIT-A02",
+  "purpose": "test-only physical-asset mapping and DAO validation",
+  "network": "Base Sepolia",
+  "chainId": 84532,
+  "fixedErc1155Supply": 100,
+  "rwaRepresentativeHeldByVault": true,
+  "governanceUnits": 100,
+  "testnetOnly": true,
+  "mainnetForbidden": true,
+  "productionEligible": false,
+  "conveysPhysicalTitle": false,
+  "redeemable": false,
+  "confidentialSourceDocumentsIncluded": false,
+  "statement": "UNIT-A02 is authorized only as an isolated Base Sepolia test asset for validating ArtFi physical mapping, custody, wallet and DAO behavior. No test result grants production or mainnet authorization."
+}

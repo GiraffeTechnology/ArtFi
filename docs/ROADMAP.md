@@ -5,7 +5,8 @@
 - `GiraffeTechnology/ArtFi` is the single source of truth.
 - Each stage ships through a branch and pull request with explicit acceptance evidence.
 - A later stage may be researched early, but cannot be release-eligible until all earlier exit gates pass.
-- Sepolia is the only allowed chain until Stage 7.
+- Testnets are the only allowed write targets until Stage 7. Base Sepolia (`84532`) is the primary
+  pre-mainnet validation chain; Ethereum Sepolia (`11155111`) remains a compatibility baseline.
 - Regulatory, security, and custody gates can stop delivery regardless of feature completion.
 - All automated/operator public-chain RPC, deployment, indexer, explorer and OpenSea work runs only
   in the SIN execution zone. abcdyi performs offline builds/tests; AIVAN performs translation; the
@@ -39,7 +40,8 @@ Scope:
 - Responsive home, projects, RWA market, fractional market, detail, and portfolio shells.
 - Shared UI tokens and accessible component foundations.
 - Wallet connection through RainbowKit/Wagmi/Viem.
-- Sepolia network enforcement, address display, balance, and reconnect handling.
+- Base Sepolia network enforcement, address display, balance, and reconnect handling, with the
+  existing Ethereum Sepolia compatibility boundary retained.
 - API health, configuration, error contract, logging, and database migrations.
 - Replace broken artwork URLs with validated metadata and licensed placeholders.
 
@@ -51,7 +53,7 @@ Exit gate:
 
 ## Stage 2 - RWA creation and NFT minting
 
-Goal: create an asset record, upload metadata, and mint a verifiable NFT on Sepolia.
+Goal: create an asset record, upload metadata, and mint a verifiable NFT on Base Sepolia.
 
 Scope:
 
@@ -70,7 +72,7 @@ Exit gate:
 
 ## Stage 3 - Vault, DAO, deposit, and fractionalization
 
-Goal: complete the PRD's central RWA-to-fractional-token journey on Sepolia.
+Goal: complete the PRD's central RWA-to-fractional-token journey on Base Sepolia.
 
 Scope:
 
@@ -100,6 +102,9 @@ Scope:
   attribution and external-market deep links.
 - Portfolio and transaction history.
 - DAO proposal, voting, quorum, timelock, execution, and treasury visibility.
+- Isolated UNIT-A02 Base Sepolia fixture: exactly 100 test ERC-1155 units, one vaulted RWA
+  representative, 100 paired governance units, and ArtFi2 buyer voting. A02 is forbidden from the
+  formal 37-artwork set, production manifests and all mainnets.
 - Wallet-control signature and RWA fractional-token snapshot rights validation.
 - Selector-bound proposal classes with strict approval against total snapshot supply: market
   migration `>50%`, physical actions `>66.6667%`, and forced buyout initiation `>80%`.

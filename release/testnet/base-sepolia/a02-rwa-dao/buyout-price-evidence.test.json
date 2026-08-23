@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "namespace": "ARTFI/BASE-SEPOLIA/A02/RWA-DAO/V1",
+  "artworkId": "UNIT-A02",
+  "evidenceType": "synthetic-governance-path-test",
+  "pricingRule": "T0-to-T-minus-30-day-volume-weighted-average",
+  "unitPriceWei": "10000000000000000",
+  "tradeCount": 1,
+  "testnetOnly": true,
+  "notMarketData": true,
+  "notAValuation": true,
+  "mainnetForbidden": true,
+  "statement": "Synthetic evidence used only to exercise verifier-gated DAO execution on Base Sepolia."
+}
