@@ -24,7 +24,7 @@ export default function DaoPage() {
   return (
     <main className="approved-page approved-page--dao page-shell">
       <div className="module-banner">
-        <span>DAO / Sepolia governance</span>
+        <span>DAO / Base Sepolia governance</span>
         <strong>RWA ownership verification required</strong>
       </div>
       <header className="approved-page__header">

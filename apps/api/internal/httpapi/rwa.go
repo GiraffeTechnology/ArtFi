@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	sepoliaChainID = 11155111
-	maxUploadBytes = 10 << 20
+	baseSepoliaChainID = 84532
+	maxUploadBytes     = 10 << 20
 )
 
 var (
@@ -347,7 +347,7 @@ func (service *rwaService) createMintIntent(writer http.ResponseWriter, request 
 			{"trait_type": "Medium", "value": input.Medium},
 			{"trait_type": "Location", "value": input.Location},
 		},
-		"artfi": map[string]any{"schemaVersion": 1, "imageSha256": upload.SHA256, "chainId": sepoliaChainID},
+		"artfi": map[string]any{"schemaVersion": 1, "imageSha256": upload.SHA256, "chainId": baseSepoliaChainID},
 	}
 	metadataJSON, _ := json.Marshal(metadata)
 	metadataDigest := sha256.Sum256(metadataJSON)
@@ -365,7 +365,7 @@ func (service *rwaService) createMintIntent(writer http.ResponseWriter, request 
 		RequestID:          requestID,
 		Recipient:          input.Recipient,
 		RegistryAddress:    service.config.registryAddress,
-		ChainID:            sepoliaChainID,
+		ChainID:            baseSepoliaChainID,
 		MetadataURI:        service.publicURL(metadataKey),
 		MetadataSHA256:     "0x" + metadataSHA,
 		ContractFunction:   "createAsset(bytes32,address,string,bytes32)",

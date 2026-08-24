@@ -95,7 +95,7 @@ const index = {
   schemaVersion: 1,
   batchId: "ye-yongrun-unit-a01-a38",
   status: "blocked-pre-mint",
-  chainId: 11155111,
+  chainId: 84532,
   standard: "ERC-1155",
   packageCount: 37,
   totalUnits: 3700,

@@ -20,7 +20,7 @@ type Catalog = {
   total: number;
   page: number;
   pageSize: number;
-  chainId: 11155111;
+  chainId: 84532;
   runtime: true;
 };
 
@@ -43,11 +43,11 @@ export function MintedNFTCatalog() {
       const value = (await response.json()) as Catalog;
       if (
         value.runtime !== true ||
-        value.chainId !== 11155111 ||
+        value.chainId !== 84532 ||
         !Array.isArray(value.data)
       ) {
         throw new Error(
-          "The NFT catalog response was not canonical Sepolia runtime data.",
+          "The NFT catalog response was not canonical Base Sepolia runtime data.",
         );
       }
       setCatalog(value);
@@ -81,9 +81,9 @@ export function MintedNFTCatalog() {
           All indexed ERC-721 and ERC-1155 NFTs.
         </h2>
         <p>
-          This list is projected from confirmed Sepolia mint events and does not
-          wait for OpenSea discovery. No fixture is substituted for a missing
-          runtime record.
+          This list is projected from confirmed Base Sepolia mint events and
+          does not wait for OpenSea discovery. No fixture is substituted for a
+          missing runtime record.
         </p>
       </header>
       {loading ? <p>Loading indexed NFTs…</p> : null}
@@ -116,7 +116,7 @@ export function MintedNFTCatalog() {
                 </div>
               </dl>
               <a
-                href={`https://sepolia.etherscan.io/tx/${item.transactionHash}`}
+                href={`https://sepolia.basescan.org/tx/${item.transactionHash}`}
                 target="_blank"
                 rel="noreferrer"
               >

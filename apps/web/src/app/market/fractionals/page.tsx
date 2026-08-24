@@ -20,7 +20,7 @@ export default function FractionalMarketPage() {
       </header>
       <div className="filter-bar" aria-label="Current fractional filters">
         <span>All positions</span>
-        <span>Sepolia preview</span>
+        <span>Base Sepolia preview</span>
         <span>Read-only</span>
       </div>
       <div className="artwork-grid">

@@ -206,7 +206,7 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
 
   const ownershipMessage = useMemo(
     () =>
-      `ArtFi DAO ownership verification\nChain: Sepolia (${supportedChain.id})\nGovernor: ${governor ?? "not-configured"}\nAccount: ${address ?? "not-connected"}\nNonce: ${verificationNonce}\nNo transaction or asset transfer is authorized.`,
+      `ArtFi DAO ownership verification\nChain: Base Sepolia (${supportedChain.id})\nGovernor: ${governor ?? "not-configured"}\nAccount: ${address ?? "not-connected"}\nNonce: ${verificationNonce}\nNo transaction or asset transfer is authorized.`,
     [address, governor, verificationNonce],
   );
 
@@ -498,7 +498,7 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
             <p>Connect the corresponding holder wallet to continue.</p>
           ) : null}
           {isConnected && !correctChain ? (
-            <p className="dao-error">Switch the wallet to Sepolia.</p>
+            <p className="dao-error">Switch the wallet to Base Sepolia.</p>
           ) : null}
           <div className="dao-actions-row">
             <button

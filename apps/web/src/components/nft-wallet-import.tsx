@@ -18,7 +18,7 @@ export function NFTWalletImport({
 }: NFTWalletImportProps) {
   const [copyStatus, setCopyStatus] = useState("");
   const importDetails = [
-    "Network: Sepolia",
+    "Network: Base Sepolia",
     `Standard: ${standard}`,
     `Contract: ${collectionAddress}`,
     `Token ID: ${tokenId}`,
@@ -72,7 +72,7 @@ export function NFTWalletImport({
         </button>
         <a
           className="text-link"
-          href={`https://sepolia.etherscan.io/token/${collectionAddress}`}
+          href={`https://sepolia.basescan.org/token/${collectionAddress}`}
           target="_blank"
           rel="noreferrer"
         >

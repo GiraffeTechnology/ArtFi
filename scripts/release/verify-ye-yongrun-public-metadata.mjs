@@ -39,7 +39,7 @@ const metadataFiles = readdirSync(metadataDirectory)
   .filter((name) => /^UNIT-A\d{2}\.json$/.test(name))
   .sort();
 
-assert(policy.chainId === 11_155_111, "policy must target Sepolia");
+assert(policy.chainId === 11_155_111, "policy must target Base Sepolia");
 assert(policy.standard === "ERC-1155", "policy must use ERC-1155");
 assert(policy.packageCount === 37, "policy package count must be 37");
 assert(policy.totalUnits === 3700, "policy unit count must be 3700");
@@ -121,7 +121,7 @@ assert(metadataHashes.size === 37, "metadata hashes must be unique");
 process.stdout.write(
   `${JSON.stringify({
     verified: true,
-    chainId: 11155111,
+    chainId: 84532,
     standard: "ERC-1155",
     artworkCount: 37,
     totalUnits: 3700,

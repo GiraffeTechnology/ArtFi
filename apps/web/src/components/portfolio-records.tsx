@@ -49,10 +49,10 @@ export function PortfolioRecords() {
         const value = (await response.json()) as Portfolio;
         if (
           value.address.toLowerCase() !== address.toLowerCase() ||
-          value.chainId !== 11155111
+          value.chainId !== 84532
         ) {
           throw new Error(
-            "Portfolio response did not match the connected Sepolia address.",
+            "Portfolio response did not match the connected Base Sepolia address.",
           );
         }
         setPortfolio(value);
@@ -86,7 +86,7 @@ export function PortfolioRecords() {
   return (
     <section className="portfolio-records" aria-live="polite">
       <div className="section-heading">
-        <p className="approved-eyebrow">Indexed Sepolia records</p>
+        <p className="approved-eyebrow">Indexed Base Sepolia records</p>
         <h2>Runtime positions and transaction history.</h2>
       </div>
       {loading ? <p>Loading indexed records…</p> : null}

@@ -75,7 +75,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** @description Runtime Sepolia mint catalog projected from canonical chain events. */
+    /** @description Runtime Base Sepolia mint catalog projected from canonical chain events. */
     get: operations["listMintedNFTs"];
     put?: never;
     post?: never;
@@ -240,7 +240,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** @description Sepolia RWA DAO addresses and immutable policy thresholds. Disabled unless every address is valid. */
+    /** @description Base Sepolia RWA DAO addresses and immutable policy thresholds. Disabled unless every address is valid. */
     get: operations["getGovernanceConfig"];
     put?: never;
     post?: never;
@@ -425,11 +425,11 @@ export interface components {
       /** @constant */
       api: "v1";
       /** @constant */
-      chainId: 11155111;
+      chainId: 84532;
       /** @constant */
       mode: "preview";
       /** @constant */
-      network: "sepolia";
+      network: "base-sepolia";
       readOnly: boolean;
       writeEnabled: boolean;
       registryAddress?: string;
@@ -446,7 +446,7 @@ export interface components {
         forcedBuyout: 800000;
       };
       /** @constant */
-      chainId: 11155111;
+      chainId: 84532;
       enabled: boolean;
       governorAddress?: string;
       /** @constant */
@@ -519,7 +519,7 @@ export interface components {
       recipient: string;
       registryAddress: string;
       /** @constant */
-      chainId: 11155111;
+      chainId: 84532;
       /** Format: uri */
       metadataUri: string;
       metadataSha256: string;
@@ -577,7 +577,7 @@ export interface components {
       pauserAddress: string;
       fractionalizerAddress: string;
       /** @constant */
-      chainId: 11155111;
+      chainId: 84532;
       /** @constant */
       contractFunction: "createVault(bytes32,string,address,uint256,address,address,address)";
       contractArguments: string[];
@@ -631,9 +631,9 @@ export interface components {
     Portfolio: {
       address: string;
       /** @constant */
-      chainId: 11155111;
+      chainId: 84532;
       /** @constant */
-      network: "sepolia";
+      network: "base-sepolia";
       positions: {
         assetToken: string;
         symbol: string;
@@ -647,7 +647,7 @@ export interface components {
     };
     ChainEventRequest: {
       /** @constant */
-      chainId: 11155111;
+      chainId: 84532;
       transactionHash: string;
       logIndex: number;
       blockNumber: number;
@@ -893,7 +893,7 @@ export interface operations {
             page: number;
             pageSize: number;
             /** @constant */
-            chainId: 11155111;
+            chainId: 84532;
             /** @constant */
             runtime: true;
           };

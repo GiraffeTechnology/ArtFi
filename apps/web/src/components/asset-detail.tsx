@@ -51,7 +51,7 @@ export function AssetDetail({
               <dd>
                 {fractional
                   ? artwork.totalFractions.toLocaleString()
-                  : "Sepolia"}
+                  : "Base Sepolia"}
               </dd>
             </div>
           </dl>

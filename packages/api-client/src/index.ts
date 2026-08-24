@@ -32,9 +32,7 @@ export function createArtFiClient(
     config: () => request<ArtFiConfig>("/v1/config"),
     assets: () => request<{ data: Asset[]; total: number }>("/v1/assets"),
     mintedNFTs: () =>
-      request<{ data: MintedNFT[]; total: number; chainId: 11155111 }>(
-        "/v1/nfts",
-      ),
+      request<{ data: MintedNFT[]; total: number; chainId: 84532 }>("/v1/nfts"),
     asset: (slug: string) =>
       request<Asset>(`/v1/assets/${encodeURIComponent(slug)}`),
     projects: () => request<{ data: Project[]; total: number }>("/v1/projects"),

@@ -52,7 +52,7 @@ const index = JSON.parse(indexText);
 assert(intent.status === "blocked-pre-mint", "intent must remain blocked");
 assert(
   intent.network === "sepolia" && intent.chainId === 11_155_111,
-  "intent must target Sepolia chain ID 11155111",
+  "intent must target Base Sepolia chain ID 84532",
 );
 assert(intent.mainnetAuthorized === false, "mainnet must remain unauthorized");
 assert(intent.tokenStandard === "ERC-1155", "intent must use ERC-1155");
@@ -287,7 +287,7 @@ for (let offset = 0; offset < includedArtworkIds.length; offset += 1) {
     record.editions === 100 && record.distributionWallet === artFi1,
     `${artworkId} index policy mismatch`,
   );
-  assert(manifest.chainId === 11155111, `${artworkId} must target Sepolia`);
+  assert(manifest.chainId === 84532, `${artworkId} must target Base Sepolia`);
   assert(manifest.standard === "ERC-1155", `${artworkId} must use ERC-1155`);
   assert(
     manifest.series.artworkId === artworkId,

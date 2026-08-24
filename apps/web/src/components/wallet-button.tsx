@@ -35,7 +35,7 @@ export function WalletButton() {
               onClick={openChainModal}
               type="button"
             >
-              Switch to Sepolia
+              Switch to Base Sepolia
             </button>
           );
         }

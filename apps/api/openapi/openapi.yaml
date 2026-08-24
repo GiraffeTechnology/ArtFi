@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: ArtFi API
   version: 0.4.0
-  description: Stage 4 Sepolia preview contract. Wallet intents never hold private keys; authenticated indexer writes are durable and replay-safe.
+  description: Stage 4 Base Sepolia preview contract. Wallet intents never hold private keys; authenticated indexer writes are durable and replay-safe.
 servers:
   - url: http://localhost:8080
 paths:
@@ -81,7 +81,7 @@ paths:
   /v1/nfts:
     get:
       operationId: listMintedNFTs
-      description: Runtime Sepolia mint catalog projected from canonical chain events.
+      description: Runtime Base Sepolia mint catalog projected from canonical chain events.
       parameters:
         - {
             name: page,
@@ -109,7 +109,7 @@ paths:
                   total: { type: integer, minimum: 0 }
                   page: { type: integer, minimum: 1 }
                   pageSize: { type: integer, minimum: 1, maximum: 100 }
-                  chainId: { type: integer, const: 11155111 }
+                  chainId: { type: integer, const: 84532 }
                   runtime: { type: boolean, const: true }
   /v1/projects:
     get:
@@ -349,7 +349,7 @@ paths:
   /v1/governance/config:
     get:
       operationId: getGovernanceConfig
-      description: Sepolia RWA DAO addresses and immutable policy thresholds. Disabled unless every address is valid.
+      description: Base Sepolia RWA DAO addresses and immutable policy thresholds. Disabled unless every address is valid.
       responses:
         "200":
           description: Governance deployment configuration
@@ -607,9 +607,9 @@ components:
       required: [api, chainId, mode, network, readOnly, writeEnabled]
       properties:
         api: { type: string, const: v1 }
-        chainId: { type: integer, const: 11155111 }
+        chainId: { type: integer, const: 84532 }
         mode: { type: string, const: preview }
-        network: { type: string, const: sepolia }
+        network: { type: string, const: base-sepolia }
         readOnly: { type: boolean }
         writeEnabled: { type: boolean }
         registryAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
@@ -633,7 +633,7 @@ components:
             marketMigration: { type: integer, const: 500000 }
             physicalAction: { type: integer, const: 666667 }
             forcedBuyout: { type: integer, const: 800000 }
-        chainId: { type: integer, const: 11155111 }
+        chainId: { type: integer, const: 84532 }
         enabled: { type: boolean }
         governorAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
         membershipAuthority: { type: string, const: onchain-rwa-token-snapshot }
@@ -744,7 +744,7 @@ components:
         requestId: { type: string, pattern: "^0x[0-9a-f]{64}$" }
         recipient: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
         registryAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
-        chainId: { type: integer, const: 11155111 }
+        chainId: { type: integer, const: 84532 }
         metadataUri: { type: string, format: uri, pattern: "^https://" }
         metadataSha256: { type: string, pattern: "^0x[0-9a-f]{64}$" }
         contractFunction:
@@ -845,7 +845,7 @@ components:
         adminAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
         pauserAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
         fractionalizerAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
-        chainId: { type: integer, const: 11155111 }
+        chainId: { type: integer, const: 84532 }
         contractFunction:
           {
             type: string,
@@ -942,8 +942,8 @@ components:
         ]
       properties:
         address: { type: string }
-        chainId: { type: integer, const: 11155111 }
-        network: { type: string, const: sepolia }
+        chainId: { type: integer, const: 84532 }
+        network: { type: string, const: base-sepolia }
         positions:
           type: array
           items:
@@ -980,7 +980,7 @@ components:
           confirmations,
         ]
       properties:
-        chainId: { type: integer, const: 11155111 }
+        chainId: { type: integer, const: 84532 }
         transactionHash: { type: string, pattern: "^0x[0-9a-fA-F]{64}$" }
         logIndex: { type: integer, minimum: 0 }
         blockNumber: { type: integer, minimum: 0 }

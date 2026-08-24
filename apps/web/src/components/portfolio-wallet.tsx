@@ -37,7 +37,9 @@ export function PortfolioWallet() {
         <dl className="wallet-facts">
           <div>
             <dt>Network</dt>
-            <dd>{isSupported ? "Sepolia" : "Unsupported — switch required"}</dd>
+            <dd>
+              {isSupported ? "Base Sepolia" : "Unsupported — switch required"}
+            </dd>
           </div>
           <div>
             <dt>Address</dt>

@@ -128,7 +128,7 @@ func (service *rwaService) hydratePersistence(ctx context.Context) error {
 	defer vaultRows.Close()
 	for vaultRows.Next() {
 		intent := &vaultIntent{
-			ChainID:          sepoliaChainID,
+			ChainID:          baseSepoliaChainID,
 			ContractFunction: "createVault(bytes32,string,address,uint256,address,address,address)",
 		}
 		var createdAt time.Time
