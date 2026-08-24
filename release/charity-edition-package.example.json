@@ -86,7 +86,7 @@
     "officialReceiptAmountDeterminedBy": "CCHS",
     "ethCadPriceEvidenceRequired": true,
     "charityStatusReportedByAuthorizedDirector": true,
-    "cchsPolicyAcceptedForRelease": false,
+    "cchsPolicyAcceptedForRelease": true,
     "confirmationBasis": "cchs-director-declaration",
     "publicRegistryVerified": false
   },
