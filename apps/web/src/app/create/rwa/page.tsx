@@ -14,7 +14,7 @@ export default function CreateRwaPage() {
         <p>
           Control ERC-721 unique assets and ERC-1155 fixed editions from one
           review surface. Every write is confirmed by an authorized external
-          wallet on Base Sepolia. The application never receives a private key.
+          wallet on Hoodi. The application never receives a private key.
         </p>
       </header>
       <NFTMintConsole />

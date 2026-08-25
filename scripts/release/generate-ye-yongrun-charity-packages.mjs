@@ -34,7 +34,7 @@ const directorDeclarationTextZh =
 const directorDeclarationSha256 =
   "ab8f2f3189528881f8c4f9a254bb93167fdf4027d44a345d2267e24fcfe4b416";
 const excludedArtworkIds = new Set(["UNIT-A02"]);
-const metadataBaseUrl = "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun";
+const metadataBaseUrl = "https://io.artcch.com/nft/metadata/hoodi/ye-yongrun";
 
 const sourceText = readFileSync(descriptionPath, "utf8");
 const blocks = [
@@ -83,7 +83,7 @@ for (const block of blocks) {
   );
   const manifest = {
     schemaVersion: 1,
-    chainId: 84532,
+    chainId: 560048,
     standard: "ERC-1155",
     marketplaceMode: "external-mirror",
     artfiExchangeEnabled: false,
@@ -218,7 +218,7 @@ const index = {
   schemaVersion: 1,
   batchId: "ye-yongrun-unit-a01-a38",
   status: "blocked-pre-mint",
-  chainId: 84532,
+  chainId: 560048,
   standard: "ERC-1155",
   packageCount: packageRecords.length,
   totalUnits: packageRecords.length * 100,

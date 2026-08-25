@@ -40,10 +40,8 @@ function assertTestOnlyEnvironment(environment = process.env) {
     throw new Error("local test wallet is disabled in production");
   }
   const chainId = environment.ARTFI_CHAIN_ID;
-  if (chainId && chainId !== "84532") {
-    throw new Error(
-      "local test wallet is restricted to Base Sepolia chain id 84532",
-    );
+  if (chainId && chainId !== "560048") {
+    throw new Error("local test wallet is restricted to Hoodi chain id 560048");
   }
 }
 

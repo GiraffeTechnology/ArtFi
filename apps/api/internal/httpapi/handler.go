@@ -87,9 +87,9 @@ func newHandler(rwa *rwaService) http.Handler {
 	mux.HandleFunc("GET /v1/config", func(writer http.ResponseWriter, _ *http.Request) {
 		writeJSON(writer, http.StatusOK, configResponse{
 			API:                 "v1",
-			ChainID:             baseSepoliaChainID,
+			ChainID:             hoodiChainID,
 			Mode:                "preview",
-			Network:             "base-sepolia",
+			Network:             "hoodi",
 			ReadOnly:            !rwa.writeEnabled(),
 			RegistryAddress:     rwa.config.registryAddress,
 			VaultFactoryAddress: rwa.config.vaultFactoryAddress,

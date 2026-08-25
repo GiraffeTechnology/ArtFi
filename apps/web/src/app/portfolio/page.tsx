@@ -17,8 +17,8 @@ export default function PortfolioPage() {
         <p className="approved-eyebrow">Wallet</p>
         <h1>Your public portfolio.</h1>
         <p>
-          Connect a standard external wallet to read public Base Sepolia state.
-          ArtFi never receives a private key or seed phrase.
+          Connect a standard external wallet to read public Hoodi state. ArtFi
+          never receives a private key or seed phrase.
         </p>
       </header>
       <PortfolioWallet />

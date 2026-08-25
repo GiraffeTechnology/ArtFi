@@ -10,7 +10,7 @@ import { loadTestAccount, runSelfTest } from "./test-wallet.mjs";
 const testEnvironment = (keyPath, overrides = {}) => ({
   NODE_ENV: "test",
   ARTFI_ENV: "test",
-  ARTFI_CHAIN_ID: "84532",
+  ARTFI_CHAIN_ID: "560048",
   ARTFI_TEST_PRIVATE_KEY_FILE: keyPath,
   ARTFI_TEST_WALLET_SKIP_PERMISSION_CHECK: "true",
   ...overrides,
@@ -47,7 +47,7 @@ test("rejects relative paths, mainnet, malformed values, and symlinks", (context
   const { directory, keyPath } = createKeyFile();
   assert.throws(
     () => loadTestAccount(testEnvironment(keyPath, { ARTFI_CHAIN_ID: "1" })),
-    /restricted to Base Sepolia/,
+    /restricted to Hoodi/,
   );
 
   const invalidPath = join(directory, "invalid.key");

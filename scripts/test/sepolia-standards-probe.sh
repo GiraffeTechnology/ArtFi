@@ -10,8 +10,8 @@ source "$repo_root/scripts/lib/require-sin-public-chain.sh"
 : "${ARTFI_VAULT_FACTORY_ADDRESS:?ARTFI_VAULT_FACTORY_ADDRESS is required}"
 
 chain_id="$(cast chain-id --rpc-url "$ARTFI_RPC_URL")"
-if [[ "$chain_id" != "84532" ]]; then
-  printf 'expected Base Sepolia chain id 84532, received %s\n' "$chain_id" >&2
+if [[ "$chain_id" != "560048" ]]; then
+  printf 'expected Hoodi chain id 560048, received %s\n' "$chain_id" >&2
   exit 1
 fi
 

@@ -59,8 +59,8 @@ const labels: Record<FlowStatus, string> = {
   uploading: "Uploading immutable image",
   preparing: "Preparing metadata commitment",
   "awaiting-wallet": "Waiting for wallet confirmation",
-  confirming: "Waiting for Base Sepolia confirmation",
-  confirmed: "Mint confirmed on Base Sepolia",
+  confirming: "Waiting for Hoodi confirmation",
+  confirmed: "Mint confirmed on Hoodi",
   error: "Action needs attention",
 };
 
@@ -132,12 +132,12 @@ export function RwaCreateFlow() {
   const boundary = useMemo(() => {
     if (!isConnected) return "Connect an external wallet to continue.";
     if (chainId !== supportedChain.id)
-      return "Switch the wallet network to Base Sepolia.";
+      return "Switch the wallet network to Hoodi.";
     if (operatorStatus === "checking")
       return "Checking the current administrator-wallet session.";
     if (operatorStatus !== "authenticated")
       return "Verify that this wallet currently holds REGISTRAR_ROLE on the reviewed registry contract.";
-    return "REGISTRAR_ROLE is verified on Base Sepolia. The browser never receives the operator API credential.";
+    return "REGISTRAR_ROLE is verified on Hoodi. The browser never receives the operator API credential.";
   }, [chainId, isConnected, operatorStatus]);
 
   async function verifyOperator() {
@@ -282,14 +282,14 @@ export function RwaCreateFlow() {
 
       setStatus("confirming");
       setMessage(
-        "The wallet submitted the transaction. Waiting for one Base Sepolia confirmation.",
+        "The wallet submitted the transaction. Waiting for one Hoodi confirmation.",
       );
       const receipt = await publicClient.waitForTransactionReceipt({
         hash,
         confirmations: 1,
       });
       if (receipt.status !== "success")
-        throw new Error("The Base Sepolia transaction reverted.");
+        throw new Error("The Hoodi transaction reverted.");
 
       const createdEvents = parseEventLogs({
         abi: rwaRegistryAbi,
@@ -452,7 +452,7 @@ export function RwaCreateFlow() {
           type="submit"
           disabled={!canSubmit}
         >
-          Review and mint on Base Sepolia
+          Review and mint on Hoodi
         </button>
       </form>
 
@@ -467,12 +467,12 @@ export function RwaCreateFlow() {
           <li>Hash and validate upload</li>
           <li>Persist immutable metadata</li>
           <li>Review wallet call</li>
-          <li>Confirm on Base Sepolia</li>
+          <li>Confirm on Hoodi</li>
         </ol>
         {transactionHash ? (
           <a
             className="text-link"
-            href={`https://sepolia.basescan.org/tx/${transactionHash}`}
+            href={`https://hoodi.etherscan.io/tx/${transactionHash}`}
             target="_blank"
             rel="noreferrer"
           >

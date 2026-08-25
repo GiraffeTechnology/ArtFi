@@ -96,7 +96,7 @@ func (service *rwaService) createVaultIntent(writer http.ResponseWriter, request
 		AdminAddress:          input.AdminAddress,
 		PauserAddress:         input.PauserAddress,
 		FractionalizerAddress: input.FractionalizerAddress,
-		ChainID:               baseSepoliaChainID,
+		ChainID:               hoodiChainID,
 		ContractFunction:      "createVault(bytes32,string,address,uint256,address,address,address)",
 		ContractArguments: []string{
 			requestID, input.VaultName, input.CollectionAddress, input.TokenID,

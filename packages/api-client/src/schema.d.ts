@@ -75,7 +75,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** @description Runtime Base Sepolia mint catalog projected from canonical chain events. */
+    /** @description Runtime Hoodi mint catalog projected from canonical chain events. */
     get: operations["listMintedNFTs"];
     put?: never;
     post?: never;
@@ -240,7 +240,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** @description Base Sepolia RWA DAO addresses and immutable policy thresholds. Disabled unless every address is valid. */
+    /** @description Hoodi RWA DAO addresses and immutable policy thresholds. Disabled unless every address is valid. */
     get: operations["getGovernanceConfig"];
     put?: never;
     post?: never;
@@ -425,11 +425,11 @@ export interface components {
       /** @constant */
       api: "v1";
       /** @constant */
-      chainId: 84532;
+      chainId: 560048;
       /** @constant */
       mode: "preview";
       /** @constant */
-      network: "base-sepolia";
+      network: "hoodi";
       readOnly: boolean;
       writeEnabled: boolean;
       registryAddress?: string;
@@ -446,7 +446,7 @@ export interface components {
         forcedBuyout: 800000;
       };
       /** @constant */
-      chainId: 84532;
+      chainId: 560048;
       enabled: boolean;
       governorAddress?: string;
       /** @constant */
@@ -519,7 +519,7 @@ export interface components {
       recipient: string;
       registryAddress: string;
       /** @constant */
-      chainId: 84532;
+      chainId: 560048;
       /** Format: uri */
       metadataUri: string;
       metadataSha256: string;
@@ -577,7 +577,7 @@ export interface components {
       pauserAddress: string;
       fractionalizerAddress: string;
       /** @constant */
-      chainId: 84532;
+      chainId: 560048;
       /** @constant */
       contractFunction: "createVault(bytes32,string,address,uint256,address,address,address)";
       contractArguments: string[];
@@ -631,9 +631,9 @@ export interface components {
     Portfolio: {
       address: string;
       /** @constant */
-      chainId: 84532;
+      chainId: 560048;
       /** @constant */
-      network: "base-sepolia";
+      network: "hoodi";
       positions: {
         assetToken: string;
         symbol: string;
@@ -647,7 +647,7 @@ export interface components {
     };
     ChainEventRequest: {
       /** @constant */
-      chainId: 84532;
+      chainId: 560048;
       transactionHash: string;
       logIndex: number;
       blockNumber: number;
@@ -893,7 +893,7 @@ export interface operations {
             page: number;
             pageSize: number;
             /** @constant */
-            chainId: 84532;
+            chainId: 560048;
             /** @constant */
             runtime: true;
           };

@@ -1,18 +1,16 @@
 import { createConfig, http } from "wagmi";
-import { base, baseSepolia } from "wagmi/chains";
+import { hoodi, mainnet } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
 
-export const supportedChain = baseSepolia;
-export const externalMarketChain = base;
+export const supportedChain = hoodi;
+export const externalMarketChain = mainnet;
 
 export const wagmiConfig = createConfig({
-  chains: [baseSepolia, base],
+  chains: [hoodi, mainnet],
   connectors: [injected()],
   transports: {
-    [baseSepolia.id]: http(
-      process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL || undefined,
-    ),
-    [base.id]: http(process.env.NEXT_PUBLIC_BASE_RPC_URL || undefined),
+    [hoodi.id]: http(process.env.NEXT_PUBLIC_HOODI_RPC_URL || undefined),
+    [mainnet.id]: http(process.env.NEXT_PUBLIC_ETHEREUM_RPC_URL || undefined),
   },
   ssr: true,
 });

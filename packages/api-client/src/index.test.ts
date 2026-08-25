@@ -8,7 +8,7 @@ describe("ArtFi API client", () => {
       new Response(
         JSON.stringify({
           api: "v1",
-          chainId: 84532,
+          chainId: 560048,
           mode: "preview",
           network: "sepolia",
           readOnly: true,
@@ -23,7 +23,7 @@ describe("ArtFi API client", () => {
       "http://localhost:8080",
       fetcher,
     ).config();
-    expect(config).toMatchObject({ chainId: 84532, readOnly: true });
+    expect(config).toMatchObject({ chainId: 560048, readOnly: true });
   });
 
   it("turns problem responses into a typed error", async () => {

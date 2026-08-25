@@ -49,7 +49,7 @@ func TestMySQLPersistenceSurvivesServiceRestart(t *testing.T) {
 		RequestID:       "0x" + "bb" + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		Recipient:       "0x2222222222222222222222222222222222222222",
 		RegistryAddress: "0x3333333333333333333333333333333333333333",
-		ChainID:         baseSepoliaChainID,
+		ChainID:         hoodiChainID,
 		MetadataURI:     "https://assets.test/metadata.json",
 		MetadataSHA256:  "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 		Status:          "prepared", CreatedAt: now.Format(time.RFC3339),
@@ -121,7 +121,7 @@ func TestMySQLChainEventDedupeConflictAndReorg(t *testing.T) {
 	service.indexerEnabled = true
 	handler := newHandler(service)
 	body := map[string]any{
-		"chainId":         baseSepoliaChainID,
+		"chainId":         hoodiChainID,
 		"transactionHash": "0x" + strings.Repeat("a", 64),
 		"logIndex":        2,
 		"blockNumber":     12345,
@@ -156,7 +156,7 @@ func TestMySQLChainEventDedupeConflictAndReorg(t *testing.T) {
 		t.Fatalf("transaction history was not projected: %+v", projected.Transactions)
 	}
 	mintBody := map[string]any{
-		"chainId":         84532,
+		"chainId":         560048,
 		"transactionHash": "0x" + strings.Repeat("d", 64),
 		"logIndex":        3,
 		"blockNumber":     12346,

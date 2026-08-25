@@ -31,7 +31,7 @@ export function WalletDaoLink() {
         </li>
         <li className={correctChain ? "is-complete" : ""}>
           <span>02</span>
-          <strong>Use Base Sepolia</strong>
+          <strong>Use Hoodi</strong>
           <small>
             {correctChain ? "Network ready" : "Network switch required"}
           </small>

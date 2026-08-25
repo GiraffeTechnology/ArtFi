@@ -42,11 +42,7 @@ for (const [name, script] of [
   );
 }
 
-assert.match(
-  preflight,
-  /84532/,
-  "preflight must enforce Base Sepolia chain ID",
-);
+assert.match(preflight, /560048/, "preflight must enforce Hoodi chain ID");
 assert.match(
   deploy,
   /artfiMarketDeployed=false/,
@@ -59,8 +55,8 @@ assert.match(
 );
 assert.match(
   charityProbe,
-  /84532/,
-  "charity probe must enforce Base Sepolia chain ID",
+  /560048/,
+  "charity probe must enforce Hoodi chain ID",
 );
 assert.match(
   environmentExample,

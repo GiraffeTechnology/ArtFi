@@ -28,7 +28,7 @@ func TestConfigIsSepoliaReadOnly(t *testing.T) {
 	recorder := request(t, http.MethodGet, "/v1/config")
 	var response configResponse
 	decode(t, recorder, &response)
-	if response.ChainID != 84532 || !response.ReadOnly || response.Network != "base-sepolia" {
+	if response.ChainID != 560048 || !response.ReadOnly || response.Network != "hoodi" {
 		t.Fatalf("unsafe config: %+v", response)
 	}
 }
@@ -57,7 +57,7 @@ func TestGovernanceConfigEnablesOnlyWithCompleteValidAddresses(t *testing.T) {
 	recorder := request(t, http.MethodGet, "/v1/governance/config")
 	var response governanceConfigResponse
 	decode(t, recorder, &response)
-	if !response.Enabled || response.ChainID != baseSepoliaChainID {
+	if !response.Enabled || response.ChainID != hoodiChainID {
 		t.Fatalf("complete governance config was not enabled: %+v", response)
 	}
 }
@@ -154,9 +154,9 @@ func TestOpenSeaDiscoveryVerifiesSupportedChainAndExactNFT(t *testing.T) {
 		switch request.URL.Path {
 		case "/api/v2/chains":
 			writeJSON(writer, http.StatusOK, map[string]any{
-				"chains": []map[string]string{{"chain": "base-sepolia"}},
+				"chains": []map[string]string{{"chain": "hoodi"}},
 			})
-		case "/api/v2/chain/base-sepolia/contract/" + contract + "/nfts/42":
+		case "/api/v2/chain/hoodi/contract/" + contract + "/nfts/42":
 			writeJSON(writer, http.StatusOK, map[string]any{
 				"nft": map[string]string{
 					"identifier":     "42",
@@ -174,7 +174,7 @@ func TestOpenSeaDiscoveryVerifiesSupportedChainAndExactNFT(t *testing.T) {
 	service.openseaAPIKey = "discovery-test-key"
 	service.openseaAPIBaseURL = upstream.URL
 	response := jsonRequest(t, newHandler(service), http.MethodPost, "/v1/rwa/discovery-checks", map[string]string{
-		"source": "opensea", "chain": "base-sepolia", "contractAddress": contract, "tokenId": "42",
+		"source": "opensea", "chain": "hoodi", "contractAddress": contract, "tokenId": "42",
 	}, nil)
 	if response.Code != http.StatusOK {
 		t.Fatalf("discovery check: status=%d body=%s", response.Code, response.Body.String())
@@ -203,7 +203,7 @@ func TestOpenSeaDiscoveryRecordsUnsupportedChainWithoutNFTClaim(t *testing.T) {
 	service.openseaAPIBaseURL = upstream.URL
 	response := jsonRequest(t, newHandler(service), http.MethodPost, "/v1/rwa/discovery-checks", map[string]string{
 		"source":          "opensea",
-		"chain":           "base-sepolia",
+		"chain":           "hoodi",
 		"contractAddress": "0x1111111111111111111111111111111111111111",
 		"tokenId":         "42",
 	}, nil)
@@ -277,7 +277,7 @@ func TestRWAUploadMintAndSubmissionLifecycle(t *testing.T) {
 	}
 	var intent mintIntent
 	decode(t, mintRecorder, &intent)
-	if intent.ChainID != baseSepoliaChainID || len(intent.ContractArguments) != 4 || intent.Status != "prepared" {
+	if intent.ChainID != hoodiChainID || len(intent.ContractArguments) != 4 || intent.Status != "prepared" {
 		t.Fatalf("unsafe intent: %+v", intent)
 	}
 
@@ -355,7 +355,7 @@ func TestVaultIntentIsIdempotentAndSubmissionBound(t *testing.T) {
 	}
 	var intent vaultIntent
 	decode(t, created, &intent)
-	if intent.ChainID != baseSepoliaChainID || len(intent.ContractArguments) != 7 || intent.Status != "prepared" {
+	if intent.ChainID != hoodiChainID || len(intent.ContractArguments) != 7 || intent.Status != "prepared" {
 		t.Fatalf("unsafe vault intent: %+v", intent)
 	}
 
