@@ -11,7 +11,7 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { sepolia } from "viem/chains";
+import { hoodi } from "viem/chains";
 
 export const operatorChallengeCookie = "artfi_operator_challenge";
 export const operatorSessionCookie = "artfi_operator_session";
@@ -115,7 +115,7 @@ Verify an ArtCCH:ArtFi administrator wallet. This signature creates no transacti
 
 URI: ${authority.origin}/create/rwa
 Version: 1
-Chain ID: ${sepolia.id}
+Chain ID: ${hoodi.id}
 Nonce: ${nonce}
 Issued At: ${issuedAt}
 Expiration Time: ${expirationTime}`;
@@ -155,7 +155,7 @@ function publicClient() {
     process.env.ARTFI_RPC_URL?.trim() ||
     process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL?.trim();
   if (!rpcURL) throw new Error("Operator chain verification is unavailable.");
-  return createPublicClient({ chain: sepolia, transport: http(rpcURL) });
+  return createPublicClient({ chain: hoodi, transport: http(rpcURL) });
 }
 
 function registryAddress() {

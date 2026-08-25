@@ -343,7 +343,7 @@ export function RwaCreateFlow() {
           method: "POST",
           body: JSON.stringify({
             source: "opensea",
-            chain: "sepolia",
+            chain: "hoodi",
             contractAddress: mintedAsset.collectionAddress,
             tokenId: mintedAsset.tokenId,
           }),
