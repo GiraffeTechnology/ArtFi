@@ -36,7 +36,17 @@ to the chain as a whole.
 Order 3 is not available for a capability that merely lacks third-party support. It applies only
 where the chain itself cannot execute the contract suite.
 
-### 0.2 Capability findings
+### 0.2 Scope of the ruling
+
+The ruling covers **testing only**. Hoodi `560048` is the test chain; it is not the production
+chain and implies nothing about one. Every artifact in this repository must treat the production
+and mainnet target as undecided.
+
+Concretely: `externalMarketChain` in `apps/web/src/lib/wagmi.ts` remains Ethereum mainnet because
+that is its pre-existing value as the read-only external-marketplace mirror source. It is not a
+production deployment target and must not be cited as one.
+
+### 0.3 Capability findings
 
 | Capability           | Finding                                                                                                                                                                    | Disposition                                        |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -90,17 +100,16 @@ from another chain.
 ### 2.2 It changes the production target by implication
 
 `PRD.md` §8 puts out of scope "chains other than the approved EVM test chain and its mainnet
-counterpart". Hoodi's mainnet counterpart is Ethereum, not Base. Choosing Hoodi as the test chain
-therefore reverses "production requires Base" and re-points M1's phase-P5 mainnet deployment at
-Ethereum mainnet.
+counterpart", which invites the reading that naming a test chain also names the production chain.
 
-**Partially resolved by §0.** The ruling settles the test chain. It does not name the production
-chain, and this directive does not infer one: `externalMarketChain` therefore stays on Ethereum
-mainnet, which is Hoodi's counterpart, rather than being moved silently.
+**Resolved by §0.2: it does not.** Hoodi is the test chain and nothing more. Selecting it neither
+confirms nor reverses any production target, and no production chain may be inferred from it —
+including Ethereum, merely because Hoodi runs Ethereum's execution layer.
 
-**Residual — still open:** confirm the production chain in writing. If it remains Base, G2 on an
-Ethereum testnet does not authorize G4 on Base, and `PRD.md` §6 and §8 need amending. This is a
-scope question and cannot be closed by implementation.
+**Residual — still open:** the production chain is an independent written decision that has not
+been made. Until it is, `PRD.md` §6 and §8 stay unresolved, and no artifact may state a production
+or mainnet target. If the production chain turns out to differ from Hoodi's lineage, the
+consequence is recorded then — not assumed now.
 
 ### 2.3 The toolchain does not ship Hoodi
 
@@ -226,10 +235,11 @@ not mistaken for progress against them.
 
 ## 7. Recommendation
 
-Resolve §2.2 first. It is the only one of the three that can invalidate the other two: if
-production remains Base, this directive should be withdrawn rather than implemented, because a
-test chain with no relationship to the production chain cannot satisfy G2 as the authorization for
-G4. If production moves to Ethereum, the directive stands and §2.1 and §2.3 become ordinary
-implementation questions.
+The test chain is settled and implemented. What remains is the production decision, which is
+independent of it and still unmade.
 
-Implementing before that decision risks a third chain migration.
+Make that decision on its own merits rather than by inference from Hoodi. When it is made, record
+whether G2 evidence gathered on Hoodi is accepted as the authorization for G4 on the chosen
+production chain, since `ACCEPTANCE.md` §4 treats G2 as that authorization and §3 excludes
+evidence from a different chain. That tension is real but it belongs to the production decision,
+not to this directive.
