@@ -21,9 +21,14 @@ const descriptionPath = join(
   sourceDirectory,
   "葉永潤_UNIT-A01-A38_作品介绍.txt",
 );
+// Chain-scoped, and it must stay that way. `ye-yongrun-unit-a01-a38` records a
+// batch already minted on Ethereum Sepolia; its manifests are hash-bound on
+// chain and the retained verifiers assert chain ID 11155111 against it. This
+// generator emits Hoodi manifests, so writing them there would overwrite that
+// evidence and fail `charity-edition:ye-yongrun:verify` on the next run.
 const batchDirectory = join(
   releaseDirectory,
-  "mint-batches/ye-yongrun-unit-a01-a38",
+  "mint-batches/ye-yongrun-unit-a01-a38-hoodi",
 );
 const packageDirectory = join(batchDirectory, "packages");
 const artFi1 = "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089";
