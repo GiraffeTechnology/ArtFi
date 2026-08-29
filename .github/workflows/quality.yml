@@ -90,12 +90,15 @@ jobs:
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000005_stage6_compliance_operations.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000006_dao_rwa_governance.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000007_external_trade_orchestration.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000008_hoodi_test_chain.up.sql
       - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
       - name: MySQL restart, replay, conflict, reorg, and projection tests
         working-directory: apps/api
         env:
           ARTFI_INTEGRATION_MYSQL_DSN: root:local-root-only@tcp(127.0.0.1:3306)/artfi?parseTime=true
         run: go test ./...
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000008_hoodi_test_chain.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000007_external_trade_orchestration.down.sql
       - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "25"
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000006_dao_rwa_governance.down.sql

@@ -3,7 +3,8 @@ import { PermissionController } from "./permissions.js";
 
 const addressPattern = /^0x[0-9a-fA-F]{40}$/;
 const hexPattern = /^0x[0-9a-fA-F]*$/;
-export const SEPOLIA_CHAIN_ID = 11_155_111;
+/** Hoodi. The alpha wallet signs on the test chain only. */
+export const SUPPORTED_CHAIN_ID = 560_048;
 
 export interface TransactionRequest {
   from: `0x${string}`;
@@ -43,10 +44,10 @@ export class ConfirmationController {
     const origin = assertSafeOrigin(originValue);
     this.permissions.assert(origin, "eth_sendTransaction", now);
     if (
-      transaction.chainId !== SEPOLIA_CHAIN_ID ||
-      simulation.chainId !== SEPOLIA_CHAIN_ID
+      transaction.chainId !== SUPPORTED_CHAIN_ID ||
+      simulation.chainId !== SUPPORTED_CHAIN_ID
     ) {
-      throw new Error("ArtFi Wallet Alpha is Sepolia-only");
+      throw new Error("ArtFi Wallet Alpha is Hoodi-only");
     }
     if (
       !addressPattern.test(transaction.from) ||

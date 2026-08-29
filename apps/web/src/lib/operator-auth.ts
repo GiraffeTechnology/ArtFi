@@ -153,7 +153,7 @@ function publicClient() {
   }
   const rpcURL =
     process.env.ARTFI_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL?.trim();
+    process.env.NEXT_PUBLIC_HOODI_RPC_URL?.trim();
   if (!rpcURL) throw new Error("Operator chain verification is unavailable.");
   return createPublicClient({ chain: hoodi, transport: http(rpcURL) });
 }
