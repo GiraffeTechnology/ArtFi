@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Path = (Join-Path $env:LOCALAPPDATA "ArtFi\secrets\sepolia-test-wallet.key")
+    [string]$Path = (Join-Path $env:LOCALAPPDATA "ArtFi\secrets\hoodi-test-wallet.key")
 )
 
 $ErrorActionPreference = "Stop"

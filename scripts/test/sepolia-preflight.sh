@@ -35,8 +35,8 @@ if [[ ! -f "$ARTFI_KEYSTORE_PASSWORD_FILE" ]]; then
 fi
 
 chain_id="$(cast chain-id --rpc-url "$ARTFI_RPC_URL")"
-if [[ "$chain_id" != "11155111" ]]; then
-  printf 'refusing deployment: expected Sepolia chain id 11155111, received %s\n' "$chain_id" >&2
+if [[ "$chain_id" != "560048" ]]; then
+  printf 'refusing deployment: expected Hoodi chain id 560048, received %s\n' "$chain_id" >&2
   exit 1
 fi
 
@@ -52,7 +52,7 @@ fi
 
 balance="$(cast balance "$DEPLOYER_ADDRESS" --rpc-url "$ARTFI_RPC_URL")"
 if [[ "$balance" == "0" ]]; then
-  printf 'refusing deployment: the test-only deployer has no Sepolia ETH\n' >&2
+  printf 'refusing deployment: the test-only deployer has no Hoodi ETH\n' >&2
   exit 1
 fi
 

@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     template: "%s | ArtCCH:ArtFi",
   },
   description:
-    "A Sepolia-first, auditable platform for real-world art assets and shared ownership.",
+    "A Hoodi-first, auditable platform for real-world art assets and shared ownership.",
 };
 
 export default function RootLayout({

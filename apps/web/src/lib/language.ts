@@ -94,7 +94,7 @@ export const protectedTranslationTerms = [
   "CCHS",
   "Giraffe ArtFi Corp.",
   "Ethereum",
-  "Sepolia",
+  "Hoodi",
   "ERC-1155",
   "NFT",
   "DAO",

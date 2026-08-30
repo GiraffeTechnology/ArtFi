@@ -49,9 +49,7 @@ export function AssetDetail({
             <div>
               <dt>{fractional ? "Total fractions" : "Network"}</dt>
               <dd>
-                {fractional
-                  ? artwork.totalFractions.toLocaleString()
-                  : "Sepolia"}
+                {fractional ? artwork.totalFractions.toLocaleString() : "Hoodi"}
               </dd>
             </div>
           </dl>

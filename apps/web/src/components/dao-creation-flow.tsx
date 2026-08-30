@@ -407,7 +407,7 @@ export function DaoCreationFlow() {
       setFractionToken(event.args.token);
       setStage("complete");
       setMessage(
-        "Vault custody and fixed fraction issuance are confirmed on Sepolia.",
+        "Vault custody and fixed fraction issuance are confirmed on Hoodi.",
       );
       idempotencyKey.current = crypto.randomUUID();
     } catch (error) {

@@ -8,8 +8,8 @@ source "$repo_root/scripts/lib/require-sin-public-chain.sh"
 : "${ARTFI_CHARITY_EDITIONS_ADDRESS:?ARTFI_CHARITY_EDITIONS_ADDRESS is required}"
 
 chain_id="$(cast chain-id --rpc-url "$ARTFI_RPC_URL")"
-if [[ "$chain_id" != "11155111" ]]; then
-  printf 'expected Sepolia chain id 11155111, received %s\n' "$chain_id" >&2
+if [[ "$chain_id" != "560048" ]]; then
+  printf 'expected Hoodi chain id 560048, received %s\n' "$chain_id" >&2
   exit 1
 fi
 

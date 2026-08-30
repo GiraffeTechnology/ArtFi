@@ -10,17 +10,17 @@ interface Vm {
     function stopBroadcast() external;
 }
 
-/// @notice Sepolia-only deployment script. The signing method is supplied by forge at runtime;
+/// @notice Hoodi-only deployment script. The signing method is supplied by forge at runtime;
 ///         this source never reads or stores a private key.
 contract DeployStage2 {
     Vm private constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
-    uint256 private constant SEPOLIA_CHAIN_ID = 11_155_111;
+    uint256 private constant HOODI_CHAIN_ID = 560_048;
 
-    error SepoliaOnly(uint256 chainId);
+    error UnsupportedChain(uint256 chainId);
     error ZeroAddress();
 
     function run() external returns (ArtFiRWA nft, RWARegistry registry) {
-        if (block.chainid != SEPOLIA_CHAIN_ID) revert SepoliaOnly(block.chainid);
+        if (block.chainid != HOODI_CHAIN_ID) revert UnsupportedChain(block.chainid);
 
         address deployer = VM.envAddress("DEPLOYER_ADDRESS");
         address admin = VM.envAddress("ARTFI_ADMIN");

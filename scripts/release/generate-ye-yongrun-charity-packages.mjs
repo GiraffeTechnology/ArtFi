@@ -21,9 +21,14 @@ const descriptionPath = join(
   sourceDirectory,
   "葉永潤_UNIT-A01-A38_作品介绍.txt",
 );
+// Chain-scoped, and it must stay that way. `ye-yongrun-unit-a01-a38` records a
+// batch already minted on Ethereum Sepolia; its manifests are hash-bound on
+// chain and the retained verifiers assert chain ID 11155111 against it. This
+// generator emits Hoodi manifests, so writing them there would overwrite that
+// evidence and fail `charity-edition:ye-yongrun:verify` on the next run.
 const batchDirectory = join(
   releaseDirectory,
-  "mint-batches/ye-yongrun-unit-a01-a38",
+  "mint-batches/ye-yongrun-unit-a01-a38-hoodi",
 );
 const packageDirectory = join(batchDirectory, "packages");
 const artFi1 = "0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089";
@@ -34,7 +39,7 @@ const directorDeclarationTextZh =
 const directorDeclarationSha256 =
   "ab8f2f3189528881f8c4f9a254bb93167fdf4027d44a345d2267e24fcfe4b416";
 const excludedArtworkIds = new Set(["UNIT-A02"]);
-const metadataBaseUrl = "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun";
+const metadataBaseUrl = "https://io.artcch.com/nft/metadata/hoodi/ye-yongrun";
 
 const sourceText = readFileSync(descriptionPath, "utf8");
 const blocks = [
@@ -83,7 +88,7 @@ for (const block of blocks) {
   );
   const manifest = {
     schemaVersion: 1,
-    chainId: 11155111,
+    chainId: 560048,
     standard: "ERC-1155",
     marketplaceMode: "external-mirror",
     artfiExchangeEnabled: false,
@@ -218,7 +223,7 @@ const index = {
   schemaVersion: 1,
   batchId: "ye-yongrun-unit-a01-a38",
   status: "blocked-pre-mint",
-  chainId: 11155111,
+  chainId: 560048,
   standard: "ERC-1155",
   packageCount: packageRecords.length,
   totalUnits: packageRecords.length * 100,

@@ -23,7 +23,7 @@ const batchDirectory = join(
 const packageDirectory = join(batchDirectory, "packages");
 const outputDirectory = join(
   repositoryRoot,
-  "apps/web/public/nft/metadata/sepolia/ye-yongrun",
+  "apps/web/public/nft/metadata/hoodi/ye-yongrun",
 );
 const verifierPath = join(
   repositoryRoot,
@@ -65,7 +65,7 @@ for (let index = 0; index < packageFiles.length; index += 1) {
       encoding: "utf8",
     }),
   );
-  const expectedURI = `https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/${artworkId}.json`;
+  const expectedURI = `https://io.artcch.com/nft/metadata/hoodi/ye-yongrun/${artworkId}.json`;
   if (
     verified.artworkId !== artworkId ||
     manifest.metadata.publicURI !== expectedURI ||
@@ -95,14 +95,14 @@ const index = {
   schemaVersion: 1,
   batchId: "ye-yongrun-unit-a01-a38",
   status: "blocked-pre-mint",
-  chainId: 11155111,
+  chainId: 560048,
   standard: "ERC-1155",
   packageCount: 37,
   totalUnits: 3700,
   excludedArtworkIds: ["UNIT-A02"],
   inscriptionSha256:
     "1c4e8260508e6f74c2e8bbd237e1f3d41f49d4c4ed7c7a0ca0f0df9162a66f01",
-  publicBaseURL: "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun",
+  publicBaseURL: "https://io.artcch.com/nft/metadata/hoodi/ye-yongrun",
   series: records,
 };
 writeFileSync(

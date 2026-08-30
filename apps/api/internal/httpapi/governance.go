@@ -43,7 +43,7 @@ func governanceConfigFromEnv() governanceConfigResponse {
 			"physicalAction":  666_667,
 			"forcedBuyout":    800_000,
 		},
-		ChainID:              sepoliaChainID,
+		ChainID:              hoodiChainID,
 		GovernorAddress:      strings.TrimSpace(os.Getenv("ARTFI_GOVERNOR_ADDRESS")),
 		MembershipAuthority:  "onchain-rwa-token-snapshot",
 		ProposalThresholdPPM: 100_000,

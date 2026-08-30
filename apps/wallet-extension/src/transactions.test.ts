@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { PermissionController } from "./permissions.js";
-import { ConfirmationController, SEPOLIA_CHAIN_ID } from "./transactions.js";
+import { ConfirmationController, SUPPORTED_CHAIN_ID } from "./transactions.js";
 
 const origin = "https://app.artfi.test";
 const transaction = {
@@ -9,11 +9,11 @@ const transaction = {
   to: "0x2222222222222222222222222222222222222222" as const,
   value: "0x0" as const,
   data: "0x1234" as const,
-  chainId: SEPOLIA_CHAIN_ID,
+  chainId: SUPPORTED_CHAIN_ID,
 };
 
 describe("transaction confirmation boundary", () => {
-  it("requires origin permission, Sepolia, fresh simulation, and one-time approval", () => {
+  it("requires origin permission, Hoodi, fresh simulation, and one-time approval", () => {
     const permissions = new PermissionController();
     permissions.grant(origin, ["eth_sendTransaction"], 1_000, 60_000);
     const confirmations = new ConfirmationController(permissions);
@@ -21,7 +21,7 @@ describe("transaction confirmation boundary", () => {
       origin,
       transaction,
       {
-        chainId: SEPOLIA_CHAIN_ID,
+        chainId: SUPPORTED_CHAIN_ID,
         status: "success",
         requestHash: "0x1234",
         expiresAt: 31_000,
@@ -56,12 +56,12 @@ describe("transaction confirmation boundary", () => {
         },
         2_000,
       ),
-    ).toThrow(/Sepolia-only/);
+    ).toThrow(/Hoodi-only/);
     const pending = confirmations.prepare(
       origin,
       transaction,
       {
-        chainId: SEPOLIA_CHAIN_ID,
+        chainId: SUPPORTED_CHAIN_ID,
         status: "success",
         requestHash: "0x12",
         expiresAt: 30_000,

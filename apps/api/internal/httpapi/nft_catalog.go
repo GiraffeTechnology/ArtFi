@@ -21,7 +21,7 @@ func (service *rwaService) getMintedNFTs(writer http.ResponseWriter, request *ht
 	if service.db == nil {
 		writeJSON(writer, http.StatusOK, map[string]any{
 			"data": []mintedNFT{}, "total": 0, "page": page, "pageSize": pageSize,
-			"chainId": sepoliaChainID, "runtime": true,
+			"chainId": hoodiChainID, "runtime": true,
 		})
 		return
 	}
@@ -31,7 +31,7 @@ func (service *rwaService) getMintedNFTs(writer http.ResponseWriter, request *ht
 	countRows, err := service.db.QueryContext(
 		request.Context(),
 		"SELECT COUNT(*) FROM chain_events WHERE "+eventFilter,
-		sepoliaChainID,
+		hoodiChainID,
 	)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "NFT catalog unavailable", "The indexed NFT catalog could not be counted.")
@@ -63,7 +63,7 @@ func (service *rwaService) getMintedNFTs(writer http.ResponseWriter, request *ht
 		FROM chain_events
 		WHERE `+eventFilter+`
 		ORDER BY block_number DESC, log_index DESC
-		LIMIT ? OFFSET ?`, sepoliaChainID, pageSize, (page-1)*pageSize)
+		LIMIT ? OFFSET ?`, hoodiChainID, pageSize, (page-1)*pageSize)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "NFT catalog unavailable", "The indexed NFT catalog could not be queried.")
 		return
@@ -112,6 +112,6 @@ func (service *rwaService) getMintedNFTs(writer http.ResponseWriter, request *ht
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{
 		"data": items, "total": total, "page": page, "pageSize": pageSize,
-		"chainId": sepoliaChainID, "runtime": true,
+		"chainId": hoodiChainID, "runtime": true,
 	})
 }

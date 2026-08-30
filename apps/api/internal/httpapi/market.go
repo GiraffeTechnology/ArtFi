@@ -68,7 +68,7 @@ func (service *rwaService) ingestChainEvent(writer http.ResponseWriter, request 
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid chain event", err.Error())
 		return
 	}
-	if input.ChainID != sepoliaChainID || !txHashPattern.MatchString(input.TransactionHash) ||
+	if input.ChainID != hoodiChainID || !txHashPattern.MatchString(input.TransactionHash) ||
 		!txHashPattern.MatchString(input.BlockHash) || !addressPattern.MatchString(input.ContractAddress) ||
 		len(input.EventName) < 2 || len(input.EventName) > 80 || input.Payload == nil {
 		writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid chain event", "Only complete Sepolia event records are accepted.")
@@ -202,7 +202,7 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		return
 	}
 	response := portfolioResponse{
-		Address: address, ChainID: sepoliaChainID, Network: "sepolia",
+		Address: address, ChainID: hoodiChainID, Network: "hoodi",
 		Positions: []portfolioPosition{}, Transactions: []portfolioEntry{},
 		Offers: []map[string]any{}, Notifications: []map[string]any{},
 	}
@@ -277,7 +277,7 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.distributionWallet'))) = ?
 		)
 		ORDER BY block_number DESC, log_index DESC
-		LIMIT 100`, sepoliaChainID, address, address, address, address, address)
+		LIMIT 100`, hoodiChainID, address, address, address, address, address)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio transaction history could not be queried.")
 		return

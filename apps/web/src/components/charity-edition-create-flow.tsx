@@ -37,7 +37,7 @@ const bytes32Pattern = /^0x[0-9a-fA-F]{64}$/;
 const labels: Record<EditionStatus, string> = {
   idle: "Package ready for review",
   "awaiting-wallet": "Waiting for wallet confirmation",
-  confirming: "Waiting for Sepolia confirmation",
+  confirming: "Waiting for Hoodi confirmation",
   confirmed: "ERC-1155 series confirmed",
   error: "Action needs attention",
 };
@@ -114,15 +114,15 @@ export function CharityEditionCreateFlow() {
     status !== "confirming";
   const boundary = useMemo(() => {
     if (!configured)
-      return "The reviewed Sepolia ERC-1155 contract is not configured. Writes fail closed.";
+      return "The reviewed Hoodi ERC-1155 contract is not configured. Writes fail closed.";
     if (!isConnected) return "Connect the authorized series-creator wallet.";
-    if (!correctChain) return "Switch the wallet network to Sepolia.";
+    if (!correctChain) return "Switch the wallet network to Hoodi.";
     if (paused) return "The ERC-1155 contract is paused.";
     if (!hasCreatorRole)
       return "The connected wallet does not hold SERIES_CREATOR_ROLE.";
     if (!constantsVerified)
       return "The contract does not match the approved 100-edition / 0.01 ETH policy.";
-    return "Series-creator role and fixed contract constants are verified on Sepolia.";
+    return "Series-creator role and fixed contract constants are verified on Hoodi.";
   }, [
     configured,
     constantsVerified,
@@ -188,14 +188,14 @@ export function CharityEditionCreateFlow() {
       setTransactionHash(hash);
       setStatus("confirming");
       setMessage(
-        "Waiting for one Sepolia confirmation and exact event matching.",
+        "Waiting for one Hoodi confirmation and exact event matching.",
       );
       const receipt = await publicClient.waitForTransactionReceipt({
         hash,
         confirmations: 1,
       });
       if (receipt.status !== "success")
-        throw new Error("The Sepolia transaction reverted.");
+        throw new Error("The Hoodi transaction reverted.");
 
       const createdEvents = parseEventLogs({
         abi: charityEditionsAbi,
@@ -342,7 +342,7 @@ export function CharityEditionCreateFlow() {
           type="submit"
           disabled={!canSubmit}
         >
-          Review and mint ERC-1155 on Sepolia
+          Review and mint ERC-1155 on Hoodi
         </button>
       </form>
 
@@ -362,7 +362,7 @@ export function CharityEditionCreateFlow() {
         {transactionHash ? (
           <a
             className="text-link"
-            href={`https://sepolia.etherscan.io/tx/${transactionHash}`}
+            href={`https://hoodi.etherscan.io/tx/${transactionHash}`}
             target="_blank"
             rel="noreferrer"
           >

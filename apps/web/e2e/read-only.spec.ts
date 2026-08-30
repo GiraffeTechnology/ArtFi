@@ -162,13 +162,13 @@ test("eight-language selection persists and translates dynamic accessible copy",
   );
 });
 
-test("RWA creation is wallet and Sepolia gated", async ({ page }) => {
+test("RWA creation is wallet and Hoodi gated", async ({ page }) => {
   await page.goto("/create/rwa");
   await expect(
     page.getByText("Connect an external wallet to continue."),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Review and mint on Sepolia" }),
+    page.getByRole("button", { name: "Review and mint on Hoodi" }),
   ).toBeDisabled();
   await expect(
     page.getByText("The application never receives a private key."),
@@ -182,7 +182,9 @@ test("RWA creation is wallet and Sepolia gated", async ({ page }) => {
     page.getByRole("heading", { name: "Package ready for review" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Review and mint ERC-1155 on Sepolia" }),
+    page.getByRole("button", {
+      name: "Review and mint ERC-1155 on Hoodi",
+    }),
   ).toBeDisabled();
   await expect(
     page.getByText("No artwork master is uploaded here."),
@@ -268,7 +270,7 @@ test("production health endpoint reports the enforced operating mode", async ({
   const response = await request.get("/api/health");
   expect(response.ok()).toBe(true);
   await expect(response.json()).resolves.toEqual({
-    chainId: 11155111,
+    chainId: 560048,
     marketplaceMode: "external-mirror",
     service: "artfi-web",
     status: "ok",

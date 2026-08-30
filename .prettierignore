@@ -5,3 +5,8 @@ dist
 node_modules
 .pnpm-store
 pnpm-lock.yaml
+
+# Published NFT metadata is served byte-for-byte and its sha256 is bound on
+# chain, so it must keep the canonical compact encoding the release verifier
+# produces. Reformatting it breaks metadataHash verification.
+apps/web/public/nft/metadata
