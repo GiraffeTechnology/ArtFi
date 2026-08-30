@@ -202,6 +202,17 @@ necessary — an auction over unlocked tokens lets the seller withdraw against a
 This is a design decision recorded for reversal, not a client ruling. If the client prefers escrow
 throughout, say so and this section changes; the invariant above does not.
 
+**Finding, 2026-08-30 — pausing traps escrowed listings.** `settleAuction` and `withdrawCredit` are
+deliberately not `whenNotPaused`, so a pause cannot strand settled proceeds. `cancelListing` is
+`whenNotPaused`, and it is the seller's only exit from an active listing. A pause therefore locks
+every seller's escrowed asset with no way out until someone unpauses. Nothing is stolen — the
+contract exposes no administrative path to user funds — but the assets are held.
+
+This must be fixed wherever escrow survives, which is at minimum the auction path under either
+option: drop `whenNotPaused` from `cancelListing`, or add an escape that works while paused. It is
+in scope for G3-A (`ACCEPTANCE.md` §4) and is recorded here so the escrow decision is made with it
+in view.
+
 #### 4.2.2 Recorded conflict
 
 The superseded document asserted that ArtFi operates no order book, matching engine, custody ledger

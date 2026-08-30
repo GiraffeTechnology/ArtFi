@@ -191,14 +191,16 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## Open items
 
-| #     | Item                                                | Owner      | Needed by     | Notes                                                                                                  |
-| ----- | --------------------------------------------------- | ---------- | ------------- | ------------------------------------------------------------------------------------------------------ |
-| ~~1~~ | ~~Confirm M2 matching-engine scope~~                | ~~Client~~ | —             | **Resolved 2026-08-30: ArtFi is a trading intermediary, not an exchange.** `PRD.md` §4.2. M2 unblocked |
-| 2     | Reconcile the schedule authorities                  | PM         | P1 exit       | `PRD.md` §3.1. Person-days retired as a unit by directive §1.3                                         |
-| 3     | Supply `pics/*.png` and `fractional_steps/*`        | Client     | G1            | Only `BLOCKED` item in the matrix                                                                      |
-| 4     | Hoodi RPC endpoint and funded keystore account      | Client     | G2            | SIN access already authorized                                                                          |
-| 5     | Production chain decision                           | Client     | before G4     | Undecided. Hoodi implies nothing                                                                       |
-| 6     | 13 token IDs / 1,300 units vs. 37 / 3,700 as minted | Client     | documentation | `PRD.md` §8.4 conflict; already on Sepolia                                                             |
+| #     | Item                                                          | Owner      | Needed by      | Notes                                                                                                                                                                 |
+| ----- | ------------------------------------------------------------- | ---------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~1~~ | ~~Confirm M2 matching-engine scope~~                          | ~~Client~~ | —              | **Resolved 2026-08-30: ArtFi is a trading intermediary, not an exchange.** `PRD.md` §4.2. M2 unblocked                                                                |
+| 2     | Reconcile the schedule authorities                            | PM         | P1 exit        | `PRD.md` §3.1. Person-days retired as a unit by directive §1.3                                                                                                        |
+| 3     | Supply `pics/*.png` and `fractional_steps/*`                  | Client     | G1             | Only `BLOCKED` item in the matrix                                                                                                                                     |
+| 4     | Hoodi RPC endpoint and funded keystore account                | Client     | G2             | SIN access already authorized                                                                                                                                         |
+| 5     | Production chain decision                                     | Client     | before G4      | Undecided. Hoodi implies nothing                                                                                                                                      |
+| 6     | 13 token IDs / 1,300 units vs. 37 / 3,700 as minted           | Client     | documentation  | `PRD.md` §8.4 conflict; already on Sepolia                                                                                                                            |
+| 7     | Settlement custody: signature settlement vs escrow throughout | Client     | before M2 code | `PRD.md` §4.2.1. A design decision recorded for reversal; does not block the other tracks                                                                             |
+| 8     | **Pausing traps escrowed listings**                           | Delivery   | G3-A           | `cancelListing` is `whenNotPaused` and is the seller's only exit from an active listing. Fix required wherever escrow survives — the auction path under either option |
 
 ---
 
