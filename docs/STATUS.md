@@ -2,18 +2,29 @@
 
 | Field       | Value                                                                 |
 | ----------- | --------------------------------------------------------------------- |
-| Reviewed    | `7c25c13` on `main` (PR #43)                                          |
-| Base        | `4cb2937`                                                             |
+| Reviewed    | `d7f2aca` on `main` (PR #44)                                          |
+| Base        | `7c25c13`                                                             |
 | Environment | local + GitHub CI. **No runtime chain evidence exists on any chain.** |
 | Date        | 2026-08-30                                                            |
 | Reviewer    | Claude (acting PM), on client instruction                             |
 | Scope note  | ArtFi is a trading intermediary, not an exchange (`PRD.md` §4.2)      |
 
-> **Attribution rule.** This snapshot describes the commit named above, not its base — the rulings
-> and rescopes recorded here do not exist at the base. Whoever merges stamps the merge SHA into
-> `Reviewed` immediately after merging — a squash merge cannot do it in the merge commit itself,
-> so it is the first follow-up commit. `ACCEPTANCE.md` §3 excludes evidence taken from a different
-> commit, and that applies to this file describing itself.
+> **Attribution rule.** `Reviewed` names the commit the matrix below was assessed against, not its
+> base — the rulings and rescopes recorded here do not exist at the base. Whoever merges a commit
+> that changes a status value, a count, or an item's evidence stamps the merge SHA into `Reviewed`
+> immediately after merging; a squash merge cannot do it in the merge commit itself, so it is the
+> first follow-up commit. `ACCEPTANCE.md` §3 excludes evidence taken from a different commit, and
+> that applies to this file describing itself.
+>
+> **Why the chain terminates.** The obligation covers the matrix, which is evidence about the
+> codebase. This rule text and the change log are metadata about this file: changing them alters no
+> item's status, count or evidence, so they carry no stamping obligation. Without that limit every
+> stamp would need a stamp, forever.
+>
+> **A row cannot name its own merge.** A change-log row describing a change that lands with the pull
+> request introducing it is keyed by that PR number, not a SHA — the SHA does not exist when the row
+> is written, and inventing one attributes evidence to a commit that does not carry it. GitHub
+> resolves the PR number to the merge commit permanently, so the reference stays auditable.
 
 > This file records current evidence. It never upgrades evidence into delivery status.
 > Statuses are the six values defined in `ACCEPTANCE.md` §2. Update on every delivery commit.
@@ -214,6 +225,8 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 | Date       | Commit    | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-08-30 | `#45`     | Attribution rule scoped to the matrix and given a termination clause, and change-log rows for a change landing with its own pull request keyed by PR number rather than a SHA that does not yet exist. Raised by Codex on `docs/STATUS.md`:223 — the previous draft credited `d7f2aca` with a clause that commit does not contain. No status value, count or item evidence changed                                                                                                                                                                                       |
+| 2026-08-30 | `d7f2aca` | Stamped `7c25c13` into `Reviewed`. The two ruling rows below gained citations to their governing sections, replacing a bare commit SHA, which `ACCEPTANCE.md` §3 and `AGENTS.md` §2 do not accept as evidence (Codex P2 on `docs/STATUS.md`:218). No status value, count or item evidence changed                                                                                                                                                                                                                                                                        |
 | 2026-08-30 | `0a73fbf` | First filled snapshot. Baseline documents committed to the repository; the matrix was previously an unfilled template                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | 2026-08-30 | `7c25c13` | Client ruling: two business roles — 自营 and 中介 — under one set of rules (`docs/PRD.md` §4.2.1, `docs/DIRECTIVE_2026-08-30_DELIVERY.md` §1.4.1). ArtCCH's assets are treated as customer assets whose account belongs to ArtCCH; no seller allowlist, matching blind to seller identity, disclosure not privilege. Proof obligation added at `docs/ACCEPTANCE.md` §4 G2 (replay the order log with ArtCCH's and a third party's addresses exchanged); boundary restated at `AGENTS.md` §3. Corrects an earlier finding that called the open listing entry points a gap |
 | 2026-08-30 | `4cb2937` | Client ruling: ArtFi is a trading intermediary, not an exchange (`docs/PRD.md` §4.2, `docs/DIRECTIVE_2026-08-30_DELIVERY.md` §1.4; settlement custody at `docs/PRD.md` §4.2.2). Open item 1 closed, M2 unblocked. M2.4/M2.5/M2.8 rescoped — no custody ledger; orders are signed intents; position projection replaces the custodial ledger. Item counts unchanged (60), only the character of M2.8. Settlement custody ruled: signature settlement, escrow only for auctions; open item 7 closed. Open item 8 added: pausing traps escrowed listings                    |
