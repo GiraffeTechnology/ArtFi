@@ -196,11 +196,37 @@ The distinction is not cosmetic. It fixes one invariant:
 - Go APIs versioned and documented in OpenAPI 3.1; bounded error responses that never expose
   secrets or internal topology.
 
-#### 4.2.1 Settlement custody
+#### 4.2.1 Two business roles, one set of rules
+
+**Client ruling, 2026-08-30.** ArtCCH:ArtFi operates in two business roles:
+
+| Role                    | Whose assets are sold    |
+| ----------------------- | ------------------------ |
+| **自营** — proprietary  | ArtCCH's own holdings    |
+| **中介** — intermediary | a third party's holdings |
+
+**These are business roles, not technical privileges.** When ArtCCH sells its own inventory it acts
+as a market participant: its wallet is a participant wallet, subject to exactly the rules that
+govern any other. Treat ArtCCH's assets as customer assets whose account happens to belong to
+ArtCCH.
+
+Three things follow, and each is a requirement:
+
+1. **No privileged path.** There is no seller allowlist, no role gating who may list, and no
+   administrative call that can move ArtCCH's holdings any more than it can move a customer's. The
+   entry points being open to any address is correct under this model, not a gap.
+2. **Matching is blind to seller identity.** Price-time priority takes no input from who the seller
+   is. ArtCCH's own orders receive no ordering, latency, visibility or fee advantage, and the
+   replayable order log is what proves it.
+3. **Disclosure, not privilege.** A listing discloses whether its seller is ArtCCH. The 自营/中介
+   distinction is visible to users and to accounting; it never appears as a branch in the settlement
+   path.
+
+#### 4.2.2 Settlement custody
 
 `ArtFiMarket.sol` currently escrows: `createListing` pulls the seller's tokens into the contract and
 `buyFixed` credits the seller's proceeds there until withdrawn. That is contract escrow, not ArtFi
-custody — ArtFi holds no keys over user balances — but it does place user assets in a
+custody — the operator holds no keys over any balance in it — but it does place assets in a
 platform-deployed contract between listing and settlement.
 
 **Client ruling, 2026-08-30: signature settlement.** The fixed-price and order-book path settles by
@@ -214,13 +240,17 @@ after seeing the winning bid, leaving the bidder to have locked funds for the au
 for nothing. The lock there is one the seller accepts to run an auction, bounded by `startsAt` and
 `endsAt`, released by a `settleAuction` that is deliberately not pausable.
 
+Both rules apply symmetrically under §4.2.1. ArtCCH selling its own inventory settles by signature
+on the fixed-price path and escrows on the auction path, on identical terms to any other seller.
+
 Consequences that must hold in implementation:
 
-- The fixed-price path holds no user assets at rest, so there is no pooled balance to drain and
-  nothing a pause can trap.
+- The fixed-price path holds no assets at rest, so there is no pooled balance to drain and nothing a
+  pause can trap.
 - A seller may keep the same tokens listed in several places at once; a listing is an authorization,
   not a transfer.
-- The auction path keeps escrow and therefore keeps the finding below.
+- The auction path keeps escrow and therefore keeps the finding below — including for ArtCCH's own
+  inventory, which the same pause would trap.
 
 **Finding, 2026-08-30 — pausing traps escrowed listings.** `settleAuction` and `withdrawCredit` are
 deliberately not `whenNotPaused`, so a pause cannot strand settled proceeds. `cancelListing` is
@@ -231,7 +261,7 @@ contract exposes no administrative path to user funds — but the assets are hel
 The ruling narrows this to the auction path, and does not remove it: drop `whenNotPaused` from
 `cancelListing`, or add an escape that works while paused. In scope for G3-A (`ACCEPTANCE.md` §4).
 
-#### 4.2.2 Recorded conflict
+#### 4.2.3 Recorded conflict
 
 The superseded document asserted that ArtFi operates no order book, matching engine, custody ledger
 or settlement system. M2 as quoted (USD 34,500) is titled "backend core trading system". The ruling

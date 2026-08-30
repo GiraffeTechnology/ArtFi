@@ -3,7 +3,8 @@
 Version: 2026-08-30
 Status: Acceptance baseline
 Companion to: `PRD.md` (what is built), `STATUS.md` (where it stands)
-Amended by: `DIRECTIVE_2026-08-30_DELIVERY.md` §1.1 (G3 split), §1.3 (measurement), §1.4 (intermediary)
+Amended by: `DIRECTIVE_2026-08-30_DELIVERY.md` §1.1 (G3 split), §1.3 (measurement),
+§1.4 and §1.4.1 (intermediary, two roles)
 
 ---
 
@@ -107,12 +108,15 @@ for each of:
 - a settlement whose signature does not match the terms it claims to authorize;
 - a fill against an intent the signer has revoked;
 - a fill exceeding the intent's authorized quantity, or replaying a fully consumed intent;
-- an administrative call attempting to move, freeze or reassign a user's assets.
+- an administrative call attempting to move, freeze or reassign a user's assets;
+- a matching decision that differs when the seller is ArtCCH rather than a third party.
 
 Each counterparty is proven separately: a rejection case that only covers a wholly unsigned
 settlement would let a seller-only or buyer-only fill pass while moving the unsigned party's
-holdings. The position projection is additionally proven never to diverge from chain state without
-reporting the divergence.
+holdings. Seller-identity blindness is proven by replaying the order log with ArtCCH's and a third
+party's addresses exchanged and showing the same match sequence (`PRD.md` §4.2.1). The position
+projection is additionally proven never to diverge from chain state without reporting the
+divergence.
 
 Funding or signer availability may be sequenced after non-funded tests but never used to mark a
 runtime item passed.
