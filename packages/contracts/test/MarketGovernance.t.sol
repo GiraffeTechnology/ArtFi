@@ -566,4 +566,50 @@ contract MarketGovernanceTest {
             "exact class threshold passed"
         );
     }
+
+    /// Pausing must not trap a seller's escrowed asset. `createListing` moves the
+    /// seller's tokens into this contract; `cancelListing` is the only way a
+    /// fixed-price seller with no bidder gets them back. If the pause blocks that
+    /// exit, an administrative action has frozen a user's assets, which
+    /// `PRD.md` §4.2 forbids outright. Every other exit — settleAuction,
+    /// finalizeOffering, claimOffering, refundOffering, withdrawCredit — is
+    /// already unpausable by design; this closes the one that was not.
+    function testPauseDoesNotTrapEscrowedListing() public {
+        uint256 before = asset.balanceOf(address(this));
+        uint256 listingId = market.createListing(
+            keccak256("paused-exit"),
+            asset,
+            payment,
+            100,
+            3,
+            uint48(block.timestamp),
+            uint48(block.timestamp + 10),
+            ArtFiMarket.ListingKind.FixedPrice
+        );
+        require(asset.balanceOf(address(this)) == before - 100, "escrow not taken");
+
+        market.pause();
+
+        // The seller retrieves their own escrow while the market is paused.
+        market.cancelListing(listingId);
+        require(asset.balanceOf(address(this)) == before, "seller escrow not returned");
+    }
+
+    /// The pause must still stop new market activity. Without this, removing
+    /// `whenNotPaused` from the exit could be mistaken for weakening the pause.
+    function testPauseStillBlocksNewListings() public {
+        market.pause();
+        try market.createListing(
+            keccak256("paused-entry"),
+            asset,
+            payment,
+            100,
+            3,
+            uint48(block.timestamp),
+            uint48(block.timestamp + 10),
+            ArtFiMarket.ListingKind.FixedPrice
+        ) {
+            require(false, "paused market accepted a new listing");
+        } catch {}
+    }
 }

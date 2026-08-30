@@ -243,7 +243,13 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         emit ListingSettled(listingId, listing.highestBidder, listing.highestBid);
     }
 
-    function cancelListing(uint256 listingId) external whenNotPaused nonReentrant {
+    /// Deliberately not `whenNotPaused`. `createListing` escrows the seller's asset in this
+    /// contract, and for a fixed-price listing with no bidder this is the seller's only way
+    /// out. Gating it on the pause would let an administrative action freeze a user's assets,
+    /// which `PRD.md` §4.2 forbids. The pause stops new market activity — createListing,
+    /// buyFixed, placeBid, contribute — while every exit stays open, as settleAuction,
+    /// finalizeOffering, claimOffering, refundOffering and withdrawCredit already do.
+    function cancelListing(uint256 listingId) external nonReentrant {
         Listing storage listing = listings[listingId];
         if (listing.state != State.Active || listing.seller != msg.sender) revert NotAuthorized();
         if (listing.highestBidder != address(0)) revert ActiveBidExists();
