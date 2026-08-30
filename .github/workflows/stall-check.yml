@@ -1,0 +1,125 @@
+name: stall-check
+
+# Surfaces silence. On 2026-08-24 a client directive was unexecutable — the
+# Foundry deploy scripts reverted on any chain but Ethereum Sepolia while the
+# shell tooling demanded Hoodi — and nothing reported it. Delivery simply
+# stopped, and the stop was invisible for days.
+#
+# ACCEPTANCE.md §7.15 makes silence a delivery defect: an instruction that
+# cannot be executed must be answered within 24 hours with the blocker, its
+# evidence, and at least one alternative. This workflow is the machinery behind
+# that rule. It does not judge whether work is good; it only makes a stop
+# visible while it is still a day old rather than a week.
+
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  # Days without a commit on the default branch before the stop is reported.
+  COMMIT_STALL_DAYS: 2
+  # Days a source change may sit without STATUS.md being updated alongside it.
+  STATUS_STALL_DAYS: 3
+  ISSUE_TITLE: "Delivery stalled without a report"
+
+jobs:
+  stall-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Measure silence
+        id: measure
+        run: |
+          now=$(date -u +%s)
+          last_commit=$(git log -1 --format=%ct)
+          commit_days=$(( (now - last_commit) / 86400 ))
+
+          # STATUS.md is the agreed record of where every item stands. Source
+          # moving without it moving is the shape the last stall took: work
+          # appeared to continue while the statement of progress went stale.
+          #
+          # `git log -1 -- <path>` exits 0 with empty output when the path has no
+          # history, so fall back on emptiness, not on exit status.
+          last_status=$(git log -1 --format=%ct -- docs/STATUS.md)
+          last_status=${last_status:-$last_commit}
+          status_days=$(( (now - last_status) / 86400 ))
+
+          last_src=$(git log -1 --format=%ct -- apps packages scripts)
+          last_src=${last_src:-$last_commit}
+          src_after_status=$(( last_src > last_status ? 1 : 0 ))
+
+          {
+            echo "commit_days=$commit_days"
+            echo "status_days=$status_days"
+            echo "src_after_status=$src_after_status"
+            echo "last_commit_iso=$(git log -1 --format=%cI)"
+            echo "last_commit_subject=$(git log -1 --format=%s | tr -d '\r')"
+          } >> "$GITHUB_OUTPUT"
+
+          stalled=0
+          reasons=""
+          if [ "$commit_days" -ge "$COMMIT_STALL_DAYS" ]; then
+            stalled=1
+            reasons="${reasons}- No commit on the default branch for ${commit_days} days (threshold ${COMMIT_STALL_DAYS}).\n"
+          fi
+          if [ "$src_after_status" -eq 1 ] && [ "$status_days" -ge "$STATUS_STALL_DAYS" ]; then
+            stalled=1
+            reasons="${reasons}- Source changed more recently than \`docs/STATUS.md\`, which is ${status_days} days old (threshold ${STATUS_STALL_DAYS}). \`ACCEPTANCE.md\` §6.1 requires it to move on every delivery commit.\n"
+          fi
+          echo "stalled=$stalled" >> "$GITHUB_OUTPUT"
+          printf 'reasons<<EOF\n%b\nEOF\n' "$reasons" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the report
+        if: steps.measure.outputs.stalled == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REASONS: ${{ steps.measure.outputs.reasons }}
+          LAST_ISO: ${{ steps.measure.outputs.last_commit_iso }}
+          LAST_SUBJECT: ${{ steps.measure.outputs.last_commit_subject }}
+        run: |
+          body=$(cat <<EOF
+          Delivery appears to have stopped, and no blocker report accompanies it.
+
+          $REASONS
+          Last commit: \`$LAST_ISO\` — $LAST_SUBJECT
+
+          ## What is being asked
+
+          Per \`ACCEPTANCE.md\` §7.15 and \`docs/DIRECTIVE_2026-08-30_DELIVERY.md\` §3.1, an
+          instruction that cannot be executed must be answered within 24 hours with:
+
+          1. the blocker,
+          2. its evidence, and
+          3. at least one alternative.
+
+          Reply here with that, or push work and update \`docs/STATUS.md\`. This issue closes
+          itself once either happens.
+
+          A stop is not a defect. An unreported stop is.
+          EOF
+          )
+
+          existing=$(gh issue list --state open --search "$ISSUE_TITLE in:title" --json number --jq '.[0].number' || true)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body "$body"
+          fi
+
+      - name: Close the report when delivery resumes
+        if: steps.measure.outputs.stalled == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh issue list --state open --search "$ISSUE_TITLE in:title" --json number --jq '.[0].number' || true)
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "Delivery resumed: a commit landed and \`docs/STATUS.md\` is current."
+          fi

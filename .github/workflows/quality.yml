@@ -73,6 +73,7 @@ jobs:
       - run: pnpm contracts:build
       - run: pnpm contracts:test
       - run: pnpm contracts:deploy-tooling:check
+      - run: pnpm chain:consistency:check
 
   migration:
     runs-on: ubuntu-latest
