@@ -57,6 +57,12 @@ out of scope and not billable.
   originates from a signature that user produced for that specific trade. Orders are signed intents;
   matching is discovery, not execution; the chain is the ownership authority, never MySQL or Redis.
   No administrative action may move, freeze, or reassign user assets.
+- **Two business roles, one set of rules** (`PRD.md` §4.2.1). ArtCCH sells its own inventory
+  (自营) and third parties' (中介). Treat ArtCCH's assets as customer assets whose account happens
+  to belong to ArtCCH. Never build a seller allowlist, a privileged listing path, or an
+  administrative call that reaches ArtCCH's holdings. **Matching takes no input from seller
+  identity** — ArtCCH's own orders get no ordering, latency, visibility or fee advantage. The
+  distinction is disclosed to users, never branched on in settlement.
 - No mainnet, real assets, or real-money operation without separate written approval.
 - The test chain is **Hoodi `560048`**. It says nothing about the production chain, which is an
   open decision. `verify-chain-consistency.mjs` enforces that every layer agrees.

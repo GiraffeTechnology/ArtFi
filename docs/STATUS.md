@@ -205,7 +205,7 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | 4     | Hoodi RPC endpoint and funded keystore account      | Client     | G2            | SIN access already authorized                                                                                                                      |
 | 5     | Production chain decision                           | Client     | before G4     | Undecided. Hoodi implies nothing                                                                                                                   |
 | 6     | 13 token IDs / 1,300 units vs. 37 / 3,700 as minted | Client     | documentation | `PRD.md` §8.4 conflict; already on Sepolia                                                                                                         |
-| ~~7~~ | ~~Settlement custody~~                              | ~~Client~~ | —             | **Resolved 2026-08-30: signature settlement.** Fixed-price and order-book settle by signature; escrow retained only for auctions (`PRD.md` §4.2.1) |
+| ~~7~~ | ~~Settlement custody~~                              | ~~Client~~ | —             | **Resolved 2026-08-30: signature settlement.** Fixed-price and order-book settle by signature; escrow retained only for auctions (`PRD.md` §4.2.2) |
 | 8     | **Pausing traps escrowed listings**                 | Delivery   | G3-A          | `cancelListing` is `whenNotPaused` and is the seller's only exit from an active listing. Narrowed by the ruling to the auction path; not removed   |
 
 ---
