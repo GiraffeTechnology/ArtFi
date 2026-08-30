@@ -72,7 +72,23 @@ docker compose config
 
 ## Delivery plan
 
-See [the staged roadmap](docs/ROADMAP.md), [PRD traceability](docs/PRD_TRACEABILITY.md),
+**The current baseline is three documents.** Read them before anything else, and see
+[`AGENTS.md`](AGENTS.md) for how they bind:
+
+- [**PRD**](docs/PRD.md) — what must exist and how it must behave
+- [**Acceptance standard**](docs/ACCEPTANCE.md) — what proves it exists, and the G1–G4 promotion gates
+- [**Status**](docs/STATUS.md) — where every requirement stands right now, item by item
+
+Client directives override them where they conflict, newest first:
+[2026-08-30 delivery](docs/DIRECTIVE_2026-08-30_DELIVERY.md) (measurement, G3 split, Hoodi test
+payload) and [2026-08-24 Hoodi](docs/DIRECTIVE_2026-08-24_HOODI.md) (test chain).
+
+### Superseded, retained as history
+
+The documents below predate the baseline above. They record how the project got here; they are not
+the acceptance target.
+
+[the staged roadmap](docs/ROADMAP.md), [PRD traceability](docs/PRD_TRACEABILITY.md),
 [Claude Code acceptance PRD](docs/PRD_CLAUDE_CODE_ACCEPTANCE.md),
 [Stage 1 acceptance evidence](docs/STAGE_1_ACCEPTANCE.md),
 [Stage 2 acceptance evidence](docs/STAGE_2_ACCEPTANCE.md),
