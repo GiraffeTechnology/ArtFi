@@ -2,15 +2,15 @@
 
 | Field       | Value                                                                 |
 | ----------- | --------------------------------------------------------------------- |
-| Reviewed    | `4cb2937` on `main` (PR #42)                                          |
-| Base        | `ac1ce8f`                                                             |
+| Reviewed    | `7c25c13` on `main` (PR #43)                                          |
+| Base        | `4cb2937`                                                             |
 | Environment | local + GitHub CI. **No runtime chain evidence exists on any chain.** |
 | Date        | 2026-08-30                                                            |
 | Reviewer    | Claude (acting PM), on client instruction                             |
 | Scope note  | ArtFi is a trading intermediary, not an exchange (`PRD.md` §4.2)      |
 
 > **Attribution rule.** This snapshot describes the commit named above, not its base — the rulings
-> and rescopes recorded here do not exist at `ac1ce8f`. Whoever merges stamps the merge SHA into
+> and rescopes recorded here do not exist at the base. Whoever merges stamps the merge SHA into
 > `Reviewed` immediately after merging — a squash merge cannot do it in the merge commit itself,
 > so it is the first follow-up commit. `ACCEPTANCE.md` §3 excludes evidence taken from a different
 > commit, and that applies to this file describing itself.
@@ -215,4 +215,5 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | Date       | Commit    | Change                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ---------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-08-30 | `0a73fbf` | First filled snapshot. Baseline documents committed to the repository; the matrix was previously an unfilled template                                                                                                                                                                                                                                                                                                                  |
+| 2026-08-30 | `7c25c13` | Client ruling: two business roles — 自营 and 中介 — under one set of rules. ArtCCH's assets are treated as customer assets whose account belongs to ArtCCH; no seller allowlist, matching blind to seller identity, disclosure not privilege. Corrects an earlier finding that called the open listing entry points a gap                                                                                                              |
 | 2026-08-30 | `4cb2937` | Client ruling: ArtFi is a trading intermediary, not an exchange. Open item 1 closed, M2 unblocked. M2.4/M2.5/M2.8 rescoped — no custody ledger; orders are signed intents; position projection replaces the custodial ledger. Item counts unchanged (60), only the character of M2.8. Settlement custody ruled: signature settlement, escrow only for auctions; open item 7 closed. Open item 8 added: pausing traps escrowed listings |
