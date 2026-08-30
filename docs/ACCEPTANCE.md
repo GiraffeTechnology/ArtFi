@@ -3,7 +3,7 @@
 Version: 2026-08-30
 Status: Acceptance baseline
 Companion to: `PRD.md` (what is built), `STATUS.md` (where it stands)
-Amended by: `DIRECTIVE_2026-08-30_DELIVERY.md` §1.1 (G3 split), §1.3 (measurement)
+Amended by: `DIRECTIVE_2026-08-30_DELIVERY.md` §1.1 (G3 split), §1.3 (measurement), §1.4 (intermediary)
 
 ---
 
@@ -89,14 +89,19 @@ Every Class B and Class C requirement `VERIFIED` on Hoodi (560048), on one integ
    issuer → buyer, buyer wallet control and DAO membership verified.
 6. Proposal / vote / queue / timelock execution tested for every threshold class
    (10% / >50% / >66.6667% / >80%).
-7. Order lifecycle proven: create, amend, cancel, partial fill, match, settle, ledger
-   reconciliation against chain state.
+7. Order lifecycle proven: create, amend, cancel, partial fill, match, settle, and position
+   projection reconciled against chain state.
 8. Auth negative tests: unauthenticated trade rejected, role escalation rejected, browser-supplied
    headers alone cannot grant admin access.
 9. A01–A38 compliant previews available with hash mapping; no preview URL exposes a master.
 10. Failure paths exercised: RPC unavailable, insufficient gas, rejected signature, translation
     failure, external-marketplace unavailability.
 11. Transaction hashes, receipts, blocks, events and balances recorded for every runtime item.
+
+**The intermediary invariant is proven as part of this gate** (`PRD.md` §4.2): a match no party
+signed cannot settle; a revoked intent cannot be filled; no administrative call can move, freeze or
+reassign a user's assets; and the position projection never diverges from chain state without
+reporting the divergence.
 
 Funding or signer availability may be sequenced after non-funded tests but never used to mark a
 runtime item passed.
