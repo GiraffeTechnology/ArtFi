@@ -97,7 +97,8 @@ paid work concentrates.
 ### 2.3 Class C — Not present in the prototype (new build)
 
 - User authentication and session (JWT), wallet-address binding, role/permission enforcement
-- Order book, matching engine, order lifecycle, fund/ledger management
+- Order book, matching engine, order lifecycle, and position projection — as an intermediary, per
+  §4.2. No custody ledger and no ArtFi-operated settlement
 - Advanced governance: proposal thresholds, snapshot voting power, timelock execution
 - Revenue distribution
 - Multi-signature administration
@@ -157,24 +158,90 @@ delivery team's.
 
 ### 4.2 M2 — Backend core trading
 
+**Client ruling, 2026-08-30: ArtFi is a trading intermediary, not an exchange.** This resolves the
+conflict recorded below and governs every requirement in this section.
+
+The distinction is not cosmetic. It fixes one invariant:
+
+> **ArtFi never takes possession of, and never holds authority to move, a user's funds or assets.**
+> Every change to a user's holdings originates from a signature that user produced for that
+> specific trade. ArtFi records intent and finds counterparties; the chain settles.
+
 - **Authentication**: wallet-signature login (SIWE-style nonce challenge), JWT issue/refresh,
   session persistence, wallet-address binding, logout. Unauthenticated users cannot trade.
 - **Order system**: limit and market orders for ERC-20 fractions; create, amend, cancel; order
-  lifecycle states; partial fills.
-- **Matching engine**: price-time priority; deterministic and replayable from the order log.
-- **Fund management**: balance and ledger per user per asset, double-entry, reconcilable against
-  chain state. Redis is cache only and never ownership authority.
+  lifecycle states; partial fills. An order is a **signed intent** — an EIP-712 payload the user
+  signs, authorizing **up to a stated maximum quantity at stated terms**, and nothing else.
+  Amending replaces a signed intent; cancelling revokes one. The backend stores intents and
+  signatures; it never stores a claim on assets.
+
+  Partial fills consume the intent cumulatively against **on-chain fill state keyed by the intent's
+  hash**: each fill increments the consumed quantity, a fill that would exceed the authorized
+  maximum reverts, and a fully consumed or revoked intent cannot be filled again. The signature is
+  therefore neither burned on first use — which would make partial fills impossible — nor reusable
+  without limit. Revocation is on-chain, so a cancelled intent cannot be filled even by a
+  counterparty holding the signature.
+
+- **Matching engine**: price-time priority; deterministic and replayable from the order log. Its
+  output is a settlement transaction submitted to the market contract, carrying both parties'
+  signatures. Matching is discovery, not execution: a match that no party signed cannot settle.
+- **Position projection** (replaces custodial fund management): balances and positions per user per
+  asset, **projected read-only from chain events** and reconcilable against chain state. Double-entry
+  bookkeeping applies to the projection's own integrity, not to a claim on customer property.
+  Neither Redis nor MySQL is ever an ownership authority — the chain is.
 - **Trade history service**: unified on-chain and off-chain event record, queryable and filterable.
 - **Admin API**: moderation, appeals, platform configuration — all privileged actions produce
-  durable audit records.
+  durable audit records. **No administrative action may move, freeze, or reassign a user's assets.**
+  Administration governs listings, visibility and platform configuration, never property.
 - Go APIs versioned and documented in OpenAPI 3.1; bounded error responses that never expose
   secrets or internal topology.
 
-> **Requires client confirmation before P1 exit:** the superseded document asserted that ArtFi
-> operates no order book, matching engine, custody ledger or settlement system. That contradicts
-> M2 as quoted (USD 34,500). This PRD implements M2 as quoted. If a regulatory constraint on
-> operating a matching venue exists, it changes the product and the contract, and must be raised
-> as a written scope change — it cannot be resolved by an implementation decision.
+#### 4.2.1 Settlement custody
+
+`ArtFiMarket.sol` currently escrows: `createListing` pulls the seller's tokens into the contract and
+`buyFixed` credits the seller's proceeds there until withdrawn. That is contract escrow, not ArtFi
+custody — ArtFi holds no keys over user balances — but it does place user assets in a
+platform-deployed contract between listing and settlement.
+
+**Client ruling, 2026-08-30: signature settlement.** The fixed-price and order-book path settles by
+signature — assets remain in the owner's wallet and move only in the atomic fill the owner signed.
+`_pullExact` on listing is removed from that path; the market contract pulls from both parties at
+fill time and never holds a resting balance.
+
+Escrow is retained **only for auctions**, where locking the asset for the auction's duration is
+structurally necessary: an auction over unlocked tokens lets the seller transfer the asset away
+after seeing the winning bid, leaving the bidder to have locked funds for the auction's duration
+for nothing. The lock there is one the seller accepts to run an auction, bounded by `startsAt` and
+`endsAt`, released by a `settleAuction` that is deliberately not pausable.
+
+Consequences that must hold in implementation:
+
+- The fixed-price path holds no user assets at rest, so there is no pooled balance to drain and
+  nothing a pause can trap.
+- A seller may keep the same tokens listed in several places at once; a listing is an authorization,
+  not a transfer.
+- The auction path keeps escrow and therefore keeps the finding below.
+
+**Finding, 2026-08-30 — pausing traps escrowed listings.** `settleAuction` and `withdrawCredit` are
+deliberately not `whenNotPaused`, so a pause cannot strand settled proceeds. `cancelListing` is
+`whenNotPaused`, and it is the seller's only exit from an active listing. A pause therefore locks
+every seller's escrowed asset with no way out until someone unpauses. Nothing is stolen — the
+contract exposes no administrative path to user funds — but the assets are held.
+
+The ruling narrows this to the auction path, and does not remove it: drop `whenNotPaused` from
+`cancelListing`, or add an escape that works while paused. In scope for G3-A (`ACCEPTANCE.md` §4).
+
+#### 4.2.2 Recorded conflict
+
+The superseded document asserted that ArtFi operates no order book, matching engine, custody ledger
+or settlement system. M2 as quoted (USD 34,500) is titled "backend core trading system". The ruling
+above resolves this: order book, matching and trade history are **in scope and built**; the custody
+ledger and ArtFi-operated settlement are **not built**, replaced by the position projection and
+on-chain settlement described above. Six of M2's seven requirement groups survive intact; only fund
+management changes character.
+
+Whether an intermediary of this shape carries licensing obligations in any given jurisdiction is a
+legal question for the client's counsel, not an implementation decision.
 
 ### 4.3 M3 — Frontend
 

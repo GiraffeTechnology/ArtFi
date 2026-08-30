@@ -2,11 +2,17 @@
 
 | Field       | Value                                                                 |
 | ----------- | --------------------------------------------------------------------- |
-| Commit      | `0a73fbf`                                                             |
-| Branch      | `claude/ci-all-pr-6dytk9` (PR #40)                                    |
+| Reviewed    | `claude/ci-all-pr-6dytk9`, PR #42 head                                |
+| Base        | `ac1ce8f` on `main`                                                   |
 | Environment | local + GitHub CI. **No runtime chain evidence exists on any chain.** |
 | Date        | 2026-08-30                                                            |
 | Reviewer    | Claude (acting PM), on client instruction                             |
+| Scope note  | ArtFi is a trading intermediary, not an exchange (`PRD.md` §4.2)      |
+
+> **Attribution rule.** This snapshot describes the branch named above, not its base. The rulings
+> and rescopes recorded here do not exist at `ac1ce8f`. Whoever merges stamps the merge SHA into
+> `Reviewed` in the same commit — `ACCEPTANCE.md` §3 excludes evidence taken from a different
+> commit, and that applies to this file describing itself.
 
 > This file records current evidence. It never upgrades evidence into delivery status.
 > Statuses are the six values defined in `ACCEPTANCE.md` §2. Update on every delivery commit.
@@ -62,19 +68,19 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## M2 — Backend core trading (`PRD.md` §4.2)
 
-| #     | Requirement                             | Status                     | Evidence / gap                                                                                                    |
-| ----- | --------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| M2.1  | SIWE nonce challenge                    | `IMPLEMENTED-NOT-VERIFIED` | `apps/web/src/lib/operator-auth.ts` — **operator only, not users**                                                |
-| M2.2  | JWT issue / refresh / session / logout  | `NOT-IMPLEMENTED`          | zero JWT references in `apps/api` or `apps/web/src`                                                               |
-| M2.3  | Wallet-address binding                  | `NOT-IMPLEMENTED`          |                                                                                                                   |
-| M2.4  | Trading schema                          | `NOT-IMPLEMENTED`          | no `orders`, `trades`, `ledger_entries`, `accounts`, `sessions`, `users` table exists. Prerequisite for M2.5–M2.9 |
-| M2.5  | Order create / amend / cancel           | `NOT-IMPLEMENTED`          | the only `orders` in Go are OpenSea mirror records                                                                |
-| M2.6  | Order lifecycle, partial fills          | `NOT-IMPLEMENTED`          |                                                                                                                   |
-| M2.7  | Matching engine, price-time, replayable | `NOT-IMPLEMENTED`          | the only "matching" is a word in a test message                                                                   |
-| M2.8  | Fund ledger, double-entry               | `NOT-IMPLEMENTED`          |                                                                                                                   |
-| M2.9  | Trade history service                   | `NOT-IMPLEMENTED`          |                                                                                                                   |
-| M2.10 | Admin API with audit records            | `NOT-IMPLEMENTED`          | no `/v1/admin` route                                                                                              |
-| M2.11 | OpenAPI 3.1, bounded errors             | `IMPLEMENTED-NOT-VERIFIED` | `apps/api/openapi/openapi.yaml`, drift tested in CI                                                               |
+| #     | Requirement                                   | Status                     | Evidence / gap                                                                                                                                           |
+| ----- | --------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M2.1  | SIWE nonce challenge                          | `IMPLEMENTED-NOT-VERIFIED` | `apps/web/src/lib/operator-auth.ts` — **operator only, not users**                                                                                       |
+| M2.2  | JWT issue / refresh / session / logout        | `NOT-IMPLEMENTED`          | zero JWT references in `apps/api` or `apps/web/src`                                                                                                      |
+| M2.3  | Wallet-address binding                        | `NOT-IMPLEMENTED`          |                                                                                                                                                          |
+| M2.4  | Trading schema                                | `NOT-IMPLEMENTED`          | no `orders`, `trades`, `positions`, `sessions`, `users` table exists. Prerequisite for M2.5–M2.9. Per the intermediary ruling no custody ledger is built |
+| M2.5  | Signed-intent orders: create / amend / cancel | `NOT-IMPLEMENTED`          | the only `orders` in Go are OpenSea mirror records. Orders are EIP-712 payloads the user signs                                                           |
+| M2.6  | Order lifecycle, partial fills                | `NOT-IMPLEMENTED`          |                                                                                                                                                          |
+| M2.7  | Matching engine, price-time, replayable       | `NOT-IMPLEMENTED`          | the only "matching" is a word in a test message. Output settles on chain with both signatures                                                            |
+| M2.8  | Position projection from chain events         | `NOT-IMPLEMENTED`          | **Rescoped 2026-08-30**: the custodial double-entry ledger is not built. ArtFi is an intermediary; the chain is the ownership authority (`PRD.md` §4.2)  |
+| M2.9  | Trade history service                         | `NOT-IMPLEMENTED`          |                                                                                                                                                          |
+| M2.10 | Admin API with audit records                  | `NOT-IMPLEMENTED`          | no `/v1/admin` route. No admin action may move, freeze or reassign user assets                                                                           |
+| M2.11 | OpenAPI 3.1, bounded errors                   | `IMPLEMENTED-NOT-VERIFIED` | `apps/api/openapi/openapi.yaml`, drift tested in CI                                                                                                      |
 
 ## M3 — Frontend (`PRD.md` §4.3)
 
@@ -190,19 +196,22 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## Open items
 
-| #   | Item                                                       | Owner  | Needed by     | Notes                                                               |
-| --- | ---------------------------------------------------------- | ------ | ------------- | ------------------------------------------------------------------- |
-| 1   | Confirm M2 matching-engine scope vs. market-boundary claim | Client | before M2     | `PRD.md` §4.2. Blocks 11 items; the other tracks proceed without it |
-| 2   | Reconcile the schedule authorities                         | PM     | P1 exit       | `PRD.md` §3.1. Person-days retired as a unit by directive §1.3      |
-| 3   | Supply `pics/*.png` and `fractional_steps/*`               | Client | G1            | Only `BLOCKED` item in the matrix                                   |
-| 4   | Hoodi RPC endpoint and funded keystore account             | Client | G2            | SIN access already authorized                                       |
-| 5   | Production chain decision                                  | Client | before G4     | Undecided. Hoodi implies nothing                                    |
-| 6   | 13 token IDs / 1,300 units vs. 37 / 3,700 as minted        | Client | documentation | `PRD.md` §8.4 conflict; already on Sepolia                          |
+| #     | Item                                                | Owner      | Needed by     | Notes                                                                                                                                              |
+| ----- | --------------------------------------------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~1~~ | ~~Confirm M2 matching-engine scope~~                | ~~Client~~ | —             | **Resolved 2026-08-30: ArtFi is a trading intermediary, not an exchange.** `PRD.md` §4.2. M2 unblocked                                             |
+| 2     | Reconcile the schedule authorities                  | PM         | P1 exit       | `PRD.md` §3.1. Person-days retired as a unit by directive §1.3                                                                                     |
+| 3     | Supply `pics/*.png` and `fractional_steps/*`        | Client     | G1            | Only `BLOCKED` item in the matrix                                                                                                                  |
+| 4     | Hoodi RPC endpoint and funded keystore account      | Client     | G2            | SIN access already authorized                                                                                                                      |
+| 5     | Production chain decision                           | Client     | before G4     | Undecided. Hoodi implies nothing                                                                                                                   |
+| 6     | 13 token IDs / 1,300 units vs. 37 / 3,700 as minted | Client     | documentation | `PRD.md` §8.4 conflict; already on Sepolia                                                                                                         |
+| ~~7~~ | ~~Settlement custody~~                              | ~~Client~~ | —             | **Resolved 2026-08-30: signature settlement.** Fixed-price and order-book settle by signature; escrow retained only for auctions (`PRD.md` §4.2.1) |
+| 8     | **Pausing traps escrowed listings**                 | Delivery   | G3-A          | `cancelListing` is `whenNotPaused` and is the seller's only exit from an active listing. Narrowed by the ruling to the auction path; not removed   |
 
 ---
 
 ## Change log
 
-| Date       | Commit    | Change                                                                                                                |
-| ---------- | --------- | --------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-30 | `0a73fbf` | First filled snapshot. Baseline documents committed to the repository; the matrix was previously an unfilled template |
+| Date       | Commit    | Change                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-30 | `0a73fbf` | First filled snapshot. Baseline documents committed to the repository; the matrix was previously an unfilled template                                                                                                                                                                                                                                                                                                   |
+| 2026-08-30 | PR #42    | Client ruling: ArtFi is a trading intermediary, not an exchange. Open item 1 closed, M2 unblocked. M2.4/M2.5/M2.8 rescoped — no custody ledger; orders are signed intents; position projection replaces the custodial ledger. Item counts unchanged (60), only the character of M2.8. Open items 7 and 8 added: the settlement-custody decision, and pausing traps escrowed listings. Stamp the merge SHA here on merge |

@@ -52,6 +52,11 @@ out of scope and not billable.
   Web, API, MySQL, servers, GitHub, CI, or logs. Signing stays local and offline.
 - All RPC, deployment, broadcast, receipt, explorer and external-marketplace calls originate from
   the approved SIN execution zone.
+- **ArtFi is a trading intermediary, not an exchange** (`PRD.md` §4.2). ArtFi never takes possession
+  of, and never holds authority to move, a user's funds or assets. Every change to a user's holdings
+  originates from a signature that user produced for that specific trade. Orders are signed intents;
+  matching is discovery, not execution; the chain is the ownership authority, never MySQL or Redis.
+  No administrative action may move, freeze, or reassign user assets.
 - No mainnet, real assets, or real-money operation without separate written approval.
 - The test chain is **Hoodi `560048`**. It says nothing about the production chain, which is an
   open decision. `verify-chain-consistency.mjs` enforces that every layer agrees.
