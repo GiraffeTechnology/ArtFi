@@ -149,7 +149,7 @@ Hoodi 上的链上测试,**由交付方自行生成 AI 作品并铸造测试 tok
 | 4   | M6 运维             | CD、生产集群、主从、备份恢复、监控告警 —— 与业务代码零耦合                                          |
 | 5   | A01–A38 合规预览    | 当前零文件;`ACCEPTANCE.md` §7.8 规定缺失即审计不通过                                                |
 
-M2 为关键路径,但其前置是 §4.1 的决策与 `migration 000009`(orders / trades / ledger_entries / accounts / sessions / users 六类表当前一张都不存在)。
+M2 为关键路径,已由 §1.4 解锁。其前置是 `migration 000009`(`orders` / `trades` / `positions` / `sessions` / `users`,当前一张都不存在)。**不建 `ledger_entries`,不建 `accounts`** —— 按 §1.4 的不变量,持仓是链上事件的只读投影,不是托管账本。
 
 ---
 

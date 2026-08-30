@@ -2,12 +2,17 @@
 
 | Field       | Value                                                                 |
 | ----------- | --------------------------------------------------------------------- |
-| Commit      | `ac1ce8f` (`main`, PR #40 merged)                                     |
-| Branch      | `main`                                                                |
+| Reviewed    | `claude/ci-all-pr-6dytk9`, PR #42 head                                |
+| Base        | `ac1ce8f` on `main`                                                   |
 | Environment | local + GitHub CI. **No runtime chain evidence exists on any chain.** |
 | Date        | 2026-08-30                                                            |
 | Reviewer    | Claude (acting PM), on client instruction                             |
 | Scope note  | ArtFi is a trading intermediary, not an exchange (`PRD.md` §4.2)      |
+
+> **Attribution rule.** This snapshot describes the branch named above, not its base. The rulings
+> and rescopes recorded here do not exist at `ac1ce8f`. Whoever merges stamps the merge SHA into
+> `Reviewed` in the same commit — `ACCEPTANCE.md` §3 excludes evidence taken from a different
+> commit, and that applies to this file describing itself.
 
 > This file records current evidence. It never upgrades evidence into delivery status.
 > Statuses are the six values defined in `ACCEPTANCE.md` §2. Update on every delivery commit.
@@ -206,7 +211,7 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## Change log
 
-| Date       | Commit    | Change                                                                                                                                                                                                                                                                               |
-| ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-08-30 | `0a73fbf` | First filled snapshot. Baseline documents committed to the repository; the matrix was previously an unfilled template                                                                                                                                                                |
-| 2026-08-30 | `ac1ce8f` | Client ruling: ArtFi is a trading intermediary, not an exchange. Open item 1 closed, M2 unblocked. M2.4/M2.5/M2.8 rescoped — no custody ledger; orders are signed intents; position projection replaces the custodial ledger. Item counts unchanged (60), only the character of M2.8 |
+| Date       | Commit    | Change                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-30 | `0a73fbf` | First filled snapshot. Baseline documents committed to the repository; the matrix was previously an unfilled template                                                                                                                                                                                                                                                                                                   |
+| 2026-08-30 | PR #42    | Client ruling: ArtFi is a trading intermediary, not an exchange. Open item 1 closed, M2 unblocked. M2.4/M2.5/M2.8 rescoped — no custody ledger; orders are signed intents; position projection replaces the custodial ledger. Item counts unchanged (60), only the character of M2.8. Open items 7 and 8 added: the settlement-custody decision, and pausing traps escrowed listings. Stamp the merge SHA here on merge |

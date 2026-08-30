@@ -98,9 +98,20 @@ Every Class B and Class C requirement `VERIFIED` on Hoodi (560048), on one integ
     failure, external-marketplace unavailability.
 11. Transaction hashes, receipts, blocks, events and balances recorded for every runtime item.
 
-**The intermediary invariant is proven as part of this gate** (`PRD.md` §4.2): a match no party
-signed cannot settle; a revoked intent cannot be filled; no administrative call can move, freeze or
-reassign a user's assets; and the position projection never diverges from chain state without
+**The intermediary invariant is proven as part of this gate** (`PRD.md` §4.2), by a rejection case
+for each of:
+
+- a settlement carrying no signature at all;
+- a settlement carrying the seller's signature but not the buyer's;
+- a settlement carrying the buyer's signature but not the seller's;
+- a settlement whose signature does not match the terms it claims to authorize;
+- a fill against an intent the signer has revoked;
+- a fill exceeding the intent's authorized quantity, or replaying a fully consumed intent;
+- an administrative call attempting to move, freeze or reassign a user's assets.
+
+Each counterparty is proven separately: a rejection case that only covers a wholly unsigned
+settlement would let a seller-only or buyer-only fill pass while moving the unsigned party's
+holdings. The position projection is additionally proven never to diverge from chain state without
 reporting the divergence.
 
 Funding or signer availability may be sequenced after non-funded tests but never used to mark a

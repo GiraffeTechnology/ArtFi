@@ -171,8 +171,17 @@ The distinction is not cosmetic. It fixes one invariant:
   session persistence, wallet-address binding, logout. Unauthenticated users cannot trade.
 - **Order system**: limit and market orders for ERC-20 fractions; create, amend, cancel; order
   lifecycle states; partial fills. An order is a **signed intent** — an EIP-712 payload the user
-  signs, authorizing exactly one trade on stated terms. Amending replaces a signed intent; cancelling
-  revokes one. The backend stores intents and signatures; it never stores a claim on assets.
+  signs, authorizing **up to a stated maximum quantity at stated terms**, and nothing else.
+  Amending replaces a signed intent; cancelling revokes one. The backend stores intents and
+  signatures; it never stores a claim on assets.
+
+  Partial fills consume the intent cumulatively against **on-chain fill state keyed by the intent's
+  hash**: each fill increments the consumed quantity, a fill that would exceed the authorized
+  maximum reverts, and a fully consumed or revoked intent cannot be filled again. The signature is
+  therefore neither burned on first use — which would make partial fills impossible — nor reusable
+  without limit. Revocation is on-chain, so a cancelled intent cannot be filled even by a
+  counterparty holding the signature.
+
 - **Matching engine**: price-time priority; deterministic and replayable from the order log. Its
   output is a settlement transaction submitted to the market contract, carrying both parties'
   signatures. Matching is discovery, not execution: a match that no party signed cannot settle.
