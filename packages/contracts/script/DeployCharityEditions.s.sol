@@ -9,18 +9,18 @@ interface VmCharityEditions {
     function stopBroadcast() external;
 }
 
-/// @notice Optional Sepolia-only deployment for the separately gated ArtCCH charity editions.
+/// @notice Optional Hoodi-only deployment for the separately gated ArtCCH charity editions.
 /// @dev The signing method is supplied to Forge and no key is read or stored by this source.
 contract DeployCharityEditions {
     VmCharityEditions private constant VM =
         VmCharityEditions(address(uint160(uint256(keccak256("hevm cheat code")))));
-    uint256 private constant SEPOLIA_CHAIN_ID = 11_155_111;
+    uint256 private constant HOODI_CHAIN_ID = 560_048;
 
-    error SepoliaOnly(uint256 chainId);
+    error UnsupportedChain(uint256 chainId);
     error ZeroAddress();
 
     function run() external returns (ArtFiCharityEditions editions) {
-        if (block.chainid != SEPOLIA_CHAIN_ID) revert SepoliaOnly(block.chainid);
+        if (block.chainid != HOODI_CHAIN_ID) revert UnsupportedChain(block.chainid);
 
         address admin = VM.envAddress("ARTFI_ADMIN");
         address seriesCreator = VM.envAddress("ARTFI_EDITION_CREATOR");

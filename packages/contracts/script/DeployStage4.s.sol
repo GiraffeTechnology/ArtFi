@@ -12,18 +12,18 @@ interface Stage4Vm {
     function stopBroadcast() external;
 }
 
-/// @notice Sepolia-only self-administered governance deployment.
+/// @notice Hoodi-only self-administered governance deployment.
 /// @dev ArtFi exchange deployment is intentionally excluded until the compliance launch gate is approved.
 contract DeployStage4 {
     Stage4Vm private constant VM =
         Stage4Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
-    uint256 private constant SEPOLIA_CHAIN_ID = 11_155_111;
+    uint256 private constant HOODI_CHAIN_ID = 560_048;
 
     error InvalidConfiguration();
-    error SepoliaOnly(uint256 chainId);
+    error UnsupportedChain(uint256 chainId);
 
     function run() external returns (ArtFiGovernanceBootstrap governance) {
-        if (block.chainid != SEPOLIA_CHAIN_ID) revert SepoliaOnly(block.chainid);
+        if (block.chainid != HOODI_CHAIN_ID) revert UnsupportedChain(block.chainid);
         address rwaVault = VM.envAddress("ARTFI_RWA_VAULT");
         address buyoutPriceVerifier = VM.envAddress("ARTFI_BUYOUT_PRICE_VERIFIER");
         uint256 delay = VM.envUint("ARTFI_TIMELOCK_DELAY_SECONDS");
