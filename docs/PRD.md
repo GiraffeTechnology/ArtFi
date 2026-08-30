@@ -203,13 +203,24 @@ The distinction is not cosmetic. It fixes one invariant:
 custody — ArtFi holds no keys over user balances — but it does place user assets in a
 platform-deployed contract between listing and settlement.
 
-Under the intermediary ruling the fixed-price and order-book path uses **signature settlement**:
-assets remain in the owner's wallet and move only in the atomic fill the owner signed. Escrow is
-retained **only for auctions**, where locking the asset for the auction's duration is structurally
-necessary — an auction over unlocked tokens lets the seller withdraw against a winning bid.
+**Client ruling, 2026-08-30: signature settlement.** The fixed-price and order-book path settles by
+signature — assets remain in the owner's wallet and move only in the atomic fill the owner signed.
+`_pullExact` on listing is removed from that path; the market contract pulls from both parties at
+fill time and never holds a resting balance.
 
-This is a design decision recorded for reversal, not a client ruling. If the client prefers escrow
-throughout, say so and this section changes; the invariant above does not.
+Escrow is retained **only for auctions**, where locking the asset for the auction's duration is
+structurally necessary: an auction over unlocked tokens lets the seller transfer the asset away
+after seeing the winning bid, leaving the bidder to have locked funds for the auction's duration
+for nothing. The lock there is one the seller accepts to run an auction, bounded by `startsAt` and
+`endsAt`, released by a `settleAuction` that is deliberately not pausable.
+
+Consequences that must hold in implementation:
+
+- The fixed-price path holds no user assets at rest, so there is no pooled balance to drain and
+  nothing a pause can trap.
+- A seller may keep the same tokens listed in several places at once; a listing is an authorization,
+  not a transfer.
+- The auction path keeps escrow and therefore keeps the finding below.
 
 **Finding, 2026-08-30 — pausing traps escrowed listings.** `settleAuction` and `withdrawCredit` are
 deliberately not `whenNotPaused`, so a pause cannot strand settled proceeds. `cancelListing` is
@@ -217,10 +228,8 @@ deliberately not `whenNotPaused`, so a pause cannot strand settled proceeds. `ca
 every seller's escrowed asset with no way out until someone unpauses. Nothing is stolen — the
 contract exposes no administrative path to user funds — but the assets are held.
 
-This must be fixed wherever escrow survives, which is at minimum the auction path under either
-option: drop `whenNotPaused` from `cancelListing`, or add an escape that works while paused. It is
-in scope for G3-A (`ACCEPTANCE.md` §4) and is recorded here so the escrow decision is made with it
-in view.
+The ruling narrows this to the auction path, and does not remove it: drop `whenNotPaused` from
+`cancelListing`, or add an escape that works while paused. In scope for G3-A (`ACCEPTANCE.md` §4).
 
 #### 4.2.2 Recorded conflict
 
