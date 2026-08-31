@@ -39,12 +39,12 @@
 | Status                     | Count | Meaning here                                      |
 | -------------------------- | ----: | ------------------------------------------------- |
 | `VERIFIED`                 |     4 | Evidence exists on this commit and environment    |
-| `IMPLEMENTED-NOT-VERIFIED` |    16 | **Code exists; only runtime evidence is missing** |
-| `NOT-IMPLEMENTED`          |    38 | Behaviour absent                                  |
+| `IMPLEMENTED-NOT-VERIFIED` |    19 | **Code exists; only runtime evidence is missing** |
+| `NOT-IMPLEMENTED`          |    35 | Behaviour absent                                  |
 | `BLOCKED`                  |     1 | Client-side asset missing                         |
 | `PENDING-GATE`             |     1 | Scheduled, awaiting a named gate                  |
 
-The 16 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
+The 19 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
 G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ---
@@ -53,7 +53,7 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 | Module             |  Items | `VERIFIED` | `IMPL-NOT-VER` | `NOT-IMPL` | Other            |
 | ------------------ | -----: | ---------: | -------------: | ---------: | ---------------- |
-| M1 Smart contracts |      8 |          0 |              3 |          5 |                  |
+| M1 Smart contracts |      8 |          0 |              6 |          2 |                  |
 | M2 Backend trading |     11 |          0 |              2 |          9 |                  |
 | M3 Frontend        |     10 |          0 |              2 |          7 | 1 `BLOCKED`      |
 | M4 DAO governance  |      6 |          1 |              4 |          1 |                  |
@@ -67,16 +67,16 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## M1 — Smart contracts (`PRD.md` §4.1)
 
-| #    | Requirement                           | Status                     | Evidence / gap                                                                                                                                                                                                       |
-| ---- | ------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1.1 | Auction: listing, bid, settle, refund | `IMPLEMENTED-NOT-VERIFIED` | `ArtFiMarket.sol`; `MarketGovernance.t.sol` preserves the PR #46 paused seller exit and covers fixed-price and auction settlement, pull refunds, cancellation, and ABI compatibility. Hoodi receipts remain required |
-| M1.2 | Auction: reserve price                | `IMPLEMENTED-NOT-VERIFIED` | Explicit auction terms; unmet reserve returns the asset and credits the bidder. Hoodi receipt remains required                                                                                                       |
-| M1.3 | Auction: minimum increment            | `IMPLEMENTED-NOT-VERIFIED` | Exact-boundary unit and 512-run fuzz coverage; production pilot cap remains cumulative. Hoodi receipt remains required                                                                                               |
-| M1.4 | Auction: extension on late bid        | `IMPLEMENTED-NOT-VERIFIED` | Configurable anti-sniping window/duration with overflow fail-closed and paused seller escape. Hoodi receipt remains required                                                                                         |
-| M1.5 | Revenue distribution, claim-based     | `NOT-IMPLEMENTED`          | only match is `distributionWallet`, a charity-contract field                                                                                                                                                         |
-| M1.6 | Multi-signature administration        | `NOT-IMPLEMENTED`          | only matches are a code comment and `assembly ("memory-safe")`                                                                                                                                                       |
-| M1.7 | Deployment tooling, address manifest  | `IMPLEMENTED-NOT-VERIFIED` | 4 Foundry scripts, Hoodi guard verified locally (`a3d6784`). All 4 manifests are `*.example.json`                                                                                                                    |
-| M1.8 | Unit / fuzz / invariant / integration | `IMPLEMENTED-NOT-VERIFIED` | 44 Foundry tests pass (`forge test`). `ArtFiMarket.sol` remains the least covered and the only money-handling contract; `cancelListing` gained its first coverage in `testPauseDoesNotTrapEscrowedListing`           |
+| #    | Requirement                           | Status                     | Evidence / gap                                                                                                                                                                                                                       |
+| ---- | ------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| M1.1 | Auction: listing, bid, settle, refund | `IMPLEMENTED-NOT-VERIFIED` | `ArtFiMarket.sol`; `MarketGovernance.t.sol` preserves the PR #46 paused seller exit and covers fixed-price and auction settlement, pull refunds, cancellation, and ABI compatibility. Hoodi receipts remain required                 |
+| M1.2 | Auction: reserve price                | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::testAuctionReserveNotMetRefundsBidAndReturnsAsset`. Hoodi receipt remains required                                                        |
+| M1.3 | Auction: minimum increment            | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::{testAuctionMinimumIncrementRejectsBelowAndAcceptsExactBoundary,testFuzzAuctionMinimumIncrementBoundary}`. Hoodi receipt remains required |
+| M1.4 | Auction: extension on late bid        | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::{testLateBidExtendsAuctionAndOriginalEndCannotSettle,testLateBidExtensionOverflowFailsWithStableError}`. Hoodi receipt remains required   |
+| M1.5 | Revenue distribution, claim-based     | `NOT-IMPLEMENTED`          | only match is `distributionWallet`, a charity-contract field                                                                                                                                                                         |
+| M1.6 | Multi-signature administration        | `NOT-IMPLEMENTED`          | only matches are a code comment and `assembly ("memory-safe")`                                                                                                                                                                       |
+| M1.7 | Deployment tooling, address manifest  | `IMPLEMENTED-NOT-VERIFIED` | 4 Foundry scripts, Hoodi guard verified locally (`a3d6784`). All 4 manifests are `*.example.json`                                                                                                                                    |
+| M1.8 | Unit / fuzz / invariant / integration | `IMPLEMENTED-NOT-VERIFIED` | 44 Foundry tests pass (`forge test`). `ArtFiMarket.sol` remains the least covered and the only money-handling contract; `cancelListing` gained its first coverage in `testPauseDoesNotTrapEscrowedListing`                           |
 
 ## M2 — Backend core trading (`PRD.md` §4.2)
 
