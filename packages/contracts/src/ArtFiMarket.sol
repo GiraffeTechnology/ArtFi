@@ -39,6 +39,10 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         State state;
         address highestBidder;
         uint256 highestBid;
+        uint256 reservePrice;
+        uint256 minimumBidIncrement;
+        uint48 extensionWindow;
+        uint48 extensionDuration;
     }
 
     struct Offering {
@@ -56,8 +60,24 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         bool successful;
     }
 
+    struct ListingParams {
+        bytes32 requestId;
+        IERC20 assetToken;
+        IERC20 paymentToken;
+        uint256 amount;
+        uint256 unitPrice;
+        uint48 startsAt;
+        uint48 endsAt;
+        ListingKind kind;
+        uint256 reservePrice;
+        uint256 minimumBidIncrement;
+        uint48 extensionWindow;
+        uint48 extensionDuration;
+    }
+
     error ActiveBidExists();
     error AmountUnavailable();
+    error AuctionEndOverflow();
     error IdempotencyConflict(bytes32 requestId);
     error InvalidConfiguration();
     error InvalidState();
@@ -76,6 +96,10 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         uint256 indexed listingId, address indexed buyer, uint256 amount, uint256 payment
     );
     event BidPlaced(uint256 indexed listingId, address indexed bidder, uint256 amount);
+    event AuctionExtended(uint256 indexed listingId, uint48 previousEnd, uint48 extendedEnd);
+    event AuctionReserveNotMet(
+        uint256 indexed listingId, address indexed highestBidder, uint256 highestBid
+    );
     event ListingSettled(uint256 indexed listingId, address indexed buyer, uint256 payment);
     event ListingCancelled(uint256 indexed listingId);
     event OfferingCreated(
@@ -93,7 +117,7 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
 
     mapping(address token => bool allowed) public allowedAssetToken;
     mapping(address token => bool allowed) public allowedPaymentToken;
-    mapping(uint256 listingId => Listing) public listings;
+    mapping(uint256 listingId => Listing) private _listings;
     mapping(uint256 offeringId => Offering) public offerings;
     mapping(uint256 offeringId => mapping(address account => uint256)) public contributions;
     mapping(uint256 offeringId => mapping(address account => uint256)) public allocations;
@@ -115,6 +139,42 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, pauser);
         _grantRole(TOKEN_MANAGER_ROLE, tokenManager);
+    }
+
+    /// @notice ABI-compatible getter for the original listing fields.
+    /// @dev Auction-specific additions are exposed separately through auctionTerms so the
+    ///      generated ABI encoder never needs to return the expanded storage struct.
+    function listings(uint256 listingId)
+        external
+        view
+        returns (
+            address seller,
+            IERC20 assetToken,
+            IERC20 paymentToken,
+            uint256 amountRemaining,
+            uint256 unitPrice,
+            uint48 startsAt,
+            uint48 endsAt,
+            ListingKind kind,
+            State state,
+            address highestBidder,
+            uint256 highestBid
+        )
+    {
+        Listing storage listing = _listings[listingId];
+        return (
+            listing.seller,
+            listing.assetToken,
+            listing.paymentToken,
+            listing.amountRemaining,
+            listing.unitPrice,
+            listing.startsAt,
+            listing.endsAt,
+            listing.kind,
+            listing.state,
+            listing.highestBidder,
+            listing.highestBid
+        );
     }
 
     function setTokenPermission(address token, bool assetAllowed, bool paymentAllowed)
@@ -146,48 +206,146 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         uint48 endsAt,
         ListingKind kind
     ) external whenNotPaused nonReentrant returns (uint256 listingId) {
+        uint256 reservePrice = kind == ListingKind.Auction ? unitPrice : 0;
+        uint256 minimumBidIncrement = kind == ListingKind.Auction ? 1 : 0;
+        return _createListing(
+            ListingParams({
+                requestId: requestId,
+                assetToken: assetToken,
+                paymentToken: paymentToken,
+                amount: amount,
+                unitPrice: unitPrice,
+                startsAt: startsAt,
+                endsAt: endsAt,
+                kind: kind,
+                reservePrice: reservePrice,
+                minimumBidIncrement: minimumBidIncrement,
+                extensionWindow: 0,
+                extensionDuration: 0
+            })
+        );
+    }
+
+    /// @notice Creates an auction with explicit reserve, increment, and anti-sniping terms.
+    /// @dev The legacy createListing auction path remains ABI-compatible with reserve=openingBid,
+    ///      minimumBidIncrement=1, and no late-bid extension.
+    function createAuctionListing(
+        bytes32 requestId,
+        IERC20 assetToken,
+        IERC20 paymentToken,
+        uint256 amount,
+        uint256 openingBid,
+        uint48 startsAt,
+        uint48 endsAt,
+        uint256 reservePrice,
+        uint256 minimumBidIncrement,
+        uint48 extensionWindow,
+        uint48 extensionDuration
+    ) external whenNotPaused nonReentrant returns (uint256 listingId) {
+        if (extensionWindow == 0 || extensionDuration == 0) {
+            revert InvalidConfiguration();
+        }
+        return _createListing(
+            ListingParams({
+                requestId: requestId,
+                assetToken: assetToken,
+                paymentToken: paymentToken,
+                amount: amount,
+                unitPrice: openingBid,
+                startsAt: startsAt,
+                endsAt: endsAt,
+                kind: ListingKind.Auction,
+                reservePrice: reservePrice,
+                minimumBidIncrement: minimumBidIncrement,
+                extensionWindow: extensionWindow,
+                extensionDuration: extensionDuration
+            })
+        );
+    }
+
+    function _createListing(ListingParams memory params) private returns (uint256 listingId) {
         if (
-            requestId == bytes32(0) || amount == 0 || unitPrice == 0 || startsAt >= endsAt
-                || endsAt <= block.timestamp
+            params.requestId == bytes32(0) || params.amount == 0 || params.unitPrice == 0
+                || params.startsAt >= params.endsAt || params.endsAt <= block.timestamp
         ) {
             revert InvalidConfiguration();
         }
-        if (!allowedAssetToken[address(assetToken)] || !allowedPaymentToken[address(paymentToken)])
-        {
+        if (
+            !allowedAssetToken[address(params.assetToken)]
+                || !allowedPaymentToken[address(params.paymentToken)]
+        ) {
             revert TokenNotAllowed();
         }
-        bytes32 intentHash = keccak256(
-            abi.encode(
-                msg.sender, assetToken, paymentToken, amount, unitPrice, startsAt, endsAt, kind
-            )
-        );
-        listingId = _listingByRequest[requestId];
+        if (params.kind == ListingKind.FixedPrice) {
+            if (
+                params.reservePrice != 0 || params.minimumBidIncrement != 0
+                    || params.extensionWindow != 0 || params.extensionDuration != 0
+            ) revert InvalidConfiguration();
+        } else if (
+            params.reservePrice < params.unitPrice || params.minimumBidIncrement == 0
+                || (params.extensionWindow == 0) != (params.extensionDuration == 0)
+                || params.extensionWindow > params.endsAt - params.startsAt
+        ) {
+            revert InvalidConfiguration();
+        }
+        bytes32 intentHash = keccak256(abi.encode(msg.sender, params));
+        listingId = _listingByRequest[params.requestId];
         if (listingId != 0) {
-            if (_listingIntent[requestId] != intentHash) revert IdempotencyConflict(requestId);
+            if (_listingIntent[params.requestId] != intentHash) {
+                revert IdempotencyConflict(params.requestId);
+            }
             return listingId;
         }
         listingId = _nextListingId++;
-        _listingByRequest[requestId] = listingId;
-        _listingIntent[requestId] = intentHash;
-        listings[listingId] = Listing(
-            msg.sender,
-            assetToken,
-            paymentToken,
-            amount,
-            unitPrice,
-            startsAt,
-            endsAt,
-            kind,
-            State.Active,
-            address(0),
-            0
+        _listingByRequest[params.requestId] = listingId;
+        _listingIntent[params.requestId] = intentHash;
+        _listings[listingId] = Listing({
+            seller: msg.sender,
+            assetToken: params.assetToken,
+            paymentToken: params.paymentToken,
+            amountRemaining: params.amount,
+            unitPrice: params.unitPrice,
+            startsAt: params.startsAt,
+            endsAt: params.endsAt,
+            kind: params.kind,
+            state: State.Active,
+            highestBidder: address(0),
+            highestBid: 0,
+            reservePrice: params.reservePrice,
+            minimumBidIncrement: params.minimumBidIncrement,
+            extensionWindow: params.extensionWindow,
+            extensionDuration: params.extensionDuration
+        });
+        _pullExact(params.assetToken, msg.sender, params.amount);
+        emit ListingCreated(params.requestId, listingId, msg.sender);
+    }
+
+    function auctionTerms(uint256 listingId)
+        external
+        view
+        returns (
+            uint256 reservePrice,
+            uint256 minimumBidIncrement,
+            uint48 endsAt,
+            uint48 extensionWindow,
+            uint48 extensionDuration
+        )
+    {
+        Listing storage listing = _listings[listingId];
+        if (listing.kind != ListingKind.Auction || listing.state == State.None) {
+            revert InvalidState();
+        }
+        return (
+            listing.reservePrice,
+            listing.minimumBidIncrement,
+            listing.endsAt,
+            listing.extensionWindow,
+            listing.extensionDuration
         );
-        _pullExact(assetToken, msg.sender, amount);
-        emit ListingCreated(requestId, listingId, msg.sender);
     }
 
     function buyFixed(uint256 listingId, uint256 amount) external whenNotPaused nonReentrant {
-        Listing storage listing = listings[listingId];
+        Listing storage listing = _listings[listingId];
         _requireLive(listing);
         if (
             listing.kind != ListingKind.FixedPrice || amount == 0
@@ -204,13 +362,21 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
     }
 
     function placeBid(uint256 listingId, uint256 bidAmount) external whenNotPaused nonReentrant {
-        Listing storage listing = listings[listingId];
+        Listing storage listing = _listings[listingId];
         _requireLive(listing);
-        if (
-            listing.kind != ListingKind.Auction || bidAmount < listing.unitPrice
-                || bidAmount <= listing.highestBid
-        ) {
+        uint256 requiredBid = listing.highestBidder == address(0)
+            ? listing.unitPrice
+            : listing.highestBid + listing.minimumBidIncrement;
+        if (listing.kind != ListingKind.Auction || bidAmount < requiredBid) {
             revert InvalidConfiguration();
+        }
+        bool shouldExtend = listing.extensionWindow != 0
+            && uint256(listing.endsAt) - block.timestamp <= listing.extensionWindow;
+        uint48 extendedEnd;
+        if (shouldExtend) {
+            uint256 candidateEnd = uint256(listing.endsAt) + listing.extensionDuration;
+            if (candidateEnd > type(uint48).max) revert AuctionEndOverflow();
+            extendedEnd = uint48(candidateEnd);
         }
         _consumePilotCap(msg.sender, address(listing.paymentToken), bidAmount);
         _pullExact(listing.paymentToken, msg.sender, bidAmount);
@@ -220,10 +386,15 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         listing.highestBidder = msg.sender;
         listing.highestBid = bidAmount;
         emit BidPlaced(listingId, msg.sender, bidAmount);
+        if (shouldExtend) {
+            uint48 previousEnd = listing.endsAt;
+            listing.endsAt = extendedEnd;
+            emit AuctionExtended(listingId, previousEnd, listing.endsAt);
+        }
     }
 
     function settleAuction(uint256 listingId) external nonReentrant {
-        Listing storage listing = listings[listingId];
+        Listing storage listing = _listings[listingId];
         if (
             listing.state != State.Active || listing.kind != ListingKind.Auction
                 || block.timestamp < listing.endsAt
@@ -233,7 +404,11 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         listing.state = State.Settled;
         uint256 amount = listing.amountRemaining;
         listing.amountRemaining = 0;
-        if (listing.highestBidder == address(0)) {
+        if (listing.highestBidder == address(0) || listing.highestBid < listing.reservePrice) {
+            if (listing.highestBidder != address(0)) {
+                credits[listing.highestBidder][address(listing.paymentToken)] += listing.highestBid;
+                emit AuctionReserveNotMet(listingId, listing.highestBidder, listing.highestBid);
+            }
             listing.assetToken.safeTransfer(listing.seller, amount);
             emit ListingSettled(listingId, address(0), 0);
             return;
@@ -250,7 +425,7 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
     /// buyFixed, placeBid, contribute — while every exit stays open, as settleAuction,
     /// finalizeOffering, claimOffering, refundOffering and withdrawCredit already do.
     function cancelListing(uint256 listingId) external nonReentrant {
-        Listing storage listing = listings[listingId];
+        Listing storage listing = _listings[listingId];
         if (listing.state != State.Active || listing.seller != msg.sender) revert NotAuthorized();
         if (listing.highestBidder != address(0)) revert ActiveBidExists();
         listing.state = State.Cancelled;

@@ -116,7 +116,7 @@ contract MarketGovernanceTest {
     }
 
     function testAuctionRefundExpiryAndSettlement() public {
-        uint256 listingId = market.createListing(
+        uint256 listingId = market.createAuctionListing(
             keccak256("auction"),
             asset,
             payment,
@@ -124,7 +124,10 @@ contract MarketGovernanceTest {
             100,
             uint48(block.timestamp),
             uint48(block.timestamp + 10),
-            ArtFiMarket.ListingKind.Auction
+            100,
+            1,
+            2,
+            5
         );
         VM.prank(BUYER_A);
         market.placeBid(listingId, 120);
@@ -138,6 +141,359 @@ contract MarketGovernanceTest {
         VM.prank(BUYER_A);
         market.withdrawCredit(payment);
         require(payment.balanceOf(BUYER_A) == 1_000_000, "outbid refund");
+    }
+
+    function testLegacyAuctionListingPreservesAuditedDefaults() public {
+        uint48 end = uint48(block.timestamp + 100);
+        uint256 listingId = market.createListing(
+            keccak256("legacy-auction"),
+            asset,
+            payment,
+            100,
+            100,
+            uint48(block.timestamp),
+            end,
+            ArtFiMarket.ListingKind.Auction
+        );
+        (
+            uint256 reservePrice,
+            uint256 minimumBidIncrement,
+            uint48 storedEnd,
+            uint48 extensionWindow,
+            uint48 extensionDuration
+        ) = market.auctionTerms(listingId);
+        require(reservePrice == 100, "legacy reserve changed");
+        require(minimumBidIncrement == 1, "legacy increment changed");
+        require(storedEnd == end, "legacy end changed");
+        require(extensionWindow == 0 && extensionDuration == 0, "legacy extension enabled");
+
+        VM.prank(BUYER_A);
+        market.placeBid(listingId, 100);
+        VM.prank(BUYER_B);
+        market.placeBid(listingId, 101);
+    }
+
+    function testLegacyListingsGetterSelectorAndOutputOrderRemainCompatible() public {
+        uint48 startsAt = uint48(block.timestamp);
+        uint48 endsAt = startsAt + 1 days;
+        uint256 listingId = market.createListing(
+            keccak256("legacy-getter"),
+            asset,
+            payment,
+            10,
+            7,
+            startsAt,
+            endsAt,
+            ArtFiMarket.ListingKind.Auction
+        );
+        require(
+            ArtFiMarket.listings.selector == bytes4(keccak256("listings(uint256)")),
+            "legacy getter selector changed"
+        );
+        (bool ok, bytes memory returndata) =
+            address(market).staticcall(abi.encodeCall(market.listings, (listingId)));
+        require(ok, "legacy getter call failed");
+        (
+            address seller,
+            address assetToken,
+            address paymentToken,
+            uint256 amountRemaining,
+            uint256 unitPrice,
+            uint48 storedStartsAt,
+            uint48 storedEndsAt,
+            ArtFiMarket.ListingKind kind,
+            ArtFiMarket.State state,
+            address highestBidder,
+            uint256 highestBid
+        ) = abi.decode(
+            returndata,
+            (
+                address,
+                address,
+                address,
+                uint256,
+                uint256,
+                uint48,
+                uint48,
+                ArtFiMarket.ListingKind,
+                ArtFiMarket.State,
+                address,
+                uint256
+            )
+        );
+        require(seller == address(this), "legacy seller position");
+        require(assetToken == address(asset), "legacy asset position");
+        require(paymentToken == address(payment), "legacy payment position");
+        require(amountRemaining == 10 && unitPrice == 7, "legacy amount/price positions");
+        require(storedStartsAt == startsAt && storedEndsAt == endsAt, "legacy time positions");
+        require(kind == ArtFiMarket.ListingKind.Auction, "legacy kind position");
+        require(state == ArtFiMarket.State.Active, "legacy state position");
+        require(highestBidder == address(0) && highestBid == 0, "legacy bid positions");
+    }
+
+    function testAuctionReserveNotMetRefundsBidAndReturnsAsset() public {
+        uint256 sellerAssetBefore = asset.balanceOf(address(this));
+        uint256 listingId = market.createAuctionListing(
+            keccak256("auction-reserve"),
+            asset,
+            payment,
+            100,
+            100,
+            uint48(block.timestamp),
+            uint48(block.timestamp + 100),
+            200,
+            10,
+            10,
+            30
+        );
+
+        VM.prank(BUYER_A);
+        market.placeBid(listingId, 150);
+        VM.warp(block.timestamp + 101);
+        market.settleAuction(listingId);
+
+        require(asset.balanceOf(address(this)) == sellerAssetBefore, "reserve returned asset");
+        require(asset.balanceOf(BUYER_A) == 0, "sub-reserve bidder received asset");
+        require(market.credits(address(this), address(payment)) == 0, "seller received bid");
+        require(market.credits(BUYER_A, address(payment)) == 150, "bid refund missing");
+        VM.prank(BUYER_A);
+        market.withdrawCredit(payment);
+        require(payment.balanceOf(BUYER_A) == 1_000_000, "reserve refund incomplete");
+    }
+
+    function testAuctionMinimumIncrementRejectsBelowAndAcceptsExactBoundary() public {
+        uint256 listingId = _createAuction(
+            keccak256("auction-increment"), 100, 100, 25, uint48(block.timestamp + 100), 10, 30
+        );
+        VM.prank(BUYER_A);
+        market.placeBid(listingId, 100);
+
+        VM.prank(BUYER_B);
+        (bool belowIncrement,) =
+            address(market).call(abi.encodeCall(market.placeBid, (listingId, 124)));
+        require(!belowIncrement, "sub-increment bid accepted");
+        require(payment.balanceOf(BUYER_B) == 1_000_000, "rejected bid charged buyer");
+
+        VM.prank(BUYER_B);
+        market.placeBid(listingId, 125);
+        require(market.credits(BUYER_A, address(payment)) == 100, "outbid refund missing");
+    }
+
+    function testFuzzAuctionMinimumIncrementBoundary(uint96 rawIncrement) public {
+        // Keep the exact-boundary bid within BUYER_B's finite 1,000,000 pilot cap and balance.
+        uint256 increment = uint256(rawIncrement) % 999_900 + 1;
+        uint256 listingId = _createAuction(
+            keccak256(abi.encode("auction-increment-fuzz", rawIncrement)),
+            100,
+            100,
+            increment,
+            uint48(block.timestamp + 100),
+            10,
+            30
+        );
+        VM.prank(BUYER_A);
+        market.placeBid(listingId, 100);
+
+        VM.prank(BUYER_B);
+        (bool belowIncrement,) =
+            address(market).call(abi.encodeCall(market.placeBid, (listingId, 100 + increment - 1)));
+        require(!belowIncrement, "fuzz sub-increment accepted");
+
+        VM.prank(BUYER_B);
+        market.placeBid(listingId, 100 + increment);
+    }
+
+    function testLateBidExtendsAuctionAndOriginalEndCannotSettle() public {
+        uint48 originalEnd = uint48(block.timestamp + 100);
+        uint256 listingId =
+            _createAuction(keccak256("auction-extension"), 100, 100, 10, originalEnd, 10, 30);
+        VM.warp(originalEnd - 5);
+        VM.prank(BUYER_A);
+        market.placeBid(listingId, 100);
+
+        (,, uint48 extendedEnd,,) = market.auctionTerms(listingId);
+        require(extendedEnd == originalEnd + 30, "late bid did not extend auction");
+        VM.warp(originalEnd);
+        (bool settledAtOriginalEnd,) =
+            address(market).call(abi.encodeCall(market.settleAuction, (listingId)));
+        require(!settledAtOriginalEnd, "auction settled at original end");
+
+        VM.warp(extendedEnd);
+        market.settleAuction(listingId);
+        require(asset.balanceOf(BUYER_A) == 100, "extended auction winner missing asset");
+    }
+
+    function testLateBidExtensionOverflowFailsWithStableError() public {
+        uint48 end = type(uint48).max - 2;
+        uint256 listingId =
+            _createAuction(keccak256("auction-extension-overflow"), 100, 100, 10, end, 10, 30);
+        VM.warp(uint256(end) - 5);
+        VM.prank(BUYER_A);
+        (bool ok, bytes memory revertData) =
+            address(market).call(abi.encodeCall(market.placeBid, (listingId, 100)));
+        require(!ok, "overflowing extension accepted");
+        require(
+            _revertSelector(revertData) == ArtFiMarket.AuctionEndOverflow.selector,
+            "overflow did not use stable error"
+        );
+        require(payment.balanceOf(BUYER_A) == 1_000_000, "overflowing bid charged buyer");
+        require(market.credits(BUYER_A, address(payment)) == 0, "overflow created refund credit");
+    }
+
+    function testRefundDoesNotResetCumulativePilotUsage() public {
+        market.setPilotCap(BUYER_A, address(payment), 150);
+        uint256 listingId = _createAuction(
+            keccak256("cumulative-pilot-reserve"),
+            100,
+            200,
+            10,
+            uint48(block.timestamp + 100),
+            10,
+            30
+        );
+        VM.prank(BUYER_A);
+        market.placeBid(listingId, 150);
+        VM.warp(block.timestamp + 101);
+        market.settleAuction(listingId);
+        VM.prank(BUYER_A);
+        market.withdrawCredit(payment);
+        require(market.pilotPaymentUsed(BUYER_A, address(payment)) == 150, "pilot usage reset");
+
+        uint256 secondListing = market.createListing(
+            keccak256("cumulative-pilot-second"),
+            asset,
+            payment,
+            1,
+            1,
+            uint48(block.timestamp),
+            uint48(block.timestamp + 100),
+            ArtFiMarket.ListingKind.Auction
+        );
+        VM.prank(BUYER_A);
+        (bool secondBid,) =
+            address(market).call(abi.encodeCall(market.placeBid, (secondListing, 1)));
+        require(!secondBid, "cumulative pilot cap reset after refund");
+    }
+
+    function testPausedSellerCanCancelAuctionAndRecoverEscrow() public {
+        uint256 sellerAssetBefore = asset.balanceOf(address(this));
+        uint256 listingId = _createAuction(
+            keccak256("paused-cancel"), 100, 100, 10, uint48(block.timestamp + 100), 10, 30
+        );
+        market.pause();
+
+        VM.prank(BUYER_A);
+        (bool unauthorized,) =
+            address(market).call(abi.encodeCall(market.cancelListing, (listingId)));
+        require(!unauthorized, "non-seller cancelled paused auction");
+
+        market.cancelListing(listingId);
+        require(asset.balanceOf(address(this)) == sellerAssetBefore, "paused escrow not returned");
+        (bool cancelledTwice,) =
+            address(market).call(abi.encodeCall(market.cancelListing, (listingId)));
+        require(!cancelledTwice, "paused listing cancelled twice");
+    }
+
+    function testPausedAuctionWithBidCannotBeCancelledButCanSettle() public {
+        uint256 listingId = _createAuction(
+            keccak256("paused-active-bid"), 100, 100, 10, uint48(block.timestamp + 100), 10, 30
+        );
+        VM.prank(BUYER_A);
+        market.placeBid(listingId, 100);
+        market.pause();
+
+        (bool cancelled,) = address(market).call(abi.encodeCall(market.cancelListing, (listingId)));
+        require(!cancelled, "active bidder lost escrow protection");
+        VM.warp(block.timestamp + 101);
+        market.settleAuction(listingId);
+        require(asset.balanceOf(BUYER_A) == 100, "paused settlement trapped asset");
+        require(market.credits(address(this), address(payment)) == 100, "seller credit missing");
+    }
+
+    function testAuctionConfigurationFailsClosed() public {
+        uint48 end = uint48(block.timestamp + 100);
+        (bool reserveBelowOpening,) = address(market)
+            .call(
+                abi.encodeCall(
+                    market.createAuctionListing,
+                    (
+                        keccak256("bad-reserve"),
+                        asset,
+                        payment,
+                        100,
+                        100,
+                        uint48(block.timestamp),
+                        end,
+                        99,
+                        10,
+                        10,
+                        30
+                    )
+                )
+            );
+        require(!reserveBelowOpening, "reserve below opening accepted");
+
+        (bool zeroIncrement,) = address(market)
+            .call(
+                abi.encodeCall(
+                    market.createAuctionListing,
+                    (
+                        keccak256("zero-increment"),
+                        asset,
+                        payment,
+                        100,
+                        100,
+                        uint48(block.timestamp),
+                        end,
+                        100,
+                        0,
+                        10,
+                        30
+                    )
+                )
+            );
+        require(!zeroIncrement, "zero increment accepted");
+
+        (bool missingExtension,) = address(market)
+            .call(
+                abi.encodeCall(
+                    market.createAuctionListing,
+                    (
+                        keccak256("missing-extension"),
+                        asset,
+                        payment,
+                        100,
+                        100,
+                        uint48(block.timestamp),
+                        end,
+                        100,
+                        10,
+                        0,
+                        0
+                    )
+                )
+            );
+        require(!missingExtension, "missing extension accepted");
+    }
+
+    function testAuctionRequestReplayAndAllTermsConflict() public {
+        bytes32 requestId = keccak256("auction-terms-replay");
+        uint48 end = uint48(block.timestamp + 100);
+        uint256 sellerBalanceBefore = asset.balanceOf(address(this));
+        uint256 first = _createAuction(requestId, 100, 150, 10, end, 10, 30);
+        uint256 replay = market.createAuctionListing(
+            requestId, asset, payment, 100, 100, uint48(block.timestamp), end, 150, 10, 10, 30
+        );
+        require(first == replay, "auction replay changed id");
+        require(
+            asset.balanceOf(address(this)) == sellerBalanceBefore - 100,
+            "auction replay pulled escrow twice"
+        );
+
+        require(!_tryAuctionTerms(requestId, end, 151, 10, 10, 30), "reserve conflict accepted");
+        require(!_tryAuctionTerms(requestId, end, 150, 11, 10, 30), "increment conflict accepted");
+        require(!_tryAuctionTerms(requestId, end, 150, 10, 11, 30), "window conflict accepted");
+        require(!_tryAuctionTerms(requestId, end, 150, 10, 10, 31), "duration conflict accepted");
     }
 
     function testListingRequestReplayAndConflict() public {
@@ -519,6 +875,66 @@ contract MarketGovernanceTest {
         );
         verifier = new AcceptingBuyoutVerifier();
         bootstrap = new ArtFiGovernanceBootstrap(vault, verifier, 2, 1, 5, 4);
+    }
+
+    function _createAuction(
+        bytes32 requestId,
+        uint256 openingBid,
+        uint256 reservePrice,
+        uint256 minimumBidIncrement,
+        uint48 endsAt,
+        uint48 extensionWindow,
+        uint48 extensionDuration
+    ) private returns (uint256 listingId) {
+        listingId = market.createAuctionListing(
+            requestId,
+            asset,
+            payment,
+            100,
+            openingBid,
+            uint48(block.timestamp),
+            endsAt,
+            reservePrice,
+            minimumBidIncrement,
+            extensionWindow,
+            extensionDuration
+        );
+    }
+
+    function _revertSelector(bytes memory revertData) private pure returns (bytes4 selector) {
+        if (revertData.length < 4) return bytes4(0);
+        assembly ("memory-safe") {
+            selector := mload(add(revertData, 0x20))
+        }
+    }
+
+    function _tryAuctionTerms(
+        bytes32 requestId,
+        uint48 endsAt,
+        uint256 reservePrice,
+        uint256 minimumBidIncrement,
+        uint48 extensionWindow,
+        uint48 extensionDuration
+    ) private returns (bool ok) {
+        (ok,) = address(market)
+            .call(
+                abi.encodeCall(
+                    market.createAuctionListing,
+                    (
+                        requestId,
+                        asset,
+                        payment,
+                        100,
+                        100,
+                        uint48(block.timestamp),
+                        endsAt,
+                        reservePrice,
+                        minimumBidIncrement,
+                        extensionWindow,
+                        extensionDuration
+                    )
+                )
+            );
     }
 
     function _marketMigrationCall(ArtFiDAOActions actions, bytes32 marketHash)
