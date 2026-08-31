@@ -15,7 +15,7 @@ runs = 512
 [profile.default.invariant]
 runs = 256
 depth = 64
-fail_on_revert = false
+fail_on_revert = true
 
 [fmt]
 line_length = 100
