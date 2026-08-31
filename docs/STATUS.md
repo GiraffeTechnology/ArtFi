@@ -61,7 +61,7 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | M6 Operations      |      5 |          0 |              2 |          3 |                  |
 | §5 Non-functional  |      8 |          1 |              0 |          7 |                  |
 | §7 Validation data |      5 |          1 |              2 |          2 |                  |
-| **Total**          | **60** |      **4** |         **16** |     **38** | **2**            |
+| **Total**          | **60** |      **4** |         **19** |     **35** | **2**            |
 
 ---
 
