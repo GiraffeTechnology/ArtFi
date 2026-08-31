@@ -14,6 +14,9 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant TOKEN_MANAGER_ROLE = keccak256("TOKEN_MANAGER_ROLE");
+    /// @dev Legacy auction clients receive a deterministic 5-minute anti-sniping response period.
+    uint48 public constant LEGACY_AUCTION_EXTENSION_WINDOW = 5 minutes;
+    uint48 public constant LEGACY_AUCTION_EXTENSION_DURATION = 5 minutes;
 
     enum ListingKind {
         FixedPrice,
@@ -208,6 +211,15 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
     ) external whenNotPaused nonReentrant returns (uint256 listingId) {
         uint256 reservePrice = kind == ListingKind.Auction ? unitPrice : 0;
         uint256 minimumBidIncrement = kind == ListingKind.Auction ? 1 : 0;
+        uint48 extensionWindow;
+        uint48 extensionDuration;
+        if (kind == ListingKind.Auction) {
+            uint48 auctionDuration = endsAt > startsAt ? endsAt - startsAt : 0;
+            extensionWindow = auctionDuration < LEGACY_AUCTION_EXTENSION_WINDOW
+                ? auctionDuration
+                : LEGACY_AUCTION_EXTENSION_WINDOW;
+            extensionDuration = LEGACY_AUCTION_EXTENSION_DURATION;
+        }
         return _createListing(
             ListingParams({
                 requestId: requestId,
@@ -220,15 +232,16 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
                 kind: kind,
                 reservePrice: reservePrice,
                 minimumBidIncrement: minimumBidIncrement,
-                extensionWindow: 0,
-                extensionDuration: 0
+                extensionWindow: extensionWindow,
+                extensionDuration: extensionDuration
             })
         );
     }
 
     /// @notice Creates an auction with explicit reserve, increment, and anti-sniping terms.
     /// @dev The legacy createListing auction path remains ABI-compatible with reserve=openingBid,
-    ///      minimumBidIncrement=1, and no late-bid extension.
+    ///      minimumBidIncrement=1, and a deterministic anti-sniping response period. Its window is
+    ///      capped to the auction duration so historical short-duration listings remain valid.
     function createAuctionListing(
         bytes32 requestId,
         IERC20 assetToken,

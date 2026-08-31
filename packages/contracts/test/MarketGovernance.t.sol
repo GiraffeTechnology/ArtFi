@@ -144,7 +144,7 @@ contract MarketGovernanceTest {
     }
 
     function testLegacyAuctionListingPreservesAuditedDefaults() public {
-        uint48 end = uint48(block.timestamp + 100);
+        uint48 end = uint48(block.timestamp + 1 hours);
         uint256 listingId = market.createListing(
             keccak256("legacy-auction"),
             asset,
@@ -165,12 +165,76 @@ contract MarketGovernanceTest {
         require(reservePrice == 100, "legacy reserve changed");
         require(minimumBidIncrement == 1, "legacy increment changed");
         require(storedEnd == end, "legacy end changed");
-        require(extensionWindow == 0 && extensionDuration == 0, "legacy extension enabled");
+        require(
+            extensionWindow == market.LEGACY_AUCTION_EXTENSION_WINDOW(),
+            "legacy extension window changed"
+        );
+        require(
+            extensionDuration == market.LEGACY_AUCTION_EXTENSION_DURATION(),
+            "legacy extension duration changed"
+        );
 
         VM.prank(BUYER_A);
         market.placeBid(listingId, 100);
         VM.prank(BUYER_B);
         market.placeBid(listingId, 101);
+
+        uint256 fixedListingId = market.createListing(
+            keccak256("legacy-fixed-defaults"),
+            asset,
+            payment,
+            1,
+            1,
+            uint48(block.timestamp),
+            uint48(block.timestamp + 1 hours),
+            ArtFiMarket.ListingKind.FixedPrice
+        );
+        (bool fixedTermsOk, bytes memory fixedTermsRevert) =
+            address(market).staticcall(abi.encodeCall(market.auctionTerms, (fixedListingId)));
+        require(!fixedTermsOk, "fixed listing exposed auction terms");
+        require(
+            _revertSelector(fixedTermsRevert) == ArtFiMarket.InvalidState.selector,
+            "fixed auction terms did not fail closed"
+        );
+        VM.prank(BUYER_A);
+        market.buyFixed(fixedListingId, 1);
+        require(asset.balanceOf(BUYER_A) == 1, "fixed purchase behavior changed");
+    }
+
+    function testLegacyAuctionLateBidExtendsAndOriginalEndCannotSettle() public {
+        uint48 originalEnd = uint48(block.timestamp + 100);
+        uint256 listingId = market.createListing(
+            keccak256("legacy-auction-extension"),
+            asset,
+            payment,
+            100,
+            100,
+            uint48(block.timestamp),
+            originalEnd,
+            ArtFiMarket.ListingKind.Auction
+        );
+        (,,, uint48 extensionWindow, uint48 extensionDuration) = market.auctionTerms(listingId);
+        require(extensionWindow == 100, "short legacy window not capped to auction duration");
+        require(
+            extensionDuration == market.LEGACY_AUCTION_EXTENSION_DURATION(),
+            "legacy extension duration changed"
+        );
+
+        VM.warp(originalEnd - 1);
+        VM.prank(BUYER_A);
+        market.placeBid(listingId, 100);
+
+        (,, uint48 extendedEnd,,) = market.auctionTerms(listingId);
+        require(extendedEnd == originalEnd + extensionDuration, "legacy late bid did not extend");
+        VM.warp(originalEnd);
+        (bool settledAtOriginalEnd,) =
+            address(market).call(abi.encodeCall(market.settleAuction, (listingId)));
+        require(!settledAtOriginalEnd, "legacy auction settled at original end");
+
+        VM.warp(extendedEnd);
+        market.settleAuction(listingId);
+        require(asset.balanceOf(BUYER_A) == 100, "legacy extended winner missing asset");
+        require(market.credits(address(this), address(payment)) == 100, "legacy seller credit");
     }
 
     function testLegacyListingsGetterSelectorAndOutputOrderRemainCompatible() public {
