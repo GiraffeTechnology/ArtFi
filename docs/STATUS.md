@@ -5,7 +5,7 @@
 | Reviewed    | `78fa689` on `main` (PR #52)                                          |
 | Base        | `efaa37b`                                                             |
 | Environment | local + GitHub CI. **No runtime chain evidence exists on any chain.** |
-| Date        | 2026-08-30                                                            |
+| Date        | 2026-09-01                                                            |
 | Reviewer    | Claude (acting PM), on client instruction                             |
 | Scope note  | ArtFi is a trading intermediary, not an exchange (`PRD.md` §4.2)      |
 
@@ -39,12 +39,12 @@
 | Status                     | Count | Meaning here                                      |
 | -------------------------- | ----: | ------------------------------------------------- |
 | `VERIFIED`                 |     4 | Evidence exists on this commit and environment    |
-| `IMPLEMENTED-NOT-VERIFIED` |    20 | **Code exists; only runtime evidence is missing** |
-| `NOT-IMPLEMENTED`          |    34 | Behaviour absent                                  |
+| `IMPLEMENTED-NOT-VERIFIED` |    21 | **Code exists; only runtime evidence is missing** |
+| `NOT-IMPLEMENTED`          |    33 | Behaviour absent                                  |
 | `BLOCKED`                  |     1 | Client-side asset missing                         |
 | `PENDING-GATE`             |     1 | Scheduled, awaiting a named gate                  |
 
-The 20 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
+The 21 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
 G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ---
@@ -53,7 +53,7 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 | Module             |  Items | `VERIFIED` | `IMPL-NOT-VER` | `NOT-IMPL` | Other            |
 | ------------------ | -----: | ---------: | -------------: | ---------: | ---------------- |
-| M1 Smart contracts |      8 |          0 |              7 |          1 |                  |
+| M1 Smart contracts |      8 |          0 |              8 |          0 |                  |
 | M2 Backend trading |     11 |          0 |              2 |          9 |                  |
 | M3 Frontend        |     10 |          0 |              2 |          7 | 1 `BLOCKED`      |
 | M4 DAO governance  |      6 |          1 |              4 |          1 |                  |
@@ -61,7 +61,7 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | M6 Operations      |      5 |          0 |              2 |          3 |                  |
 | §5 Non-functional  |      8 |          1 |              0 |          7 |                  |
 | §7 Validation data |      5 |          1 |              2 |          2 |                  |
-| **Total**          | **60** |      **4** |         **20** |     **34** | **2**            |
+| **Total**          | **60** |      **4** |         **21** |     **33** | **2**            |
 
 ---
 
@@ -74,9 +74,9 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | M1.3 | Auction: minimum increment            | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::{testAuctionMinimumIncrementRejectsBelowAndAcceptsExactBoundary,testFuzzAuctionMinimumIncrementBoundary}`. Hoodi receipt remains required                                                                                                                                                                                                                                                       |
 | M1.4 | Auction: extension on late bid        | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::{testLateBidExtendsAuctionAndOriginalEndCannotSettle,testLateBidExtensionOverflowFailsWithStableError,testLegacyAuctionLateBidExtendsAndOriginalEndCannotSettle}`. Hoodi receipt remains required                                                                                                                                                                                               |
 | M1.5 | Revenue distribution, claim-based     | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/FractionalToken.sol`; `packages/contracts/src/RevenueDistributor.sol`; `packages/contracts/test/RevenueDistributor.t.sol::{testClaimsUseSnapshotBalancesAfterFractionsMove,testFeeOnTransferRevenueIsRejectedWithoutRoundCreation,testOutboundFeeRevenueRevertsClaimAndAccounting,testRoundingDustIsBoundedAndCannotBeSwept,testFuzzProRataClaimsNeverExceedRevenue,invariant_ClaimsNeverExceedFundedRevenue}`. Claim-based Hoodi runtime receipts remain required |
-| M1.6 | Multi-signature administration        | `NOT-IMPLEMENTED`          | only matches are a code comment and `assembly ("memory-safe")`                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| M1.6 | Multi-signature administration        | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiAdminSafe.sol`; `packages/contracts/test/ArtFiAdminSafe.t.sol::{testSingleOwnerCannotTransferSafeCustodiedAsset,testPrivilegedPauseRoleHasNoSingleOwnerExecutionPath,testNoDelegatecallExecutionSurfaceExists,testTimelockOverflowFailsClosedWithoutRecordingConfirmation,testTargetCallFailureRollsBackExecutedState,testRevocationBelowThresholdRestartsFullDelay}`. Eleven directed tests plus 512 fuzz runs cover immutable owners, threshold-gated timelock, revoke/reconfirm delay restart, replay/conflict rejection, target-call rollback, absent delegatecall, timestamp overflow fail-closed, privileged-role custody and ERC-20 custody. Hoodi runtime receipts remain required |
 | M1.7 | Deployment tooling, address manifest  | `IMPLEMENTED-NOT-VERIFIED` | 4 Foundry scripts, Hoodi guard verified locally (`a3d6784`). All 4 manifests are `*.example.json`                                                                                                                                                                                                                                                                                                                                                                                          |
-| M1.8 | Unit / fuzz / invariant / integration | `IMPLEMENTED-NOT-VERIFIED` | 67 Foundry tests pass (`forge test --offline --use /opt/solc-0.8.30`); see `packages/contracts/test/`. The revenue invariant targets only `RevenueInvariantHandler.fundAndClaim` and requires nonzero calls with zero reverts; `cancelListing` is covered by `testPauseDoesNotTrapEscrowedListing`                                                                                                                                                                                         |
+| M1.8 | Unit / fuzz / invariant / integration | `IMPLEMENTED-NOT-VERIFIED` | 78 Foundry tests pass (`forge test --offline --use /opt/solc-0.8.30`); see `packages/contracts/test/`. `ArtFiAdminSafe.t.sol` adds eleven directed tests and a 512-run pre-delay fuzz campaign. All three invariant campaigns run 256 × 64 with 16,384 calls and zero reverts; the revenue invariant targets only `RevenueInvariantHandler.fundAndClaim` and requires nonzero calls. `cancelListing` remains covered by `testPauseDoesNotTrapEscrowedListing` |
 
 ## M2 — Backend core trading (`PRD.md` §4.2)
 
@@ -225,6 +225,7 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 | Date       | Commit    | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-01 | `#TBD`    | M1.6 implemented: `ArtFiAdminSafe.sol` provides an immutable m-of-n owner set, threshold-gated timelock, confirmation revocation with full-delay restart, replay/conflict rejection, checks-effects-interactions execution with target-revert rollback, explicit overflow rejection, and no delegatecall or owner-management surface. Tests prove no single owner can exercise privileged market roles or transfer safe-custodied ERC-20 assets. Suite 67 → 78; Hoodi runtime receipts remain required |
 | 2026-08-31 | `78fa689` | M1.5 implemented: `RevenueDistributor.sol`, funded immutable rounds with pro-rata claims pulled against a past snapshot, and no sweep path — unclaimed revenue and rounding dust stay claimable indefinitely (`PRD.md` §4.2). `FractionalToken` gains `getPastBalance` on its own checkpoints, independent of delegated voting power. Reviewed as PR #49, landed here after #49's base stayed on its stacking branch. Suite 57 → 67                                                                                                                                      |
 | 2026-08-31 | `efaa37b` | M1.2, M1.3 and M1.4 implemented: auction reserve price, minimum bid increment, and late-bid extension in `packages/contracts/src/ArtFiMarket.sol`, all with pull-based refunds. The PR #46 pause boundary is preserved. Suite 44 → 57                                                                                                                                                                                                                                                                                                                                    |
 | 2026-08-30 | `#46`     | `cancelListing` no longer gated on the pause. Pausing was the seller's only exit from a fixed-price listing with no bidder, so an administrative action could freeze a user's escrowed asset — prohibited by `PRD.md` §4.2 and `AGENTS.md` §3. Every other exit was already unpausable. Open item 8 closed; M1.8 evidence 42 -> 44 tests                                                                                                                                                                                                                                 |
