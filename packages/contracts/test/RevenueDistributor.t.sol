@@ -88,9 +88,9 @@ contract RevenueInvariantHandler {
         funded += amount;
 
         VM.prank(_holderA);
-        try _distributor.claim(distributionId) {} catch {}
+        _distributor.claim(distributionId);
         VM.prank(_holderB);
-        try _distributor.claim(distributionId) {} catch {}
+        _distributor.claim(distributionId);
         claimedAmount += _distributor.totalClaimed(distributionId);
     }
 }
