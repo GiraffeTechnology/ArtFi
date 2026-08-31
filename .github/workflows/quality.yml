@@ -27,6 +27,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm security:secrets
       - run: pnpm release:verify-schema
+      - run: pnpm hoodi-admin-safe:verify-schema
+      - run: pnpm hoodi-admin-safe:verifier:test
       - run: pnpm mint:verify-schema
       - run: pnpm mint:verifier:test
       - run: pnpm charity-edition:verify-schema
@@ -73,6 +75,7 @@ jobs:
       - run: pnpm contracts:build
       - run: pnpm contracts:test
       - run: pnpm contracts:deploy-tooling:check
+      - run: pnpm contracts:hoodi-admin-safe-tooling:check
       - run: pnpm chain:consistency:check
 
   migration:

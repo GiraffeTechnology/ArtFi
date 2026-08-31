@@ -55,3 +55,17 @@ an `.env` file.
 After a reviewed deployment, copy `deployments/sepolia.example.json`, fill every evidence field,
 verify source and constructor arguments, and commit the manifest in a separate deployment PR.
 No inherited address is authoritative without matching source, transaction, roles, and bytecode.
+
+### Hoodi consolidated administration safe
+
+The separate Hoodi path uses chain ID `560048` and does not alter the historical Sepolia release
+manifest or verifier. Run `DeployAdminSafe.s.sol` first, then pin its public address and runtime
+code hash before running Stage 2, Stage 3, or the optional charity stage. All final admin, pauser,
+registrar, creator, and donation-recorder roles are held by that one validated safe. The RWA NFT
+minter is held only by the Registry, and the Stage 2 bootstrap deployer retains no privileged role.
+
+`release/hoodi-admin-safe-deployment.schema.json` and
+`scripts/release/verify-hoodi-admin-safe-deployment.mjs` require every stage to bind the same
+chain/address/code-hash identity. Future `VaultFactory.createVault` child-vault role arguments remain
+a separately controlled action and must also bind the validated safe. This milestone does not claim
+that the safe is an ERC-721 or ERC-1155 treasury receiver.

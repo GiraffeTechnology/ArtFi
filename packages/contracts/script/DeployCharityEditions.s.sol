@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
+import {AdminSafeDeploymentPolicy} from "../src/AdminSafeDeploymentPolicy.sol";
 import {ArtFiCharityEditions} from "../src/ArtFiCharityEditions.sol";
 
 interface VmCharityEditions {
     function envAddress(string calldata name) external view returns (address value);
+    function envBytes32(string calldata name) external view returns (bytes32 value);
     function startBroadcast() external;
     function stopBroadcast() external;
 }
@@ -18,21 +20,31 @@ contract DeployCharityEditions {
 
     error UnsupportedChain(uint256 chainId);
     error ZeroAddress();
+    error RoleHandoffFailed();
 
     function run() external returns (ArtFiCharityEditions editions) {
         if (block.chainid != HOODI_CHAIN_ID) revert UnsupportedChain(block.chainid);
 
-        address admin = VM.envAddress("ARTFI_ADMIN");
-        address seriesCreator = VM.envAddress("ARTFI_EDITION_CREATOR");
-        address donationRecorder = VM.envAddress("ARTFI_DONATION_RECORDER");
-        address pauser = VM.envAddress("ARTFI_PAUSER");
-        if (
-            admin == address(0) || seriesCreator == address(0) || donationRecorder == address(0)
-                || pauser == address(0)
-        ) revert ZeroAddress();
+        address adminSafe = VM.envAddress("ARTFI_ADMIN_SAFE");
+        bytes32 adminSafeCodehash = VM.envBytes32("ARTFI_ADMIN_SAFE_CODEHASH");
+        if (adminSafe == address(0)) revert ZeroAddress();
+        AdminSafeDeploymentPolicy.validate(adminSafe, adminSafeCodehash);
 
         VM.startBroadcast();
-        editions = new ArtFiCharityEditions(admin, seriesCreator, donationRecorder, pauser);
+        editions = _deploy(adminSafe);
         VM.stopBroadcast();
+    }
+
+    function _deploy(address adminSafe) internal returns (ArtFiCharityEditions editions) {
+        AdminSafeDeploymentPolicy.validate(adminSafe, adminSafe.codehash);
+        editions = new ArtFiCharityEditions(adminSafe, adminSafe, adminSafe, adminSafe);
+        if (
+            !editions.hasRole(editions.DEFAULT_ADMIN_ROLE(), adminSafe)
+                || !editions.hasRole(editions.SERIES_CREATOR_ROLE(), adminSafe)
+                || !editions.hasRole(editions.DONATION_RECORDER_ROLE(), adminSafe)
+                || !editions.hasRole(editions.PAUSER_ROLE(), adminSafe)
+        ) {
+            revert RoleHandoffFailed();
+        }
     }
 }
