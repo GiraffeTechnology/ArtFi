@@ -26,6 +26,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm security:secrets
+      - name: Monitor-only deterministic fault and retention tests
+        run: pnpm ops:monitor:test
+        timeout-minutes: 2
       - run: pnpm release:verify-schema
       - run: pnpm mint:verify-schema
       - run: pnpm mint:verifier:test

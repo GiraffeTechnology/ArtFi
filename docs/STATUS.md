@@ -134,13 +134,13 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## M6 — Operations (`PRD.md` §4.6)
 
-| #    | Requirement                                      | Status                     | Evidence / gap                                                          |
-| ---- | ------------------------------------------------ | -------------------------- | ----------------------------------------------------------------------- |
-| M6.1 | CI/CD to staging and production                  | `NOT-IMPLEMENTED`          | one workflow, `quality.yml`. No CD                                      |
-| M6.2 | Cluster: load balancing, replica, backup/restore | `NOT-IMPLEMENTED`          | `ACCEPTANCE.md` §5 also mandates a CI backup/restore job that is absent |
-| M6.3 | Monitoring, log aggregation, alerting            | `NOT-IMPLEMENTED`          |                                                                         |
-| M6.4 | Object storage MIME / size / SHA-256 validation  | `IMPLEMENTED-NOT-VERIFIED` | `s3store.go`, `rwa.go`                                                  |
-| M6.5 | Runbooks and operator documentation              | `IMPLEMENTED-NOT-VERIFIED` | `docs/OPERATIONS_RUNBOOK.md`; no observed drill                         |
+| #    | Requirement                                      | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                         |
+| ---- | ------------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| M6.1 | CI/CD to staging and production                  | `NOT-IMPLEMENTED`          | one workflow, `quality.yml`. No CD                                                                                                                                                                                                                                                                     |
+| M6.2 | Cluster: load balancing, replica, backup/restore | `NOT-IMPLEMENTED`          | `ACCEPTANCE.md` §5 also mandates a CI backup/restore job that is absent                                                                                                                                                                                                                                |
+| M6.3 | Monitoring, log aggregation, alerting            | `NOT-IMPLEMENTED`          | Independent `scripts/ops` candidate adds deterministic probes, durable incident/recovery queue and a monitor-only service template. Local tests do not prove deployment: CTYun Aivan QWEN identity, notification delivery, retention, startup/crash/fault evidence and production rollout remain open. |
+| M6.4 | Object storage MIME / size / SHA-256 validation  | `IMPLEMENTED-NOT-VERIFIED` | `s3store.go`, `rwa.go`                                                                                                                                                                                                                                                                                 |
+| M6.5 | Runbooks and operator documentation              | `IMPLEMENTED-NOT-VERIFIED` | `docs/OPERATIONS_RUNBOOK.md`; no observed drill                                                                                                                                                                                                                                                        |
 
 ## Non-functional (`PRD.md` §5)
 
@@ -222,6 +222,30 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 ---
 
 ## Change log
+
+2026-09-05 operations source milestone on `da1b196`: independent monitor-only
+implementation and local fault tests, per user direction. No matrix status/count is
+promoted. QWEN3.5:9B refers to the CTYun Aivan host, not the Giraffe Agent product;
+no model, notification channel or production service has been enabled. Source quality
+requires the delivery PR's exact-head CI and independent review; local results alone
+do not satisfy deployment acceptance.
+
+The working candidate's `scripts/ops/monitor-retention.test.mjs` covers acknowledged
+record expiry, pending/needs-human retention, explicit capacity gaps and restart
+draining, finite configuration bounds, atomic multi-check batches and refusal to
+shrink a queue destructively. `pnpm ops:monitor:test` is wired to the web CI job;
+no CI run for this candidate is claimed. These are local queue semantics, not
+journal archival, deployed process recovery, live Qwen/notification integration or
+24x7 operational acceptance; M6.3 remains `NOT-IMPLEMENTED`.
+`scripts/ops/monitor-crash.test.mjs` additionally exercises owned test-child
+termination/restart after persistence and receiver-effect-before-ACK. Its receiver
+is synthetic and deduplicates stable IDs; real service-manager restart, power loss,
+channel delivery and production availability remain unverified.
+`scripts/ops/monitor-storage.test.mjs` reproduces rename/serialization failures and
+checks committed state preservation, precise temporary-file cleanup and successful
+replacement. It does not prove disk-full, directory fsync or power-loss durability.
+Core regressions also cover prototype-name check IDs and malformed restored counters,
+incident IDs and statuses; rejected state is not rewritten or silently discarded.
 
 | Date       | Commit    | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
