@@ -60,6 +60,41 @@ for variable in "${required[@]}"; do
   fi
 done
 
+# Presence is not validity. A variable set to the zero address, or to something that is
+# not an address at all, passes the loop above and then reverts inside a Forge script —
+# but only when that script runs. The market and revenue scripts run last, so Stage2 and
+# Stage3 would already have broadcast, leaving a partial deployment and spent test funds.
+# Every address is therefore shape-checked and rejected as zero here, before any Forge
+# invocation, so that the fail-closed promise holds where it is made.
+address_settings=(
+  DEPLOYER_ADDRESS
+  ARTFI_ADMIN
+  ARTFI_REGISTRAR
+  ARTFI_PAUSER
+  ARTFI_VAULT_CREATOR
+)
+for variable in "${required[@]}"; do
+  case "$variable" in
+    ARTFI_MARKET_* | ARTFI_REVENUE_* | ARTFI_EDITION_CREATOR | ARTFI_DONATION_RECORDER)
+      address_settings+=("$variable")
+      ;;
+  esac
+done
+
+zero_address=0x0000000000000000000000000000000000000000
+for variable in "${address_settings[@]}"; do
+  value="${!variable:-}"
+  [[ -z "$value" ]] && continue
+  if [[ ! "$value" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+    printf 'refusing deployment: %s is not a 20-byte address: %s\n' "$variable" "$value" >&2
+    exit 1
+  fi
+  if [[ "${value,,}" == "$zero_address" ]]; then
+    printf 'refusing deployment: %s is the zero address\n' "$variable" >&2
+    exit 1
+  fi
+done
+
 if [[ ! -f "$ARTFI_KEYSTORE_PASSWORD_FILE" ]]; then
   printf 'keystore password file is not readable\n' >&2
   exit 1
