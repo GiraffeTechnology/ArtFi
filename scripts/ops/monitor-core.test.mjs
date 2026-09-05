@@ -357,6 +357,88 @@ test("shutdown during notification preserves its pending ID and uncertain attemp
   assert.equal(resumed.heartbeatAt, config.now());
 });
 
+test("category changes reset observations without recovering an old-category incident", async (t) => {
+  for (const legacy of [false, true]) {
+    await t.test(
+      legacy ? "legacy state" : "category-bound state",
+      async (t) => {
+        const { config, monitor, directory } = await fixture(t);
+        const first = await monitor.tick();
+        const oldId = first.queue[0].id;
+        if (legacy) {
+          delete first.checks["market-api"].category;
+          await writeFile(
+            join(directory, "monitor-state.json"),
+            JSON.stringify(first),
+          );
+        }
+        const changed = {
+          ...config,
+          checks: [{ id: "market-api", category: "web", maxAgeMs: 1000 }],
+          probe: async () => ({
+            observedAt: 10000,
+            available: true,
+            fresh: true,
+          }),
+        };
+        const healthy = await new Monitor(changed).tick();
+        assert.equal(healthy.queue.length, 1);
+        assert.equal(healthy.queue[0].id, oldId);
+        assert.equal(healthy.queue[0].category, "api");
+        assert.equal(healthy.checks["market-api"].category, "web");
+        assert.equal(healthy.checks["market-api"].incident, null);
+        const down = await new Monitor({
+          ...changed,
+          probe: config.probe,
+        }).tick();
+        assert.equal(down.queue.length, 2);
+        assert.equal(down.queue[1].category, "web");
+        assert.notEqual(down.queue[1].id, oldId);
+        const recovered = await new Monitor(changed).tick();
+        assert.equal(recovered.queue.length, 3);
+        assert.equal(recovered.queue[2].category, "web");
+        assert.equal(recovered.queue[2].incidentId, down.queue[1].id);
+        assert.notEqual(recovered.queue[2].incidentId, oldId);
+      },
+    );
+  }
+});
+
+test("legacy category inference preserves same-category recovery and rejects conflicting state", async (t) => {
+  const { config, monitor, directory } = await fixture(t);
+  const saved = await monitor.tick();
+  const path = join(directory, "monitor-state.json");
+  const incidentId = saved.queue[0].id;
+  const healthy = {
+    ...config,
+    probe: async () => ({ observedAt: 10000, available: true, fresh: true }),
+  };
+  for (const category of ["web", "invalid-category"]) {
+    saved.checks["market-api"].category = category;
+    await writeFile(path, JSON.stringify(saved));
+    const before = await readFile(path, "utf8");
+    let probed = false;
+    await assert.rejects(
+      new Monitor({
+        ...healthy,
+        probe: async () => {
+          probed = true;
+          return null;
+        },
+      }).tick(),
+      /MONITOR_CHECK_STATE_REFUSED/,
+    );
+    assert.equal(probed, false);
+    assert.equal(await readFile(path, "utf8"), before);
+  }
+  delete saved.checks["market-api"].category;
+  await writeFile(path, JSON.stringify(saved));
+  const recovered = await new Monitor(healthy).tick();
+  assert.equal(recovered.queue[1].incidentId, incidentId);
+  assert.equal(recovered.queue[1].category, "api");
+  assert.equal(recovered.checks["market-api"].category, "api");
+});
+
 test("aborted notification retains the prior completed heartbeat until restart finishes", async (t) => {
   let now = 1000;
   const { config, monitor, directory } = await fixture(t, {

@@ -286,7 +286,8 @@ export class Monitor {
           prior.consecutive < 0 ||
           prior.consecutive > 10 ||
           !(prior.incident === null || uuid.test(prior.incident)) ||
-          !states.has(prior.status)
+          !states.has(prior.status) ||
+          (prior.category !== undefined && !categories.has(prior.category))
         )
           throw new Error("MONITOR_CHECK_STATE_REFUSED");
       }
@@ -303,6 +304,24 @@ export class Monitor {
             : event.deliveredAt !== undefined)
         )
           throw new Error("QUEUE_RECORD_REFUSED");
+      }
+      for (const [checkId, prior] of Object.entries(saved.checks)) {
+        const incident = saved.queue.find(
+          (event) =>
+            event.id === prior.incident &&
+            event.checkId === checkId &&
+            event.type === "incident",
+        );
+        if (incident) {
+          if (
+            prior.category !== undefined &&
+            prior.category !== incident.category
+          )
+            throw new Error("MONITOR_CHECK_STATE_REFUSED");
+          // Legacy version-1 state has no category. Only its own validated
+          // incident can establish one; never infer it from new configuration.
+          prior.category ??= incident.category;
+        }
       }
       expireDelivered(saved, observedAt, this.deliveredRetentionMs);
       if (saved.queue.length > this.maxQueueEntries)
@@ -324,9 +343,13 @@ export class Monitor {
         }
         refuseAborted(signal);
         const status = evaluate(sample, this.now(), check.maxAgeMs);
-        const prior = Object.hasOwn(saved.checks, check.id)
+        const previous = Object.hasOwn(saved.checks, check.id)
           ? saved.checks[check.id]
-          : { consecutive: 0, incident: null };
+          : undefined;
+        const prior =
+          previous?.category === check.category
+            ? previous
+            : { category: check.category, consecutive: 0, incident: null };
         prior.consecutive =
           status === "healthy"
             ? 0

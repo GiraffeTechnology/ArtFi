@@ -89,6 +89,12 @@ be healthy, incident records non-healthy, and delivered records require a timest
 which is forbidden on pending/exhausted records. Corruption is rejected before any
 probe/adapter or state rewrite, not silently pruned.
 
+Durable observations bind category as well as logical check ID. Reusing an ID for
+a different category resets its observation counters/incident, but preserves all old
+queued events. Legacy category-less state can recover category only from its own
+validated queued incident; without that evidence it resets instead of assuming the
+new configuration's category. Contradictory category/incident state is rejected.
+
 Service shutdown propagates into the active tick and its bounded probe/model/notifier
 calls. Observation/queue persistence is separate from the completed-tick heartbeat:
 the heartbeat advances only after processing reaches a non-aborted endpoint. An

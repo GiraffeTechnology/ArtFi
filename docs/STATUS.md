@@ -251,6 +251,8 @@ contradictory event states and timestamps, and preserve retired checks' durable 
 `service shutdown aborts the active HTTP probe and preserves the previous heartbeat batch`,
 `shutdown during notification preserves its pending ID and uncertain attempt for restart`,
 `aborted notification retains the prior completed heartbeat until restart finishes`,
+`category changes reset observations without recovering an old-category incident`,
+`legacy category inference preserves same-category recovery and rejects conflicting state`,
 and the restored-record/retired-check tests bind these changes. New-head CI and review
 remain required; previous-head green CI is not promoted to the changed source.
 
