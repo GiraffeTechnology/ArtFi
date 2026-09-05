@@ -55,6 +55,7 @@ const LAYERS = [
     "DeployStage2",
     "DeployStage3",
     "DeployStage4",
+    "DeployAdminSafe",
     "DeployMarket",
     "DeployRevenueDistributor",
     "DeployCharityEditions",
