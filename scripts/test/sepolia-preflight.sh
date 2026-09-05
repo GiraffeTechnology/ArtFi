@@ -22,6 +22,37 @@ if [[ "${ARTFI_DEPLOY_CHARITY_EDITIONS:-false}" == "true" ]]; then
   )
 fi
 
+# ArtFiMarket and RevenueDistributor hold user value, so their opt-ins carry two
+# conditions the other stages do not. Both fail closed: an operator who omits either
+# gets a refusal, not a default.
+#
+#   ARTFI_TEST_PAYLOAD_CLASS   must be TEST_ONLY_NO_REAL_VALUE. PRD.md §7.0 confines
+#                              Hoodi to separately generated test assets; this makes the
+#                              operator state that on every money-handling deployment.
+#   ARTFI_REVIEWED_COMMIT      must equal the commit being deployed. ACCEPTANCE.md §3
+#                              excludes evidence taken from a different commit, and G3-A
+#                              freezes the contract suite; a deployment that cannot name
+#                              its own reviewed commit cannot produce G2 evidence.
+if [[ "${ARTFI_DEPLOY_MARKET:-false}" == "true" ]]; then
+  required+=(
+    ARTFI_MARKET_ADMIN
+    ARTFI_MARKET_PAUSER
+    ARTFI_MARKET_TOKEN_MANAGER
+    ARTFI_TEST_PAYLOAD_CLASS
+    ARTFI_REVIEWED_COMMIT
+  )
+fi
+
+if [[ "${ARTFI_DEPLOY_REVENUE_DISTRIBUTOR:-false}" == "true" ]]; then
+  required+=(
+    ARTFI_REVENUE_FRACTION_TOKEN
+    ARTFI_REVENUE_ADMIN
+    ARTFI_REVENUE_DISTRIBUTOR
+    ARTFI_TEST_PAYLOAD_CLASS
+    ARTFI_REVIEWED_COMMIT
+  )
+fi
+
 for variable in "${required[@]}"; do
   if [[ -z "${!variable:-}" ]]; then
     printf 'missing required deployment setting: %s\n' "$variable" >&2
@@ -32,6 +63,26 @@ done
 if [[ ! -f "$ARTFI_KEYSTORE_PASSWORD_FILE" ]]; then
   printf 'keystore password file is not readable\n' >&2
   exit 1
+fi
+
+# Value checks for the money-handling opt-ins. The loop above only proves the settings
+# are non-empty; these prove they say the right thing.
+if [[ "${ARTFI_DEPLOY_MARKET:-false}" == "true" \
+  || "${ARTFI_DEPLOY_REVENUE_DISTRIBUTOR:-false}" == "true" ]]; then
+  if [[ "${ARTFI_TEST_PAYLOAD_CLASS:-}" != "TEST_ONLY_NO_REAL_VALUE" ]]; then
+    printf 'refusing deployment: ARTFI_TEST_PAYLOAD_CLASS must be TEST_ONLY_NO_REAL_VALUE\n' >&2
+    exit 1
+  fi
+  head_commit="$(git -C "$repo_root" rev-parse HEAD)"
+  if [[ "${ARTFI_REVIEWED_COMMIT,,}" != "${head_commit,,}" ]]; then
+    printf 'refusing deployment: ARTFI_REVIEWED_COMMIT %s does not match HEAD %s\n' \
+      "$ARTFI_REVIEWED_COMMIT" "$head_commit" >&2
+    exit 1
+  fi
+  if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
+    printf 'refusing deployment: the working tree is dirty, so HEAD is not what would deploy\n' >&2
+    exit 1
+  fi
 fi
 
 chain_id="$(cast chain-id --rpc-url "$ARTFI_RPC_URL")"
