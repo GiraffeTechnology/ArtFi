@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "scope": "PR57 Next.js 16.3.3 image-runtime regression; no completion promotion",
+  "sourceParent": {
+    "commit": "acb833462779fed9104d547663aeaf7a6dfeeffa",
+    "tree": "0a83d6992b307e0c3b702124062e9405b61d66b8"
+  },
+  "tests": {
+    "file": "apps/web/e2e/image-runtime.spec.ts",
+    "cases": [
+      "visible brand images decode in the browser",
+      "all approved standalone brand assets decode rather than merely return image MIME",
+      "image optimizer negotiates non-AVIF output from a benign PNG and the result decodes"
+    ],
+    "projects": ["desktop-chromium", "mobile-chromium"],
+    "newCases": 6,
+    "existingCases": 38,
+    "expectedTotal": 44
+  },
+  "historicalEvidence": {
+    "exactParentCI": {
+      "head": "acb833462779fed9104d547663aeaf7a6dfeeffa",
+      "url": "https://github.com/GiraffeTechnology/ArtFi/actions/runs/33951273353",
+      "jobs": 5,
+      "conclusion": "success",
+      "newImageTestsIncluded": false
+    },
+    "localParentDiagnostic": {
+      "publiclyRetrievable": false,
+      "independentlyReviewedByDeliveryCoordinator": true,
+      "summarySha256": "05D0B8AC2B70511F664C71332FFC2995F2A16419BF7A25F5CB0FCAE15D0DE8CF",
+      "sourceBlobMatches": 327,
+      "next": "16.3.3",
+      "node": "24.19.0",
+      "pnpm": "11.22.0",
+      "playwright": "1.62.1",
+      "browserCasesPassed": 44,
+      "retries": 0,
+      "skipped": 0,
+      "loopbackOnly": true,
+      "serviceStopped": true,
+      "portReleased": true,
+      "appliesToFinalChildCommit": false
+    }
+  },
+  "reproduce": {
+    "install": "pnpm install --frozen-lockfile",
+    "format": "pnpm format:check",
+    "typecheck": "pnpm typecheck",
+    "browser": "pnpm test:e2e",
+    "standalone": "pnpm build; stage public and .next/static under apps/web/.next/standalone/apps/web; start that verified standalone server on loopback and run pnpm test:e2e with ARTFI_E2E_BASE_URL pointing only to it.",
+    "requireExactFinalHead": true,
+    "requireFrozenDependencies": true,
+    "requireBothProjects": true
+  },
+  "boundaries": {
+    "inputImages": "existing approved local SVG/PNG only",
+    "avifInputDecoderTest": false,
+    "exploitTest": false,
+    "liveProviderConnectivity": false,
+    "db": false,
+    "walletSigning": false,
+    "productionDeployment": false,
+    "p0Complete": false,
+    "finalChildCI": "REQUIRED_NOT_INHERITED"
+  }
+}
