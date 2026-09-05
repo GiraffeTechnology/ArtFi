@@ -15,18 +15,18 @@ may hold a database; abcdyi and Aivan are application/bridge hosts, not DB targe
   Unset options preserve the existing startup defaults; configuration errors expose
   only `DB_POOL_CONFIGURATION_REFUSED`. Open/ping/hydration logs now use fixed stage
   codes rather than raw driver errors.
-- `persistence_options_test.go` contains default-preservation, application-to-pool
-  and invalid-input cases. Isolated official Go 1.26.5 Windows now runs these two
-  explicit source/test files locally: three top-level tests and sixteen negative
-  subtests pass, independently reproduced. The three changed Go files have no
-  remaining gofmt diff. An independent copy of the same six pinned files subsequently
-  passed offline `go mod verify`, `go vet ./...` and `go test -count=1 ./...` using
-  the managed public-module cache (API test log SHA-256
-  `354916a22778f060b106bdf35c892bf6d95480732faa6e6b17c831462c69285f`).
-  This is source-test evidence only: race, live DB integration, TLS and switching
-  remain **NOT_VERIFIED**. No real DB has been connected; all service credentials
-  were absent from the test environment. The earlier missing-cache checkpoint is
-  superseded for source tests, not converted into DB acceptance.
+- `persistence_options_test.go` contains three top-level default-preservation,
+  application-to-pool and invalid-input tests, including sixteen negative subtests.
+  Retrievable source evidence: exact PR #67 head
+  `5d9b11aadd557cf3dd2520556e969e8b3f55a11c`,
+  [quality run 33952268640](https://github.com/GiraffeTechnology/ArtFi/actions/runs/33952268640),
+  [API job 101269156886](https://github.com/GiraffeTechnology/ArtFi/actions/runs/33952268640/job/101269156886):
+  Go 1.26.5 Linux, gofmt/no-diff, `go vet ./...` and `go test -race ./...` succeeded.
+  No retrievable standalone offline `go mod verify` log is attached to this PR;
+  local offline observations are not counted as reviewable acceptance evidence.
+  These CI results bind the cited source head only; any follow-up needs fresh CI.
+  Approved CTYun DB integration, TLS, backup/restore and switching remain
+  **NOT_VERIFIED**. No real DB was connected by the local source checks.
 - TLS certificate/hostname policy enforcement, live pool replacement, write
   admission fencing, replication and rollback are **not implemented by this slice**.
   `MYSQL_DSN` changing in an environment or secret file does not reload an existing

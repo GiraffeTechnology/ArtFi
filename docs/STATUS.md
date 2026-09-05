@@ -223,18 +223,19 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## Change log
 
-2026-09-05 DB-portability source slice based on `da1b196`: startup pool
+2026-09-05 PR #67 DB-portability source slice based on `da1b196`: startup pool
 settings are externalized and bounded, defaults preserved, and raw driver errors
-removed from startup logging. Fixed Go 1.26.5 file-level configuration tests
+removed from startup logging. Configuration tests
 (`TestPersistencePoolDefaultsPreserveStartupBehavior`, `TestPersistencePoolManagedOptions`,
-`TestPersistencePoolRefusesInvalidAndUnboundedConfiguration`) pass locally, including
-sixteen negative subtests; independent local reproduction agrees. Changed Go files
-have no gofmt diff. The same six-file candidate passed independent offline
-`go mod verify`, `go vet ./...` and `go test -count=1 ./...` with the managed public
-module cache; API log SHA-256 is
-`354916a22778f060b106bdf35c892bf6d95480732faa6e6b17c831462c69285f`.
-Race and live DB integration remain unverified; source tests are not CI or DB
-acceptance. The explicit compatibility,
+`TestPersistencePoolRefusesInvalidAndUnboundedConfiguration`) include sixteen
+negative subtests. Retrievable evidence for exact head
+`5d9b11aadd557cf3dd2520556e969e8b3f55a11c` is
+[quality run 33952268640](https://github.com/GiraffeTechnology/ArtFi/actions/runs/33952268640),
+including [API job 101269156886](https://github.com/GiraffeTechnology/ArtFi/actions/runs/33952268640/job/101269156886):
+Go 1.26.5 Linux gofmt/no-diff, `go vet ./...` and `go test -race ./...` succeeded.
+Unarchived local offline logs are not counted as reviewable evidence. These results
+apply only to the cited source head; follow-up commits need fresh CI/review. Approved
+CTYun live DB integration remains unverified. The explicit compatibility,
 fencing, UNKNOWN-outcome and rollback-after-new-write gates are recorded in
 `docs/DB_PORTABILITY_SWITCH.md`. No reload, live switch, real DB connection or RPO/RTO
 measurement is claimed; M6.2 remains `NOT-IMPLEMENTED`, counts unchanged. Exact-head
