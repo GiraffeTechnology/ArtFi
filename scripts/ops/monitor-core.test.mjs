@@ -227,3 +227,177 @@ test("invalid restored check state is refused before probes or heartbeat rewrite
     assert.equal(await readFile(path, "utf8"), bytes);
   }
 });
+
+test("contradictory restored event and delivery timestamps are rejected without side effects", async (t) => {
+  const { config, monitor, directory } = await fixture(t);
+  await monitor.tick();
+  const path = join(directory, "monitor-state.json");
+  const valid = JSON.parse(await readFile(path, "utf8"));
+  for (const [index, mutate] of [
+    (e) => {
+      e.type = "recovery";
+      e.incidentId = e.id;
+      e.status = "unavailable";
+    },
+    (e) => {
+      e.type = "incident";
+      e.status = "healthy";
+    },
+    (e) => {
+      e.delivery = "delivered";
+      delete e.deliveredAt;
+    },
+    (e) => {
+      e.delivery = "pending";
+      e.deliveredAt = 10000;
+    },
+    (e) => {
+      e.delivery = "needs-human";
+      e.deliveredAt = 10000;
+    },
+  ].entries()) {
+    await t.test(`restored-record-${index}`, async () => {
+      const state = structuredClone(valid);
+      mutate(state.queue[0]);
+      const bytes = JSON.stringify(state);
+      await writeFile(path, bytes);
+      let calls = 0;
+      await assert.rejects(
+        new Monitor({
+          ...config,
+          probe: async () => {
+            calls++;
+          },
+          classify: async () => {
+            calls++;
+          },
+          notify: async () => {
+            calls++;
+          },
+        }).tick(),
+        /QUEUE_RECORD_REFUSED/,
+      );
+      assert.equal(calls, 0);
+      assert.equal(await readFile(path, "utf8"), bytes);
+    });
+  }
+});
+
+test("retired check pending and needs-human events survive active configuration replacement", async (t) => {
+  const { config, monitor, directory } = await fixture(t);
+  await monitor.tick();
+  const path = join(directory, "monitor-state.json");
+  const initial = JSON.parse(await readFile(path, "utf8"));
+  for (const delivery of ["pending", "needs-human"]) {
+    const state = structuredClone(initial);
+    state.queue[0].delivery = delivery;
+    if (delivery === "needs-human") state.queue[0].attempts = 3;
+    await writeFile(path, JSON.stringify(state));
+    const sent = [];
+    const probed = [];
+    const resumed = await new Monitor({
+      ...config,
+      checks: [{ id: "replacement-api", category: "api", maxAgeMs: 1000 }],
+      probe: async (id) => {
+        probed.push(id);
+        return { observedAt: 10000, available: true, fresh: true };
+      },
+      notify: async (e) => {
+        sent.push(e);
+        return { id: e.id, accepted: true };
+      },
+    }).tick();
+    assert.deepEqual(probed, ["replacement-api"]);
+    assert.equal(resumed.queue[0].id, initial.queue[0].id);
+    assert.equal(
+      resumed.queue[0].delivery,
+      delivery === "pending" ? "delivered" : "needs-human",
+    );
+    assert.equal(sent.length, delivery === "pending" ? 1 : 0);
+  }
+});
+
+test("shutdown during notification preserves its pending ID and uncertain attempt for restart", async (t) => {
+  const control = new AbortController();
+  let sentId;
+  let propagated = false;
+  const { config, monitor, directory } = await fixture(t, {
+    notify: (event, signal) => {
+      sentId = event.id;
+      signal.addEventListener(
+        "abort",
+        () => {
+          propagated = true;
+        },
+        { once: true },
+      );
+      control.abort();
+      return new Promise(() => {});
+    },
+  });
+  await assert.rejects(monitor.tick(control.signal), /MONITOR_TICK_ABORTED/);
+  const persisted = JSON.parse(
+    await readFile(join(directory, "monitor-state.json"), "utf8"),
+  );
+  assert.equal(propagated, true);
+  assert.equal(persisted.queue[0].id, sentId);
+  assert.equal(persisted.queue[0].delivery, "pending");
+  assert.equal(persisted.queue[0].attempts, 1);
+  assert.equal(persisted.heartbeatAt, undefined);
+  const resumed = await new Monitor({
+    ...config,
+    notify: async (event) => {
+      assert.equal(event.id, sentId);
+      return { id: event.id, accepted: true };
+    },
+  }).tick();
+  assert.equal(resumed.queue.length, 1);
+  assert.equal(resumed.queue[0].delivery, "delivered");
+  assert.equal(resumed.queue[0].attempts, 2);
+  assert.equal(resumed.heartbeatAt, config.now());
+});
+
+test("aborted notification retains the prior completed heartbeat until restart finishes", async (t) => {
+  let now = 1000;
+  const { config, monitor, directory } = await fixture(t, {
+    now: () => now,
+    probe: async () => ({ observedAt: now, available: true, fresh: true }),
+  });
+  await monitor.tick();
+  now = 2000;
+  const control = new AbortController();
+  let sentId;
+  const interrupted = new Monitor({
+    ...config,
+    probe: async () => ({ observedAt: now, available: false }),
+    notify: (event) => {
+      sentId = event.id;
+      control.abort();
+      return new Promise(() => {});
+    },
+  });
+  await assert.rejects(
+    interrupted.tick(control.signal),
+    /MONITOR_TICK_ABORTED/,
+  );
+  const persisted = JSON.parse(
+    await readFile(join(directory, "monitor-state.json"), "utf8"),
+  );
+  assert.equal(persisted.heartbeatAt, 1000);
+  assert.equal(persisted.queue[0].id, sentId);
+  assert.equal(persisted.queue[0].attempts, 1);
+  assert.equal(persisted.queue[0].delivery, "pending");
+  now = 3000;
+  const resumed = await new Monitor({
+    ...config,
+    probe: async () => ({ observedAt: now, available: false }),
+    notify: async (event) => {
+      assert.equal(event.id, sentId);
+      return { id: event.id, accepted: true };
+    },
+  }).tick();
+  assert.equal(resumed.heartbeatAt, 3000);
+  assert.equal(resumed.queue.length, 1);
+  assert.equal(resumed.queue[0].delivery, "delivered");
+  assert.equal(resumed.queue[0].attempts, 2);
+});

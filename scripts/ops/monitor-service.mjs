@@ -113,7 +113,14 @@ export async function runService(config, { signal, once = false } = {}) {
       if (error.code !== "ENOENT") throw new Error("STOP_CONTROL_UNREADABLE");
     }
     if (signal?.aborted) return "SHUTDOWN";
-    const state = await monitor.tick();
+    let state;
+    try {
+      state = await monitor.tick(signal);
+    } catch (error) {
+      if (signal?.aborted && error.message === "MONITOR_TICK_ABORTED")
+        return "SHUTDOWN";
+      throw error;
+    }
     if (once)
       return state.collection.status === "capacity-blocked"
         ? "MONITOR_QUEUE_CAPACITY_BLOCKED"

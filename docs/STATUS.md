@@ -223,7 +223,7 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## Change log
 
-2026-09-05 operations source milestone on `da1b196`: independent monitor-only
+2026-09-05 operations source milestone ([PR #66](https://github.com/GiraffeTechnology/ArtFi/pull/66)) on `da1b196`: independent monitor-only
 implementation and local fault tests, per user direction. No matrix status/count is
 promoted. QWEN3.5:9B refers to the CTYun Aivan host, not the Giraffe Agent product;
 no model, notification channel or production service has been enabled. Source quality
@@ -246,6 +246,13 @@ checks committed state preservation, precise temporary-file cleanup and successf
 replacement. It does not prove disk-full, directory fsync or power-loss durability.
 Core regressions also cover prototype-name check IDs and malformed restored counters,
 incident IDs and statuses; rejected state is not rewritten or silently discarded.
+PR #66 review corrections propagate shutdown into active probes/delivery, reject
+contradictory event states and timestamps, and preserve retired checks' durable events.
+`service shutdown aborts the active HTTP probe and preserves the previous heartbeat batch`,
+`shutdown during notification preserves its pending ID and uncertain attempt for restart`,
+`aborted notification retains the prior completed heartbeat until restart finishes`,
+and the restored-record/retired-check tests bind these changes. New-head CI and review
+remain required; previous-head green CI is not promoted to the changed source.
 
 | Date       | Commit    | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -9,8 +9,8 @@ optional bounded classifier and notifier. No shell/action executor, signing, dat
 mutation, transaction broadcast or legal-rights decision exists. Model output accepts
 only four suggestion labels; it cannot change a probe result or execute instructions.
 Notifications use an explicit field projection, not the persisted event object. A
-restored event must match its configured check, environment, category and bounded
-identity fields before either optional adapter is called; arbitrary diagnostic fields
+restored event must have a valid original logical check ID, environment, category and
+bounded identity fields before either optional adapter is called; arbitrary diagnostic fields
 are never forwarded. The two corresponding negative tests use synthetic markers only.
 
 `node --test scripts/ops/*.test.mjs` tests the core and an actual ephemeral loopback
@@ -81,3 +81,20 @@ Restored check counters, incident IDs and statuses are validated before probing 
 rewriting the heartbeat. Check lookup uses own properties so a valid logical ID such
 as `constructor` cannot be mistaken for inherited state and silently suppress an
 incident. Corrupted state is refused, not repaired or discarded automatically.
+
+Pending and exhausted events keep their original validated check identity when the
+active probe list changes; retiring a probe neither deletes its events nor blocks
+remaining delivery. Only active probes collect new samples. Recovery records must
+be healthy, incident records non-healthy, and delivered records require a timestamp
+which is forbidden on pending/exhausted records. Corruption is rejected before any
+probe/adapter or state rewrite, not silently pruned.
+
+Service shutdown propagates into the active tick and its bounded probe/model/notifier
+calls. Observation/queue persistence is separate from the completed-tick heartbeat:
+the heartbeat advances only after processing reaches a non-aborted endpoint. An
+interrupted notification retains the prior heartbeat and its durable pending ID/attempt.
+An interrupted notification retains the persisted pending ID and attempt because its
+remote effect is uncertain; receiver-side deduplication remains required. Local tests
+exercise an actual hanging loopback request and notification cancellation. Filesystem
+syscalls themselves are not abortable; these tests do not prove bounded shutdown of
+a stalled storage device or a real systemd installation.

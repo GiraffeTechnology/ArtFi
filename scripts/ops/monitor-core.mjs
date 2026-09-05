@@ -21,15 +21,18 @@ const states = new Set(["healthy", "unavailable", "stale", "unknown"]);
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-function notificationRecord(event, checks, environment) {
-  const check = checks.find((item) => item.id === event.checkId);
+function notificationRecord(event, environment) {
+  // Durable event identity is independent of today's active probe inventory.
   if (
-    !check ||
-    event.category !== check.category ||
+    !event ||
+    !/^[a-z][a-z0-9-]{0,47}$/.test(event.checkId) ||
+    !categories.has(event.category) ||
     event.environment !== environment ||
     !uuid.test(event.id) ||
     !states.has(event.status) ||
     !["incident", "recovery"].includes(event.type) ||
+    (event.type === "recovery" && event.status !== "healthy") ||
+    (event.type === "incident" && event.status === "healthy") ||
     !Number.isSafeInteger(event.observedAt) ||
     event.observedAt < 0 ||
     !advice.has(event.recommendation) ||
@@ -145,13 +148,28 @@ export async function atomicJson(path, value) {
   }
 }
 
-export async function bounded(call, milliseconds) {
+function refuseAborted(signal) {
+  if (signal?.aborted) throw new Error("MONITOR_TICK_ABORTED");
+}
+
+export async function bounded(call, milliseconds, signal) {
   let timer;
+  let abort;
   const controller = new AbortController();
   try {
+    refuseAborted(signal);
     return await Promise.race([
-      Promise.resolve().then(() => call(controller.signal)),
+      Promise.resolve().then(() => {
+        refuseAborted(signal);
+        return call(controller.signal);
+      }),
       new Promise((_, reject) => {
+        abort = () => {
+          controller.abort();
+          reject(new Error("MONITOR_TICK_ABORTED"));
+        };
+        signal?.addEventListener("abort", abort, { once: true });
+        if (signal?.aborted) abort();
         timer = setTimeout(() => {
           controller.abort();
           reject(new Error("DEPENDENCY_TIMEOUT"));
@@ -160,6 +178,7 @@ export async function bounded(call, milliseconds) {
     ]);
   } finally {
     clearTimeout(timer);
+    if (abort) signal?.removeEventListener("abort", abort);
   }
 }
 
@@ -229,10 +248,11 @@ export class Monitor {
     this.running = false;
   }
 
-  async tick() {
+  async tick(signal) {
     if (this.running) throw new Error("OVERLAPPING_TICK_REFUSED");
     this.running = true;
     try {
+      refuseAborted(signal);
       await mkdir(this.directory, { recursive: true, mode: 0o700 });
       const path = join(this.directory, "monitor-state.json");
       let saved;
@@ -273,13 +293,14 @@ export class Monitor {
       const observedAt = this.now();
       // Validate before retention can discard anything, and before any adapter.
       for (const event of saved.queue) {
-        notificationRecord(event, this.checks, this.environment);
+        notificationRecord(event, this.environment);
         if (
           !["pending", "delivered", "needs-human"].includes(event.delivery) ||
           !Number.isSafeInteger(event.attempts) ||
           event.attempts < 0 ||
-          (event.deliveredAt !== undefined &&
-            (!Number.isSafeInteger(event.deliveredAt) || event.deliveredAt < 0))
+          (event.delivery === "delivered"
+            ? !Number.isSafeInteger(event.deliveredAt) || event.deliveredAt < 0
+            : event.deliveredAt !== undefined)
         )
           throw new Error("QUEUE_RECORD_REFUSED");
       }
@@ -289,15 +310,19 @@ export class Monitor {
       const durable = structuredClone(saved);
       let capacityBlocked = false;
       for (const check of this.checks) {
+        refuseAborted(signal);
         let sample;
         try {
           sample = await bounded(
             (signal) => this.probe(check.id, signal),
             this.timeoutMs,
+            signal,
           );
         } catch {
+          refuseAborted(signal);
           sample = null;
         }
+        refuseAborted(signal);
         const status = evaluate(sample, this.now(), check.maxAgeMs);
         const prior = Object.hasOwn(saved.checks, check.id)
           ? saved.checks[check.id]
@@ -390,12 +415,13 @@ export class Monitor {
               ? { lastCapacityGap: durable.collection.lastCapacityGap }
               : {}),
         };
-        saved.heartbeatAt = observedAt;
       }
       // Persist incidents BEFORE contacting either optional dependency.
+      refuseAborted(signal);
       await atomicJson(path, saved);
       for (const event of saved.queue) {
-        notificationRecord(event, this.checks, this.environment);
+        refuseAborted(signal);
+        notificationRecord(event, this.environment);
         if (event.model === "not-run") {
           event.model = "unavailable";
           if (this.classify)
@@ -412,12 +438,14 @@ export class Monitor {
                     signal,
                   ),
                 this.timeoutMs,
+                signal,
               );
               if (advice.has(result?.recommendation)) {
                 event.model = "classified";
                 event.recommendation = result.recommendation;
               }
             } catch {
+              refuseAborted(signal);
               /* Deterministic monitoring and escalation remain available. */
             }
           await atomicJson(path, saved);
@@ -431,20 +459,19 @@ export class Monitor {
         event.attempts += 1;
         await atomicJson(path, saved);
         try {
-          const payload = notificationRecord(
-            event,
-            this.checks,
-            this.environment,
-          );
+          const payload = notificationRecord(event, this.environment);
           const ack = await bounded(
             (signal) => this.notify(payload, signal),
             this.timeoutMs,
+            signal,
           );
+          refuseAborted(signal);
           if (ack?.id === event.id && ack.accepted === true) {
             event.delivery = "delivered";
             event.deliveredAt = this.now();
           }
         } catch {
+          refuseAborted(signal);
           /* Never retain a potentially sensitive transport exception. */
         }
         if (
@@ -454,6 +481,10 @@ export class Monitor {
           event.delivery = "needs-human";
         await atomicJson(path, saved);
       }
+      refuseAborted(signal);
+      // Observation persistence is not a completed tick. Keep the previous
+      // heartbeat through uncertain delivery, shutdown, and capacity gaps.
+      if (!capacityBlocked) saved.heartbeatAt = observedAt;
       await atomicJson(path, saved);
       return saved;
     } finally {

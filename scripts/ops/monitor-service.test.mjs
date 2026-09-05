@@ -8,6 +8,63 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { validateConfig, httpProbe, runService } from "./monitor-service.mjs";
+import { Monitor } from "./monitor-core.mjs";
+
+test("service shutdown aborts the active HTTP probe and preserves the previous heartbeat batch", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "artfi-shutdown-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const c = config(directory);
+  await new Monitor({
+    directory,
+    environment: "test",
+    checks: c.checks,
+    threshold: 1,
+    now: () => 10000,
+    probe: async () => ({ observedAt: 10000, available: false }),
+  }).tick();
+  const statePath = join(directory, "monitor-state.json");
+  const before = await readFile(statePath, "utf8");
+  const control = new AbortController();
+  let cleanup = false;
+  let observedAbort = false;
+  let timer;
+  const server = createServer((req, res) => {
+    if (cleanup) {
+      res.writeHead(503).end();
+      return;
+    }
+    req.on("close", () => {
+      observedAbort = true;
+    });
+    control.abort();
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  c.checks[0].url = `http://127.0.0.1:${server.address().port}/hang`;
+  const running = runService(c, { signal: control.signal });
+  try {
+    assert.equal(
+      await Promise.race([
+        running,
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(Error("SHUTDOWN_NOT_PROPAGATED")),
+            1000,
+          );
+        }),
+      ]),
+      "SHUTDOWN",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(observedAbort, true);
+    assert.equal(await readFile(statePath, "utf8"), before);
+  } finally {
+    clearTimeout(timer);
+    cleanup = true;
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+    await running.catch(() => {});
+  }
+});
 
 function config(directory) {
   return {
