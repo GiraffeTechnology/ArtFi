@@ -40,7 +40,38 @@
       "loopbackOnly": true,
       "serviceStopped": true,
       "portReleased": true,
-      "appliesToFinalChildCommit": false
+      "appliesToFinalChildCommit": false,
+      "sourceCommit": "acb833462779fed9104d547663aeaf7a6dfeeffa",
+      "sourceTree": "0a83d6992b307e0c3b702124062e9405b61d66b8"
+    },
+    "reviewedCandidateDiagnostic": {
+      "artifactType": "candidate-gate-freeze-manifest",
+      "runtimeSourceCommit": null,
+      "gitCheckout": false,
+      "publishedCommit": "697a311253a9cebb0cdd6a6e2404307210d6343d",
+      "candidateTree": "b0fe9664278563495c73aee5b9a9561e1e0533f0",
+      "sourceParent": "acb833462779fed9104d547663aeaf7a6dfeeffa",
+      "publiclyRetrievable": false,
+      "summarySha256": "D03502C94BDA538BA7FA07648AE8424B9A0250103B442EE239E083FC5B8CA711",
+      "summaryPurpose": "Frozen three-file candidate checks; distinct from the parent-source browser report above",
+      "browserCasesPassed": 44,
+      "retries": 0,
+      "skipped": 0,
+      "loopbackOnly": true,
+      "serviceStopped": true,
+      "portReleased": true,
+      "appliesToFutureCommits": false
+    },
+    "reviewedCandidateCI": {
+      "head": "697a311253a9cebb0cdd6a6e2404307210d6343d",
+      "tree": "b0fe9664278563495c73aee5b9a9561e1e0533f0",
+      "url": "https://github.com/GiraffeTechnology/ArtFi/actions/runs/33957027676",
+      "jobs": 5,
+      "conclusion": "success",
+      "browserJob": 101282097262,
+      "browserCasesPassed": 44,
+      "newImageTestsIncluded": true,
+      "appliesToFutureCommits": false
     }
   },
   "reproduce": {
