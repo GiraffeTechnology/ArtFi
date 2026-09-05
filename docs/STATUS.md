@@ -134,13 +134,13 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## M6 — Operations (`PRD.md` §4.6)
 
-| #    | Requirement                                      | Status                     | Evidence / gap                                                          |
-| ---- | ------------------------------------------------ | -------------------------- | ----------------------------------------------------------------------- |
-| M6.1 | CI/CD to staging and production                  | `NOT-IMPLEMENTED`          | one workflow, `quality.yml`. No CD                                      |
-| M6.2 | Cluster: load balancing, replica, backup/restore | `NOT-IMPLEMENTED`          | `ACCEPTANCE.md` §5 also mandates a CI backup/restore job that is absent |
-| M6.3 | Monitoring, log aggregation, alerting            | `NOT-IMPLEMENTED`          |                                                                         |
-| M6.4 | Object storage MIME / size / SHA-256 validation  | `IMPLEMENTED-NOT-VERIFIED` | `s3store.go`, `rwa.go`                                                  |
-| M6.5 | Runbooks and operator documentation              | `IMPLEMENTED-NOT-VERIFIED` | `docs/OPERATIONS_RUNBOOK.md`; no observed drill                         |
+| #    | Requirement                                      | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                         |
+| ---- | ------------------------------------------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M6.1 | CI/CD to staging and production                  | `NOT-IMPLEMENTED`          | one workflow, `quality.yml`. No CD                                                                                                                                                                                                                                                                                                                                                     |
+| M6.2 | Cluster: load balancing, replica, backup/restore | `NOT-IMPLEMENTED`          | Startup-only pool settings are bounded in `apps/api/internal/httpapi/persistence_options.go`; default, setter and refusal tests are in `persistence_options_test.go`. `docs/DB_PORTABILITY_SWITCH.md` records compatibility, fencing, UNKNOWN outcome and rollback requirements. This prerequisite does not implement clustering, live replacement or a verified backup/restore drill. |
+| M6.3 | Monitoring, log aggregation, alerting            | `NOT-IMPLEMENTED`          |                                                                                                                                                                                                                                                                                                                                                                                        |
+| M6.4 | Object storage MIME / size / SHA-256 validation  | `IMPLEMENTED-NOT-VERIFIED` | `s3store.go`, `rwa.go`                                                                                                                                                                                                                                                                                                                                                                 |
+| M6.5 | Runbooks and operator documentation              | `IMPLEMENTED-NOT-VERIFIED` | `docs/OPERATIONS_RUNBOOK.md`; no observed drill                                                                                                                                                                                                                                                                                                                                        |
 
 ## Non-functional (`PRD.md` §5)
 
@@ -222,6 +222,23 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 ---
 
 ## Change log
+
+2026-09-05 DB-portability source slice based on `da1b196`: startup pool
+settings are externalized and bounded, defaults preserved, and raw driver errors
+removed from startup logging. Fixed Go 1.26.5 file-level configuration tests
+(`TestPersistencePoolDefaultsPreserveStartupBehavior`, `TestPersistencePoolManagedOptions`,
+`TestPersistencePoolRefusesInvalidAndUnboundedConfiguration`) pass locally, including
+sixteen negative subtests; independent local reproduction agrees. Changed Go files
+have no gofmt diff. The same six-file candidate passed independent offline
+`go mod verify`, `go vet ./...` and `go test -count=1 ./...` with the managed public
+module cache; API log SHA-256 is
+`354916a22778f060b106bdf35c892bf6d95480732faa6e6b17c831462c69285f`.
+Race and live DB integration remain unverified; source tests are not CI or DB
+acceptance. The explicit compatibility,
+fencing, UNKNOWN-outcome and rollback-after-new-write gates are recorded in
+`docs/DB_PORTABILITY_SWITCH.md`. No reload, live switch, real DB connection or RPO/RTO
+measurement is claimed; M6.2 remains `NOT-IMPLEMENTED`, counts unchanged. Exact-head
+CI and independent review remain required before accepting this source slice.
 
 | Date       | Commit    | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
