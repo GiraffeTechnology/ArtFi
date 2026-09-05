@@ -91,10 +91,7 @@ type openseaFulfillmentResponse struct {
 
 func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *http.Request) {
 	if service.db == nil {
-		writeJSON(writer, http.StatusOK, map[string]any{
-			"data": []marketAsset{}, "total": 0, "page": 1, "pageSize": 100,
-			"schemaVersion": "1", "source": "opensea", "runtime": true,
-		})
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "Durable marketplace data is unavailable; an empty live catalog cannot be inferred.")
 		return
 	}
 	source := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("source")))

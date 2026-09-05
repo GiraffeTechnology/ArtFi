@@ -240,6 +240,7 @@ paths:
                   execution: { type: string, const: external-deeplink-only }
                   custody: { type: boolean, const: false }
         "400": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /v1/market/assets:
     get:
       operationId: getExternalMarketAssets
@@ -277,6 +278,7 @@ paths:
                   source: { type: string }
                   runtime: { type: boolean, const: true }
         "400": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /v1/market/intents:
     post:
       operationId: createExternalMarketIntent
