@@ -28,6 +28,26 @@ if [[ "${ARTFI_DEPLOY_CHARITY_EDITIONS:-false}" == "true" ]]; then
     --rpc-url "$ARTFI_RPC_URL" "${wallet_args[@]}" "${verify_args[@]}" --broadcast --slow
 fi
 
+artfi_market_deployed=false
+if [[ "${ARTFI_DEPLOY_MARKET:-false}" == "true" ]]; then
+  : "${ARTFI_MARKET_ADMIN:?ARTFI_MARKET_ADMIN is required}"
+  : "${ARTFI_MARKET_PAUSER:?ARTFI_MARKET_PAUSER is required}"
+  : "${ARTFI_MARKET_TOKEN_MANAGER:?ARTFI_MARKET_TOKEN_MANAGER is required}"
+  forge script script/DeployMarket.s.sol:DeployMarket \
+    --rpc-url "$ARTFI_RPC_URL" "${wallet_args[@]}" "${verify_args[@]}" --broadcast --slow
+  artfi_market_deployed=true
+fi
+
+artfi_revenue_distributor_deployed=false
+if [[ "${ARTFI_DEPLOY_REVENUE_DISTRIBUTOR:-false}" == "true" ]]; then
+  : "${ARTFI_REVENUE_FRACTION_TOKEN:?ARTFI_REVENUE_FRACTION_TOKEN is required}"
+  : "${ARTFI_REVENUE_ADMIN:?ARTFI_REVENUE_ADMIN is required}"
+  : "${ARTFI_REVENUE_DISTRIBUTOR:?ARTFI_REVENUE_DISTRIBUTOR is required}"
+  forge script script/DeployRevenueDistributor.s.sol:DeployRevenueDistributor \
+    --rpc-url "$ARTFI_RPC_URL" "${wallet_args[@]}" "${verify_args[@]}" --broadcast --slow
+  artfi_revenue_distributor_deployed=true
+fi
+
 if [[ "${ARTFI_DEPLOY_GOVERNANCE:-false}" == "true" ]]; then
   : "${ARTFI_RWA_VAULT:?ARTFI_RWA_VAULT is required}"
   : "${ARTFI_BUYOUT_PRICE_VERIFIER:?ARTFI_BUYOUT_PRICE_VERIFIER is required}"
@@ -40,4 +60,5 @@ if [[ "${ARTFI_DEPLOY_GOVERNANCE:-false}" == "true" ]]; then
 fi
 
 printf 'deployment=complete\n'
-printf 'artfiMarketDeployed=false\n'
+printf 'artfiMarketDeployed=%s\n' "$artfi_market_deployed"
+printf 'revenueDistributorDeployed=%s\n' "$artfi_revenue_distributor_deployed"

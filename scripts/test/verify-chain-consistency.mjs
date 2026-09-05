@@ -55,6 +55,8 @@ const LAYERS = [
     "DeployStage2",
     "DeployStage3",
     "DeployStage4",
+    "DeployMarket",
+    "DeployRevenueDistributor",
     "DeployCharityEditions",
   ].map((script) => ({
     layer: `solidity/${script}`,
