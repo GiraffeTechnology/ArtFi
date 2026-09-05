@@ -1051,6 +1051,7 @@ export interface operations {
         };
       };
       400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
     };
   };
   getExternalMarketAssets: {
@@ -1087,6 +1088,7 @@ export interface operations {
         };
       };
       400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
     };
   };
   createExternalMarketIntent: {
