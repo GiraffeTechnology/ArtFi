@@ -112,7 +112,7 @@ contract RevenueDistributorTest {
 
     function setUp() public {
         fractions = new FractionalToken(
-            "Snapshot Fractions", "SNAP", address(this), 1_000 ether, address(this), address(this)
+            "Snapshot Fractions", "SNAP", address(this), 1_000 ether, address(this)
         );
         revenue = new RevenuePaymentToken();
         distributor = new RevenueDistributor(

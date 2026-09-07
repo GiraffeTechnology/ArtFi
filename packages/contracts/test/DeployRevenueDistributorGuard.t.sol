@@ -45,9 +45,7 @@ contract DeployRevenueDistributorGuardTest {
 
     function setUp() public {
         harness = new ProbeHarness();
-        token = new FractionalToken(
-            "Fraction", "FRC", address(this), 1000, address(this), address(this)
-        );
+        token = new FractionalToken("Fraction", "FRC", address(this), 1000, address(this));
         impostor = new NotAFractionToken();
     }
 

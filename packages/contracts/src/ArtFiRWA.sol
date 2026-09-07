@@ -61,10 +61,13 @@ contract ArtFiRWA is ERC721URIStorage, AccessControl, Pausable {
         return _nextTokenId;
     }
 
+    /// @dev Deliberately not `whenNotPaused`, unlike `safeMint`. The pause stops new issuance;
+    ///      it must never freeze a token an owner already holds, including the transfer that
+    ///      returns a deposited NFT. `PRD.md` §4.2 forbids an administrative action holding
+    ///      authority over a user's asset, and `ACCEPTANCE.md` §4.1 leaves no one to unpause.
     function _update(address to, uint256 tokenId, address auth)
         internal
         override
-        whenNotPaused
         returns (address)
     {
         return super._update(to, tokenId, auth);
