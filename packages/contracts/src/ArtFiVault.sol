@@ -32,7 +32,6 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
     IERC721 public immutable collection;
     uint256 public immutable tokenId;
     address public immutable tokenAdmin;
-    address public immutable tokenPauser;
     string public vaultName;
 
     address public originalOwner;
@@ -59,7 +58,6 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
         collection = collection_;
         tokenId = tokenId_;
         tokenAdmin = admin;
-        tokenPauser = pauser;
         vaultName = vaultName_;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, pauser);
@@ -86,8 +84,7 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
                 || supply > MAX_FRACTION_SUPPLY
         ) revert InvalidFractionConfiguration();
 
-        FractionalToken created =
-            new FractionalToken(name, symbol, recipient, supply, tokenAdmin, tokenPauser);
+        FractionalToken created = new FractionalToken(name, symbol, recipient, supply, tokenAdmin);
         fractionalToken = created;
         fractionalSupply = supply;
         token = address(created);
