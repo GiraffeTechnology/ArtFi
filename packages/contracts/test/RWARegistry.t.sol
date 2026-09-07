@@ -118,18 +118,28 @@ contract RWARegistryTest {
         require(tokenId == 1, "unpause did not recover");
     }
 
-    function testNftPauseBlocksTransfers() public {
+    /// The pause stops new issuance; it must never freeze a token an owner already holds.
+    /// `PRD.md` §4.2 forbids an administrative action holding authority over a user's asset, and
+    /// under `ACCEPTANCE.md` §4.1 production is unattended, so a freeze has nobody to lift it.
+    function testNftPauseStopsMintingButNeverFreezesAnOwner() public {
         uint256 tokenId = registry.createAsset(
             keccak256("transfer-pause"), address(this), VALID_URI, METADATA_HASH
         );
         nft.pause();
-        (bool ok,) = address(nft)
-            .call(abi.encodeCall(nft.transferFrom, (address(this), address(0xBEEF), tokenId)));
-        require(!ok, "paused NFT transferred");
 
-        nft.unpause();
         nft.transferFrom(address(this), address(0xBEEF), tokenId);
-        require(nft.ownerOf(tokenId) == address(0xBEEF), "unpause did not recover");
+        require(nft.ownerOf(tokenId) == address(0xBEEF), "paused NFT froze its owner");
+
+        // The pause keeps its legitimate job, or this change would have deleted safety rather
+        // than bounded it.
+        (bool minted,) = address(registry)
+            .call(
+                abi.encodeCall(
+                    registry.createAsset,
+                    (keccak256("blocked-mint"), address(this), VALID_URI, METADATA_HASH)
+                )
+            );
+        require(!minted, "paused registry still minted");
     }
 
     function testInvalidMetadataInputsRevert() public {
