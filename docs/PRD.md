@@ -144,6 +144,22 @@ delivery team's.
 
 ### 4.1 M1 — Smart contracts
 
+**Client ruling, 2026-09-07: every asset traded on ArtFi Market corresponds to a real object,
+and that correspondence is established by two off-chain paths of record.**
+
+1. **文保链**, or an equivalent registry institution or registry chain;
+2. **ArtCCH**.
+
+An oracle carries those attestations on-chain so that minting is gated on correspondence rather
+than on a role alone. **The token is a claim about an object that a path of record already
+attests to; it is never the origin of that claim.**
+
+Why this is a contract requirement and not a process one: without an on-chain check, an
+unbacked token is indistinguishable from a genuine one at every downstream layer — it can be
+deposited, fractionalized, listed and sold for real payment. Its lack of backing would be a fact
+about the physical world that the system cannot see. **Correspondence has to be checkable where
+the token is created, because nothing after that point can recover it.**
+
 - **Auction contract**: English auction with reserve price, minimum increment, extension on
   late bid, settlement, and refund of losing bids. Emits events consumed by the monitor service.
 - **Revenue distribution**: pro-rata distribution to fraction holders by snapshot balance;
@@ -152,6 +168,10 @@ delivery team's.
   thresholds, `TimelockController` execution.
 - **Multi-signature administration**: privileged contract operations require an m-of-n safe. No
   single EOA holds upgrade, pause, or treasury authority.
+- **Asset correspondence**: `RWARegistry.createAsset` accepts a mint only against a valid
+  attestation from an accepted path of record. Today its only substantive gate is
+  `REGISTRAR_ROLE`; the metadata hash and recipient are caller-supplied and nothing verifies
+  that they describe a real object.
 - **Deployment tooling**: deterministic build, deployment scripts, gas optimization pass,
   verified source on the block explorer, address manifest per network.
 - Full unit, fuzz, invariant and integration test suites.
