@@ -16,14 +16,23 @@ const compose = fs
   .replaceAll("\r\n", "\n");
 
 function verifyExplicitNonDatabaseCompose(source) {
+  const active = source
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith("#"))
+    .join("\n");
   for (const call of source.matchAll(
     /\b(?:docker\s+compose|docker-compose|podman\s+compose)\s+([^\r\n]*)/g,
   )) {
     const tokens = call[1].trim().split(/\s+/).filter(Boolean);
     const commandIndex = tokens.findIndex(
-      (token) => token === "up" || token === "start",
+      (token) => token === "up" || token === "start" || token === "run",
     );
     if (commandIndex < 0) continue; // Read-only identity/config commands are not startup.
+    assert.doesNotMatch(
+      active,
+      /\bCOMPOSE_(?:FILE|PROFILES|PATH_SEPARATOR|ENV_FILES)\s*["']?\s*[:=]/,
+      "Compose environment changes require independent configuration review",
+    );
     const files = [];
     // Bounded known Compose syntax, not shell evaluation. Unknown global options
     // on a startup require review, rather than inheriting root-file approval.
@@ -63,6 +72,7 @@ function verifyExplicitNonDatabaseCompose(source) {
       "--no-deps",
       "--no-recreate",
       "--remove-orphans",
+      "--rm",
     ]);
     const services = tokens
       .slice(commandIndex + 1)
@@ -273,4 +283,36 @@ test("reviewed root redis accepts bounded project and file options", () => {
     verifyBoundary(
       workflow + `\n  other:\n    steps:\n      - run: ${command}\n`,
     );
+});
+
+test("Compose environment overrides cannot inherit root redis review", () => {
+  for (const snippet of [
+    "      - run: COMPOSE_FILE=other.yml docker compose up -d redis",
+    "    env:\n      COMPOSE_FILE: other.yml\n    steps:\n      - run: docker compose up redis",
+    "      - run: export COMPOSE_FILE=other.yml\n      - run: docker compose start redis",
+    "    env:\n      COMPOSE_PROFILES: database\n    steps:\n      - run: docker compose up redis",
+  ])
+    assert.throws(() => verifyBoundary(workflow + `\n  other:\n${snippet}\n`));
+});
+
+test("one-off Compose run cannot launch MySQL", () => {
+  for (const command of [
+    "docker compose run mysql",
+    "docker compose -p artfi run --rm mysql",
+    "docker-compose run --no-deps mariadb",
+    "podman compose run mysql",
+  ]) {
+    assert.throws(() =>
+      verifyBoundary(
+        workflow + `\n  other:\n    steps:\n      - run: ${command}\n`,
+      ),
+    );
+  }
+});
+
+test("commented overrides are not active configuration", () => {
+  verifyBoundary(
+    workflow +
+      "\n# COMPOSE_FILE: other.yml\n  other:\n    steps:\n      - run: docker compose up redis\n",
+  );
 });
