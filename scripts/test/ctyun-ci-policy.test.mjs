@@ -11,8 +11,45 @@ const workflow = fs.readFileSync(
   ),
   "utf8",
 );
+const compose = fs
+  .readFileSync(new URL("../../docker-compose.yml", import.meta.url), "utf8")
+  .replaceAll("\r\n", "\n");
+
+function verifyExplicitNonDatabaseCompose(source) {
+  for (const call of source.matchAll(
+    /\b(?:docker\s+compose|docker-compose|podman\s+compose)\s+(?:up|start)\b([^\r\n]*)/g,
+  )) {
+    const tokens = call[1].trim().split(/\s+/).filter(Boolean);
+    const options = new Set([
+      "-d",
+      "--detach",
+      "--wait",
+      "--no-deps",
+      "--no-recreate",
+      "--remove-orphans",
+    ]);
+    const services = tokens.filter((token) => !options.has(token));
+    // Bare up/start selects every service, including the root MySQL service.
+    // The only audited non-DB service currently in this Compose file is redis.
+    assert.ok(
+      services.length > 0 && services.every((service) => service === "redis"),
+      "Compose startup requires an explicit reviewed non-DB service",
+    );
+    const block =
+      compose.match(
+        /^  redis:\n([\s\S]*?)(?=^  [A-Za-z0-9_-]+:|^\S|$(?![\s\S]))/m,
+      )?.[1] ?? "";
+    assert.ok(
+      /^    image: redis:8-alpine\s*$/m.test(block) &&
+        !/\b(?:depends_on|extends|include):/.test(block) &&
+        !/^include:/m.test(compose),
+      "redis dependency graph needs renewed non-DB review",
+    );
+  }
+}
 
 function verifyBoundary(source) {
+  verifyExplicitNonDatabaseCompose(source);
   const lines = source.replaceAll("\r\n", "\n").split("\n");
   const starts = lines.flatMap((line, index) =>
     line === "  migration:" ? [index] : [],
@@ -122,4 +159,32 @@ test("known MySQL image and legacy local DB script in other jobs are rejected", 
         "\n  db:\n    steps:\n      - run: bash scripts/test/mysql-integration.sh\n",
     ),
   );
+});
+
+test("bare Compose starts cannot start the root MySQL service", () => {
+  for (const command of [
+    "docker compose up -d",
+    "docker compose up --wait",
+    "docker compose start",
+    "docker-compose up",
+    "podman compose start",
+  ]) {
+    assert.throws(() =>
+      verifyBoundary(
+        workflow + `\n  other:\n    steps:\n      - run: ${command}\n`,
+      ),
+    );
+  }
+});
+
+test("explicit redis with no database dependencies is allowed", () => {
+  for (const command of [
+    "docker compose up -d redis",
+    "docker compose start redis",
+    "docker compose up --wait redis",
+  ]) {
+    verifyBoundary(
+      workflow + `\n  other:\n    steps:\n      - run: ${command}\n`,
+    );
+  }
 });
