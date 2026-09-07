@@ -86,8 +86,10 @@ The gray environment is:
    CTYun and public-chain operation through the approved SIN boundary (`STATUS.md` topology
    ruling, PR #74);
 2. reached by an automated pipeline from the authoritative branch, not by hand;
-3. monitored, with alerts reaching a named person through a real channel — a local fixture does
-   not satisfy this;
+3. monitored, with alerts reaching a **responder that acts** through a real channel — a local
+   fixture does not satisfy this. In gray the responder may be a person; in production it is the
+   operations agent, with a person as escalation (§4.1). **The channel must be built for the
+   production terminal condition from the start**, or it is built twice;
 4. loaded only with test payloads. **Gray is not production.** No mainnet, no real assets and no
    real money enter it before G3-B and G4, whatever the client has confirmed in gray.
 
@@ -105,6 +107,55 @@ acceptance still requires G1 + G2 + G3-A on one commit.
 against static prototype images, at one moment, for surfaces the delivery happened to touch. Every
 other gate is cleared by the delivery side or an auditor. Discovering a requirement mismatch only
 at hand-over was therefore not a risk of the process; it was its design.
+
+### 4.1 Unattended operation (client ruling, 2026-09-07)
+
+**In production ArtFi Market is unattended. Operations and customer service are performed by
+agents, not staff. No control may depend on a human confirming it, wallet operations included.**
+
+Users grant bounded standing authorization for small trades and auction bids — an allowance up to
+a stated ceiling — and expect execution within it without being asked again.
+
+> **Risk is controlled by bounding authority, never by withholding it.** Refusing an action is not
+> a safety property in an unattended system; it is an outage with a security-sounding name. A
+> control that answers "not without approval" has no one to ask at 03:00, so it does not fail
+> closed — it fails silent.
+
+Every control in this system is therefore one of two kinds, and only the second is permitted on a
+production path:
+
+|                    | Refusal control                                | Bounded control                                 |
+| ------------------ | ---------------------------------------------- | ----------------------------------------------- |
+| Answers            | "not without approval"                         | "yes, up to N, at rate R, reversibly, recorded" |
+| Unattended outcome | halts and waits for nobody                     | degrades and keeps serving                      |
+| Where allowed      | deployment and build time, operated by a human | production runtime                              |
+
+`sepolia-preflight.sh`, `require-sin-public-chain.sh` and the deployment guards are refusal
+controls and stay as they are: a human runs them, and a human is present to answer.
+
+**This ruling does not weaken the intermediary invariant — it depends on it.** Because ArtFi never
+holds authority to move a user's assets (`PRD.md` §4.2), an automated ArtFi that is fully
+compromised still cannot take anything: it can only submit settlements already carrying both
+parties' signatures, bounded by each intent's authorized maximum and revocable on-chain. **The
+invariant is what makes unattended operation safe enough to be possible**, and the signed-intent
+model already expresses the client's bounded allowance — an intent authorizes up to a stated
+maximum and nothing else.
+
+Two consequences for the gates:
+
+1. **`human-review` is not a terminal state on a production path.** A control whose safe default is
+   to wait for a person has, in production, no default at all. Where an agent cannot decide, the
+   system takes the bounded conservative action and escalates in parallel — it does not stop and
+   hold.
+2. **G2's negative tests keep their full force.** Rejecting an unsigned settlement, an over-consumed
+   intent, or a revoked intent is not refusal control — those actions were never authorized, so
+   there is no authority to bound. Refusal control means withholding an action the user _did_
+   authorize, pending someone's approval.
+
+Whether **administrative** powers — role grants, pause, upgrade — also become unattended is a
+separate decision, recorded at `STATUS.md` open item 13. They are rare, high-blast-radius, and
+governed by `ArtFiAdminSafe`'s threshold and timelock, which are human confirmation by
+construction.
 
 ### G1 — Prototype parity preserved (continuous)
 
