@@ -17,9 +17,45 @@ const compose = fs
 
 function verifyExplicitNonDatabaseCompose(source) {
   for (const call of source.matchAll(
-    /\b(?:docker\s+compose|docker-compose|podman\s+compose)\s+(?:up|start)\b([^\r\n]*)/g,
+    /\b(?:docker\s+compose|docker-compose|podman\s+compose)\s+([^\r\n]*)/g,
   )) {
     const tokens = call[1].trim().split(/\s+/).filter(Boolean);
+    const commandIndex = tokens.findIndex(
+      (token) => token === "up" || token === "start",
+    );
+    if (commandIndex < 0) continue; // Read-only identity/config commands are not startup.
+    const files = [];
+    // Bounded known Compose syntax, not shell evaluation. Unknown global options
+    // on a startup require review, rather than inheriting root-file approval.
+    for (let index = 0; index < commandIndex; index++) {
+      const option = tokens[index];
+      let value, kind;
+      if (["-p", "--project-name", "-f", "--file"].includes(option)) {
+        assert.ok(
+          index + 1 < commandIndex,
+          "Compose global option lacks a value",
+        );
+        value = tokens[++index];
+        kind = option === "-f" || option === "--file" ? "file" : "project";
+      } else {
+        const match = option.match(/^(--project-name=|--file=|-p|-f)(.+)$/);
+        assert.ok(match, "unreviewed Compose global option on startup");
+        value = match[2];
+        kind = match[1] === "--file=" || match[1] === "-f" ? "file" : "project";
+      }
+      if (kind === "file") files.push(value);
+      else
+        assert.match(
+          value,
+          /^[a-z0-9][a-z0-9_-]*$/,
+          "unreviewed Compose project name",
+        );
+    }
+    assert.ok(
+      files.length === 0 ||
+        (files.length === 1 && files[0] === "docker-compose.yml"),
+      "alternate or merged Compose files require independent non-DB review",
+    );
     const options = new Set([
       "-d",
       "--detach",
@@ -28,7 +64,9 @@ function verifyExplicitNonDatabaseCompose(source) {
       "--no-recreate",
       "--remove-orphans",
     ]);
-    const services = tokens.filter((token) => !options.has(token));
+    const services = tokens
+      .slice(commandIndex + 1)
+      .filter((token) => !options.has(token));
     // Bare up/start selects every service, including the root MySQL service.
     // The only audited non-DB service currently in this Compose file is redis.
     assert.ok(
@@ -187,4 +225,52 @@ test("explicit redis with no database dependencies is allowed", () => {
       workflow + `\n  other:\n    steps:\n      - run: ${command}\n`,
     );
   }
+});
+
+test("global Compose options cannot hide an implicit all-service startup", () => {
+  for (const command of [
+    "docker compose -p artfi up -d",
+    "docker compose --project-name=artfi start",
+    "docker compose --project-name artfi start",
+    "docker compose -f docker-compose.yml up --wait",
+    "docker compose --file=docker-compose.yml up",
+    "docker-compose -partfi up",
+    "podman compose -f docker-compose.yml start",
+  ])
+    assert.throws(
+      () =>
+        verifyBoundary(
+          workflow + `\n  other:\n    steps:\n      - run: ${command}\n`,
+        ),
+      command,
+    );
+});
+
+test("alternate or merged Compose files do not inherit root redis approval", () => {
+  for (const command of [
+    "docker compose -f other.yml up redis",
+    "docker compose -f docker-compose.yml -f override.yml up redis",
+    "docker compose --file=docker-compose.yml --file=override.yml start redis",
+    "docker compose --project-directory elsewhere up redis",
+    "docker compose --profile db up redis",
+  ])
+    assert.throws(
+      () =>
+        verifyBoundary(
+          workflow + `\n  other:\n    steps:\n      - run: ${command}\n`,
+        ),
+      command,
+    );
+});
+
+test("reviewed root redis accepts bounded project and file options", () => {
+  for (const command of [
+    "docker compose -p artfi up -d redis",
+    "docker compose --project-name=artfi --file=docker-compose.yml start redis",
+    "docker-compose -partfi -fdocker-compose.yml up redis",
+    "podman compose -f docker-compose.yml up --wait redis",
+  ])
+    verifyBoundary(
+      workflow + `\n  other:\n    steps:\n      - run: ${command}\n`,
+    );
 });
