@@ -65,6 +65,47 @@ is unavailable, the status is recorded — never inferred, substituted or invent
 Sequential. Each gate's exit condition is the next stage's authorization. Clearing a gate requires
 no separate approval cycle beyond the sign-offs named below.
 
+**G0 is the exception: it is continuous and precedes the rest.** It exists because the client
+requires progressive release rather than a single terminal delivery.
+
+### G0 — Gray environment running (continuous, precedes G1)
+
+**Client ruling, 2026-09-07: delivery is progressive, not terminal.** The client will not accept a
+single hand-over at the end and discover there that a large part of it is not what was asked for.
+Requirements are released to a running environment in slices, and the client confirms each slice
+against the running system as it lands.
+
+**The operations requirements move to the front for this reason.** A gray environment cannot exist
+without the means to deploy to it and observe it, so `M6.1` (CI/CD) and `M6.3` (monitoring, log
+aggregation, alerting) are prerequisites of G0 rather than late-stage deliverables. `M6.2`
+(clustering, replica, backup/restore) is not: gray tolerates a single instance.
+
+The gray environment is:
+
+1. a continuously running deployment of the current integrated commit, off-chain components on
+   CTYun and public-chain operation through the approved SIN boundary (`STATUS.md` topology
+   ruling, PR #74);
+2. reached by an automated pipeline from the authoritative branch, not by hand;
+3. monitored, with alerts reaching a named person through a real channel — a local fixture does
+   not satisfy this;
+4. loaded only with test payloads. **Gray is not production.** No mainnet, no real assets and no
+   real money enter it before G3-B and G4, whatever the client has confirmed in gray.
+
+**`GRAY_AVAILABLE` is a slice's client confirmation, not a status value.** The vocabulary in §2
+stays at six values and a requirement's status continues to say only what its evidence supports. A
+slice is `GRAY_AVAILABLE` when it is deployed to the gray environment, exercised there by the
+client, and confirmed by the client as what was wanted. That confirmation is recorded in
+`STATUS.md` with its date and the commit confirmed.
+
+**A gray confirmation is not acceptance and does not promote any item.** It answers "is this what
+I asked for", which no test can answer. `VERIFIED` still requires the evidence in §3, and
+acceptance still requires G1 + G2 + G3-A on one commit.
+
+**Why this gate exists at all.** Before it, the client's only checkpoint was G1 — a comparison
+against static prototype images, at one moment, for surfaces the delivery happened to touch. Every
+other gate is cleared by the delivery side or an auditor. Discovering a requirement mismatch only
+at hand-over was therefore not a risk of the process; it was its design.
+
 ### G1 — Prototype parity preserved (continuous)
 
 Class A surfaces (`PRD.md` §2.1) still work. Regression suite green. Desktop and mobile
@@ -200,9 +241,17 @@ ArtFi is delivered when all of the following hold:
    HTTP 200 is insufficient.
 9. **System stable for 48 continuous hours** with monitoring and alerting active.
 10. Operator documentation and runbooks handed over.
+11. Every Class B and Class C requirement confirmed by the client in the gray environment (G0),
+    each confirmation naming its date and commit. A requirement the client has never exercised on
+    a running system is not delivered, however green its tests are.
 
 Items 7–9 are the delivery terminus (Gantt P5). A delivery that stops at testnet has completed
 G2, not the project. G3-B runs immediately before item 7 and gates it.
+
+Item 11 is deliberately the client's own obligation as much as the delivery side's. Progressive
+release only removes late-discovery risk if the client actually exercises each slice when it
+lands; confirmations that are all deferred to the end reproduce the single hand-over the client
+ruled against, with extra steps.
 
 ### 6.1 Measuring progress
 
