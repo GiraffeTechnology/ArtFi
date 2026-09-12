@@ -185,7 +185,7 @@ if (failures.length > 0) {
       failures.map((line) => `  - ${line}\n`).join("") +
       `\nEvery layer above must name ${CHAIN.name} ${CHAIN.id}. A directive the\n` +
       `tooling silently refuses to execute is the failure this check prevents\n` +
-      `(ACCEPTANCE.md §7.16).\n`,
+      `(ACCEPTANCE.md §7.15).\n`,
   );
   process.exit(1);
 }

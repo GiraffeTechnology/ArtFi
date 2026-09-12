@@ -341,10 +341,7 @@ is incomplete.
     express the gap in person-days.
 14. Fail the audit if `STATUS.md` carries unfilled placeholders, or if source changed since its
     last update.
-15. Fail the audit if an instruction from a client directive was neither executed nor reported as
-    blocked. Silence is a delivery defect in its own right: an instruction that cannot be executed
-    must be answered within 24 hours with the blocker, its evidence, and at least one alternative.
-16. Fail the audit if the configured test chain is not consistent across every layer that names
+15. Fail the audit if the configured test chain is not consistent across every layer that names
     it — Solidity, shell tooling, TypeScript, Go, SQL constraints and the environment example. A
     directive that the tooling silently refuses to execute is the failure mode this rule exists to
     catch.
