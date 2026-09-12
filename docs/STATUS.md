@@ -2,8 +2,8 @@
 
 | Field       | Value                                                                 |
 | ----------- | --------------------------------------------------------------------- |
-| Reviewed    | `fdb90ff` on `main` (PR #68)                                          |
-| Base        | `da1b196`                                                             |
+| Reviewed    | `9afce78` on `main` (PR #65)                                          |
+| Base        | `a5877ee`                                                             |
 | Environment | local + GitHub CI. **No runtime chain evidence exists on any chain.** |
 | Date        | 2026-08-30                                                            |
 | Reviewer    | Claude (acting PM), on client instruction                             |
