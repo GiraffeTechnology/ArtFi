@@ -142,7 +142,10 @@ contract CharityEditionsTest is IERC1155Receiver {
         );
     }
 
-    function testPauseBlocksCreationAndTransfers() public {
+    /// The pause stops new series and new evidence records. A holder's editions stay
+    /// transferable: freezing them would be an administrative action over a user's asset
+    /// (`PRD.md` §4.2), with nobody present to lift it (`ACCEPTANCE.md` §4.1).
+    function testPauseBlocksCreationAndRecordsButNeverFreezesAHolder() public {
         editions.pause();
         _requireCallFails(
             abi.encodeCall(
@@ -155,12 +158,10 @@ contract CharityEditionsTest is IERC1155Receiver {
 
         uint256 tokenId = _createSeries();
         editions.pause();
-        _requireCallFails(
-            abi.encodeCall(
-                editions.safeTransferFrom, (address(this), address(0xBEEF), tokenId, 1, "")
-            ),
-            "transferred while paused"
-        );
+
+        editions.safeTransferFrom(address(this), address(0xBEEF), tokenId, 1, "");
+        require(editions.balanceOf(address(0xBEEF), tokenId) == 1, "paused editions froze a holder");
+
         _requireCallFails(
             abi.encodeCall(editions.recordSellout, (tokenId, sha256("sellout"))),
             "sellout recorded while paused"
