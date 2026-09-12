@@ -16,6 +16,7 @@ Complete one TEST_ONLY bounded-agent lifecycle for an NFT BUY: observe a source-
 ## FINISH-NOW
 
 - Integrate the bounded Agent modules on current `main` without importing stale branch evidence.
+- Record the wallet+DAO operations agent as the required managed production dependency; keep its opaque signer/dispatcher injection fail-closed and separate from application-held credentials.
 - Prove the local lifecycle, restart recovery, revocation, duplicate-execution refusal, source-outage behavior, and UI state with the repository tests for this exact commit.
 - Run the applicable repository gates and obtain same-head CI and review for this bounded change.
 

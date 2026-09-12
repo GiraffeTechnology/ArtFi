@@ -42,5 +42,11 @@ this integrated commit. Remaining gates include durable DB restart, real proof
 adapter composition, authenticated HTTP/wallet binding, chain executor integration,
 browser runtime, dependency/CI/security review and deployment acceptance.
 
+Production composition treats the wallet+DAO operations agent as a required,
+managed dependency. It must be injected through the reviewed opaque adapter
+boundary; ArtFi must not read wallet material, place keys in IPC/environment/logs,
+or silently fall back to an application-held signer. This repository slice does
+not install or activate that production dependency.
+
 Initial supported execution is one bounded TEST_ONLY NFT BUY, not every PRD action.
 All other actions remain outstanding; this slice does not redefine final delivery.

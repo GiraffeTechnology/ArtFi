@@ -42,8 +42,41 @@ const uint = (value) => {
 // validator alone is not replay-safe execution and is never reported as D1 E2E.
 export function createIntentAuthorizer({ ethers, policy, readState, clock }) {
   const fixed = structuredClone(policy);
+  const sameAddress = (a, b) => ethers.getAddress(a) === ethers.getAddress(b);
+  const validAddress = (value) => {
+    try {
+      return ethers.isAddress(value) && !sameAddress(value, ethers.ZeroAddress);
+    } catch {
+      return false;
+    }
+  };
   if (
+    !ethers ||
+    typeof ethers.isAddress !== "function" ||
+    typeof ethers.getAddress !== "function" ||
+    typeof ethers.verifyTypedData !== "function" ||
+    typeof ethers.AbiCoder?.defaultAbiCoder !== "function" ||
+    typeof ethers.keccak256 !== "function" ||
+    typeof ethers.TypedDataEncoder?.hash !== "function" ||
+    !fixed ||
     fixed?.mode !== "TEST_ONLY_NO_REAL_VALUE" ||
+    String(fixed.chainId) !== "560048" ||
+    !validAddress(fixed.executor) ||
+    !validAddress(fixed.venue) ||
+    !Array.isArray(fixed.counterparties) ||
+    fixed.counterparties.length === 0 ||
+    fixed.counterparties.some((value) => !validAddress(value)) ||
+    [
+      "allowedCounterpartyPolicy",
+      "allowedVenuePolicy",
+      "jurisdictionPolicy",
+      "settlementPolicy",
+    ].some(
+      (key) =>
+        typeof fixed[key] !== "string" ||
+        !/^0x[0-9a-f]{64}$/.test(fixed[key]) ||
+        fixed[key] === ethers.ZeroHash,
+    ) ||
     typeof readState !== "function" ||
     typeof clock !== "function"
   )
@@ -51,12 +84,14 @@ export function createIntentAuthorizer({ ethers, policy, readState, clock }) {
   const domain = Object.freeze({
     name: "ArtFi Bounded Intent",
     version: "1",
-    chainId: fixed.chainId,
+    chainId: String(fixed.chainId),
     verifyingContract: fixed.executor,
   });
-  const sameAddress = (a, b) => ethers.getAddress(a) === ethers.getAddress(b);
   return function authorize(input) {
-    const { intent: p, signature, proposal: q } = structuredClone(input);
+    const cloned = structuredClone(input);
+    if (!cloned || typeof cloned !== "object" || Array.isArray(cloned))
+      reject("INTENT_SHAPE_INVALID");
+    const { intent: p, signature, proposal: q } = cloned;
     if (
       !p ||
       Object.keys(p).length !== INTENT_FIELDS.length ||

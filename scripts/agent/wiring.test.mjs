@@ -4,8 +4,27 @@ import assert from "node:assert/strict";
 // crypto package or sibling checkout is needed; signature operations must fail.
 const ethers = new Proxy(
   {
+    ZeroAddress: "0x" + "00".repeat(20),
+    ZeroHash: "0x" + "00".repeat(32),
     isAddress: (value) =>
       typeof value === "string" && /^0x[0-9a-fA-F]{40}$/.test(value),
+    getAddress: (value) => value.toLowerCase(),
+    verifyTypedData: () => {
+      throw Error("CRYPTO_OUTSIDE_WIRING_TEST");
+    },
+    AbiCoder: {
+      defaultAbiCoder: () => {
+        throw Error("CRYPTO_OUTSIDE_WIRING_TEST");
+      },
+    },
+    keccak256: () => {
+      throw Error("CRYPTO_OUTSIDE_WIRING_TEST");
+    },
+    TypedDataEncoder: {
+      hash: () => {
+        throw Error("CRYPTO_OUTSIDE_WIRING_TEST");
+      },
+    },
   },
   {
     get(target, key) {
@@ -19,6 +38,18 @@ import { kernelRequestDigest } from "./agent-kernel.mjs";
 import { createDurableRuntime } from "./runtime.mjs";
 const address = "0x" + "ab".repeat(20),
   hash = "0x" + "12".repeat(32);
+const servicePolicy = Object.freeze({
+  chainId: "560048",
+  executor: address,
+  collection: address,
+  paymentToken: address,
+  venue: address,
+  counterparties: [address],
+  allowedCounterpartyPolicy: hash,
+  allowedVenuePolicy: hash,
+  jurisdictionPolicy: hash,
+  settlementPolicy: hash,
+});
 const request = {
   operationId: "test-1",
   authorityVersion: "v1",
@@ -275,12 +306,7 @@ test("new runtime discovers committed STARTED without HTTP IDs, retries DB outag
     },
     serviceOptions: {
       ethers,
-      policy: {
-        chainId: "560048",
-        executor: address,
-        collection: address,
-        paymentToken: address,
-      },
+      policy: servicePolicy,
       planFor: unused,
       observe: unused,
       inspectRevocation: unused,
@@ -336,12 +362,7 @@ test("durable runtime scans confirmed revoked PREPARED, persists terminal and ex
     },
     serviceOptions: {
       ethers,
-      policy: {
-        chainId: "560048",
-        executor: address,
-        collection: address,
-        paymentToken: address,
-      },
+      policy: servicePolicy,
       planFor: unused,
       observe: unused,
       inspectRevocation: unused,

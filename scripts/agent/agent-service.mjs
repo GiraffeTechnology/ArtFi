@@ -32,6 +32,26 @@ export function createAgentService({
   )
     fail("SERVICE_CONFIGURATION_INVALID");
   const fixed = structuredClone(policy);
+  const policyHashes = [
+    "allowedCounterpartyPolicy",
+    "allowedVenuePolicy",
+    "jurisdictionPolicy",
+    "settlementPolicy",
+  ];
+  if (
+    !fixed ||
+    typeof fixed !== "object" ||
+    Array.isArray(fixed) ||
+    (fixed.mode !== undefined && fixed.mode !== mode) ||
+    typeof e?.isAddress !== "function" ||
+    typeof e?.getAddress !== "function" ||
+    typeof e?.verifyTypedData !== "function" ||
+    typeof e?.AbiCoder?.defaultAbiCoder !== "function" ||
+    typeof e?.keccak256 !== "function" ||
+    typeof e?.TypedDataEncoder?.hash !== "function"
+  )
+    fail("SERVICE_POLICY_INVALID");
+  fixed.mode = mode;
   const domain = {
     name: "ArtFi Bounded Intent",
     version: "1",
@@ -40,8 +60,25 @@ export function createAgentService({
   };
   if (
     domain.chainId !== "560048" ||
+    !e.isAddress(fixed.executor) ||
+    /^0x0{40}$/i.test(fixed.executor) ||
     !e.isAddress(fixed.collection) ||
-    !e.isAddress(fixed.paymentToken)
+    /^0x0{40}$/i.test(fixed.collection) ||
+    !e.isAddress(fixed.paymentToken) ||
+    /^0x0{40}$/i.test(fixed.paymentToken) ||
+    !e.isAddress(fixed.venue) ||
+    /^0x0{40}$/i.test(fixed.venue) ||
+    !Array.isArray(fixed.counterparties) ||
+    fixed.counterparties.length === 0 ||
+    fixed.counterparties.some(
+      (value) => !e.isAddress(value) || /^0x0{40}$/i.test(value),
+    ) ||
+    policyHashes.some(
+      (key) =>
+        typeof fixed[key] !== "string" ||
+        !/^0x[0-9a-f]{64}$/.test(fixed[key]) ||
+        /^0x0{64}$/.test(fixed[key]),
+    )
   )
     fail("SERVICE_POLICY_INVALID");
   for (const fn of [
@@ -244,7 +281,7 @@ export function createAgentService({
           action: "BUY",
           opensOrder: false,
           counterparty: plan.sale.seller,
-          venue: fixed.executor,
+          venue: fixed.venue,
           contract: plan.sale.nft,
           tokenId: plan.sale.tokenId,
           unitPrice: plan.sale.price,
