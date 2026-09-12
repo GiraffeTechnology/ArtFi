@@ -1,6 +1,14 @@
 "use client";
 
+import localFont from "next/font/local";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const recoveryFont = localFont({
+  src: "../fonts/InterVariable.woff2",
+  display: "swap",
+  weight: "100 900",
+  fallback: [],
+});
 
 const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
@@ -203,7 +211,10 @@ export function LiveMarketCatalog() {
       </div>
 
       {catalogError ? (
-        <div className="market-runtime-state" role="alert">
+        <div
+          className={`market-runtime-state ${recoveryFont.className}`}
+          role="alert"
+        >
           <strong>Live mirror unavailable</strong>
           <span>{catalogError} No fixture is shown as live data.</span>
           <span>
@@ -211,6 +222,7 @@ export function LiveMarketCatalog() {
           </span>
           <button
             type="button"
+            className="wallet-button"
             disabled={loading}
             onClick={() => void loadCatalog()}
           >

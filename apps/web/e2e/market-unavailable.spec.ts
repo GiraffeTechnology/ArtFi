@@ -81,6 +81,25 @@ for (const recovery of ["manual", "polling"] as const) {
     await page.clock.fastForward(15_000);
     await expect(alert).toBeVisible();
     await expect(alert).toContainText("Live mirror unavailable");
+    await page.evaluate(() => document.fonts.ready);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("DOM.enable");
+    await cdp.send("CSS.enable");
+    const documentNode = await cdp.send("DOM.getDocument");
+    const retryNode = await cdp.send("DOM.querySelector", {
+      nodeId: documentNode.root.nodeId,
+      selector: ".market-runtime-state button",
+    });
+    const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", {
+      nodeId: retryNode.nodeId,
+    });
+    expect(fonts.length).toBeGreaterThan(0);
+    expect(
+      fonts.every(
+        (font) => font.isCustomFont && font.familyName.startsWith("Inter"),
+      ),
+    ).toBe(true);
+    await cdp.detach();
     await expect(cards).toHaveCount(0);
     await expect(
       page.getByText("Market data unavailable", { exact: true }),
