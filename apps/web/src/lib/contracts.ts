@@ -246,3 +246,74 @@ export const artFiVaultAbi = [
     ],
   },
 ] as const;
+
+export const artFiAdminSafeAbi = [
+  {
+    type: "function",
+    name: "isOwner",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "allowed", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "threshold",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "delaySeconds",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint64" }],
+  },
+  {
+    type: "function",
+    name: "submit",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "requestId", type: "bytes32" },
+      { name: "target", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [{ name: "transactionId", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "confirm",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "transactionId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "execute",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "transactionId", type: "uint256" }],
+    outputs: [{ name: "returndata", type: "bytes" }],
+  },
+  {
+    type: "function",
+    name: "transaction",
+    stateMutability: "view",
+    inputs: [{ name: "transactionId", type: "uint256" }],
+    outputs: [
+      {
+        name: "entry",
+        type: "tuple",
+        components: [
+          { name: "requestId", type: "bytes32" },
+          { name: "target", type: "address" },
+          { name: "value", type: "uint256" },
+          { name: "data", type: "bytes" },
+          { name: "readyAt", type: "uint64" },
+          { name: "confirmations", type: "uint32" },
+          { name: "executed", type: "bool" },
+        ],
+      },
+    ],
+  },
+] as const;
