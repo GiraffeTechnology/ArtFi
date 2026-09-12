@@ -304,7 +304,7 @@ func marketOrderStatus(eventType string) string {
 
 func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request *http.Request) {
 	if service.db == nil {
-		writeJSON(writer, http.StatusOK, map[string]any{"data": []marketActivity{}, "schemaVersion": "1"})
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market activity unavailable", "Durable marketplace data is unavailable; an empty trading history cannot be inferred.")
 		return
 	}
 	source := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("source")))

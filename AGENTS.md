@@ -1,84 +1,197 @@
 # ArtFi agent instructions
 
-Read this before touching the repository. It is short on purpose.
+Read this before touching the repository. This file defines the execution boundary for every coding, review, PM, audit, or AI agent working on ArtFi.
 
-## 1. The governing documents
+## 0. P0 governance rule
 
-Three documents govern, in this order. Do not merge them and do not treat any other file as the
-baseline.
+**Issue #84 — `[GOVERNING][NO COMMENTS] Stage 2 PRD v2.0 — NO-HIL Agentic RWA Market` — is the sole product baseline.**
 
-| Document             | Answers                                       | You must                                     |
-| -------------------- | --------------------------------------------- | -------------------------------------------- |
-| `docs/PRD.md`        | What must exist and how it must behave        | Trace every change to a requirement in §4    |
-| `docs/ACCEPTANCE.md` | What proves it exists, and how it is promoted | Report every item using its §2 status values |
-| `docs/STATUS.md`     | Where each item stands right now              | **Update it on every delivery commit**       |
+No agent may create, infer, extend, reinterpret, or write back a product requirement that cannot be traced to #84 or to an explicit later client ruling.
 
-Client directives override all three where they conflict, newest first:
+This applies equally to Codex, Claude Code, reviewers, automation, and human contributors acting through an agent.
 
-- `docs/DIRECTIVE_2026-08-30_DELIVERY.md` — measurement, the G3 split, Hoodi test payload
-- `docs/DIRECTIVE_2026-08-24_HOODI.md` — the test chain
+An agent may:
 
-`docs/ROADMAP.md`, `docs/PRD_TRACEABILITY.md` and `docs/PRD_CLAUDE_CODE_ACCEPTANCE.md` predate this
-set. Consult them for history; do not accept them as the current baseline.
+- implement an existing requirement;
+- verify implementation against an existing requirement;
+- report a gap, defect, conflict, risk, or missing decision;
+- propose an option in a separate non-governing issue for client decision.
 
-## 2. Standing rules
+An agent may **not**:
 
-**Evidence.** `ACCEPTANCE.md` §3 lists what is not evidence. The short version: your own assessment
-of your own output is not evidence. Every claim cites a file path, a test name, a CI run, or a
-transaction hash with its receipt.
+- add a gate, status value, delivery condition, acceptance obligation, architecture requirement, product principle, scope item, dependency, or client obligation on its own authority;
+- convert an observation, recommendation, risk, or interpretation into a requirement;
+- amend #84 through comments, another document, a commit message, `ACCEPTANCE.md`, `STATUS.md`, or an issue;
+- make its own proposed rule authoritative by writing it into a governance or acceptance document;
+- block implementation on a condition that is not traceable to #84 or an explicit client ruling.
 
-**Status.** Use only the six values in `ACCEPTANCE.md` §2. Never mark deferred work `OUT-OF-SCOPE` —
-that silently deletes paid scope. Work awaiting a named gate is `PENDING-GATE`.
+**If no trace exists, it is not a requirement. Report it; do not legislate it.**
 
-**Progress is counted in items, never in person-days.** The quotation's unit was retired when the
-work became AI-coded (`DIRECTIVE_2026-08-30_DELIVERY.md` §1.3).
+---
 
-**Silence is a defect.** If an instruction cannot be executed — tooling, permissions, dependencies,
-environment, scope conflict — say so within 24 hours with the blocker, its evidence, and at least
-one alternative. Do not go quiet. `stall-check.yml` will open an issue if you do.
+## 1. Authority order
 
-**One reviewable change per pull request**, with green CI. Commits of 100+ files cannot be reviewed
-and have hidden real defects in this repository before.
+Use the following authority order. Lower levels may explain or record higher levels; they may never expand them.
 
-**Never present fixture data as live.** A Class B surface backed by mock or static data while shown
-as functional fails the audit (`ACCEPTANCE.md` §7.5).
+| Priority | Source                                                                   | Role                                                                                                         |
+| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| 1        | **Issue #84**                                                            | Sole product baseline: what ArtFi is and what must be built                                                  |
+| 2        | **Explicit later client rulings**                                        | Authorized amendments or decisions; must identify the client ruling and must not be invented by an agent     |
+| 3        | `AGENTS.md`                                                              | Execution and agent-control rules                                                                            |
+| 4        | `docs/ACCEPTANCE.md`                                                     | Evidence and promotion process only                                                                          |
+| 5        | `docs/STATUS.md`                                                         | Evidence snapshot only; it records state and creates no requirement                                          |
+| 6        | legacy PRDs, roadmaps, directives, issues, comments, and commit messages | Historical/reference material only unless #84 or an explicit client ruling incorporates a specific provision |
 
-**Do not rebuild Class A.** `PRD.md` §2.1 surfaces are preserved, not rebuilt; rebuilding them is
-out of scope and not billable.
+**No issue number other than #84 is automatically governing merely because an older document or comment calls it governing.** Temporary cleanup issues, audit issues, and historical PM issues are execution records only.
 
-## 3. Hard boundaries
+`docs/PRD.md` is **not an independent authority**. #84 preserves the required Stage 1 substrate; legacy Stage 1 detail may be used only to the extent that it is incorporated by #84 and does not conflict with #84 or a later client ruling.
 
-- No private keys, seed phrases, credentials, database dumps, or raw signed transactions — not in
-  Web, API, MySQL, servers, GitHub, CI, or logs. Signing stays local and offline.
-- All RPC, deployment, broadcast, receipt, explorer and external-marketplace calls originate from
-  the approved SIN execution zone.
-- **ArtFi is a trading intermediary, not an exchange** (`PRD.md` §4.2). ArtFi never takes possession
-  of, and never holds authority to move, a user's funds or assets. Every change to a user's holdings
-  originates from a signature that user produced for that specific trade. Orders are signed intents;
-  matching is discovery, not execution; the chain is the ownership authority, never MySQL or Redis.
-  No administrative action may move, freeze, or reassign user assets.
-- **Two business roles, one set of rules** (`PRD.md` §4.2.1). ArtCCH sells its own inventory
-  (自营) and third parties' (中介). Treat ArtCCH's assets as customer assets whose account happens
-  to belong to ArtCCH. Never build a seller allowlist, a privileged listing path, or an
-  administrative call that reaches ArtCCH's holdings. **Matching takes no input from seller
-  identity** — ArtCCH's own orders get no ordering, latency, visibility or fee advantage. The
-  distinction is disclosed to users, never branched on in settlement.
+If two sources conflict, use the higher source. Do not reconcile a conflict by inventing a third rule.
+
+---
+
+## 2. Mandatory traceability
+
+Every change that claims to satisfy product scope must cite one of:
+
+1. a specific section of #84; or
+2. an explicit later client ruling.
+
+Every audit finding must separately identify:
+
+- **baseline:** the #84 section or client ruling;
+- **evidence:** file path, test, CI run, transaction/receipt, or observed runtime behaviour;
+- **finding:** what does not match.
+
+If the baseline field cannot be filled, the finding may be recorded as a recommendation or question, but **must not become a blocker or requirement**.
+
+---
+
+## 3. Governance contamination rule
+
+The repository contains historical AI-authored requirements that exceeded the agent's authority. Issues #91 and #92 identify known examples.
+
+During cleanup:
+
+- remove or freeze requirements, gates, states, delivery obligations, and derived blockers that have no valid trace to #84 or an explicit client ruling;
+- preserve valid client rulings even where an agent previously over-expanded them;
+- preserve useful implemented code, tests, security fixes, and infrastructure when they remain compatible with #84;
+- do not roll back working implementation merely because Claude Code or another AI contributed it;
+- do not keep an invalid requirement merely because implementation effort has already been spent on it;
+- do not create replacement requirements while deleting invalid ones.
+
+**Governance rollback is not code rollback. Provenance alone is never a reason to delete useful code.**
+
+Where useful existing code is not currently required for the active delivery stage but is compatible with #84, freeze it in place rather than expanding current scope around it. Delete code only when it is demonstrably harmful, contradictory, dead, security-sensitive, or creates an active maintenance/behavioural conflict.
+
+---
+
+## 4. Staged delivery — anti-black-hole rule
+
+ArtFi is delivered in bounded stages. The project must not remain in an indefinitely expanding pre-delivery state.
+
+For each active stage:
+
+1. define a finite deliverable set traced to #84;
+2. freeze that stage's scope before implementation begins;
+3. finish, test, integrate, and demonstrate that set;
+4. record remaining valid requirements as later-stage work;
+5. do not pull later-stage work forward unless it is a true technical prerequisite for the active stage;
+6. do not add new requirements during implementation without an explicit client ruling.
+
+A later-stage missing feature is **not** a blocker for the current stage unless the current stage cannot function without it.
+
+The default priority is:
+
+```text
+finish useful existing work
+→ close the current bounded stage
+→ demonstrate it
+→ only then open the next stage
+```
+
+Not:
+
+```text
+find more requirements
+→ enlarge the gate
+→ redesign the stage
+→ defer delivery
+→ repeat
+```
+
+No audit, review, refactor, architecture exercise, or governance activity may indefinitely displace delivery of a bounded working slice.
+
+---
+
+## 5. Standing engineering rules
+
+**Evidence.** Self-assessment is not delivery evidence. Every delivery claim cites a file path, test name, CI run, or transaction hash with receipt as applicable.
+
+**Status.** `docs/STATUS.md` records evidence and current state. It does not create scope. Status vocabulary must not be expanded by an agent.
+
+**One reviewable change per pull request.** Prefer bounded, reviewable PRs with green CI. Avoid broad speculative rewrites.
+
+**Fixtures are not live product data.** Never present mock/static data as live behaviour.
+
+**Do not rebuild valid working surfaces without a product reason.** Preserve useful existing implementation and improve only where #84 or a verified defect requires it.
+
+**Blockers must be real.** A blocker must identify the exact active-stage requirement it prevents and the evidence for the dependency. Unsupported or later-stage work is not a blocker.
+
+**Questions do not block by default.** If #84 leaves something unspecified, choose the least-expansive reversible implementation that preserves #84, or raise a separate question. Do not freeze delivery by inventing an approval dependency.
+
+---
+
+## 6. Hard boundaries
+
+- No private keys, seed phrases, credentials, database dumps, or raw signed transactions in Web, API, MySQL, servers, GitHub, CI, or logs.
 - No mainnet, real assets, or real-money operation without separate written approval.
-- The test chain is **Hoodi `560048`**. It says nothing about the production chain, which is an
-  open decision. `verify-chain-consistency.mjs` enforces that every layer agrees.
-- Historical mint evidence is immutable: `release/mint-batches/ye-yongrun-unit-a01-a38` records a
-  real Ethereum Sepolia mint (tx `0xfe71d3af…0534b`, block `11545902`). Never rewrite it, and never
-  regenerate into that directory. Its verifiers stay pinned to `11155111` by design.
-- Hoodi testing uses separately generated AI artwork (`PRD.md` §7.0), in its own namespace, on its
-  own deployment, carrying `TESTNET` / `NO REAL-WORLD VALUE` / `NO LEGAL EFFECT`. It may never
-  borrow a real artist's identity or reach a production manifest.
-- Inherited screenshots and PRD claims are references, not proof of implementation.
-- Keep external-wallet integration separate from the wallet extension.
+- The current test chain is Hoodi `560048`; it does not determine the production chain.
+- Historical mint evidence must remain immutable.
+- Test assets must remain clearly isolated from production/real-asset records.
+- External partner identities in governing product material must use the neutral placeholder policy already stated in #84.
+- LLM output is advisory; transaction authority must come from deterministic policy and valid authority as defined by #84.
+- An operational agent must never infer higher authority from lower authority.
 
-## 4. Before handoff
+---
 
-Run the checks in `CONTRIBUTING.md` for the area you changed, then confirm:
+## 7. Cleanup protocol
 
-- `pnpm chain:consistency:check` passes;
-- `docs/STATUS.md` reflects this commit, with no `<SHA>` or `<YYYY-MM-DD>` placeholders left;
-- every item you moved cites its evidence.
+When performing a repository-wide cleanup, classify every disputed item into exactly one of four buckets:
+
+### KEEP
+
+Implemented and useful, compatible with #84. Preserve it and its valid tests/evidence.
+
+### FINISH-NOW
+
+Valid #84 requirement needed for the currently declared delivery stage and sufficiently close to completion. Finish it within the bounded stage.
+
+### FREEZE-LATER
+
+Valid under #84 but not required for the current stage. Keep existing useful work, stop expansion, and move it to a later-stage backlog.
+
+### REMOVE
+
+No valid trace to #84/client ruling, or actively harmful/contradictory/dead. Remove the invalid governance requirement or, where justified, the conflicting implementation.
+
+Every REMOVE decision must state what valid source, if any, replaces it. `No replacement — agent-authored scope expansion` is acceptable.
+
+Do not use cleanup to generate a fifth bucket of newly invented work.
+
+---
+
+## 8. Before handoff
+
+Before declaring a stage or cleanup batch complete, confirm:
+
+- all changed product behaviour traces to #84 or an explicit later client ruling;
+- no new agent-authored requirement, gate, status, or delivery condition was introduced;
+- useful compatible implementation was preserved;
+- current-stage scope is finite and written down;
+- later-stage items are frozen rather than allowed to block current delivery;
+- tests and CI for the changed area are green;
+- `docs/STATUS.md` records evidence only and does not expand scope;
+- any unresolved question is clearly marked non-governing and non-blocking unless the client explicitly ruled otherwise.
+
+**Primary operating principle: deliver bounded working stages; do not turn ArtFi into an endless governance project.**
