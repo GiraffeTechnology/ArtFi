@@ -119,16 +119,34 @@ contract VaultFlowTest is IERC721Receiver {
         require(nft.ownerOf(1) == address(vault), "vault lost custody");
     }
 
-    function testTokenPauseBlocksTransfers() public {
+    /// The fractions are the holder's asset. Every exit from `ArtFiMarket` and
+    /// `RevenueDistributor` completes by transferring this token, so freezing it would
+    /// re-create one layer down the trap PR #46 removed from `cancelListing` — and
+    /// `ACCEPTANCE.md` §4.1 leaves nobody present to lift the freeze.
+    ///
+    /// `FractionalToken` no longer carries a pause surface at all, so the strongest part of
+    /// this guarantee is enforced by the compiler: the previous version of this test called
+    /// `token.pause()`, and that call no longer exists.
+    function testAdministrativePauseNeverFreezesFractions() public {
         vault.deposit();
         FractionalToken token = FractionalToken(
             vault.fractionalize("Material Memory Fractions", "MMF", 4_000 ether, address(this))
         );
-        token.pause();
-        (bool ok,) = address(token).call(abi.encodeCall(token.transfer, (address(0xBEEF), 1 ether)));
-        require(!ok, "paused fractions transferred");
-        token.unpause();
-        require(token.transfer(address(0xBEEF), 1 ether), "transfer failed after unpause");
+        vault.pause();
+        require(token.transfer(address(0xBEEF), 1 ether), "paused vault froze a holder's fractions");
+        require(token.balanceOf(address(0xBEEF)) == 1 ether, "fractions did not arrive");
+    }
+
+    /// The pause keeps its legitimate job. Asserting only the test above would be satisfied by
+    /// a pause that had been reduced to doing nothing, which is not the change being made here.
+    function testVaultPauseStillBlocksNewFractionalization() public {
+        vault.deposit();
+        vault.pause();
+        (bool ok,) = address(vault)
+            .call(
+                abi.encodeCall(vault.fractionalize, ("Blocked", "BLK", 4_000 ether, address(this)))
+            );
+        require(!ok, "paused vault still fractionalized");
     }
 
     function testFuzzFixedSupply(uint96 rawSupply) public {

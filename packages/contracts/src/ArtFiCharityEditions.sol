@@ -188,10 +188,13 @@ contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable {
         return super.supportsInterface(interfaceId);
     }
 
+    /// @dev Deliberately not `whenNotPaused`, unlike `createSeries` and the evidence recorders.
+    ///      The pause stops new series and new records; a holder's editions stay transferable.
+    ///      Freezing them would be an administrative action over a user's asset, which `PRD.md`
+    ///      §4.2 forbids and which nobody would be present to lift (`ACCEPTANCE.md` §4.1).
     function _update(address from, address to, uint256[] memory ids, uint256[] memory values)
         internal
         override(ERC1155Supply)
-        whenNotPaused
     {
         super._update(from, to, ids, values);
     }
