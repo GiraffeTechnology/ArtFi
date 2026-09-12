@@ -33,14 +33,14 @@ An agent may **not**:
 
 Use the following authority order. Lower levels may explain or record higher levels; they may never expand them.
 
-| Priority | Source | Role |
-| --- | --- | --- |
-| 1 | **Issue #84** | Sole product baseline: what ArtFi is and what must be built |
-| 2 | **Explicit later client rulings** | Authorized amendments or decisions; must identify the client ruling and must not be invented by an agent |
-| 3 | `AGENTS.md` | Execution and agent-control rules |
-| 4 | `docs/ACCEPTANCE.md` | Evidence and promotion process only |
-| 5 | `docs/STATUS.md` | Evidence snapshot only; it records state and creates no requirement |
-| 6 | legacy PRDs, roadmaps, directives, issues, comments, and commit messages | Historical/reference material only unless #84 or an explicit client ruling incorporates a specific provision |
+| Priority | Source                                                                   | Role                                                                                                         |
+| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| 1        | **Issue #84**                                                            | Sole product baseline: what ArtFi is and what must be built                                                  |
+| 2        | **Explicit later client rulings**                                        | Authorized amendments or decisions; must identify the client ruling and must not be invented by an agent     |
+| 3        | `AGENTS.md`                                                              | Execution and agent-control rules                                                                            |
+| 4        | `docs/ACCEPTANCE.md`                                                     | Evidence and promotion process only                                                                          |
+| 5        | `docs/STATUS.md`                                                         | Evidence snapshot only; it records state and creates no requirement                                          |
+| 6        | legacy PRDs, roadmaps, directives, issues, comments, and commit messages | Historical/reference material only unless #84 or an explicit client ruling incorporates a specific provision |
 
 **No issue number other than #84 is automatically governing merely because an older document or comment calls it governing.** Temporary cleanup issues, audit issues, and historical PM issues are execution records only.
 
@@ -160,15 +160,19 @@ No audit, review, refactor, architecture exercise, or governance activity may in
 When performing a repository-wide cleanup, classify every disputed item into exactly one of four buckets:
 
 ### KEEP
+
 Implemented and useful, compatible with #84. Preserve it and its valid tests/evidence.
 
 ### FINISH-NOW
+
 Valid #84 requirement needed for the currently declared delivery stage and sufficiently close to completion. Finish it within the bounded stage.
 
 ### FREEZE-LATER
+
 Valid under #84 but not required for the current stage. Keep existing useful work, stop expansion, and move it to a later-stage backlog.
 
 ### REMOVE
+
 No valid trace to #84/client ruling, or actively harmful/contradictory/dead. Remove the invalid governance requirement or, where justified, the conflicting implementation.
 
 Every REMOVE decision must state what valid source, if any, replaces it. `No replacement — agent-authored scope expansion` is acceptable.
