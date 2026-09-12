@@ -53,6 +53,7 @@ export function createAgentKernel({
     throw new Error("KERNEL_CONFIGURATION_INVALID");
   for (const fn of [
     store?.claim,
+    store?.renew,
     store?.transition,
     store?.release,
     authorize,
@@ -65,8 +66,15 @@ export function createAgentKernel({
   ])
     if (typeof fn !== "function") throw new Error("KERNEL_ADAPTER_REQUIRED");
   const claim = store.claim.bind(store),
+    renew = store.renew.bind(store),
     transition = store.transition.bind(store),
     release = store.release.bind(store);
+  if (
+    !Number.isSafeInteger(store.leaseDurationMs) ||
+    !Number.isSafeInteger(store.operationTimeoutMs) ||
+    store.leaseDurationMs < adapterTimeoutMs + store.operationTimeoutMs + 1000
+  )
+    throw new Error("KERNEL_LEASE_BUDGET_INVALID");
   async function bounded(stage, call) {
     const controller = new AbortController();
     const deadline = performance.now() + adapterTimeoutMs;
@@ -179,6 +187,28 @@ export function createAgentKernel({
       storeUncertain = false;
       return record;
     };
+    const refreshLease = async () => {
+      checkLease(record);
+      storeUncertain = true;
+      const next = structuredClone(
+        await bounded("STORE_RENEW", (signal) =>
+          renew(record.id, record.version, leaseToken, signal),
+        ),
+      );
+      if (
+        !next ||
+        next.id !== frozen.operationId ||
+        next.requestDigest !== requestDigest ||
+        kernelRequestDigest(next.request) !== requestDigest ||
+        next.version !== record.version ||
+        next.leaseToken !== leaseToken ||
+        next.leaseExpiresAt <= record.leaseExpiresAt
+      )
+        throw new Error("DURABLE_RENEWAL_INVALID");
+      record = next;
+      checkLease(record);
+      storeUncertain = false;
+    };
     let attempted = false;
     try {
       checkLease(record);
@@ -207,6 +237,7 @@ export function createAgentKernel({
             reason: "INTENT_REVOKED",
           });
         }
+        await refreshLease();
         const authority = await bounded("MINT_AUTHORITY", (signal) =>
           mintAuthority(structuredClone(persisted), signal),
         );
@@ -216,10 +247,12 @@ export function createAgentKernel({
         });
         if (authority.status !== "EXCLUSIVE_AT_PINNED_BLOCK")
           throw Error("MINT_AUTHORITY_UNPROVEN");
+        await refreshLease();
         const observation = await bounded("OBSERVE", (signal) =>
           observe(structuredClone(persisted), signal),
         );
         checkLease(record);
+        await refreshLease();
         const decision = await bounded("AUTHORIZE", (signal) =>
           authorize(
             structuredClone(persisted),
@@ -234,13 +267,16 @@ export function createAgentKernel({
           });
         // Adapter must reserve exposure/nonce atomically with this transition. A validator
         // result is not itself an authorization to spend without on-chain enforcement.
+        await refreshLease();
         await save({
           state: "STARTED",
           intentDigest: decision.intentDigest,
           authorityVersion: decision.stateVersion,
+          reservedValue: decision.value,
           recoveryAttempts: 0,
         });
         checkLease(record);
+        await refreshLease();
         attempted = true;
         const submitted = await bounded("EXECUTE", (signal) =>
           execute(structuredClone(persisted), structuredClone(record), signal),
@@ -251,6 +287,7 @@ export function createAgentKernel({
         });
       }
       if (record.state === "SUBMITTED") {
+        await refreshLease();
         const proof = await bounded("VERIFY", (signal) =>
           verify(structuredClone(record), signal),
         );
@@ -260,6 +297,7 @@ export function createAgentKernel({
       }
       // STARTED after a crash may have a transaction without a locally recorded hash.
       // Reconciler must discover by immutable intent/operation identity, not submit again.
+      await refreshLease();
       const result = await bounded("RECONCILE", (signal) =>
         reconcile(structuredClone(record), signal),
       );

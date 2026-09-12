@@ -37,7 +37,13 @@ function fixture(revocation, state = "PREPARED", failCAS = false) {
   const kernel = createAgentKernel({
     mode: "TEST_ONLY_NO_REAL_VALUE",
     store: {
+      leaseDurationMs: 60000,
+      operationTimeoutMs: 1000,
       claim: async () => structuredClone(row),
+      renew: async () => {
+        row = { ...row, leaseExpiresAt: row.leaseExpiresAt + 60000 };
+        return structuredClone(row);
+      },
       transition: async (id, version, patch) => {
         assert.equal(version, row.version);
         if (failCAS) throw Error("DURABLE_CAS_REFUSED");

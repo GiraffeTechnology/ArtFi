@@ -61,8 +61,9 @@ const request = {
     actionScope: "1",
     maxExecutions: "1",
     maxOpenOrders: "0",
+    maxAggregateExposure: "100",
   },
-  sale: { nft: address },
+  sale: { nft: address, price: "10" },
 };
 const authority = {
   status: "EXCLUSIVE_AT_PINNED_BLOCK",
@@ -77,7 +78,11 @@ const authority = {
   requestedBlockHash: hash,
 };
 // mysql2 protocol contract fake only; no real SQL, isolation or durability proof.
-function fixture(state = "PREPARED", reservationConflict = false) {
+function fixture(
+  state = "PREPARED",
+  reservationConflict = false,
+  initialExposure = "0",
+) {
   const row = {
     operation_id: request.operationId,
     request_json: JSON.stringify(request),
@@ -90,7 +95,8 @@ function fixture(state = "PREPARED", reservationConflict = false) {
     lease_token: state === "STARTED" ? null : "lease-1",
     lease_expires_ms: state === "STARTED" ? 0 : Date.now() + 60000,
   };
-  let available = true;
+  let available = true,
+    exposure = initialExposure;
   const connection = {
     beginTransaction: async () => {},
     commit: async () => {},
@@ -120,11 +126,18 @@ function fixture(state = "PREPARED", reservationConflict = false) {
               : []),
           ],
         ];
+      if (sql.startsWith("SELECT reserved_value"))
+        return [[{ reserved_value: exposure }]];
+      if (sql.startsWith("INSERT INTO agent_slice_wallet_exposure"))
+        return [{ affectedRows: 1 }];
       if (sql.startsWith("INSERT INTO agent_slice_reservations")) {
         if (reservationConflict)
           throw Object.assign(Error("duplicate"), { code: "ER_DUP_ENTRY" });
-        assert.equal(p[2], request.operationId);
-        assert.equal(p[3], hash);
+        assert.equal(p[3], request.operationId);
+        assert.equal(p[4], hash);
+        assert.equal(p[5], "10");
+      } else if (sql.startsWith("UPDATE agent_slice_wallet_exposure")) {
+        exposure = p[0];
       } else if (sql.startsWith("UPDATE") && sql.includes("SET record_json")) {
         row.record_json = p[0];
         row.version = p[1];
@@ -135,6 +148,11 @@ function fixture(state = "PREPARED", reservationConflict = false) {
         row.lease_token = p[0];
         row.lease_expires_ms = p[1];
         row.version = p[2];
+      } else if (
+        sql.startsWith("UPDATE") &&
+        sql.includes("SET lease_expires_ms")
+      ) {
+        row.lease_expires_ms = p[0];
       } else if (
         sql.startsWith("UPDATE") &&
         sql.includes("SET lease_token = NULL")
@@ -169,7 +187,12 @@ test("healthy reauthorization at a new observation version can reserve without r
   const started = await store.transition(
     "test-1",
     1,
-    { state: "STARTED", authorityVersion: "v2", intentDigest: hash },
+    {
+      state: "STARTED",
+      authorityVersion: "v2",
+      intentDigest: hash,
+      reservedValue: "10",
+    },
     "lease-1",
   );
   assert.equal(started.state, "STARTED");
@@ -188,7 +211,12 @@ test("new observation version never bypasses reservation uniqueness or malformed
     store.transition(
       "test-1",
       1,
-      { state: "STARTED", authorityVersion: "v2", intentDigest: hash },
+      {
+        state: "STARTED",
+        authorityVersion: "v2",
+        intentDigest: hash,
+        reservedValue: "10",
+      },
       "lease-1",
     ),
     /AUTHORITY_ALREADY_RESERVED/,
@@ -198,12 +226,62 @@ test("new observation version never bypasses reservation uniqueness or malformed
       store.transition(
         "test-1",
         1,
-        { state: "STARTED", authorityVersion: version, intentDigest: hash },
+        {
+          state: "STARTED",
+          authorityVersion: version,
+          intentDigest: hash,
+          reservedValue: "10",
+        },
         "lease-1",
       ),
       /AUTHORITY_VERSION_REFUSED/,
     );
   assert.equal(hydrateOperation(f.row).state, "PREPARED");
+});
+test("wallet aggregate exposure is atomically refused before STARTED", async () => {
+  const f = fixture("PREPARED", false, "95"),
+    store = createDurableStore({
+      mode: "TEST_ONLY_NO_REAL_VALUE",
+      pool: f.pool,
+    });
+  await assert.rejects(
+    store.transition(
+      "test-1",
+      1,
+      {
+        state: "STARTED",
+        authorityVersion: "v2",
+        intentDigest: hash,
+        reservedValue: "10",
+      },
+      "lease-1",
+    ),
+    /EXPOSURE_EXCEEDED/,
+  );
+  assert.equal(hydrateOperation(f.row).state, "PREPARED");
+});
+
+test("a permanently hung acquisition is quarantined without disabling later recovery", async () => {
+  const healthy = fixture(),
+    pool = {
+      calls: 0,
+      getConnection() {
+        this.calls++;
+        return this.calls === 1
+          ? new Promise(() => {})
+          : healthy.pool.getConnection();
+      },
+    },
+    store = createDurableStore({
+      mode: "TEST_ONLY_NO_REAL_VALUE",
+      pool,
+      operationTimeoutMs: 20,
+      cleanupTimeoutMs: 10,
+    });
+  await assert.rejects(store.get("test-1"), /DURABLE_ACQUIRE_TIMEOUT/);
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  assert.equal((await store.get("test-1")).id, "test-1");
+  assert.equal(pool.calls, 2);
 });
 test("preflight evidence persists and hydrates, without weakening PREPARED reservation rule", async () => {
   const f = fixture(),

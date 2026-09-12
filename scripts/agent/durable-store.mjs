@@ -53,6 +53,8 @@ export function reservationIdentity(request) {
     !address(a.wallet) ||
     !uint(a.nonce) ||
     !digest(a.intentId) ||
+    !uint(a.maxAggregateExposure) ||
+    !uint(request?.sale?.price) ||
     a.actionScope !== "1" ||
     a.maxExecutions !== "1" ||
     a.maxOpenOrders !== "0"
@@ -66,6 +68,7 @@ export function reservationIdentity(request) {
   return {
     authorityKey: kernelRequestDigest({ ...scope, nonce: a.nonce }),
     intentKey: kernelRequestDigest({ ...scope, intentId: a.intentId }),
+    exposureKey: kernelRequestDigest(scope),
   };
 }
 const decode = (value) =>
@@ -258,17 +261,16 @@ export function createDurableStore({
     }
     // Never fall back to release on unknown protocol/transaction state.
   }
-  let unresolvedAcquisitions = 0;
+  let acquisitionRetryAfter = 0;
   async function transaction(body) {
     const deadline = performance.now() + operationTimeoutMs;
     let c,
-      acquirePending = false,
-      acquireQuarantined = false;
+      acquirePending = false;
     let outcome = "ACQUIRE_UNKNOWN",
       result,
       primary = null;
-    if (unresolvedAcquisitions > 0) {
-      const error = new Error("DURABLE_ACQUISITION_STILL_PENDING");
+    if (performance.now() < acquisitionRetryAfter) {
+      const error = new Error("DURABLE_ACQUISITION_BACKOFF");
       error.transactionOutcome = outcome;
       throw error;
     }
@@ -280,10 +282,6 @@ export function createDurableStore({
           const pending = Promise.resolve().then(() => pool.getConnection());
           const settled = () => {
             acquirePending = false;
-            if (acquireQuarantined) {
-              unresolvedAcquisitions--;
-              acquireQuarantined = false;
-            }
           };
           pending.then(settled, settled);
           return pending;
@@ -294,8 +292,10 @@ export function createDurableStore({
       );
     } catch (error) {
       if (acquirePending) {
-        unresolvedAcquisitions++;
-        acquireQuarantined = true;
+        acquisitionRetryAfter = Math.max(
+          acquisitionRetryAfter,
+          performance.now() + cleanupTimeoutMs,
+        );
       }
       primary = safeError(error, "DURABLE_ACQUIRE_FAILED");
       primary.transactionOutcome = outcome;
@@ -383,6 +383,8 @@ export function createDurableStore({
     return rows.length === 0 ? null : hydrateOperation(rows[0]);
   }
   return Object.freeze({
+    leaseDurationMs: leaseMs,
+    operationTimeoutMs,
     async listRecoverable({ after = "", limit = 32 } = {}) {
       if (
         (after !== "" && !id(after)) ||
@@ -520,6 +522,33 @@ export function createDurableStore({
         };
       });
     },
+    async renew(operationId, expectedVersion, token) {
+      if (
+        !id(operationId) ||
+        !id(token) ||
+        !Number.isSafeInteger(expectedVersion)
+      )
+        fail("LEASE_RENEWAL_INVALID");
+      return transaction(async (c) => {
+        const row = await load(c, operationId),
+          time = await now(c);
+        if (
+          !row ||
+          row.version !== expectedVersion ||
+          row.leaseToken !== token ||
+          row.leaseExpiresAt <= time
+        )
+          fail("DURABLE_CAS_REFUSED");
+        const expiry = Math.max(time + leaseMs, row.leaseExpiresAt + 1);
+        if (!Number.isSafeInteger(expiry)) fail("LEASE_EXPIRY_OVERFLOW");
+        const [result] = await c.execute(
+          "UPDATE agent_slice_operations SET lease_expires_ms = ? WHERE operation_id = ? AND version = ? AND lease_token = ? AND lease_expires_ms > ?",
+          [expiry, operationId, expectedVersion, token, time],
+        );
+        if (result?.affectedRows !== 1) fail("DURABLE_CAS_REFUSED");
+        return { ...row, leaseExpiresAt: expiry };
+      });
+    },
     async transition(operationId, expectedVersion, patchInput, token) {
       const patch = structuredClone(patchInput);
       const allowed = new Set([
@@ -532,6 +561,7 @@ export function createDurableStore({
         "reconciliation",
         "reason",
         "mintAuthority",
+        "reservedValue",
       ]);
       if (
         !id(operationId) ||
@@ -593,7 +623,13 @@ export function createDurableStore({
             fail("SETTLEMENT_EVIDENCE_REFUSED");
         }
         if (patch.state === "STARTED") {
-          if (!id(patch.authorityVersion) || !digest(patch.intentDigest))
+          if (
+            !id(patch.authorityVersion) ||
+            !digest(patch.intentDigest) ||
+            !uint(patch.reservedValue) ||
+            BigInt(patch.reservedValue) === 0n ||
+            patch.reservedValue !== row.request.sale.price
+          )
             fail("AUTHORITY_VERSION_REFUSED");
           // Creation's observation version is historical, not an immutable
           // authorization term. The trusted kernel reauthorizes before STARTED
@@ -603,12 +639,35 @@ export function createDurableStore({
           const keys = reservationIdentity(row.request);
           try {
             await c.execute(
-              "INSERT INTO agent_slice_reservations (authority_key, intent_key, operation_id, intent_digest) VALUES (?, ?, ?, ?)",
+              "INSERT INTO agent_slice_wallet_exposure (exposure_key, reserved_value) VALUES (?, 0) ON DUPLICATE KEY UPDATE exposure_key = exposure_key",
+              [keys.exposureKey],
+            );
+            const [exposures] = await c.execute(
+              "SELECT reserved_value FROM agent_slice_wallet_exposure WHERE exposure_key = ? FOR UPDATE",
+              [keys.exposureKey],
+            );
+            if (
+              exposures.length !== 1 ||
+              !uint(String(exposures[0].reserved_value))
+            )
+              fail("EXPOSURE_RECORD_INVALID");
+            const nextExposure =
+              BigInt(exposures[0].reserved_value) + BigInt(patch.reservedValue);
+            if (nextExposure > BigInt(row.request.intent.maxAggregateExposure))
+              fail("EXPOSURE_EXCEEDED");
+            await c.execute(
+              "UPDATE agent_slice_wallet_exposure SET reserved_value = ? WHERE exposure_key = ?",
+              [nextExposure.toString(), keys.exposureKey],
+            );
+            await c.execute(
+              "INSERT INTO agent_slice_reservations (authority_key, intent_key, exposure_key, operation_id, intent_digest, reserved_value) VALUES (?, ?, ?, ?, ?, ?)",
               [
                 keys.authorityKey,
                 keys.intentKey,
+                keys.exposureKey,
                 operationId,
                 patch.intentDigest,
+                patch.reservedValue,
               ],
             );
           } catch (error) {

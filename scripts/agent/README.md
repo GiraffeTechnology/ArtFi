@@ -21,6 +21,13 @@ this change does not replace its proof implementation or introduce named-source
 requirements. The caller supplies trusted `mintAuthority`, `observe`, `authorize`,
 `execute`, `verify` and `reconcile` dependencies; caller JSON is not authority.
 
+The durable store renews its identity-bound lease before each bounded external
+stage. STARTED atomically reserves nonce, intent ID and a conservative monotonic
+wallet exposure before executor dispatch; an UNKNOWN result or expired process
+lease never releases that authority. A timed-out pool acquisition is quarantined
+and any late connection is destroyed, while later bounded recovery attempts remain
+possible after a short backoff.
+
 Source observation failure cannot erase owned durable identity or disable wallet
 revocation. The view marks stale source data while preserving stored status;
 creation/execution still require their independent fresh checks. STARTED stores
