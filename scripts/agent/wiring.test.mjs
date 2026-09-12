@@ -1,0 +1,384 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+// This suite tests store/runtime composition, never cryptography. No external
+// crypto package or sibling checkout is needed; signature operations must fail.
+const ethers = new Proxy(
+  {
+    isAddress: (value) =>
+      typeof value === "string" && /^0x[0-9a-fA-F]{40}$/.test(value),
+  },
+  {
+    get(target, key) {
+      if (key in target) return target[key];
+      throw Error("CRYPTO_OUTSIDE_WIRING_TEST");
+    },
+  },
+);
+import { createDurableStore, hydrateOperation } from "./durable-store.mjs";
+import { kernelRequestDigest } from "./agent-kernel.mjs";
+import { createDurableRuntime } from "./runtime.mjs";
+const address = "0x" + "ab".repeat(20),
+  hash = "0x" + "12".repeat(32);
+const request = {
+  operationId: "test-1",
+  authorityVersion: "v1",
+  execution: { chainId: "560048", executor: address },
+  intent: {
+    wallet: address,
+    nonce: "0",
+    intentId: hash,
+    actionScope: "1",
+    maxExecutions: "1",
+    maxOpenOrders: "0",
+  },
+  sale: { nft: address },
+};
+const authority = {
+  status: "EXCLUSIVE_AT_PINNED_BLOCK",
+  productionApproved: false,
+  chainId: "560048",
+  nft: address,
+  consumer: address,
+  policy: address,
+  blockNumber: 4,
+  blockHash: hash,
+  requestedBlockNumber: 4,
+  requestedBlockHash: hash,
+};
+// mysql2 protocol contract fake only; no real SQL, isolation or durability proof.
+function fixture(state = "PREPARED", reservationConflict = false) {
+  const row = {
+    operation_id: request.operationId,
+    request_json: JSON.stringify(request),
+    request_digest: kernelRequestDigest(request),
+    record_json: JSON.stringify({
+      state,
+      ...(state === "STARTED" ? { intentDigest: hash } : {}),
+    }),
+    version: 1,
+    lease_token: state === "STARTED" ? null : "lease-1",
+    lease_expires_ms: state === "STARTED" ? 0 : Date.now() + 60000,
+  };
+  let available = true;
+  const connection = {
+    beginTransaction: async () => {},
+    commit: async () => {},
+    rollback: async () => {},
+    release: () => {},
+    destroy: () => {},
+    execute: async (sql, p = []) => {
+      if (sql.startsWith("SELECT FLOOR")) return [[{ now_ms: Date.now() }]];
+      if (sql.startsWith("SELECT *") && sql.includes("operation_id >"))
+        return [
+          [
+            ...(row.operation_id > p[0] &&
+            !["SETTLED", "TERMINAL_REJECTED"].includes(
+              JSON.parse(row.record_json).state,
+            ) &&
+            (!row.lease_token || row.lease_expires_ms <= p[1])
+              ? [structuredClone(row)]
+              : []),
+          ],
+        ];
+      if (sql.startsWith("SELECT *")) return [[structuredClone(row)]];
+      if (sql.startsWith("SELECT intent_digest"))
+        return [
+          [
+            ...(JSON.parse(row.record_json).intentDigest
+              ? [{ intent_digest: hash }]
+              : []),
+          ],
+        ];
+      if (sql.startsWith("INSERT INTO agent_slice_reservations")) {
+        if (reservationConflict)
+          throw Object.assign(Error("duplicate"), { code: "ER_DUP_ENTRY" });
+        assert.equal(p[2], request.operationId);
+        assert.equal(p[3], hash);
+      } else if (sql.startsWith("UPDATE") && sql.includes("SET record_json")) {
+        row.record_json = p[0];
+        row.version = p[1];
+      } else if (
+        sql.startsWith("UPDATE") &&
+        sql.includes("SET lease_token = ?")
+      ) {
+        row.lease_token = p[0];
+        row.lease_expires_ms = p[1];
+        row.version = p[2];
+      } else if (
+        sql.startsWith("UPDATE") &&
+        sql.includes("SET lease_token = NULL")
+      ) {
+        row.lease_token = null;
+        row.lease_expires_ms = 0;
+      } else throw Error("UNEXPECTED_TEST_SQL");
+      return [{ affectedRows: 1 }];
+    },
+  };
+  return {
+    row,
+    pool: {
+      getConnection: async () => {
+        if (!available) throw Error("TEST_DB_UNAVAILABLE");
+        return connection;
+      },
+    },
+    setAvailable: (x) => {
+      available = x;
+    },
+  };
+}
+
+test("healthy reauthorization at a new observation version can reserve without replacing original intent", async () => {
+  const f = fixture();
+  const store = createDurableStore({
+    mode: "TEST_ONLY_NO_REAL_VALUE",
+    pool: f.pool,
+  });
+  const before = f.row.request_json;
+  const started = await store.transition(
+    "test-1",
+    1,
+    { state: "STARTED", authorityVersion: "v2", intentDigest: hash },
+    "lease-1",
+  );
+  assert.equal(started.state, "STARTED");
+  assert.equal(started.authorityVersion, "v2");
+  assert.equal(f.row.request_json, before);
+  assert.equal(started.request.authorityVersion, "v1");
+});
+
+test("new observation version never bypasses reservation uniqueness or malformed-version refusal", async () => {
+  const f = fixture("PREPARED", true);
+  const store = createDurableStore({
+    mode: "TEST_ONLY_NO_REAL_VALUE",
+    pool: f.pool,
+  });
+  await assert.rejects(
+    store.transition(
+      "test-1",
+      1,
+      { state: "STARTED", authorityVersion: "v2", intentDigest: hash },
+      "lease-1",
+    ),
+    /AUTHORITY_ALREADY_RESERVED/,
+  );
+  for (const version of ["", "space invalid", null])
+    await assert.rejects(
+      store.transition(
+        "test-1",
+        1,
+        { state: "STARTED", authorityVersion: version, intentDigest: hash },
+        "lease-1",
+      ),
+      /AUTHORITY_VERSION_REFUSED/,
+    );
+  assert.equal(hydrateOperation(f.row).state, "PREPARED");
+});
+test("preflight evidence persists and hydrates, without weakening PREPARED reservation rule", async () => {
+  const f = fixture(),
+    s = createDurableStore({ mode: "TEST_ONLY_NO_REAL_VALUE", pool: f.pool });
+  await s.transition(
+    "test-1",
+    1,
+    { state: "PREPARED", mintAuthority: authority },
+    "lease-1",
+  );
+  assert.deepEqual((await s.get("test-1")).mintAuthority, authority);
+  await s.transition(
+    "test-1",
+    2,
+    {
+      state: "PREPARED",
+      mintAuthority: {
+        status: "UNKNOWN",
+        reason: "EVIDENCE_REFUSED",
+        productionApproved: false,
+      },
+    },
+    "lease-1",
+  );
+  assert.equal((await s.get("test-1")).mintAuthority.status, "UNKNOWN");
+  f.row.record_json = JSON.stringify({ state: "PREPARED", intentDigest: hash });
+  await assert.rejects(
+    s.transition(
+      "test-1",
+      3,
+      { state: "PREPARED", mintAuthority: authority },
+      "lease-1",
+    ),
+    /PREPARED_HAS_RESERVATION/,
+  );
+});
+test("drifted evidence cannot hydrate; historical state cannot overwrite authority", async () => {
+  for (const change of [
+    { chainId: "1" },
+    { nft: "0x" + "cd".repeat(20) },
+    { productionApproved: true },
+    { blockHash: "bad" },
+    { requestedBlockNumber: 5 },
+  ]) {
+    const f = fixture();
+    f.row.record_json = JSON.stringify({
+      state: "PREPARED",
+      mintAuthority: { ...authority, ...change },
+    });
+    assert.throws(
+      () => hydrateOperation(f.row),
+      /MINT_AUTHORITY_RECORD_INVALID/,
+    );
+  }
+  const f = fixture("STARTED");
+  f.row.lease_token = "lease-1";
+  f.row.lease_expires_ms = Date.now() + 60000;
+  const s = createDurableStore({
+    mode: "TEST_ONLY_NO_REAL_VALUE",
+    pool: f.pool,
+  });
+  await assert.rejects(
+    s.transition(
+      "test-1",
+      1,
+      { state: "SETTLED", mintAuthority: authority },
+      "lease-1",
+    ),
+    /MINT_AUTHORITY_PATCH_STATE_REFUSED/,
+  );
+});
+test("new runtime discovers committed STARTED without HTTP IDs, retries DB outage and reconciles without execute", async () => {
+  const f = fixture("STARTED");
+  f.setAvailable(false);
+  const controller = new AbortController();
+  let sends = 0,
+    authorityCalls = 0;
+  const unused = async () => {
+    throw Error("UNEXPECTED_ADAPTER");
+  };
+  const runtime = createDurableRuntime({
+    pool: f.pool,
+    kernelOptions: {
+      authorize: unused,
+      observe: unused,
+      execute: async () => {
+        sends++;
+        throw Error("UNEXPECTED_SEND");
+      },
+      verify: unused,
+      mintAuthority: async () => {
+        authorityCalls++;
+        throw Error("UNEXPECTED_PREFLIGHT");
+      },
+      reconcile: async () => ({
+        state: "SETTLED",
+        canonical: true,
+        accountingMatches: true,
+      }),
+    },
+    serviceOptions: {
+      ethers,
+      policy: {
+        chainId: "560048",
+        executor: address,
+        collection: address,
+        paymentToken: address,
+      },
+      planFor: unused,
+      observe: unused,
+      inspectRevocation: unused,
+    },
+  });
+  const outcomes = [];
+  await runtime.run({
+    signal: controller.signal,
+    intervalMs: 10,
+    onBatch: (result) => {
+      outcomes.push(result);
+      if (outcomes.length === 1) {
+        assert.equal(result.state, "SAFE_DEGRADED");
+        f.setAvailable(true);
+      } else controller.abort();
+    },
+  });
+  assert.equal(outcomes[1].outcomes[0].state, "SETTLED");
+  assert.equal(sends, 0);
+  assert.equal(authorityCalls, 0);
+  assert.equal(hydrateOperation(f.row).state, "SETTLED");
+  assert.equal(f.row.lease_token, null);
+});
+
+test("durable runtime scans confirmed revoked PREPARED, persists terminal and excludes next batch", async () => {
+  const f = fixture();
+  f.row.lease_token = null;
+  f.row.lease_expires_ms = 0;
+  const revocation = {
+    transactionHash: hash,
+    wallet: address,
+    nonce: "0",
+    executor: address,
+    chainId: "560048",
+    state: "CONFIRMED",
+    canonical: true,
+  };
+  f.row.record_json = JSON.stringify({ state: "PREPARED", revocation });
+  let calls = 0;
+  const unused = async () => {
+    calls++;
+    throw Error("UNEXPECTED_ADAPTER");
+  };
+  const runtime = createDurableRuntime({
+    pool: f.pool,
+    kernelOptions: {
+      authorize: unused,
+      observe: unused,
+      execute: unused,
+      verify: unused,
+      mintAuthority: unused,
+      reconcile: unused,
+    },
+    serviceOptions: {
+      ethers,
+      policy: {
+        chainId: "560048",
+        executor: address,
+        collection: address,
+        paymentToken: address,
+      },
+      planFor: unused,
+      observe: unused,
+      inspectRevocation: unused,
+    },
+  });
+  const batch = await runtime.runBatch();
+  assert.equal(batch.outcomes[0].state, "TERMINAL_REJECTED");
+  const stored = hydrateOperation(f.row);
+  assert.equal(stored.reason, "INTENT_REVOKED");
+  assert.deepEqual(stored.revocation, revocation);
+  assert.equal(stored.leaseToken, null);
+  const next = await runtime.runBatch();
+  assert.equal(next.outcomes.length, 0);
+  assert.equal(calls, 0);
+});
+
+test("durable hydration refuses revoked proof identity corruption before worker execution", async () => {
+  for (const change of [
+    { nonce: "1" },
+    { chainId: "1" },
+    { canonical: false },
+    { wallet: "0x" + "cd".repeat(20) },
+  ]) {
+    const f = fixture();
+    f.row.record_json = JSON.stringify({
+      state: "PREPARED",
+      revocation: {
+        transactionHash: hash,
+        wallet: address,
+        nonce: "0",
+        executor: address,
+        chainId: "560048",
+        state: "CONFIRMED",
+        canonical: true,
+        ...change,
+      },
+    });
+    assert.throws(() => hydrateOperation(f.row), /REVOCATION_RECORD_INVALID/);
+  }
+});

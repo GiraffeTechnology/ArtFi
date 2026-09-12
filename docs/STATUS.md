@@ -34,6 +34,24 @@
 
 ## Headline
 
+### Stage 2 integration work (2026-09-09)
+
+`scripts/agent/README.md` records the first deterministic Agent integration slice
+derived from main `631788bfd1a6265f9c48829ce060be042679c009`, under client issue #84
+and the approved delivery recovery plan. Status: `IMPLEMENTED-NOT-VERIFIED`;
+not a `DELIVERY_CANDIDATE`. Kernel, service, durable worker and UI modules exist;
+real DB restart, proof/execution adapters, authenticated runtime, same-commit CI
+and deployed UI acceptance remain unverified. The existing 60-item counts below
+are not promoted by this partial Stage 2 implementation. See
+`scripts/agent/revocation.test.mjs` and `scripts/agent/wiring.test.mjs` for bounded
+contract and SQL-protocol-fake runtime tests, not live DB proof. `pnpm agent:test`
+is included in the quality web job; a remote run is not yet available.
+
+Local integration checks currently include 15 contract tests. New regressions
+cover source-failure-safe reads/revocation and healthy observation-version changes
+with unchanged signed request and duplicate-reservation rejection. These are not
+real database isolation or deployed chain evidence.
+
 **`VERIFIED` 4 / 60.**
 
 | Status                     | Count | Meaning here                                      |

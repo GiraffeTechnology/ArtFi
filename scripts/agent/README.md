@@ -1,0 +1,48 @@
+# Deterministic Agent integration slice
+
+Status: IMPLEMENTED-NOT-VERIFIED. This is not a DELIVERY_CANDIDATE.
+
+Authority: client PRD v2.0, repository issue #84 and the approved 2026-09-08
+delivery recovery plan, especially D1–D4 and the minimum intent/grounding/
+execution/reconciliation/recovery UI. These newer directives supersede the older
+per-trade manual-confirmation wording in PRD §4.2 for bounded Agent execution.
+They do not authorize unbounded spending, custody or mainnet real-value actions.
+Trace: existing PRD §4.2 signed/revocable authority, §4.3 UI and §4.6 recovery.
+
+`runtime.mjs` composes durable SQL storage, kernel, service and scanning worker.
+`agent-console.mjs` mounts the minimum browser view with injected authenticated
+API and user-wallet adapters. No adapter is discovered from environment or guessed.
+An absent adapter fails configuration; fixtures are never used as live fallback.
+The modules do not start a listener or sign a transaction on import.
+
+The kernel persists STARTED before execute and reconciles uncertain submission
+instead of resending. Only exact confirmed canonical revocation proof terminates
+PREPARED; STARTED remains eligible for historical reconciliation. New mint-authority
+preflight is separate from historical recovery. Oracle supplies that interface;
+this change does not replace its proof implementation or introduce named-source
+requirements. The caller supplies trusted `mintAuthority`, `observe`, `authorize`,
+`execute`, `verify` and `reconcile` dependencies; caller JSON is not authority.
+
+Source observation failure cannot erase owned durable identity or disable wallet
+revocation. The view marks stale source data while preserving stored status;
+creation/execution still require their independent fresh checks. STARTED stores
+the newly authorized observation version, not a permanent equality to the creation
+snapshot. This does not replace nonce/reservation enforcement or chain checks.
+
+`durable-store.sql` is an unapplied schema template, not a numbered deployment
+migration. A reviewed exclusive CTYun TEST schema and non-root TLS pool are still
+required. The code expects a mysql2-compatible pool, but installs no driver and
+contains no connection information. No DB or source snapshot is included.
+
+Run `pnpm agent:test` for kernel and durable-runtime contract tests. The existing
+quality web job runs this command. The wiring suite uses an explicit SQL protocol
+fake and a configuration-only crypto stub which throws if signature operations
+are attempted; no sibling checkout or external test dependency is required.
+These tests use a store fake and prove no live DB, real source or remote runtime.
+Prior local EVM/browser tests are diagnostic provenance only, not evidence for
+this integrated commit. Remaining gates include durable DB restart, real proof
+adapter composition, authenticated HTTP/wallet binding, chain executor integration,
+browser runtime, dependency/CI/security review and deployment acceptance.
+
+Initial supported execution is one bounded TEST_ONLY NFT BUY, not every PRD action.
+All other actions remain outstanding; this slice does not redefine final delivery.
