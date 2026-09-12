@@ -65,98 +65,6 @@ is unavailable, the status is recorded — never inferred, substituted or invent
 Sequential. Each gate's exit condition is the next stage's authorization. Clearing a gate requires
 no separate approval cycle beyond the sign-offs named below.
 
-**G0 is the exception: it is continuous and precedes the rest.** It exists because the client
-requires progressive release rather than a single terminal delivery.
-
-### G0 — Gray environment running (continuous, precedes G1)
-
-**Client ruling, 2026-09-07: delivery is progressive, not terminal.** The client will not accept a
-single hand-over at the end and discover there that a large part of it is not what was asked for.
-Requirements are released to a running environment in slices, and the client confirms each slice
-against the running system as it lands.
-
-**The operations requirements move to the front for this reason.** A gray environment cannot exist
-without the means to deploy to it and observe it, so `M6.1` (CI/CD) and `M6.3` (monitoring, log
-aggregation, alerting) are prerequisites of G0 rather than late-stage deliverables. `M6.2`
-(clustering, replica, backup/restore) is not: gray tolerates a single instance.
-
-The gray environment is:
-
-1. a continuously running deployment of the current integrated commit, off-chain components on
-   CTYun and public-chain operation through the approved SIN boundary (`STATUS.md` topology
-   ruling, PR #74);
-2. reached by an automated pipeline from the authoritative branch, not by hand;
-3. monitored, with alerts reaching a **responder that acts** through a real channel — a local
-   fixture does not satisfy this. In gray the responder may be a person; in production it is the
-   operations agent, with a person as escalation (§4.1). **The channel must be built for the
-   production terminal condition from the start**, or it is built twice;
-4. loaded only with test payloads. **Gray is not production.** No mainnet, no real assets and no
-   real money enter it before G3-B and G4, whatever the client has confirmed in gray.
-
-**`GRAY_AVAILABLE` is a slice's client confirmation, not a status value.** The vocabulary in §2
-stays at six values and a requirement's status continues to say only what its evidence supports. A
-slice is `GRAY_AVAILABLE` when it is deployed to the gray environment, exercised there by the
-client, and confirmed by the client as what was wanted. That confirmation is recorded in
-`STATUS.md` with its date and the commit confirmed.
-
-**A gray confirmation is not acceptance and does not promote any item.** It answers "is this what
-I asked for", which no test can answer. `VERIFIED` still requires the evidence in §3, and
-acceptance still requires G1 + G2 + G3-A on one commit.
-
-**Why this gate exists at all.** Before it, the client's only checkpoint was G1 — a comparison
-against static prototype images, at one moment, for surfaces the delivery happened to touch. Every
-other gate is cleared by the delivery side or an auditor. Discovering a requirement mismatch only
-at hand-over was therefore not a risk of the process; it was its design.
-
-### 4.1 Unattended operation (client ruling, 2026-09-07)
-
-**In production ArtFi Market is unattended. Operations and customer service are performed by
-agents, not staff. No control may depend on a human confirming it, wallet operations included.**
-
-Users grant bounded standing authorization for small trades and auction bids — an allowance up to
-a stated ceiling — and expect execution within it without being asked again.
-
-> **Risk is controlled by bounding authority, never by withholding it.** Refusing an action is not
-> a safety property in an unattended system; it is an outage with a security-sounding name. A
-> control that answers "not without approval" has no one to ask at 03:00, so it does not fail
-> closed — it fails silent.
-
-Every control in this system is therefore one of two kinds, and only the second is permitted on a
-production path:
-
-|                    | Refusal control                                | Bounded control                                 |
-| ------------------ | ---------------------------------------------- | ----------------------------------------------- |
-| Answers            | "not without approval"                         | "yes, up to N, at rate R, reversibly, recorded" |
-| Unattended outcome | halts and waits for nobody                     | degrades and keeps serving                      |
-| Where allowed      | deployment and build time, operated by a human | production runtime                              |
-
-`sepolia-preflight.sh`, `require-sin-public-chain.sh` and the deployment guards are refusal
-controls and stay as they are: a human runs them, and a human is present to answer.
-
-**This ruling does not weaken the intermediary invariant — it depends on it.** Because ArtFi never
-holds authority to move a user's assets (`PRD.md` §4.2), an automated ArtFi that is fully
-compromised still cannot take anything: it can only submit settlements already carrying both
-parties' signatures, bounded by each intent's authorized maximum and revocable on-chain. **The
-invariant is what makes unattended operation safe enough to be possible**, and the signed-intent
-model already expresses the client's bounded allowance — an intent authorizes up to a stated
-maximum and nothing else.
-
-Two consequences for the gates:
-
-1. **`human-review` is not a terminal state on a production path.** A control whose safe default is
-   to wait for a person has, in production, no default at all. Where an agent cannot decide, the
-   system takes the bounded conservative action and escalates in parallel — it does not stop and
-   hold.
-2. **G2's negative tests keep their full force.** Rejecting an unsigned settlement, an over-consumed
-   intent, or a revoked intent is not refusal control — those actions were never authorized, so
-   there is no authority to bound. Refusal control means withholding an action the user _did_
-   authorize, pending someone's approval.
-
-Whether **administrative** powers — role grants, pause, upgrade — also become unattended is a
-separate decision, recorded at `STATUS.md` open item 13. They are rare, high-blast-radius, and
-governed by `ArtFiAdminSafe`'s threshold and timelock, which are human confirmation by
-construction.
-
 ### G1 — Prototype parity preserved (continuous)
 
 Class A surfaces (`PRD.md` §2.1) still work. Regression suite green. Desktop and mobile
@@ -292,17 +200,9 @@ ArtFi is delivered when all of the following hold:
    HTTP 200 is insufficient.
 9. **System stable for 48 continuous hours** with monitoring and alerting active.
 10. Operator documentation and runbooks handed over.
-11. Every Class B and Class C requirement confirmed by the client in the gray environment (G0),
-    each confirmation naming its date and commit. A requirement the client has never exercised on
-    a running system is not delivered, however green its tests are.
 
 Items 7–9 are the delivery terminus (Gantt P5). A delivery that stops at testnet has completed
 G2, not the project. G3-B runs immediately before item 7 and gates it.
-
-Item 11 is deliberately the client's own obligation as much as the delivery side's. Progressive
-release only removes late-discovery risk if the client actually exercises each slice when it
-lands; confirmations that are all deferred to the end reproduce the single hand-over the client
-ruled against, with extra steps.
 
 ### 6.1 Measuring progress
 
