@@ -562,6 +562,7 @@ export function createDurableStore({
         "reason",
         "mintAuthority",
         "reservedValue",
+        "observedAggregateExposure",
       ]);
       if (
         !id(operationId) ||
@@ -627,6 +628,7 @@ export function createDurableStore({
             !id(patch.authorityVersion) ||
             !digest(patch.intentDigest) ||
             !uint(patch.reservedValue) ||
+            !uint(patch.observedAggregateExposure) ||
             BigInt(patch.reservedValue) === 0n ||
             patch.reservedValue !== row.request.sale.price
           )
@@ -651,8 +653,13 @@ export function createDurableStore({
               !uint(String(exposures[0].reserved_value))
             )
               fail("EXPOSURE_RECORD_INVALID");
-            const nextExposure =
-              BigInt(exposures[0].reserved_value) + BigInt(patch.reservedValue);
+            const storedExposure = BigInt(exposures[0].reserved_value),
+              observedExposure = BigInt(patch.observedAggregateExposure),
+              exposureBaseline =
+                storedExposure > observedExposure
+                  ? storedExposure
+                  : observedExposure,
+              nextExposure = exposureBaseline + BigInt(patch.reservedValue);
             if (nextExposure > BigInt(row.request.intent.maxAggregateExposure))
               fail("EXPOSURE_EXCEEDED");
             await c.execute(

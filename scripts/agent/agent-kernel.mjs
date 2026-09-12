@@ -273,6 +273,7 @@ export function createAgentKernel({
           intentDigest: decision.intentDigest,
           authorityVersion: decision.stateVersion,
           reservedValue: decision.value,
+          observedAggregateExposure: decision.observedAggregateExposure,
           recoveryAttempts: 0,
         });
         checkLease(record);

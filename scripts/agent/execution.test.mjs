@@ -62,6 +62,7 @@ function fixture({
       intentDigest: "test-digest",
       stateVersion: "v1",
       value: "10",
+      observedAggregateExposure: "0",
     }),
     execute: async () => {
       assert.equal(row.state, "STARTED");

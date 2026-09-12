@@ -229,6 +229,7 @@ export function createIntentAuthorizer({ ethers, policy, readState, clock }) {
       stateVersion: state.version,
       assetScope: asset,
       value: value.toString(),
+      observedAggregateExposure: uint(state.aggregateExposure).toString(),
       executionRequired: "ATOMIC_RESERVATION_AND_CHAIN_ENFORCEMENT",
       testOnly: true,
     });

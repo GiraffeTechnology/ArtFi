@@ -192,6 +192,7 @@ test("healthy reauthorization at a new observation version can reserve without r
       authorityVersion: "v2",
       intentDigest: hash,
       reservedValue: "10",
+      observedAggregateExposure: "0",
     },
     "lease-1",
   );
@@ -216,6 +217,7 @@ test("new observation version never bypasses reservation uniqueness or malformed
         authorityVersion: "v2",
         intentDigest: hash,
         reservedValue: "10",
+        observedAggregateExposure: "0",
       },
       "lease-1",
     ),
@@ -231,6 +233,7 @@ test("new observation version never bypasses reservation uniqueness or malformed
           authorityVersion: version,
           intentDigest: hash,
           reservedValue: "10",
+          observedAggregateExposure: "0",
         },
         "lease-1",
       ),
@@ -238,8 +241,8 @@ test("new observation version never bypasses reservation uniqueness or malformed
     );
   assert.equal(hydrateOperation(f.row).state, "PREPARED");
 });
-test("wallet aggregate exposure is atomically refused before STARTED", async () => {
-  const f = fixture("PREPARED", false, "95"),
+test("observed and already-reserved wallet exposure are atomically refused before STARTED", async () => {
+  const f = fixture("PREPARED", false, "0"),
     store = createDurableStore({
       mode: "TEST_ONLY_NO_REAL_VALUE",
       pool: f.pool,
@@ -253,6 +256,7 @@ test("wallet aggregate exposure is atomically refused before STARTED", async () 
         authorityVersion: "v2",
         intentDigest: hash,
         reservedValue: "10",
+        observedAggregateExposure: "95",
       },
       "lease-1",
     ),
