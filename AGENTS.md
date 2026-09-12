@@ -37,11 +37,12 @@ Use the following authority order. Lower levels may explain or record higher lev
 | --- | --- | --- |
 | 1 | **Issue #84** | Sole product baseline: what ArtFi is and what must be built |
 | 2 | **Explicit later client rulings** | Authorized amendments or decisions; must identify the client ruling and must not be invented by an agent |
-| 3 | **Issue #85** | Information boundary and placeholder policy where applicable |
-| 4 | `AGENTS.md` | Execution and agent-control rules |
-| 5 | `docs/ACCEPTANCE.md` | Evidence and promotion process only |
-| 6 | `docs/STATUS.md` | Evidence snapshot only; it records state and creates no requirement |
-| 7 | legacy PRDs, roadmaps, directives, issues, comments, and commit messages | Historical/reference material only unless #84 or an explicit client ruling incorporates a specific provision |
+| 3 | `AGENTS.md` | Execution and agent-control rules |
+| 4 | `docs/ACCEPTANCE.md` | Evidence and promotion process only |
+| 5 | `docs/STATUS.md` | Evidence snapshot only; it records state and creates no requirement |
+| 6 | legacy PRDs, roadmaps, directives, issues, comments, and commit messages | Historical/reference material only unless #84 or an explicit client ruling incorporates a specific provision |
+
+**No issue number other than #84 is automatically governing merely because an older document or comment calls it governing.** Temporary cleanup issues, audit issues, and historical PM issues are execution records only.
 
 `docs/PRD.md` is **not an independent authority**. #84 preserves the required Stage 1 substrate; legacy Stage 1 detail may be used only to the extent that it is incorporated by #84 and does not conflict with #84 or a later client ruling.
 
@@ -148,7 +149,7 @@ No audit, review, refactor, architecture exercise, or governance activity may in
 - The current test chain is Hoodi `560048`; it does not determine the production chain.
 - Historical mint evidence must remain immutable.
 - Test assets must remain clearly isolated from production/real-asset records.
-- External partner names in governing product material follow #84/#85 placeholder rules.
+- External partner identities in governing product material must use the neutral placeholder policy already stated in #84.
 - LLM output is advisory; transaction authority must come from deterministic policy and valid authority as defined by #84.
 - An operational agent must never infer higher authority from lower authority.
 
