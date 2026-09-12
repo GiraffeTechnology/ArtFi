@@ -195,3 +195,33 @@ Before declaring a stage or cleanup batch complete, confirm:
 - any unresolved question is clearly marked non-governing and non-blocking unless the client explicitly ruled otherwise.
 
 **Primary operating principle: deliver bounded working stages; do not turn ArtFi into an endless governance project.**
+
+
+## Stage-Based Delivery Rule
+
+Agents must work on the current stage only.
+
+Agents MUST NOT:
+
+- move future-stage requirements into current acceptance;
+- create additional gates;
+- redefine protocol semantics;
+- expand PRD scope.
+
+Agents MUST:
+
+- implement;
+- test;
+- provide evidence;
+- freeze completed stages.
+
+Preserve existing code.
+
+Classification:
+
+- KEEP
+- FINISH-NOW
+- FREEZE-LATER
+- REMOVE
+
+The client-approved [ArtFi + Oracle Delivery Stage Framework v1.1](https://github.com/GiraffeTechnology/ArtFi/issues/100) separates stage acceptance without lowering engineering standards or expanding product scope. Each stage has independent acceptance. Future-stage capabilities MUST NOT block current-stage delivery.
