@@ -2,12 +2,10 @@
 
 Status: IMPLEMENTED-NOT-VERIFIED. This is not a DELIVERY_CANDIDATE.
 
-Authority: client PRD v2.0, repository issue #84 and the approved 2026-09-08
-delivery recovery plan, especially D1–D4 and the minimum intent/grounding/
-execution/reconciliation/recovery UI. These newer directives supersede the older
-per-trade manual-confirmation wording in PRD §4.2 for bounded Agent execution.
-They do not authorize unbounded spending, custody or mainnet real-value actions.
-Trace: existing PRD §4.2 signed/revocable authority, §4.3 UI and §4.6 recovery.
+Authority: repository issue #84 §§9–18 and §§32–34. The slice implements a
+minimum observation, signed-intent, deterministic-policy, execution, verification,
+reconciliation and recovery path. It does not authorize unbounded spending,
+custody, mainnet, real assets or stored user keys.
 
 `runtime.mjs` composes durable SQL storage, kernel, service and scanning worker.
 `agent-console.mjs` mounts the minimum browser view with injected authenticated
