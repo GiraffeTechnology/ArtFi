@@ -30,7 +30,9 @@
     "charity-edition:ye-yongrun:verify": "node scripts/release/verify-ye-yongrun-public-metadata.mjs",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @giraffetechnology/artfi-web test:e2e",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "hoodi-admin-safe:verify-schema": "node scripts/release/verify-hoodi-admin-safe-deployment.mjs release/hoodi-admin-safe-deployment.example.json",
+    "hoodi-admin-safe:verifier:test": "node scripts/test/verify-hoodi-admin-safe-deployment.mjs"
   },
   "devDependencies": {
     "prettier": "3.9.6",
