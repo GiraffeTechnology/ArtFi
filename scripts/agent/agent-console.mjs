@@ -37,6 +37,18 @@ const operationStates = new Set([
 const stable = (code) => {
   throw new Error(code);
 };
+export function canRequestRevocation(record) {
+  return record?.revocation?.state === "NOT_REQUESTED";
+}
+export function validateRevocationResult(result, operationId) {
+  if (
+    !result ||
+    result.id !== operationId ||
+    !["PENDING", "CONFIRMED"].includes(result.state)
+  )
+    stable("REVOCATION_RESULT_INVALID");
+  return result.state;
+}
 export function validateDraft(draft) {
   if (
     !draft ||
@@ -215,8 +227,7 @@ export function mountAgentConsole(
     for (const input of Object.values(inputs)) input.disabled = busy || !ready;
     for (const b of [prepare, refresh]) b.disabled = busy || !ready;
     signButton.disabled = busy || !ready || !draft;
-    revoke.disabled =
-      busy || !ready || !current || current.revocation.state === "CONFIRMED";
+    revoke.disabled = busy || !ready || !canRequestRevocation(current);
     selected.disabled = busy;
   }
   function resetObservation() {
@@ -424,11 +435,17 @@ export function mountAgentConsole(
       if (disposed) return;
       if (!/^0x[0-9a-fA-F]{64}$/.test(result?.transactionHash ?? ""))
         stable("REVOCATION_SUBMISSION_INVALID");
-      await methods.recordRevocation(snapshot.id, result.transactionHash);
+      const recordedState = validateRevocationResult(
+        await methods.recordRevocation(snapshot.id, result.transactionHash),
+        snapshot.id,
+      );
       if (disposed) return;
-      current = null;
-      values.revocation.textContent = "PENDING";
-      notice.textContent = "撤销已提交，尚未确认；请刷新核对链上结果。";
+      await load(snapshot.id);
+      if (disposed) return;
+      notice.textContent =
+        recordedState === "CONFIRMED"
+          ? "撤销已由服务端核验为链上确认。"
+          : "撤销已提交，尚未确认；请刷新核对链上结果。";
     });
   });
   for (const input of Object.values(inputs))
