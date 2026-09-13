@@ -72,7 +72,8 @@ export function createAgentKernel({
   if (
     !Number.isSafeInteger(store.leaseDurationMs) ||
     !Number.isSafeInteger(store.operationTimeoutMs) ||
-    store.leaseDurationMs < adapterTimeoutMs + store.operationTimeoutMs + 1000
+    store.leaseDurationMs <
+      adapterTimeoutMs + 2 * store.operationTimeoutMs + 1000
   )
     throw new Error("KERNEL_LEASE_BUDGET_INVALID");
   async function bounded(stage, call) {

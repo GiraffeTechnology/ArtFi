@@ -120,7 +120,7 @@ test("lease renewal failure before authorization forbids executor dispatch", asy
   assert.equal(f.stats().sends, 0);
   assert.deepEqual(f.stats().transitions, []);
 });
-test("kernel rejects a lease shorter than one adapter plus durable-save budget", () => {
+test("kernel rejects a lease shorter than renewal, adapter and durable-save budgets", () => {
   const unused = async () => {};
   assert.throws(
     () =>
@@ -128,7 +128,9 @@ test("kernel rejects a lease shorter than one adapter plus durable-save budget",
         mode: "TEST_ONLY_NO_REAL_VALUE",
         adapterTimeoutMs: 5000,
         store: {
-          leaseDurationMs: 6000,
+          // The previous one-save formula accepted 7s. Renewal can consume one
+          // operation budget before the adapter and the following durable save.
+          leaseDurationMs: 7000,
           operationTimeoutMs: 1000,
           claim: unused,
           renew: unused,

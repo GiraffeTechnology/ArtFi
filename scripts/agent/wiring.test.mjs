@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 // This suite tests store/runtime composition, never cryptography. No external
 // crypto package or sibling checkout is needed; signature operations must fail.
 const ethers = new Proxy(
@@ -38,6 +39,20 @@ import { kernelRequestDigest } from "./agent-kernel.mjs";
 import { createDurableRuntime } from "./runtime.mjs";
 const address = "0x" + "ab".repeat(20),
   hash = "0x" + "12".repeat(32);
+
+test("TEST_ONLY schema uses a MySQL-compatible uint256 decimal encoding", () => {
+  const schema = readFileSync(
+    new URL("./durable-store.sql", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(schema, /DECIMAL\s*\(\s*78\s*,/i);
+  assert.equal(
+    schema.match(
+      /reserved_value VARCHAR\(78\) CHARACTER SET ascii COLLATE ascii_bin NOT NULL/g,
+    )?.length,
+    2,
+  );
+});
 const servicePolicy = Object.freeze({
   chainId: "560048",
   executor: address,

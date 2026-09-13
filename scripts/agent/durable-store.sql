@@ -15,7 +15,9 @@ CREATE TABLE agent_slice_operations (
 -- UNKNOWN. A later reviewed accounting stage may define narrower release rules.
 CREATE TABLE agent_slice_wallet_exposure (
   exposure_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
-  reserved_value DECIMAL(78, 0) UNSIGNED NOT NULL
+  -- MySQL DECIMAL precision is capped at 65 digits. The application validates
+  -- this canonical decimal string as uint256 before every write and after read.
+  reserved_value VARCHAR(78) CHARACTER SET ascii COLLATE ascii_bin NOT NULL
 ) ENGINE=InnoDB;
 
 -- Reservations never disappear on an UNKNOWN outcome or expired process lease.
@@ -27,7 +29,7 @@ CREATE TABLE agent_slice_reservations (
   exposure_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   operation_id VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
   intent_digest CHAR(66) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-  reserved_value DECIMAL(78, 0) UNSIGNED NOT NULL,
+  reserved_value VARCHAR(78) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   CONSTRAINT fk_agent_slice_reservation_operation FOREIGN KEY (operation_id)
     REFERENCES agent_slice_operations(operation_id),
   CONSTRAINT fk_agent_slice_reservation_exposure FOREIGN KEY (exposure_key)
