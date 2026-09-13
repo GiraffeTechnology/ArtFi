@@ -199,6 +199,8 @@ Before declaring a stage or cleanup batch complete, confirm:
 
 ## Stage-Based Delivery Rule
 
+Current stage: **Stage 1 — Demonstrable Capability**, as approved by the client in [#100](https://github.com/GiraffeTechnology/ArtFi/issues/100). ArtFi's bounded scope is cultural asset application delivery: artist management, artwork management, exhibition workflow, marketplace workflow, verified asset presentation, and the Oracle integration boundary. Token economics, secondary market infrastructure, and advanced RWA mechanisms do not block this stage. Preserve useful later-stage code without adding it to current-stage acceptance.
+
 Agents must work on the current stage only.
 
 Agents MUST NOT:
