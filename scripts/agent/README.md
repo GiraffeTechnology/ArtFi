@@ -63,16 +63,16 @@ or silently fall back to an application-held signer. This repository slice does
 not install or activate that production dependency.
 
 `operations-dependency.contract.json` records the exact non-secret handoff that
-is currently available. Its role is limited to read-only operations health input:
+is currently available. The client ruled that the wallet+DAO Operations Agent is
+a production dependency; the fields below are implementation observations, not
+new product requirements or acceptance gates. The current artifact's role is
+limited to read-only operations health input:
 it has no execute, reconcile, revoke, signing, RPC or broadcast capability. The
-contract deliberately remains `productionReady: false` while its independent
-integrity object, complete health projection, managed database probe, installation,
-injection, rollback, alerting, recovery and soak gates are absent. Treating the
-handoff as a required production dependency does not promote an artifact-only,
-non-callable input into a ready Operations Agent. Even after those health-input
-gates pass, this role cannot self-promote: the complete Operations Agent requires
-a separate exact capability contract covering the autonomous responsibilities in
-issue #84 sections 30 and 36.
+contract deliberately remains `productionReady: false`. Integrity, projection,
+database, installation, rollback, alerting, recovery and soak fields describe
+currently unverified implementation evidence only. They do not amend issue #84 or
+independently block a bounded stage. This read-only artifact does not implement
+the autonomous responsibilities described by issue #84 sections 30 and 36.
 
 The separately frozen `ArtFiLinkOps` r3 package is audit-only provenance, not
 an executable dependency contract: archive
@@ -83,10 +83,10 @@ integrity
 `EB04584630464CDE28BF3FF6B5D5C4A91245C595C7AA34135BD90C73AED1C827`
 and test results
 `729F22E3B60BDDFE2DEC82CAAA142977F9AB4F77F41D3F7C6EA430EE7EADF825`.
-Producer-side tests passed 23/23 locally and 23/23 on ABCDYI. Independent
-audit, protected execution authority, alert/repair helper acceptance, actual
-installation/upgrade/rollback, recovery evidence and soak remain absent, so
-r3 is not imported into this machine contract and cannot enable execution.
+The producer reported 23/23 local and 23/23 ABCDYI tests, but this repository
+contains no durable run or artifact that independently reproduces those counts.
+Treat them as unverified external provenance, not current delivery evidence. r3
+is not imported into this machine contract and cannot enable execution.
 
 Initial supported execution is one bounded TEST_ONLY NFT BUY, not every PRD action.
 All other actions remain outstanding; this slice does not redefine final delivery.

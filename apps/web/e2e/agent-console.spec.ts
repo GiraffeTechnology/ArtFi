@@ -14,7 +14,13 @@ const intentSource = readFileSync(
 
 interface AgentHarnessWindow extends Window {
   __agentHarness: {
-    calls: { create: number; get: number; revoke: number; sign: number };
+    calls: {
+      create: number;
+      get: number;
+      revoke: number;
+      sign: number;
+      walletRevoke: number;
+    };
     current: {
       execution: { state: string; transactionHash?: string };
       fresh: boolean;
@@ -90,7 +96,14 @@ test("TEST_ONLY Agent console exposes safe lifecycle and restart recovery", asyn
           revocationRef: digest("8"),
         },
       };
-      const calls = { create: 0, get: 0, revoke: 0, sign: 0 };
+      const calls = {
+        create: 0,
+        get: 0,
+        revoke: 0,
+        sign: 0,
+        walletRevoke: 0,
+      };
+      let recordFailures = 1;
       const current = {
         ...structuredClone(draft),
         id: draft.operationId,
@@ -134,8 +147,12 @@ test("TEST_ONLY Agent console exposes safe lifecycle and restart recovery", asyn
           calls.get += 1;
           return structuredClone(current);
         },
-        async recordRevocation(id: string) {
+        async recordRevocation(id: string, transactionHash: string) {
           calls.revoke += 1;
+          if (transactionHash !== digest("b").toLowerCase())
+            throw new Error("REVOCATION_HASH_NOT_CANONICAL");
+          if (recordFailures-- > 0)
+            throw new Error("RECORD_TEMPORARILY_UNAVAILABLE");
           current.revocation.state = "PENDING";
           return { id, state: "PENDING" };
         },
@@ -146,12 +163,30 @@ test("TEST_ONLY Agent console exposes safe lifecycle and restart recovery", asyn
           return `0x${"11".repeat(65)}`;
         },
         async revokeNonce() {
-          return { transactionHash: digest("b") };
+          calls.walletRevoke += 1;
+          return { transactionHash: `0x${"bB".repeat(32)}` };
         },
       };
       const root = document.querySelector<HTMLElement>("#agent-console");
       if (!root) throw new Error("TEST_ROOT_MISSING");
-      const adapters = { api, wallet, maxObservationAgeMs: 30_000 };
+      const revocationEntries = new Map<string, string>();
+      const revocationStorage = {
+        getItem(key: string) {
+          return revocationEntries.get(key) ?? null;
+        },
+        setItem(key: string, value: string) {
+          revocationEntries.set(key, value);
+        },
+        removeItem(key: string) {
+          revocationEntries.delete(key);
+        },
+      };
+      const adapters = {
+        api,
+        wallet,
+        maxObservationAgeMs: 30_000,
+        revocationStorage,
+      };
       let controller = mountAgentConsole(root, adapters);
       const harness = {
         calls,
@@ -195,6 +230,18 @@ test("TEST_ONLY Agent console exposes safe lifecycle and restart recovery", asyn
   ).toBeEnabled();
 
   await page.getByRole("button", { name: "通过钱包撤销 nonce" }).click();
+  await expect(page.getByRole("status")).toHaveText(
+    "RECORD_TEMPORARILY_UNAVAILABLE",
+  );
+  await page.evaluate(() => {
+    (window as unknown as AgentHarnessWindow).__agentHarness.remount();
+  });
+  await page.getByLabel("Intent / operation ID").fill("test-only-buy-1");
+  await page.getByRole("button", { name: "读取最新状态" }).click();
+  await expect(
+    page.getByRole("button", { name: "重试记录已提交撤销" }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "重试记录已提交撤销" }).click();
   await expect(
     page.locator("dt", { hasText: "撤销" }).locator("+ dd"),
   ).toHaveText("PENDING");
@@ -241,7 +288,13 @@ test("TEST_ONLY Agent console exposes safe lifecycle and restart recovery", asyn
   const calls = await page.evaluate(
     () => (window as unknown as AgentHarnessWindow).__agentHarness.calls,
   );
-  expect(calls).toEqual({ create: 1, get: 4, revoke: 1, sign: 1 });
+  expect(calls).toEqual({
+    create: 1,
+    get: 5,
+    revoke: 2,
+    sign: 1,
+    walletRevoke: 1,
+  });
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(
     accessibility.violations.filter((violation) =>

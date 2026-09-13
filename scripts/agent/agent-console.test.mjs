@@ -2,8 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   canRequestRevocation,
+  normalizeRevocationHash,
   validateRevocationResult,
 } from "./agent-console.mjs";
+
+test("revocation hashes use one canonical boundary", () => {
+  assert.equal(
+    normalizeRevocationHash(`0x${"aB".repeat(32)}`),
+    `0x${"ab".repeat(32)}`,
+  );
+  for (const value of [undefined, "0x12", `0x${"gg".repeat(32)}`])
+    assert.throws(
+      () => normalizeRevocationHash(value),
+      /REVOCATION_SUBMISSION_INVALID/,
+    );
+});
 
 test("revocation control permits exactly the not-requested durable state", () => {
   assert.equal(canRequestRevocation(), false);

@@ -195,15 +195,20 @@ export function createAgentService({
     return row;
   }
   async function revocationProof(row, transactionHash) {
-    if (!/^0x[0-9a-f]{64}$/.test(transactionHash))
+    if (
+      typeof transactionHash !== "string" ||
+      !/^0x[0-9a-fA-F]{64}$/.test(transactionHash)
+    )
       fail("REVOCATION_HASH_INVALID");
+    const normalizedHash = transactionHash.toLowerCase();
     const proof = structuredClone(
-      await inspectRevocation(structuredClone(row.request), transactionHash),
+      await inspectRevocation(structuredClone(row.request), normalizedHash),
     );
     const request = row.request;
     if (
       !proof ||
-      proof.transactionHash !== transactionHash ||
+      !/^0x[0-9a-fA-F]{64}$/.test(proof.transactionHash ?? "") ||
+      proof.transactionHash.toLowerCase() !== normalizedHash ||
       !same(proof.wallet, request.intent.wallet) ||
       proof.nonce !== request.intent.nonce ||
       !same(proof.executor, fixed.executor) ||
@@ -212,7 +217,7 @@ export function createAgentService({
       (proof.state === "CONFIRMED" && proof.canonical !== true)
     )
       fail("REVOCATION_EVIDENCE_UNPROVEN");
-    return proof;
+    return { ...proof, transactionHash: normalizedHash };
   }
   return Object.freeze({
     async prepareIntent(session, input) {

@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createAgentService } from "./agent-service.mjs";
 const address = "0x" + "ab".repeat(20),
-  hash = "0x" + "12".repeat(32);
+  hash = "0x" + "12".repeat(32),
+  mixedCaseRevocationHash = "0x" + "aB".repeat(32);
 const ethers = {
   ZeroAddress: "0x" + "00".repeat(20),
   ZeroHash: "0x" + "00".repeat(32),
@@ -72,10 +73,11 @@ test("source throw/unavailable/stale preserves owned durable read and independen
           return row;
         },
       },
-      inspectRevocation: async () => {
+      inspectRevocation: async (_request, transactionHash) => {
         proofs++;
+        assert.equal(transactionHash, mixedCaseRevocationHash.toLowerCase());
         return {
-          transactionHash: hash,
+          transactionHash: mixedCaseRevocationHash,
           wallet: address,
           nonce: "1",
           executor: address,
@@ -101,8 +103,13 @@ test("source throw/unavailable/stale preserves owned durable read and independen
     assert.equal(before.fresh, false);
     assert.equal(before.execution.state, "PREPARED");
     assert.equal(
-      (await service.recordRevocation(session, "test", hash)).state,
+      (await service.recordRevocation(session, "test", mixedCaseRevocationHash))
+        .state,
       "CONFIRMED",
+    );
+    assert.equal(
+      row.revocation.transactionHash,
+      mixedCaseRevocationHash.toLowerCase(),
     );
     assert.equal(
       (await service.getIntent(session, "test")).revocation.state,

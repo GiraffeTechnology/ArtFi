@@ -40,6 +40,11 @@ const stable = (code) => {
 export function canRequestRevocation(record) {
   return record?.revocation?.state === "NOT_REQUESTED";
 }
+export function normalizeRevocationHash(value) {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(value))
+    stable("REVOCATION_SUBMISSION_INVALID");
+  return value.toLowerCase();
+}
 export function validateRevocationResult(result, operationId) {
   if (
     !result ||
@@ -97,7 +102,13 @@ export function validateDraft(draft) {
 
 export function mountAgentConsole(
   root,
-  { api, wallet, clock = Date.now, maxObservationAgeMs = 30000 },
+  {
+    api,
+    wallet,
+    clock = Date.now,
+    maxObservationAgeMs = 30000,
+    revocationStorage,
+  },
 ) {
   if (
     typeof clock !== "function" ||
@@ -107,6 +118,12 @@ export function mountAgentConsole(
   )
     stable("UI_FRESHNESS_POLICY_INVALID");
   const d = root.ownerDocument;
+  if (revocationStorage === undefined)
+    try {
+      revocationStorage = d.defaultView?.sessionStorage;
+    } catch {
+      revocationStorage = null;
+    }
   const el = (tag, text, attributes = {}) => {
     const n = d.createElement(tag);
     if (text !== undefined) n.textContent = text;
@@ -205,8 +222,62 @@ export function mountAgentConsole(
   root.append(loadSection);
   let draft = null,
     current = null,
+    pendingRevocation = null,
     busy = false,
     disposed = false;
+  const journal =
+    revocationStorage &&
+    ["getItem", "setItem", "removeItem"].every(
+      (name) => typeof revocationStorage[name] === "function",
+    )
+      ? revocationStorage
+      : null;
+  const journalKey = (operationId) =>
+    `artfi-agent:pending-revocation:${operationId}`;
+  function readPendingRevocation(operationId) {
+    if (!journal) return null;
+    try {
+      const stored = journal.getItem(journalKey(operationId));
+      return stored === null
+        ? null
+        : { operationId, transactionHash: normalizeRevocationHash(stored) };
+    } catch {
+      stable("REVOCATION_JOURNAL_UNAVAILABLE");
+    }
+  }
+  function writePendingRevocation(operationId, transactionHash) {
+    if (!journal) stable("REVOCATION_JOURNAL_UNAVAILABLE");
+    const key = journalKey(operationId),
+      normalized = normalizeRevocationHash(transactionHash);
+    try {
+      journal.setItem(key, normalized);
+      if (journal.getItem(key) !== normalized)
+        stable("REVOCATION_JOURNAL_UNAVAILABLE");
+    } catch {
+      stable("REVOCATION_JOURNAL_UNAVAILABLE");
+    }
+    return { operationId, transactionHash: normalized };
+  }
+  function clearPendingRevocation(operationId) {
+    if (!journal) return;
+    try {
+      journal.removeItem(journalKey(operationId));
+    } catch {
+      stable("REVOCATION_JOURNAL_UNAVAILABLE");
+    }
+  }
+  function proveJournalWritable(operationId) {
+    if (!journal) stable("REVOCATION_JOURNAL_UNAVAILABLE");
+    const key = `${journalKey(operationId)}:probe`;
+    try {
+      journal.setItem(key, "1");
+      if (journal.getItem(key) !== "1")
+        stable("REVOCATION_JOURNAL_UNAVAILABLE");
+      journal.removeItem(key);
+    } catch {
+      stable("REVOCATION_JOURNAL_UNAVAILABLE");
+    }
+  }
   const ready =
     api &&
     wallet &&
@@ -227,7 +298,12 @@ export function mountAgentConsole(
     for (const input of Object.values(inputs)) input.disabled = busy || !ready;
     for (const b of [prepare, refresh]) b.disabled = busy || !ready;
     signButton.disabled = busy || !ready || !draft;
-    revoke.disabled = busy || !ready || !canRequestRevocation(current);
+    revoke.textContent =
+      pendingRevocation?.operationId === current?.id
+        ? "重试记录已提交撤销"
+        : "通过钱包撤销 nonce";
+    revoke.disabled =
+      busy || !ready || !journal || !canRequestRevocation(current);
     selected.disabled = busy;
   }
   function resetObservation() {
@@ -296,6 +372,12 @@ export function mountAgentConsole(
     )
       record.execution.state = "UNKNOWN";
     current = structuredClone(record);
+    if (record.revocation.state === "NOT_REQUESTED")
+      pendingRevocation = readPendingRevocation(record.id);
+    else {
+      clearPendingRevocation(record.id);
+      pendingRevocation = null;
+    }
     values.identity.textContent = `${record.asset.chainId} / ${record.asset.contract} / ${record.asset.tokenId}`;
     values.grounding.textContent = record.fresh
       ? record.grounding.state
@@ -425,20 +507,32 @@ export function mountAgentConsole(
       if (!current || current.id !== selected.value.trim())
         stable("REVOCATION_CONTEXT_CHANGED");
       const snapshot = structuredClone(current);
-      const result = await revokeNonce({
-        id: snapshot.id,
-        wallet: snapshot.intent.wallet,
-        nonce: snapshot.intent.nonce,
-        executor: snapshot.executor,
-        chainId: "560048",
-      });
+      let transactionHash =
+        pendingRevocation?.operationId === snapshot.id
+          ? pendingRevocation.transactionHash
+          : null;
+      if (!transactionHash) {
+        proveJournalWritable(snapshot.id);
+        const result = await revokeNonce({
+          id: snapshot.id,
+          wallet: snapshot.intent.wallet,
+          nonce: snapshot.intent.nonce,
+          executor: snapshot.executor,
+          chainId: "560048",
+        });
+        transactionHash = normalizeRevocationHash(result?.transactionHash);
+        pendingRevocation = writePendingRevocation(
+          snapshot.id,
+          transactionHash,
+        );
+      }
       if (disposed) return;
-      if (!/^0x[0-9a-fA-F]{64}$/.test(result?.transactionHash ?? ""))
-        stable("REVOCATION_SUBMISSION_INVALID");
       const recordedState = validateRevocationResult(
-        await methods.recordRevocation(snapshot.id, result.transactionHash),
+        await methods.recordRevocation(snapshot.id, transactionHash),
         snapshot.id,
       );
+      clearPendingRevocation(snapshot.id);
+      pendingRevocation = null;
       if (disposed) return;
       await load(snapshot.id);
       if (disposed) return;
