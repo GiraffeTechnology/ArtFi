@@ -5,7 +5,7 @@ Status: Draft for approval
 Repository: `GiraffeTechnology/ArtFi`
 Supersedes: `PRD_AND_DELIVERY_STANDARD.md`
 Amended by: `DIRECTIVE_2026-08-24_HOODI.md` (test chain), `DIRECTIVE_2026-08-30_DELIVERY.md` §1.2.1
-(Hoodi test payload)
+(Hoodi test payload), `DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md` (§1 product definition)
 
 ---
 
@@ -19,10 +19,9 @@ This PRD defines **what is built**. It is one of three documents; do not merge t
 | `ACCEPTANCE.md` | What proves it exists and how it is promoted | Process change          |
 | `STATUS.md`     | Where each item stands right now             | Every delivery commit   |
 
-Scope authority is the signed quotation (450 person-days / USD 155,000, six modules).
-Functional authority is the inherited prototype documentation
-(`任务清单含mvp已完成及Dao_钱包技术实施方案及清单.pdf`, 155 pp.).
-Schedule authority is `项目甘特图.pdf`.
+Scope authority is the signed quotation (six modules). Its commercial terms are held outside this
+repository and are not reproduced here; progress is counted in items, never in effort
+(`ACCEPTANCE.md` §6.1). Functional authority is the inherited prototype documentation.
 Where these conflict, the latest explicit written requirement from the client controls, and the
 conflict is recorded — never silently resolved.
 
@@ -30,9 +29,56 @@ conflict is recorded — never silently resolved.
 
 ## 1. Product definition
 
-ArtCCH:ArtFi is a Real-World-Asset (RWA) platform that takes a physical or high-value digital
-asset, mints it as an ERC-721, locks it in a vault, issues ERC-20 fractions against it, and lets
-holders trade those fractions and govern the underlying asset through a DAO.
+Amended by `DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md`.
+
+ArtCCH:ArtFi is a commercial digital art and Real-World-Asset (RWA) platform. **It is a commercial
+application, not a demo**, and it must not be treated as an ERC-8415 demo application.
+
+It supports three product lines:
+
+1. **ERC-8415 based asset products**
+2. **Artwork investment products**
+3. **Charity NFT editions**
+
+### 1.0.1 Asset models
+
+**A — Full artwork asset receipt.** Individual artwork ownership representation and transfer.
+
+```text
+Artwork → Custody → Registry → ERC-8415 asset representation → Market transfer
+```
+
+A token may represent one specific artwork custody certificate.
+
+**B — Artwork investment fund.** An asset-specific investment product.
+
+```text
+Artwork → Single-asset fund → Fund token → DAO governance
+```
+
+The fund token represents investor participation. Each artwork may form an independent investment
+product with tokenized participation and asset-specific governance. This is the model the ERC-721
+mint, vault, and ERC-20 fractionalization requirements in §4 implement.
+
+### 1.0.2 Governance authority
+
+Governance authority depends on the product model:
+
+- **fund products** — fund token holders participate in governance;
+- **direct artwork receipt products** — governance follows the defined asset authority model.
+
+**Token possession alone does not define governance rights unless the asset model specifies it.**
+
+### 1.0.3 ERC-8415 and charity boundaries
+
+ERC-8415 applies to asset identity, registry synchronization, ownership-related workflows, and asset
+lifecycle management.
+
+Charity NFT editions are an independent business module for cultural and philanthropic purposes.
+They are **not** required to follow the ERC-8415 asset model and must not be forced into it. Their
+requirements in §4 and §7 stand on their own.
+
+### 1.0.4 Engagement shape
 
 **This engagement is not a greenfield build.** A working prototype/MVP already exists and is
 deployed. This engagement converts that prototype into a commercially operable product: real
@@ -112,15 +158,18 @@ paid work concentrates.
 Derived from the quotation. Every requirement in §4 traces to exactly one module. Work that
 traces to no module is out of scope and must not be started.
 
-| #   | Module                                                                 | Days    | USD         | Class emphasis |
-| --- | ---------------------------------------------------------------------- | ------- | ----------- | -------------- |
-| M1  | Smart contract enhancement + mainnet deploy                            | 95      | 28,500      | B + C          |
-| M2  | Backend core trading system                                            | 115     | 34,500      | C              |
-| M3  | Frontend UX and feature completion                                     | 90      | 27,000      | B              |
-| M4  | DAO governance and administration                                      | 70      | 21,000      | C              |
-| M5  | Hardening and security audit (incl. third-party firm, est. USD 20,000) | 35      | 30,500      | —              |
-| M6  | Operations, monitoring, production deploy                              | 45      | 13,500      | C              |
-|     | **Total**                                                              | **450** | **155,000** |                |
+Commercial terms per module are held outside this repository and are not reproduced here. The
+module boundaries below are the scope contract; progress against them is counted in `STATUS.md`
+items, never in effort or money (`ACCEPTANCE.md` §6.1).
+
+| #   | Module                                      | Class emphasis |
+| --- | ------------------------------------------- | -------------- |
+| M1  | Smart contract enhancement + mainnet deploy | B + C          |
+| M2  | Backend core trading system                 | C              |
+| M3  | Frontend UX and feature completion          | B              |
+| M4  | DAO governance and administration           | C              |
+| M5  | Hardening and security audit                | —              |
+| M6  | Operations, monitoring, production deploy   | C              |
 
 ### 3.1 Schedule
 
@@ -135,8 +184,8 @@ delivery team's.
 | P4    | 09-21 → 10-05 | Security audit and remediation                                  |
 | P5    | 10-05 → 10-12 | **Mainnet deployment and go-live**                              |
 
-> Open item: the Gantt spans ~15 weeks while the task list states 12 weeks / 5–6 people /
-> 720–864 person-hours, against a quotation of 450 person-days. Reconcile before P1 sign-off.
+> Open item: the Gantt window and the task list's stated duration disagree. Reconcile before P1
+> sign-off. The figures are held outside this repository.
 
 ---
 
@@ -264,7 +313,7 @@ The ruling narrows this to the auction path, and does not remove it: drop `whenN
 #### 4.2.3 Recorded conflict
 
 The superseded document asserted that ArtFi operates no order book, matching engine, custody ledger
-or settlement system. M2 as quoted (USD 34,500) is titled "backend core trading system". The ruling
+or settlement system. M2 as quoted is titled "backend core trading system". The ruling
 above resolves this: order book, matching and trade history are **in scope and built**; the custody
 ledger and ArtFi-operated settlement are **not built**, replaced by the position projection and
 on-chain settlement described above. Six of M2's seven requirement groups survive intact; only fund
@@ -303,7 +352,7 @@ legal question for the client's counsel, not an implementation decision.
 
 - Internal security review and penetration test.
 - Code hardening; remediation of all findings.
-- **Third-party audit by a recognized firm** (budgeted USD 20,000) covering the contract suite.
+- **Third-party audit by a recognized firm** (budgeted) covering the contract suite.
   Audit report and remediation evidence are delivery artifacts.
 - Secret, private-key, raw-signed-transaction and prohibited-plaintext scans in CI.
 - Private keys and seed phrases never enter Web, API, MySQL, servers, GitHub, CI or logs.
