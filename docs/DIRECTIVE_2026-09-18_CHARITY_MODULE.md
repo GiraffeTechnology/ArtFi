@@ -90,8 +90,8 @@ Adding rows records existing state; it promotes nothing.
 | Status                     | Before |  After |
 | -------------------------- | -----: | -----: |
 | `VERIFIED`                 |      4 |      4 |
-| `IMPLEMENTED-NOT-VERIFIED` |     20 |     32 |
-| `NOT-IMPLEMENTED`          |     34 |     39 |
+| `IMPLEMENTED-NOT-VERIFIED` |     20 |     34 |
+| `NOT-IMPLEMENTED`          |     34 |     37 |
 | `BLOCKED`                  |      1 |      1 |
 | `PENDING-GATE`             |      1 |      1 |
 | **Total**                  | **60** | **77** |
@@ -110,12 +110,18 @@ Strongest at the bottom, absent at the top:
   routes in `apps/api` and no charity route in `apps/web`. **What a buyer actually receives does not
   exist.**
 
-On the mirroring side, two gaps are now visible that were not before:
+**The mirroring side is more complete than a first pass suggested.** `apps/market-mirror` is a
+separate workspace app carrying the OpenSea adapter: `opensea.ts` runs an `OpenSeaStreamClient` over
+`ws` alongside a cursor-paged REST `backfill()`, and its tests run in CI. A first scoring of `XM.3`
+and `XM.6` as `NOT-IMPLEMENTED` was wrong — it searched only `apps/api` and only Go string literals.
+Both are `IMPLEMENTED-NOT-VERIFIED`. The lesson is recorded here because understating built work
+wastes delivery-side time as surely as overstating it.
 
-- **`XM.3` — no realtime stream client exists.** OpenSea access is REST-only. The requirement pairs a
-  realtime stream with REST gap-fill; only the gap-fill half is built.
-- **`XM.6` — the state machine is missing `accepted`.** Eight of the nine required states exist; the
-  only occurrence of `accepted` in `market_orchestration.go` is inside an error string.
+One narrow gap and one tension remain, both precise:
+
+- **`XM.6` — `accepted` is declared but unreachable.** All nine states exist in
+  `000007_external_trade_orchestration.up.sql`, `openapi.yaml` and the generated client, but no Go
+  code ever writes `accepted`.
 - **`XM.1` carries a recorded tension.** The original marks any deployable ArtFi-operated market
   implementation `P0 / FAIL`; `fdb90ff` made `ArtFiMarket.sol` deployable behind a default-off
   opt-in. Recorded rather than resolved.

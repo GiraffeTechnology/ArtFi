@@ -62,12 +62,12 @@ configuration. These are not real database isolation or deployed chain evidence.
 | Status                     | Count | Meaning here                                      |
 | -------------------------- | ----: | ------------------------------------------------- |
 | `VERIFIED`                 |     4 | Evidence exists on this commit and environment    |
-| `IMPLEMENTED-NOT-VERIFIED` |    32 | **Code exists; only runtime evidence is missing** |
-| `NOT-IMPLEMENTED`          |    39 | Behaviour absent                                  |
+| `IMPLEMENTED-NOT-VERIFIED` |    34 | **Code exists; only runtime evidence is missing** |
+| `NOT-IMPLEMENTED`          |    37 | Behaviour absent                                  |
 | `BLOCKED`                  |     1 | Client-side asset missing                         |
 | `PENDING-GATE`             |     1 | Scheduled, awaiting a named gate                  |
 
-The 32 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
+The 34 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
 G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ---
@@ -83,10 +83,10 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | M5 Security        |      7 |          1 |              1 |          4 | 1 `PENDING-GATE` |
 | M6 Operations      |      5 |          0 |              2 |          3 |                  |
 | CH Charity NFT     |     11 |          0 |              8 |          3 |                  |
-| XM External market |      6 |          0 |              4 |          2 |                  |
+| XM External market |      6 |          0 |              6 |          0 |                  |
 | §5 Non-functional  |      8 |          1 |              0 |          7 |                  |
 | §7 Validation data |      5 |          1 |              2 |          2 |                  |
-| **Total**          | **77** |      **4** |         **32** |     **39** | **2**            |
+| **Total**          | **77** |      **4** |         **34** |     **37** | **2**            |
 
 ---
 
@@ -199,14 +199,14 @@ Added 2026-09-18. Charity editions and approved-external-marketplace mirroring a
 paired requirement; the mirroring side was implemented in `apps/api` but itemized nowhere. These rows
 carry the original `MARKET-001`–`MARKET-006` forward. No rule is new.
 
-| #    | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                  |
-| ---- | -------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| XM.1 | ArtFi-operated order, match, custody and settlement stays shut | `IMPLEMENTED-NOT-VERIFIED` | No order book, counterparty, custody or settlement path exists; no frontend route reaches `ArtFiMarket.sol`. **Tension recorded**: the original marks any deployable implementation `P0 / FAIL`, and `fdb90ff` made deployment possible behind the default-off `ARTFI_DEPLOY_MARKET`            |
-| XM.2 | Versioned approved-marketplace adapter with a source allowlist | `IMPLEMENTED-NOT-VERIFIED` | `external_market.go` carries `schemaVersion`, persists the raw payload and source version, and rejects anything but `"1"`; sources come from the `ARTFI_MARKETPLACE_SOURCES` allowlist. No live adapter run                                                                                     |
-| XM.3 | Realtime stream plus REST gap-fill converging to one state     | `NOT-IMPLEMENTED`          | **No stream client exists.** OpenSea access is REST-only (`opensea_discovery.go`, `http.NewRequestWithContext` + `X-API-Key`). Push ingestion at `POST /v1/indexer/market-events` dedupes by SHA-256 event ID, but the realtime half of the requirement is absent                               |
-| XM.4 | Mirror API, transaction orchestration, external deep links     | `IMPLEMENTED-NOT-VERIFIED` | `/v1/market/activity`, `/v1/market/intents`; `market_orchestration.go` (628 lines) prepares an idempotent intent for an approved external market without matching or settling. No live external submission observed                                                                             |
-| XM.5 | Data claims accurate: fixtures labelled, freshness real        | `IMPLEMENTED-NOT-VERIFIED` | Missing persistence answers HTTP 503 rather than an empty success (#65); freshness and observation time are persisted. No live adapter, so "realtime" is claimed nowhere yet                                                                                                                    |
-| XM.6 | Result state machine and reconciliation                        | `NOT-IMPLEMENTED`          | Eight of the nine required states exist — `initiated`, `awaiting-wallet`, `submitted`, `pending`, `confirmed`, `failed`, `cancelled`, `rejected`. **`accepted` is absent** as a state; the only occurrence is inside an error string. Reconciliation on reorg/out-of-order callback is untested |
+| #    | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---- | -------------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| XM.1 | ArtFi-operated order, match, custody and settlement stays shut | `IMPLEMENTED-NOT-VERIFIED` | No order book, counterparty, custody or settlement path exists; no frontend route reaches `ArtFiMarket.sol`. **Tension recorded**: the original marks any deployable implementation `P0 / FAIL`, and `fdb90ff` made deployment possible behind the default-off `ARTFI_DEPLOY_MARKET`                                                                                                                             |
+| XM.2 | Versioned approved-marketplace adapter with a source allowlist | `IMPLEMENTED-NOT-VERIFIED` | `external_market.go` carries `schemaVersion`, persists the raw payload and source version, and rejects anything but `"1"`; sources come from the `ARTFI_MARKETPLACE_SOURCES` allowlist. No live adapter run                                                                                                                                                                                                      |
+| XM.3 | Realtime stream plus REST gap-fill converging to one state     | `IMPLEMENTED-NOT-VERIFIED` | `apps/market-mirror/src/opensea.ts` runs an `OpenSeaStreamClient` over `ws` and a cursor-paged `backfill()`, declaring `realtime: true, restBackfill: true`; `opensea.test.ts` runs in CI. `persistence_integration_test.go` proves cancel-then-stale-version convergence against real MySQL — a v6 event arriving after a v8 cancel stays auditable without overwriting the canonical order. No live stream run |
+| XM.4 | Mirror API, transaction orchestration, external deep links     | `IMPLEMENTED-NOT-VERIFIED` | `/v1/market/activity`, `/v1/market/intents`; `market_orchestration.go` (628 lines) prepares an idempotent intent for an approved external market without matching or settling. No live external submission observed                                                                                                                                                                                              |
+| XM.5 | Data claims accurate: fixtures labelled, freshness real        | `IMPLEMENTED-NOT-VERIFIED` | Missing persistence answers HTTP 503 rather than an empty success (#65); freshness and observation time are persisted. The mainnet-versus-testnet separation the requirement names is asserted nowhere yet                                                                                                                                                                                                       |
+| XM.6 | Result state machine and reconciliation                        | `IMPLEMENTED-NOT-VERIFIED` | All nine states are declared in `000007_external_trade_orchestration.up.sql`, `openapi.yaml` and the generated client. **Gap: no Go code ever writes `accepted`** — the state is declared but unreachable at runtime. Reconciliation on reorg and out-of-order callback is untested                                                                                                                              |
 
 ---
 
