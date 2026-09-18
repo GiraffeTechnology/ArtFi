@@ -366,6 +366,43 @@ legal question for the client's counsel, not an implementation decision.
 - Object storage validating MIME, size and SHA-256.
 - Runbooks and operator documentation.
 
+### 4.7 CH — Charity NFT editions
+
+Added 2026-09-18 by client ruling. Charity NFT editions are the third product line (§1) and an
+independent business module: they are **not** required to follow the ERC-8415 asset model and must
+not be forced into it.
+
+The rules below are not new. They are the product rules already stated in
+[`CHARITY_EDITIONS.md`](CHARITY_EDITIONS.md), itemized here so they are traceable and countable in
+`STATUS.md` — previously the module appeared in no requirement list at all.
+
+- **CH.1** One approved artwork is one ERC-1155 token ID with exactly `100` units, minted once.
+- **CH.2** The recorded primary unit price is `0.01 ETH`. ArtFi does not create, sign, match, fulfil
+  or settle marketplace orders for these editions.
+- **CH.3** Sellout may be recorded only after the distribution wallet holds a zero balance and the
+  sale evidence is externally reconciled.
+- **CH.4** Physical-donation acceptance by CCHS may be hash-recorded only after sellout is recorded.
+- **CH.5** **The only holder benefit** is access to a high-resolution **watermarked** copy, released
+  only after wallet ownership is verified.
+- **CH.6** The unwatermarked master never enters public metadata, a website download, or any
+  browser-delivered object. Charity masters never enter public storage.
+- **CH.7** Public token metadata contains no artwork preview. An external marketplace may show a
+  generic missing-image treatment; discovery must never be "fixed" by publishing the master.
+- **CH.8** An edition conveys no copyright, physical title, possession, redemption, commercial-use
+  or reproduction right. This must be disclosed wherever an edition is displayed or offered.
+- **CH.9** All primary proceeds are designated for CCHS and routed to the CCHS-confirmed beneficiary
+  wallet. Holders contact CCHS directly for any receipt. **ArtFi issues no receipt, determines no
+  eligible amount, and promises no tax credit.**
+- **CH.10** The release package fails closed until the master, the distinct watermarked holder file,
+  rights evidence, CCHS status and receipting-policy evidence, the non-zero beneficiary wallet and
+  listing eligibility are all verified. `listingActionConfirmed` stays `false`; every external
+  listing operation needs a fresh action-time confirmation.
+
+Go-live additionally depends on the CCHS-side written evidence listed in
+[`CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md`](CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md) under
+"Release blockers". Those gate release, not implementation: CH.1–CH.10 are built and tested against
+TEST_ONLY fixtures without them.
+
 ---
 
 ## 5. Non-functional requirements
@@ -412,9 +449,16 @@ Hoodi (560048)  →  integration green  →  simulated audit passed (G3-A)  → 
 
 ## 7. Validation dataset
 
-The charity artwork set is **test payload used to exercise the platform**, not a product module.
-It proves batch minting, isolation, and preview handling work correctly. Delivery is not defined
-by it.
+**Conflict recorded, resolved by the later ruling (§0).** This section previously read "the charity
+artwork set is test payload used to exercise the platform, **not a product module**". The client
+ruling of 2026-09-18 makes charity NFT editions a product line and an independent business module,
+specified at §4.7. The two cannot both stand, and §0 requires the latest explicit written client
+requirement to control, with the conflict recorded rather than silently resolved. The superseded
+sentence is reproduced here for that reason.
+
+What remains true is narrower: **the historical 37-work charity batch on Ethereum Sepolia is a
+frozen record, not the validation dataset.** Runtime validation uses the separately generated Hoodi
+AI payload described below. Delivery is not defined by either payload.
 
 ### 7.0 Two payloads, two chains
 

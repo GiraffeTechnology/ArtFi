@@ -57,17 +57,17 @@ retry without a second wallet broadcast, mixed-case transaction-hash
 normalization, exact signed BUY authorization, and fail-closed service policy
 configuration. These are not real database isolation or deployed chain evidence.
 
-**`VERIFIED` 4 / 60.**
+**`VERIFIED` 4 / 70.**
 
 | Status                     | Count | Meaning here                                      |
 | -------------------------- | ----: | ------------------------------------------------- |
 | `VERIFIED`                 |     4 | Evidence exists on this commit and environment    |
-| `IMPLEMENTED-NOT-VERIFIED` |    20 | **Code exists; only runtime evidence is missing** |
-| `NOT-IMPLEMENTED`          |    34 | Behaviour absent                                  |
+| `IMPLEMENTED-NOT-VERIFIED` |    27 | **Code exists; only runtime evidence is missing** |
+| `NOT-IMPLEMENTED`          |    37 | Behaviour absent                                  |
 | `BLOCKED`                  |     1 | Client-side asset missing                         |
 | `PENDING-GATE`             |     1 | Scheduled, awaiting a named gate                  |
 
-The 20 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
+The 27 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
 G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ---
@@ -82,9 +82,10 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | M4 DAO governance  |      6 |          1 |              4 |          1 |                  |
 | M5 Security        |      7 |          1 |              1 |          4 | 1 `PENDING-GATE` |
 | M6 Operations      |      5 |          0 |              2 |          3 |                  |
+| CH Charity NFT     |     10 |          0 |              7 |          3 |                  |
 | §5 Non-functional  |      8 |          1 |              0 |          7 |                  |
 | §7 Validation data |      5 |          1 |              2 |          2 |                  |
-| **Total**          | **60** |      **4** |         **20** |     **34** | **2**            |
+| **Total**          | **70** |      **4** |         **27** |     **37** | **2**            |
 
 ---
 
@@ -164,6 +165,31 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | M6.3 | Monitoring, log aggregation, alerting            | `NOT-IMPLEMENTED`          | `scripts/ops/` monitor core exists on PR #66 (draft): probing, durable queue, incident lifecycle, crash recovery, 5 test files. **No alert has ever reached a responder** — that is the promotion evidence and it needs open item 12. LLM triage boundary settled at issue #73 |
 | M6.4 | Object storage MIME / size / SHA-256 validation  | `IMPLEMENTED-NOT-VERIFIED` | `s3store.go`, `rwa.go`                                                                                                                                                                                                                                                         |
 | M6.5 | Runbooks and operator documentation              | `IMPLEMENTED-NOT-VERIFIED` | `docs/OPERATIONS_RUNBOOK.md`; no observed drill                                                                                                                                                                                                                                |
+
+## CH — Charity NFT editions (`PRD.md` §4.7)
+
+Added 2026-09-18 by client ruling. The module previously appeared in no requirement list; these rows
+itemize the product rules already stated in `docs/CHARITY_EDITIONS.md`. Each row cites the line it
+comes from. No rule is new and no status is promoted by the act of listing it.
+
+| #     | Requirement                                                   | Status                     | Evidence / gap                                                                                                                                                                             |
+| ----- | ------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CH.1  | One artwork = one ERC-1155 token ID, exactly 100 units        | `IMPLEMENTED-NOT-VERIFIED` | `ArtFiCharityEditions.sol` `EDITIONS_PER_ARTWORK = 100`, single `_mint` at series creation, duplicate artwork and master-hash guards; 9 tests in `CharityEditions.t.sol`. No chain receipt |
+| CH.2  | Recorded primary unit price `0.01 ETH`; ArtFi settles nothing | `IMPLEMENTED-NOT-VERIFIED` | `PRIMARY_PRICE_WEI = 0.01 ether`. No order, match or settle path exists for these editions. No chain receipt                                                                               |
+| CH.3  | Sellout recorded only after zero distributor balance          | `IMPLEMENTED-NOT-VERIFIED` | `recordSellout` reverts `SeriesNotSoldOut` while the distribution wallet holds units. External reconciliation is procedural and unobserved                                                 |
+| CH.4  | Physical donation hash-recorded only after sellout            | `IMPLEMENTED-NOT-VERIFIED` | `recordPhysicalDonation` reverts `SelloutNotRecorded`; `PhysicalDonationAlreadyRecorded` blocks replay. No chain receipt                                                                   |
+| CH.5  | Holder benefit: watermarked copy after ownership verification | `NOT-IMPLEMENTED`          | **The module's only holder benefit does not exist.** Zero charity routes in `apps/api`; no `/charity` route in `apps/web`. Verified by route enumeration                                   |
+| CH.6  | Master never in public metadata, download, or served object   | `NOT-IMPLEMENTED`          | `verify-charity-edition-package.mjs` checks the manifest _declares_ `unwatermarkedWebDownload: false`. No runtime enforces it, because no runtime serves these assets at all               |
+| CH.7  | Public token metadata carries no artwork preview              | `IMPLEMENTED-NOT-VERIFIED` | Verifier emits `Artwork preview: Not provided` and asserts `holderAsset.preview !== true`. No published metadata observed                                                                  |
+| CH.8  | No copyright / title / redemption right, disclosed on display | `NOT-IMPLEMENTED`          | Zero matches for the disclosure anywhere in `apps/web/src`. The rule exists only in `CHARITY_EDITIONS.md`; no surface states it to a buyer                                                 |
+| CH.9  | Proceeds to CCHS wallet; ArtFi issues no receipt              | `IMPLEMENTED-NOT-VERIFIED` | Verifier pins CCHS as sole proceeds recipient and receipt decision-maker, fail-closed. No runtime surface, no observed routing                                                             |
+| CH.10 | Release package fails closed; `listingActionConfirmed` false  | `IMPLEMENTED-NOT-VERIFIED` | `verify-charity-edition-package.mjs` full mode requires master, distinct watermarked file, rights, CCHS status, non-zero wallet. CI runs `--schema-only`, so full mode is unexercised      |
+
+**CH.5, CH.6 and CH.8 are the product.** The contract and release layers are the strongest part of
+this module; what a buyer actually receives is absent. Go-live additionally depends on the CCHS-side
+written evidence in `CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md`; that gates release, not implementation.
+
+---
 
 ## Non-functional (`PRD.md` §5)
 
