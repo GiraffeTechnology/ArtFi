@@ -1,16 +1,50 @@
 # ArtFi
 
-ArtFi is GiraffeTechnology's RWA and digital art platform for minting real-world assets as NFTs, placing them into vaults, fractionalizing ownership, and governing assets through DAOs.
+ArtFi is a commercial digital art and real-world asset platform. It is a commercial application, not a demo.
 
 This repository is the single source of truth for the rebuilt ArtFi platform.
+
+## Product lines
+
+ArtFi supports three product lines.
+
+### 1. ERC-8415 asset market
+
+ArtFi applies ERC-8415 concepts to connect physical artwork identity, custody records, ownership state, and blockchain settlement. ERC-8415 covers asset identity, registry synchronization, ownership-related workflows, and asset lifecycle management.
+
+**Full artwork asset receipt** — individual artwork ownership representation and transfer:
+
+```text
+Artwork → Custody → Registry → ERC-8415 asset representation → Market transfer
+```
+
+A token may represent one specific artwork custody certificate.
+
+**Artwork investment fund** — an asset-specific investment product:
+
+```text
+Artwork → Single-asset fund → Fund token → DAO governance
+```
+
+Each artwork may form an independent investment product with tokenized participation and asset-specific governance.
+
+### 2. ArtFi DAO governance
+
+DAO governance follows the underlying asset model. For artwork investment products, fund token holders participate in governance according to the defined governance rules. For direct artwork receipt products, governance follows the defined asset authority model.
+
+Token possession alone does not define governance rights unless the asset model specifies it.
+
+### 3. Charity NFT editions
+
+Charity NFT editions are an independent product line for cultural and philanthropic fundraising. They are not required to follow the ERC-8415 asset model.
 
 ## Current status
 
 - Delivery phase: **Stage 2–7 integrated implementation**
-- Allowed chain: **Sepolia only**
+- Test chain: **Hoodi `560048`**; the production chain is undecided
 - Mainnet and real-money operation: **not approved**
-- Live Sepolia/OpenSea evidence run: **pending after pre-chain gates; not claimed as passed**
-- PRD: converted into staged, testable requirements
+- Runtime chain evidence: **none on any chain; not claimed as passed**
+- Requirement status, item by item: [`docs/STATUS.md`](docs/STATUS.md)
 
 ## Workspace
 
@@ -80,6 +114,8 @@ docker compose config
 - [**Status**](docs/STATUS.md) — where every requirement stands right now, item by item
 
 Client directives override them where they conflict, newest first:
+[2026-09-18 product alignment](docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md) (positioning, asset
+models, product invariants),
 [2026-08-30 delivery](docs/DIRECTIVE_2026-08-30_DELIVERY.md) (measurement, G3 split, Hoodi test
 payload) and [2026-08-24 Hoodi](docs/DIRECTIVE_2026-08-24_HOODI.md) (test chain).
 

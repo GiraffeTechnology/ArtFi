@@ -48,6 +48,19 @@ Use the following authority order. Lower levels may explain or record higher lev
 
 If two sources conflict, use the higher source. Do not reconcile a conflict by inventing a third rule.
 
+### 1.1 Product invariants
+
+Client ruling of 2026-09-18, recorded in
+[`docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md`](docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md).
+Priority 2 in the table above. These rules preserve the commercial product design; they are cited,
+not invented, and they create no new delivery obligation.
+
+1. **ArtFi is a commercial platform.** It must not be treated as an ERC-8415 demo application.
+2. **Supported product models** are artwork receipt assets, artwork investment funds, and charity NFT editions.
+3. **ERC-8415 boundary.** ERC-8415 applies to asset identity, registry synchronization, ownership-related workflows, and asset lifecycle management.
+4. **Charity NFT boundary.** Charity NFT is an independent product line and must not be forced into the ERC-8415 asset model.
+5. **Governance boundary.** DAO governance follows the underlying product structure. Economic participation and governance authority must be explicitly defined by the corresponding asset model. Token possession alone does not define governance rights.
+
 ---
 
 ## 2. Mandatory traceability
