@@ -4,9 +4,11 @@ Read this before touching the repository. This file defines the execution bounda
 
 ## 0. P0 governance rule
 
-**Issue #84 — `[GOVERNING][NO COMMENTS] Stage 2 PRD v2.0 — NO-HIL Agentic RWA Market` — is the sole product baseline.**
+**Issue #110 — `[GOVERNING][NO COMMENTS] ArtFi Product Baseline — #84 plus the 2026-09-18 rulings` — is the sole product baseline.**
 
-No agent may create, infer, extend, reinterpret, or write back a product requirement that cannot be traced to #84 or to an explicit later client ruling.
+#110 **incorporates #84 by reference and does not replace it.** #84 remains the text for Stage 1 / Stage 2 architecture, A1–A10, the A0–A6 gates, the authority model, key safety and partner neutrality. #110 adds what #84 does not cover — product positioning, the charity NFT module, external-marketplace mirroring, and the delivery standard — and where the two differ, #110 controls. **Cite #110, not #84.** #84 stays locked and unedited as the historical record.
+
+No agent may create, infer, extend, reinterpret, or write back a product requirement that cannot be traced to #110 or to an explicit later client ruling.
 
 This applies equally to Codex, Claude Code, reviewers, automation, and human contributors acting through an agent.
 
@@ -21,9 +23,9 @@ An agent may **not**:
 
 - add a gate, status value, delivery condition, acceptance obligation, architecture requirement, product principle, scope item, dependency, or client obligation on its own authority;
 - convert an observation, recommendation, risk, or interpretation into a requirement;
-- amend #84 through comments, another document, a commit message, `ACCEPTANCE.md`, `STATUS.md`, or an issue;
+- amend #110 through comments, another document, a commit message, `ACCEPTANCE.md`, `STATUS.md`, or an issue;
 - make its own proposed rule authoritative by writing it into a governance or acceptance document;
-- block implementation on a condition that is not traceable to #84 or an explicit client ruling.
+- block implementation on a condition that is not traceable to #110 or an explicit client ruling.
 
 **If no trace exists, it is not a requirement. Report it; do not legislate it.**
 
@@ -33,18 +35,18 @@ An agent may **not**:
 
 Use the following authority order. Lower levels may explain or record higher levels; they may never expand them.
 
-| Priority | Source                                                                   | Role                                                                                                         |
-| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| 1        | **Issue #84**                                                            | Sole product baseline: what ArtFi is and what must be built                                                  |
-| 2        | **Explicit later client rulings**                                        | Authorized amendments or decisions; must identify the client ruling and must not be invented by an agent     |
-| 3        | `AGENTS.md`                                                              | Execution and agent-control rules                                                                            |
-| 4        | `docs/ACCEPTANCE.md`                                                     | Evidence and promotion process only                                                                          |
-| 5        | `docs/STATUS.md`                                                         | Evidence snapshot only; it records state and creates no requirement                                          |
-| 6        | legacy PRDs, roadmaps, directives, issues, comments, and commit messages | Historical/reference material only unless #84 or an explicit client ruling incorporates a specific provision |
+| Priority | Source                                                                   | Role                                                                                                          |
+| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| 1        | **Issue #110** (incorporates #84)                                        | Sole product baseline: what ArtFi is and what must be built                                                   |
+| 2        | **Explicit later client rulings**                                        | Authorized amendments or decisions; must identify the client ruling and must not be invented by an agent      |
+| 3        | `AGENTS.md`                                                              | Execution and agent-control rules                                                                             |
+| 4        | `docs/ACCEPTANCE.md`                                                     | Evidence and promotion process only                                                                           |
+| 5        | `docs/STATUS.md`                                                         | Evidence snapshot only; it records state and creates no requirement                                           |
+| 6        | legacy PRDs, roadmaps, directives, issues, comments, and commit messages | Historical/reference material only unless #110 or an explicit client ruling incorporates a specific provision |
 
-**No issue number other than #84 is automatically governing merely because an older document or comment calls it governing.** Temporary cleanup issues, audit issues, and historical PM issues are execution records only.
+**No issue number other than #110, and #84 through it, is automatically governing merely because an older document or comment calls it governing.** Temporary cleanup issues, audit issues, and historical PM issues are execution records only.
 
-`docs/PRD.md` is **not an independent authority**. #84 preserves the required Stage 1 substrate; legacy Stage 1 detail may be used only to the extent that it is incorporated by #84 and does not conflict with #84 or a later client ruling.
+`docs/PRD.md` is **not an independent authority**. #110 preserves the required Stage 1 substrate; legacy Stage 1 detail may be used only to the extent that it is incorporated by #110 and does not conflict with #110 or a later client ruling.
 
 If two sources conflict, use the higher source. Do not reconcile a conflict by inventing a third rule.
 
@@ -67,12 +69,12 @@ not invented, and they create no new delivery obligation.
 
 Every change that claims to satisfy product scope must cite one of:
 
-1. a specific section of #84; or
+1. a specific section of #110; or
 2. an explicit later client ruling.
 
 Every audit finding must separately identify:
 
-- **baseline:** the #84 section or client ruling;
+- **baseline:** the #110 section or client ruling;
 - **evidence:** file path, test, CI run, transaction/receipt, or observed runtime behaviour;
 - **finding:** what does not match.
 
@@ -86,16 +88,16 @@ The repository contains historical AI-authored requirements that exceeded the ag
 
 During cleanup:
 
-- remove or freeze requirements, gates, states, delivery obligations, and derived blockers that have no valid trace to #84 or an explicit client ruling;
+- remove or freeze requirements, gates, states, delivery obligations, and derived blockers that have no valid trace to #110 or an explicit client ruling;
 - preserve valid client rulings even where an agent previously over-expanded them;
-- preserve useful implemented code, tests, security fixes, and infrastructure when they remain compatible with #84;
+- preserve useful implemented code, tests, security fixes, and infrastructure when they remain compatible with #110;
 - do not roll back working implementation merely because Claude Code or another AI contributed it;
 - do not keep an invalid requirement merely because implementation effort has already been spent on it;
 - do not create replacement requirements while deleting invalid ones.
 
 **Governance rollback is not code rollback. Provenance alone is never a reason to delete useful code.**
 
-Where useful existing code is not currently required for the active delivery stage but is compatible with #84, freeze it in place rather than expanding current scope around it. Delete code only when it is demonstrably harmful, contradictory, dead, security-sensitive, or creates an active maintenance/behavioural conflict.
+Where useful existing code is not currently required for the active delivery stage but is compatible with #110, freeze it in place rather than expanding current scope around it. Delete code only when it is demonstrably harmful, contradictory, dead, security-sensitive, or creates an active maintenance/behavioural conflict.
 
 ---
 
@@ -105,7 +107,7 @@ ArtFi is delivered in bounded stages. The project must not remain in an indefini
 
 For each active stage:
 
-1. define a finite deliverable set traced to #84;
+1. define a finite deliverable set traced to #110;
 2. freeze that stage's scope before implementation begins;
 3. finish, test, integrate, and demonstrate that set;
 4. record remaining valid requirements as later-stage work;
@@ -147,11 +149,11 @@ No audit, review, refactor, architecture exercise, or governance activity may in
 
 **Fixtures are not live product data.** Never present mock/static data as live behaviour.
 
-**Do not rebuild valid working surfaces without a product reason.** Preserve useful existing implementation and improve only where #84 or a verified defect requires it.
+**Do not rebuild valid working surfaces without a product reason.** Preserve useful existing implementation and improve only where #110 or a verified defect requires it.
 
 **Blockers must be real.** A blocker must identify the exact active-stage requirement it prevents and the evidence for the dependency. Unsupported or later-stage work is not a blocker.
 
-**Questions do not block by default.** If #84 leaves something unspecified, choose the least-expansive reversible implementation that preserves #84, or raise a separate question. Do not freeze delivery by inventing an approval dependency.
+**Questions do not block by default.** If #110 leaves something unspecified, choose the least-expansive reversible implementation that preserves #110, or raise a separate question. Do not freeze delivery by inventing an approval dependency.
 
 ---
 
@@ -162,8 +164,8 @@ No audit, review, refactor, architecture exercise, or governance activity may in
 - The current test chain is Hoodi `560048`; it does not determine the production chain.
 - Historical mint evidence must remain immutable.
 - Test assets must remain clearly isolated from production/real-asset records.
-- External partner identities in governing product material must use the neutral placeholder policy already stated in #84.
-- LLM output is advisory; transaction authority must come from deterministic policy and valid authority as defined by #84.
+- External partner identities in governing product material must use the neutral placeholder policy already stated in #110.
+- LLM output is advisory; transaction authority must come from deterministic policy and valid authority as defined by #110.
 - An operational agent must never infer higher authority from lower authority.
 
 ---
@@ -174,19 +176,19 @@ When performing a repository-wide cleanup, classify every disputed item into exa
 
 ### KEEP
 
-Implemented and useful, compatible with #84. Preserve it and its valid tests/evidence.
+Implemented and useful, compatible with #110. Preserve it and its valid tests/evidence.
 
 ### FINISH-NOW
 
-Valid #84 requirement needed for the currently declared delivery stage and sufficiently close to completion. Finish it within the bounded stage.
+Valid #110 requirement needed for the currently declared delivery stage and sufficiently close to completion. Finish it within the bounded stage.
 
 ### FREEZE-LATER
 
-Valid under #84 but not required for the current stage. Keep existing useful work, stop expansion, and move it to a later-stage backlog.
+Valid under #110 but not required for the current stage. Keep existing useful work, stop expansion, and move it to a later-stage backlog.
 
 ### REMOVE
 
-No valid trace to #84/client ruling, or actively harmful/contradictory/dead. Remove the invalid governance requirement or, where justified, the conflicting implementation.
+No valid trace to #110/client ruling, or actively harmful/contradictory/dead. Remove the invalid governance requirement or, where justified, the conflicting implementation.
 
 Every REMOVE decision must state what valid source, if any, replaces it. `No replacement — agent-authored scope expansion` is acceptable.
 
@@ -198,7 +200,7 @@ Do not use cleanup to generate a fifth bucket of newly invented work.
 
 Before declaring a stage or cleanup batch complete, confirm:
 
-- all changed product behaviour traces to #84 or an explicit later client ruling;
+- all changed product behaviour traces to #110 or an explicit later client ruling;
 - no new agent-authored requirement, gate, status, or delivery condition was introduced;
 - useful compatible implementation was preserved;
 - current-stage scope is finite and written down;
