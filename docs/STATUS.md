@@ -57,17 +57,17 @@ retry without a second wallet broadcast, mixed-case transaction-hash
 normalization, exact signed BUY authorization, and fail-closed service policy
 configuration. These are not real database isolation or deployed chain evidence.
 
-**`VERIFIED` 4 / 70.**
+**`VERIFIED` 4 / 77.**
 
 | Status                     | Count | Meaning here                                      |
 | -------------------------- | ----: | ------------------------------------------------- |
 | `VERIFIED`                 |     4 | Evidence exists on this commit and environment    |
-| `IMPLEMENTED-NOT-VERIFIED` |    27 | **Code exists; only runtime evidence is missing** |
-| `NOT-IMPLEMENTED`          |    37 | Behaviour absent                                  |
+| `IMPLEMENTED-NOT-VERIFIED` |    32 | **Code exists; only runtime evidence is missing** |
+| `NOT-IMPLEMENTED`          |    39 | Behaviour absent                                  |
 | `BLOCKED`                  |     1 | Client-side asset missing                         |
 | `PENDING-GATE`             |     1 | Scheduled, awaiting a named gate                  |
 
-The 27 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
+The 32 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
 G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ---
@@ -82,10 +82,11 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | M4 DAO governance  |      6 |          1 |              4 |          1 |                  |
 | M5 Security        |      7 |          1 |              1 |          4 | 1 `PENDING-GATE` |
 | M6 Operations      |      5 |          0 |              2 |          3 |                  |
-| CH Charity NFT     |     10 |          0 |              7 |          3 |                  |
+| CH Charity NFT     |     11 |          0 |              8 |          3 |                  |
+| XM External market |      6 |          0 |              4 |          2 |                  |
 | §5 Non-functional  |      8 |          1 |              0 |          7 |                  |
 | §7 Validation data |      5 |          1 |              2 |          2 |                  |
-| **Total**          | **70** |      **4** |         **27** |     **37** | **2**            |
+| **Total**          | **77** |      **4** |         **32** |     **39** | **2**            |
 
 ---
 
@@ -172,22 +173,40 @@ Added 2026-09-18 by client ruling. The module previously appeared in no requirem
 itemize the product rules already stated in `docs/CHARITY_EDITIONS.md`. Each row cites the line it
 comes from. No rule is new and no status is promoted by the act of listing it.
 
-| #     | Requirement                                                   | Status                     | Evidence / gap                                                                                                                                                                             |
-| ----- | ------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| CH.1  | One artwork = one ERC-1155 token ID, exactly 100 units        | `IMPLEMENTED-NOT-VERIFIED` | `ArtFiCharityEditions.sol` `EDITIONS_PER_ARTWORK = 100`, single `_mint` at series creation, duplicate artwork and master-hash guards; 9 tests in `CharityEditions.t.sol`. No chain receipt |
-| CH.2  | Recorded primary unit price `0.01 ETH`; ArtFi settles nothing | `IMPLEMENTED-NOT-VERIFIED` | `PRIMARY_PRICE_WEI = 0.01 ether`. No order, match or settle path exists for these editions. No chain receipt                                                                               |
-| CH.3  | Sellout recorded only after zero distributor balance          | `IMPLEMENTED-NOT-VERIFIED` | `recordSellout` reverts `SeriesNotSoldOut` while the distribution wallet holds units. External reconciliation is procedural and unobserved                                                 |
-| CH.4  | Physical donation hash-recorded only after sellout            | `IMPLEMENTED-NOT-VERIFIED` | `recordPhysicalDonation` reverts `SelloutNotRecorded`; `PhysicalDonationAlreadyRecorded` blocks replay. No chain receipt                                                                   |
-| CH.5  | Holder benefit: watermarked copy after ownership verification | `NOT-IMPLEMENTED`          | **The module's only holder benefit does not exist.** Zero charity routes in `apps/api`; no `/charity` route in `apps/web`. Verified by route enumeration                                   |
-| CH.6  | Master never in public metadata, download, or served object   | `NOT-IMPLEMENTED`          | `verify-charity-edition-package.mjs` checks the manifest _declares_ `unwatermarkedWebDownload: false`. No runtime enforces it, because no runtime serves these assets at all               |
-| CH.7  | Public token metadata carries no artwork preview              | `IMPLEMENTED-NOT-VERIFIED` | Verifier emits `Artwork preview: Not provided` and asserts `holderAsset.preview !== true`. No published metadata observed                                                                  |
-| CH.8  | No copyright / title / redemption right, disclosed on display | `NOT-IMPLEMENTED`          | Zero matches for the disclosure anywhere in `apps/web/src`. The rule exists only in `CHARITY_EDITIONS.md`; no surface states it to a buyer                                                 |
-| CH.9  | Proceeds to CCHS wallet; ArtFi issues no receipt              | `IMPLEMENTED-NOT-VERIFIED` | Verifier pins CCHS as sole proceeds recipient and receipt decision-maker, fail-closed. No runtime surface, no observed routing                                                             |
-| CH.10 | Release package fails closed; `listingActionConfirmed` false  | `IMPLEMENTED-NOT-VERIFIED` | `verify-charity-edition-package.mjs` full mode requires master, distinct watermarked file, rights, CCHS status, non-zero wallet. CI runs `--schema-only`, so full mode is unexercised      |
+| #     | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----- | -------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CH.1  | The 13-work set, one ERC-1155 token ID each, exactly 100 units | `IMPLEMENTED-NOT-VERIFIED` | `ArtFiCharityEditions.sol` fixes `EDITIONS_PER_ARTWORK = 100` with a single `_mint` and duplicate artwork/master-hash guards; 9 tests. **The set membership is not enforced**: `verify-charity-edition-package.mjs` matches `^UNIT-A\d{2}$` and checks neither the 13-work list `A01/04/05/11/14/15/16/17/20/21/22/23/24` nor the A16 single-count rule. **Open item 6 conflict stands** — the original requires 13 works / 1,300 units; 37 / 3,700 were minted on Sepolia |
+| CH.2  | Recorded primary unit price `0.01 ETH`; ArtFi settles nothing  | `IMPLEMENTED-NOT-VERIFIED` | `PRIMARY_PRICE_WEI = 0.01 ether`. No order, match or settle path exists for these editions. No chain receipt                                                                                                                                                                                                                                                                                                                                                               |
+| CH.3  | Sellout recorded only after zero distributor balance           | `IMPLEMENTED-NOT-VERIFIED` | `recordSellout` reverts `SeriesNotSoldOut` while the distribution wallet holds units. External reconciliation is procedural and unobserved                                                                                                                                                                                                                                                                                                                                 |
+| CH.4  | Physical donation hash-recorded only after sellout             | `IMPLEMENTED-NOT-VERIFIED` | `recordPhysicalDonation` reverts `SelloutNotRecorded`; `PhysicalDonationAlreadyRecorded` blocks replay. No chain receipt                                                                                                                                                                                                                                                                                                                                                   |
+| CH.5  | Holder benefit: watermarked copy after ownership verification  | `NOT-IMPLEMENTED`          | **The module's only holder benefit does not exist.** Zero charity routes in `apps/api`; no `/charity` route in `apps/web`. Verified by route enumeration                                                                                                                                                                                                                                                                                                                   |
+| CH.6  | Master never in public metadata, download, or served object    | `NOT-IMPLEMENTED`          | `verify-charity-edition-package.mjs` checks the manifest _declares_ `unwatermarkedWebDownload: false`. No runtime enforces it, because no runtime serves these assets at all                                                                                                                                                                                                                                                                                               |
+| CH.7  | Public token metadata carries no artwork preview               | `IMPLEMENTED-NOT-VERIFIED` | Verifier emits `Artwork preview: Not provided` and asserts `holderAsset.preview !== true`. No published metadata observed                                                                                                                                                                                                                                                                                                                                                  |
+| CH.8  | No copyright / title / redemption right, disclosed on display  | `NOT-IMPLEMENTED`          | Zero matches for the disclosure anywhere in `apps/web/src`. The rule exists only in `CHARITY_EDITIONS.md`; no surface states it to a buyer                                                                                                                                                                                                                                                                                                                                 |
+| CH.9  | Proceeds to CCHS wallet; ArtFi issues no receipt               | `IMPLEMENTED-NOT-VERIFIED` | Verifier pins CCHS as sole proceeds recipient and receipt decision-maker, and locks valuation to the donation-date ETH/CAD fair market value from a CCHS-approved public source, retaining date, price, source and snapshot hash; fail-closed without CCHS written confirmation. No runtime surface, no observed routing                                                                                                                                                   |
+| CH.10 | Release package fails closed; `listingActionConfirmed` false   | `IMPLEMENTED-NOT-VERIFIED` | `verify-charity-edition-package.mjs` full mode requires master, distinct watermarked file, rights, CCHS status, non-zero wallet. CI runs `--schema-only`, so full mode is unexercised                                                                                                                                                                                                                                                                                      |
+| CH.11 | Master and holder file must differ by hash; no browser preview | `IMPLEMENTED-NOT-VERIFIED` | Verifier asserts `holderAsset.watermarked`, `unwatermarkedAvailable === false`, `preview === false`, and that the watermarked holder file hashes differently from the master — **but only in full mode, and CI runs `--schema-only`**, so the distinct-hash check never executes in the pipeline                                                                                                                                                                           |
 
 **CH.5, CH.6 and CH.8 are the product.** The contract and release layers are the strongest part of
 this module; what a buyer actually receives is absent. Go-live additionally depends on the CCHS-side
 written evidence in `CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md`; that gates release, not implementation.
+
+---
+
+## XM — External marketplace mirroring (`PRD.md` §4.8)
+
+Added 2026-09-18. Charity editions and approved-external-marketplace mirroring are ArtFi's original
+paired requirement; the mirroring side was implemented in `apps/api` but itemized nowhere. These rows
+carry the original `MARKET-001`–`MARKET-006` forward. No rule is new.
+
+| #    | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                  |
+| ---- | -------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| XM.1 | ArtFi-operated order, match, custody and settlement stays shut | `IMPLEMENTED-NOT-VERIFIED` | No order book, counterparty, custody or settlement path exists; no frontend route reaches `ArtFiMarket.sol`. **Tension recorded**: the original marks any deployable implementation `P0 / FAIL`, and `fdb90ff` made deployment possible behind the default-off `ARTFI_DEPLOY_MARKET`            |
+| XM.2 | Versioned approved-marketplace adapter with a source allowlist | `IMPLEMENTED-NOT-VERIFIED` | `external_market.go` carries `schemaVersion`, persists the raw payload and source version, and rejects anything but `"1"`; sources come from the `ARTFI_MARKETPLACE_SOURCES` allowlist. No live adapter run                                                                                     |
+| XM.3 | Realtime stream plus REST gap-fill converging to one state     | `NOT-IMPLEMENTED`          | **No stream client exists.** OpenSea access is REST-only (`opensea_discovery.go`, `http.NewRequestWithContext` + `X-API-Key`). Push ingestion at `POST /v1/indexer/market-events` dedupes by SHA-256 event ID, but the realtime half of the requirement is absent                               |
+| XM.4 | Mirror API, transaction orchestration, external deep links     | `IMPLEMENTED-NOT-VERIFIED` | `/v1/market/activity`, `/v1/market/intents`; `market_orchestration.go` (628 lines) prepares an idempotent intent for an approved external market without matching or settling. No live external submission observed                                                                             |
+| XM.5 | Data claims accurate: fixtures labelled, freshness real        | `IMPLEMENTED-NOT-VERIFIED` | Missing persistence answers HTTP 503 rather than an empty success (#65); freshness and observation time are persisted. No live adapter, so "realtime" is claimed nowhere yet                                                                                                                    |
+| XM.6 | Result state machine and reconciliation                        | `NOT-IMPLEMENTED`          | Eight of the nine required states exist — `initiated`, `awaiting-wallet`, `submitted`, `pending`, `confirmed`, `failed`, `cancelled`, `rejected`. **`accepted` is absent** as a state; the only occurrence is inside an error string. Reconciliation on reorg/out-of-order callback is untested |
 
 ---
 
