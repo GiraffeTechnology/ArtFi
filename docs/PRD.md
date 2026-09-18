@@ -366,6 +366,79 @@ legal question for the client's counsel, not an implementation decision.
 - Object storage validating MIME, size and SHA-256.
 - Runbooks and operator documentation.
 
+### 4.7 CH — Charity NFT editions
+
+Added 2026-09-18 by client ruling. Charity NFT editions are the third product line (§1) and an
+independent business module: they are **not** required to follow the ERC-8415 asset model and must
+not be forced into it.
+
+The rules below are not new. They are the product rules already stated in
+[`CHARITY_EDITIONS.md`](CHARITY_EDITIONS.md), itemized here so they are traceable and countable in
+`STATUS.md` — previously the module appeared in no requirement list at all.
+
+- **CH.1** The first fixed charity supply is **13 works** — `UNIT-A01/04/05/11/14/15/16/17/20/21/22/23/24`,
+  with a repeated `A16` counted once. Each is one ERC-1155 token ID with exactly `100` units, minted
+  once and permanently fixed, at a recorded unit price of `0.01 ETH`. No additional-mint and no
+  external burn entry point exists. **Open item 6 records the unresolved conflict**: 37 works /
+  3,700 units were minted on Sepolia against this requirement's 13 / 1,300.
+- **CH.2** The recorded primary unit price is `0.01 ETH`. ArtFi does not create, sign, match, fulfil
+  or settle marketplace orders for these editions.
+- **CH.3** Sellout may be recorded only after the distribution wallet holds a zero balance and the
+  sale evidence is externally reconciled.
+- **CH.4** Physical-donation acceptance by CCHS may be hash-recorded only after sellout is recorded.
+- **CH.5** **The only holder benefit** is access to a high-resolution **watermarked** copy, released
+  only after wallet ownership is verified.
+- **CH.6** The unwatermarked master never enters public metadata, a website download, or any
+  browser-delivered object. Charity masters never enter public storage.
+- **CH.7** Public token metadata contains no artwork preview. An external marketplace may show a
+  generic missing-image treatment; discovery must never be "fixed" by publishing the master.
+- **CH.8** An edition conveys no copyright, physical title, possession, redemption, commercial-use
+  or reproduction right. This must be disclosed wherever an edition is displayed or offered.
+- **CH.9** All primary proceeds are designated for CCHS and routed to the CCHS-confirmed beneficiary
+  wallet. Holders contact CCHS directly for any receipt. **ArtFi issues no receipt, determines no
+  eligible amount, and promises no tax credit.** The receipt valuation policy is locked to the
+  donation-date `ETH/CAD` fair market value from a CCHS-approved public source, retaining date,
+  price, source and snapshot hash, and fails closed without CCHS written confirmation.
+- **CH.11** The master and the watermarked holder file must hash differently, and the holder file is
+  delivered without a browser preview.
+- **CH.10** The release package fails closed until the master, the distinct watermarked holder file,
+  rights evidence, CCHS status and receipting-policy evidence, the non-zero beneficiary wallet and
+  listing eligibility are all verified. `listingActionConfirmed` stays `false`; every external
+  listing operation needs a fresh action-time confirmation.
+
+### 4.8 XM — External marketplace mirroring
+
+Added 2026-09-18. Charity editions and approved-external-marketplace mirroring are ArtFi's original
+paired requirement. The mirroring side was implemented in `apps/api` but appeared in no requirement
+list. These carry the original `MARKET-001`–`MARKET-006` forward; no rule is new.
+
+- **XM.1** ArtFi-operated orders, bids, matching, claims and settlement stay shut. ArtFi is never a
+  counterparty, never custodies, never matches and never settles.
+- **XM.2** The approved-marketplace adapter is versioned: explicit backfill and realtime lifecycle,
+  schema version, raw payload and source version retained. Sources come from an allowlist.
+- **XM.3** A realtime stream and REST gap-fill converge to one correct state under duplication,
+  out-of-order delivery, disconnect, reconnect, gaps, stale versions, sale-after-cancel and
+  stale-listing-after-sale.
+- **XM.4** A mirror API serves activity, and a transaction intent may be submitted idempotently to an
+  approved external market and its status and receipt received back. Each record retains the external
+  market, order ID, time, freshness and an HTTPS deep link. **The UI does not redirect to OpenSea.**
+- **XM.5** Data claims are accurate. Local fixtures are labelled as such; "realtime" may be claimed
+  only by a connected adapter reporting observation time and freshness; a mainnet stream event is
+  never presented as a testnet one.
+- **XM.6** The result state machine covers `initiated`, `awaiting-wallet`, `submitted`, `accepted`,
+  `rejected`, `pending`, `confirmed`, `failed` and `cancelled`, and converges with the external
+  market's authoritative state under disconnect, retry, duplicate submission, external cancellation,
+  chain reorg and out-of-order callbacks.
+
+---
+
+### 4.7 continued — charity release dependency
+
+Go-live additionally depends on the CCHS-side written evidence listed in
+[`CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md`](CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md) under
+"Release blockers". Those gate release, not implementation: CH.1–CH.10 are built and tested against
+TEST_ONLY fixtures without them.
+
 ---
 
 ## 5. Non-functional requirements
@@ -412,9 +485,16 @@ Hoodi (560048)  →  integration green  →  simulated audit passed (G3-A)  → 
 
 ## 7. Validation dataset
 
-The charity artwork set is **test payload used to exercise the platform**, not a product module.
-It proves batch minting, isolation, and preview handling work correctly. Delivery is not defined
-by it.
+**Conflict recorded, resolved by the later ruling (§0).** This section previously read "the charity
+artwork set is test payload used to exercise the platform, **not a product module**". The client
+ruling of 2026-09-18 makes charity NFT editions a product line and an independent business module,
+specified at §4.7. The two cannot both stand, and §0 requires the latest explicit written client
+requirement to control, with the conflict recorded rather than silently resolved. The superseded
+sentence is reproduced here for that reason.
+
+What remains true is narrower: **the historical 37-work charity batch on Ethereum Sepolia is a
+frozen record, not the validation dataset.** Runtime validation uses the separately generated Hoodi
+AI payload described below. Delivery is not defined by either payload.
 
 ### 7.0 Two payloads, two chains
 

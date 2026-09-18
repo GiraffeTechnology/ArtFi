@@ -114,6 +114,8 @@ docker compose config
 - [**Status**](docs/STATUS.md) — where every requirement stands right now, item by item
 
 Client directives override them where they conflict, newest first:
+[2026-09-18 charity module](docs/DIRECTIVE_2026-09-18_CHARITY_MODULE.md) (charity requirement
+coverage),
 [2026-09-18 product alignment](docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md) (positioning, asset
 models, product invariants),
 [2026-08-30 delivery](docs/DIRECTIVE_2026-08-30_DELIVERY.md) (measurement, G3 split, Hoodi test

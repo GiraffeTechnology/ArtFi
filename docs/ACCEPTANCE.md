@@ -245,3 +245,11 @@ is incomplete.
     it — Solidity, shell tooling, TypeScript, Go, SQL constraints and the environment example. A
     directive that the tooling silently refuses to execute is the failure mode this rule exists to
     catch.
+16. **Fail the audit if any charity-edition master is reachable.** A preview URL, public metadata
+    field, website download, or any browser-delivered object that resolves to an unwatermarked
+    master is a failure, as is a charity master present in public storage (`PRD.md` §4.7 CH.6,
+    CH.7). A manifest that _declares_ the correct posture is not evidence that the runtime enforces
+    it; the check is against what the running system actually serves.
+17. **Fail the audit if the charity holder benefit is presented as available without the runtime
+    behind it** — ownership verification followed by watermarked delivery (`PRD.md` §4.7 CH.5) — or
+    if an edition is displayed or offered without the no-rights disclosure required by CH.8.
