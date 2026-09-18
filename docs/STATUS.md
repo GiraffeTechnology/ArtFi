@@ -6,7 +6,7 @@
 | Base        | `a5877ee`                                                             |
 | Environment | local + GitHub CI. **No runtime chain evidence exists on any chain.** |
 | Date        | 2026-08-30                                                            |
-| Reviewer    | Claude (acting PM), on client instruction                             |
+| Reviewer    | Acting PM, on client instruction                                      |
 | Scope note  | ArtFi is a trading intermediary, not an exchange (`PRD.md` §4.2)      |
 
 > **Attribution rule.** `Reviewed` names the commit the matrix below was assessed against, not its

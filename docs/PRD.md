@@ -104,7 +104,7 @@ backends behind the existing screens, real order flow, real governance, real mon
 
 ## 2. Baseline: the inherited prototype
 
-**This is the section codex got wrong. The prototype is the starting line, not the finish line.**
+**The prototype is the starting line, not the finish line.**
 
 `pics/*.png` and `fractional_steps/*` are **prototype screenshots**. They define visual and
 interaction language to be preserved. They are **not** the acceptance target: a delivery that
