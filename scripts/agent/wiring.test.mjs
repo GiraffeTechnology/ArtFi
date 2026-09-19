@@ -78,7 +78,7 @@ const request = {
     maxOpenOrders: "0",
     maxAggregateExposure: "100",
   },
-  sale: { nft: address, price: "10" },
+  sale: { nft: address, tokenId: "1", price: "10" },
 };
 const authority = {
   status: "EXCLUSIVE_AT_PINNED_BLOCK",
@@ -499,4 +499,147 @@ test("durable hydration refuses revoked proof identity corruption before worker 
     });
     assert.throws(() => hydrateOperation(f.row), /REVOCATION_RECORD_INVALID/);
   }
+});
+
+test("optional Oracle runtime adapter persists rejection evidence through durable hydration", async () => {
+  const f = fixture();
+  f.row.lease_token = null;
+  f.row.lease_expires_ms = 0;
+  const unused = async () => {
+    throw Error("UNEXPECTED_ADAPTER");
+  };
+  const runtime = createDurableRuntime({
+    pool: f.pool,
+    kernelOptions: {
+      observe: async () => ({
+        available: true,
+        current: true,
+        groundingCurrent: true,
+        assetRestricted: false,
+      }),
+      authorize: async () => {
+        throw Error("STATE_NOT_ELIGIBLE");
+      },
+      execute: unused,
+      verify: unused,
+      reconcile: unused,
+      mintAuthority: async () => authority,
+    },
+    oracleAttestation: {
+      resolveRequiredAttestation: async () => ({
+        attestation: { envelope: { attestationId: "fixture-attestation-1" } },
+        expectedSubject: {
+          assetId: "test-asset",
+          chainId: "560048",
+          contract: address,
+          tokenId: "1",
+          purpose: "test-required-flow",
+        },
+      }),
+      attestationService: { verify() {} },
+      verifyOracleAttestation: async () => ({
+        valid: false,
+        errorCode: "REVOKED",
+      }),
+    },
+    serviceOptions: {
+      ethers,
+      policy: servicePolicy,
+      planFor: unused,
+      observe: async () => ({
+        available: true,
+        current: true,
+        groundingCurrent: true,
+        assetRestricted: false,
+      }),
+      inspectRevocation: unused,
+    },
+  });
+  const result = await runtime.runBatch();
+  assert.equal(result.outcomes[0].state, "SAFE_DEGRADED");
+  const restored = hydrateOperation(f.row);
+  assert.equal(restored.state, "PREPARED");
+  assert.equal(restored.mintAuthority.status, "EXCLUSIVE_AT_PINNED_BLOCK");
+  assert.equal(restored.oracleAttestation.errorCode, "REVOKED");
+  assert.equal(f.row.lease_token, null);
+});
+
+for (const errorCode of [null, "NOT_CURRENT", "REVOKED"]) {
+  test(`durable Oracle ${errorCode ?? "valid"} evidence retains exact identity`, async () => {
+    const f = fixture();
+    f.row.lease_token = null;
+    f.row.lease_expires_ms = 0;
+    const store = createDurableStore({
+      mode: "TEST_ONLY_NO_REAL_VALUE",
+      pool: f.pool,
+    });
+    const row = await store.claim("test-1", kernelRequestDigest(request));
+    const evidence = {
+      valid: errorCode === null,
+      errorCode,
+      checkedAt: "2026-09-13T00:00:00.000Z",
+      attestationId: "fixture-attestation-1",
+      expectedSubject: {
+        assetId: "test-asset",
+        chainId: request.execution.chainId,
+        contract: request.sale.nft,
+        tokenId: request.sale.tokenId,
+        purpose: "fixture-required-flow",
+      },
+    };
+    await store.transition(
+      row.id,
+      row.version,
+      { state: "PREPARED", oracleAttestation: evidence },
+      row.leaseToken,
+    );
+    assert.deepEqual(hydrateOperation(f.row).oracleAttestation, evidence);
+    for (const change of [
+      { attestationId: undefined },
+      { attestationId: 123 },
+      { attestationId: "a".repeat(129) },
+      { expectedSubject: undefined },
+      ...[
+        { chainId: "1" },
+        { contract: "0x" + "cd".repeat(20) },
+        { tokenId: "2" },
+        { purpose: "" },
+        { assetId: "a".repeat(129) },
+        { extra: "not-allowed" },
+      ].map((fields) => ({
+        expectedSubject: { ...evidence.expectedSubject, ...fields },
+      })),
+    ]) {
+      const corrupted = {
+        ...f.row,
+        record_json: JSON.stringify({
+          state: "PREPARED",
+          oracleAttestation: { ...evidence, ...change },
+        }),
+      };
+      assert.throws(
+        () => hydrateOperation(corrupted),
+        /ORACLE_EVIDENCE_IDENTITY_INVALID/,
+      );
+    }
+  });
+}
+test("source-resolution failure may hydrate without identity but valid may not", () => {
+  const f = fixture();
+  f.row.record_json = JSON.stringify({
+    state: "PREPARED",
+    oracleAttestation: { valid: false, errorCode: "SOURCE_TIMEOUT" },
+  });
+  assert.equal(
+    hydrateOperation(f.row).oracleAttestation.errorCode,
+    "SOURCE_TIMEOUT",
+  );
+  f.row.record_json = JSON.stringify({
+    state: "PREPARED",
+    oracleAttestation: { valid: true, errorCode: null },
+  });
+  assert.throws(
+    () => hydrateOperation(f.row),
+    /ORACLE_EVIDENCE_IDENTITY_INVALID/,
+  );
 });
