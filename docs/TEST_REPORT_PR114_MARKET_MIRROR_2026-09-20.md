@@ -16,28 +16,28 @@ addresses, wallet material, RPC values, or internal filesystem locations.
 
 ## Results
 
-| Gate | Result |
-| --- | --- |
-| Prettier | PASS |
-| Market-mirror focused suite | PASS — 42/42 |
-| Forced no-cache Turbo matrix | PASS — 15/15 tasks, 0 cached |
-| Web unit suite | PASS — 106/106 |
-| Wallet extension suite | PASS — 6/6 |
-| API client suite | PASS — 2/2 |
-| Production-mode web build | PASS — 32 routes generated |
-| Agent suite | PASS — 34/34 |
-| Desktop/mobile mirror-attribution browser matrix | PASS — 8/8 |
-| Secret scan | PASS — 406 repository files |
-| Hoodi chain consistency | PASS — 18 layers agree on chain ID 560048 |
-| Release schema | PASS |
-| Charity package schema and verifier | PASS |
-| Hoodi Admin Safe schema and verifier | PASS — 1 positive, 15 negative |
-| Fixed Go 1.26.5 `gofmt -l` | PASS — zero output, clean tree |
-| Offline `go mod verify` | PASS — all modules verified |
-| `go vet ./...` | PASS |
-| Snapshot deadline tests | PASS — 2/2 |
-| Managed test-database integration | NOT RUN — approved opaque TEST_ONLY profile unavailable |
-| Exact-head GitHub CI | INFRASTRUCTURE FAILURE — 5 jobs, 0 steps, no logs |
+| Gate                                             | Result                                                  |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| Prettier                                         | PASS                                                    |
+| Market-mirror focused suite                      | PASS — 42/42                                            |
+| Forced no-cache Turbo matrix                     | PASS — 15/15 tasks, 0 cached                            |
+| Web unit suite                                   | PASS — 106/106                                          |
+| Wallet extension suite                           | PASS — 6/6                                              |
+| API client suite                                 | PASS — 2/2                                              |
+| Production-mode web build                        | PASS — 32 routes generated                              |
+| Agent suite                                      | PASS — 34/34                                            |
+| Desktop/mobile mirror-attribution browser matrix | PASS — 8/8                                              |
+| Secret scan                                      | PASS — 406 repository files                             |
+| Hoodi chain consistency                          | PASS — 18 layers agree on chain ID 560048               |
+| Release schema                                   | PASS                                                    |
+| Charity package schema and verifier              | PASS                                                    |
+| Hoodi Admin Safe schema and verifier             | PASS — 1 positive, 15 negative                          |
+| Fixed Go 1.26.5 `gofmt -l`                       | PASS — zero output, clean tree                          |
+| Offline `go mod verify`                          | PASS — all modules verified                             |
+| `go vet ./...`                                   | PASS                                                    |
+| Snapshot deadline tests                          | PASS — 2/2                                              |
+| Managed test-database integration                | NOT RUN — approved opaque TEST_ONLY profile unavailable |
+| Exact-head GitHub CI                             | INFRASTRUCTURE FAILURE — 5 jobs, 0 steps, no logs       |
 
 ## Regression evidence
 
@@ -127,3 +127,4 @@ evidence, not a candidate test failure; no retry loop is used.
 - The database integration result and fresh final-head review remain open.
 - XM.3 remains `IMPLEMENTED-NOT-VERIFIED`; no count or status is promoted by
   this report.
+
