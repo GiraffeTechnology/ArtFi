@@ -11,6 +11,7 @@ const navigation = [
   ["Mint", "/create/rwa"],
   ["Wallet", "/portfolio"],
   ["DAO", "/dao"],
+  ["Operations", "/operations"],
 ] as const;
 
 export function SiteHeader() {

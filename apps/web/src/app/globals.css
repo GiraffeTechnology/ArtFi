@@ -2371,3 +2371,66 @@ p {
     grid-template-columns: 1fr;
   }
 }
+
+/* Operator status table (#110 §2 M6.3, read-only). Nothing here renders an endpoint or a host. */
+.ops-status {
+  display: grid;
+  gap: 24px;
+}
+.ops-status .market-runtime-state button {
+  justify-self: start;
+}
+.ops-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.ops-table caption {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+}
+.ops-table th,
+.ops-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.ops-table thead th {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ops-table td[data-state] {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  text-transform: uppercase;
+}
+.ops-table td[data-state="unavailable"],
+.market-runtime-state[data-state="unavailable"] strong {
+  color: var(--wall-red);
+}
+
+@media (max-width: 680px) {
+  .ops-table,
+  .ops-table tbody,
+  .ops-table tr,
+  .ops-table th,
+  .ops-table td {
+    display: block;
+  }
+  .ops-table thead {
+    display: none;
+  }
+  .ops-table tr {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .ops-table th,
+  .ops-table td {
+    padding: 4px 0;
+    border: 0;
+  }
+}

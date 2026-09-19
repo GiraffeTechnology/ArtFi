@@ -14,6 +14,7 @@ const journeys = [
   ["/create/rwa", "Mint, verify, and route the token."],
   ["/charity", "Charity editions."],
   ["/charity/1", "Edition 1."],
+  ["/operations", "Dependency status."],
 ] as const;
 
 for (const [path, heading] of journeys) {
