@@ -376,42 +376,42 @@ test(
   "new runtime survives a hung observer, retries DB outage and reconciles STARTED without execute",
   { timeout: 2000 },
   async () => {
-  const f = fixture("STARTED");
-  f.setAvailable(false);
-  const controller = new AbortController();
-  let sends = 0,
-    authorityCalls = 0;
-  const unused = async () => {
-    throw Error("UNEXPECTED_ADAPTER");
-  };
-  const runtime = createDurableRuntime({
-    pool: f.pool,
-    kernelOptions: {
-      authorize: unused,
-      observe: unused,
-      execute: async () => {
-        sends++;
-        throw Error("UNEXPECTED_SEND");
+    const f = fixture("STARTED");
+    f.setAvailable(false);
+    const controller = new AbortController();
+    let sends = 0,
+      authorityCalls = 0;
+    const unused = async () => {
+      throw Error("UNEXPECTED_ADAPTER");
+    };
+    const runtime = createDurableRuntime({
+      pool: f.pool,
+      kernelOptions: {
+        authorize: unused,
+        observe: unused,
+        execute: async () => {
+          sends++;
+          throw Error("UNEXPECTED_SEND");
+        },
+        verify: unused,
+        mintAuthority: async () => {
+          authorityCalls++;
+          throw Error("UNEXPECTED_PREFLIGHT");
+        },
+        reconcile: async () => ({
+          state: "SETTLED",
+          canonical: true,
+          accountingMatches: true,
+        }),
       },
-      verify: unused,
-      mintAuthority: async () => {
-        authorityCalls++;
-        throw Error("UNEXPECTED_PREFLIGHT");
+      serviceOptions: {
+        ethers,
+        policy: servicePolicy,
+        planFor: unused,
+        observe: unused,
+        inspectRevocation: unused,
       },
-      reconcile: async () => ({
-        state: "SETTLED",
-        canonical: true,
-        accountingMatches: true,
-      }),
-    },
-    serviceOptions: {
-      ethers,
-      policy: servicePolicy,
-      planFor: unused,
-      observe: unused,
-      inspectRevocation: unused,
-    },
-  });
+    });
     let observations = 0;
     await runtime.run({
       signal: controller.signal,
@@ -679,3 +679,4 @@ test("source-resolution failure may hydrate without identity but valid may not",
     /ORACLE_EVIDENCE_IDENTITY_INVALID/,
   );
 });
+
