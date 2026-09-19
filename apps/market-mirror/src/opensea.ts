@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
+import type { FileHandle } from "node:fs/promises";
 import {
   access,
   link,
@@ -8,6 +9,7 @@ import {
   open,
   readFile,
   rm,
+  rmdir,
   stat,
   unlink,
 } from "node:fs/promises";
@@ -397,7 +399,8 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
             ? body.asset_events
             : [];
           for (const event of events) {
-            await spool.write(
+            await writeAll(
+              spool,
               `${JSON.stringify(normalizeOpenSeaEvent(event))}\n`,
             );
           }
@@ -414,7 +417,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
             collectionIndex: nextCursor ? collectionIndex : collectionIndex + 1,
             ...(nextCursor ? { nextCursor } : {}),
           };
-          await checkpointLog.write(`${JSON.stringify(nextCheckpoint)}\n`);
+          await writeAll(checkpointLog, `${JSON.stringify(nextCheckpoint)}\n`);
           await checkpointLog.sync();
           checkpoints.push(nextCheckpoint);
           cursor = nextCursor;
@@ -446,11 +449,28 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     } finally {
       await spool?.close();
       await checkpointLog?.close();
+      const removeSnapshot = completed || transientParent !== undefined;
+      if (removeSnapshot && !transientParent) {
+        // Delete only the known snapshot payload while the writer lock is still
+        // held. A successor cannot enter until release, and the final rmdir is
+        // non-recursive so it can never delete a successor's files.
+        await Promise.all(
+          [spoolPath, checkpointPath].map((path) =>
+            unlink(path).catch((error: unknown) => {
+              if (!isMissingFile(error)) throw error;
+            }),
+          ),
+        );
+      }
       if (lock) {
         await releaseBackfillLock(lockPath, lock);
       }
-      if (completed || transientParent) {
-        await rm(spoolDirectory, { force: true, recursive: true });
+      if (removeSnapshot && !transientParent) {
+        await rmdir(spoolDirectory).catch((error: unknown) => {
+          if (!isMissingFile(error) && record(error).code !== "ENOTEMPTY") {
+            throw error;
+          }
+        });
       }
       if (transientParent) {
         await rm(transientParent, { force: true, recursive: true });
@@ -639,11 +659,8 @@ async function acquireBackfillLock(lockPath: string): Promise<BackfillLock> {
   const reclaimPath = `${lockPath}.reclaim`;
 
   for (;;) {
-    try {
-      await access(reclaimPath);
+    if (!(await removeStaleReclaimMarker(lockPath))) {
       throw fileExistsError(lockPath);
-    } catch (error) {
-      if (!isMissingFile(error)) throw error;
     }
 
     let candidate: Awaited<ReturnType<typeof open>> | undefined;
@@ -665,6 +682,26 @@ async function acquireBackfillLock(lockPath: string): Promise<BackfillLock> {
       });
     }
   }
+}
+
+async function removeStaleReclaimMarker(lockPath: string): Promise<boolean> {
+  const reclaimPath = `${lockPath}.reclaim`;
+  let ownerText: string;
+  try {
+    ownerText = await readFile(reclaimPath, "utf8");
+  } catch (error) {
+    if (isMissingFile(error)) return true;
+    throw error;
+  }
+
+  const owner = parseBackfillLockOwner(ownerText);
+  if (!owner || (await backfillLockOwnerIsLive(owner))) return false;
+  try {
+    await unlink(reclaimPath);
+  } catch (error) {
+    if (!isMissingFile(error)) throw error;
+  }
+  return true;
 }
 
 async function removeStaleBackfillLock(lockPath: string): Promise<boolean> {
@@ -798,13 +835,55 @@ export async function startOpenSeaMirror(
   adapter: MarketplaceAdapter,
   sink: MarketEventSink,
 ): Promise<() => void> {
-  const stop = await adapter.start(sink);
+  const bufferedRealtime: NormalizedMarketEvent[] = [];
+  let realtimeReady = false;
+  let realtimeSequence = Promise.resolve();
+  const realtimeSink: MarketEventSink = async (event) => {
+    const next = realtimeSequence.then(async () => {
+      if (!realtimeReady) {
+        bufferedRealtime.push(event);
+        return;
+      }
+      await sink(event);
+    });
+    realtimeSequence = next.catch(() => undefined);
+    await next;
+  };
+  const stop = await adapter.start(realtimeSink);
   try {
     await adapter.backfill(sink);
+    const commitRealtime = realtimeSequence.then(async () => {
+      for (const event of bufferedRealtime) await sink(event);
+      bufferedRealtime.length = 0;
+      realtimeReady = true;
+    });
+    realtimeSequence = commitRealtime.catch(() => undefined);
+    await commitRealtime;
     return stop;
   } catch (error) {
+    bufferedRealtime.length = 0;
     stop();
     throw error;
+  }
+}
+
+export async function writeAll(
+  file: Pick<FileHandle, "write">,
+  value: string,
+): Promise<void> {
+  const bytes = Buffer.from(value, "utf8");
+  let offset = 0;
+  while (offset < bytes.length) {
+    const { bytesWritten } = await file.write(
+      bytes,
+      offset,
+      bytes.length - offset,
+      null,
+    );
+    if (bytesWritten <= 0) {
+      throw new Error("Durable backfill log write made no progress");
+    }
+    offset += bytesWritten;
   }
 }
 

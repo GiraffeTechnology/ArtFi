@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,6 +11,7 @@ import {
   OpenSeaAdapter,
   OpenSeaJoinReadiness,
   startOpenSeaMirror,
+  writeAll,
 } from "./opensea.js";
 import type {
   MarketEventSink,
@@ -58,6 +60,30 @@ describe("OpenSea normalization", () => {
     const event = normalizeOpenSeaEvent(listed);
     expect(eventFingerprint(event)).toMatch(/^[0-9a-f]{64}$/);
     expect(eventFingerprint(event)).toBe(eventFingerprint(event));
+  });
+
+  it("completes short durable-log writes before returning", async () => {
+    const chunks: Buffer[] = [];
+    let calls = 0;
+    const file = {
+      async write(
+        buffer: Uint8Array,
+        offset: number,
+        length: number,
+      ): Promise<{ bytesWritten: number; buffer: Uint8Array }> {
+        calls += 1;
+        const bytesWritten = Math.min(2, length);
+        chunks.push(
+          Buffer.from(buffer.subarray(offset, offset + bytesWritten)),
+        );
+        return { bytesWritten, buffer };
+      },
+    } as unknown as Pick<FileHandle, "write">;
+
+    await writeAll(file, "abcdef");
+
+    expect(calls).toBe(3);
+    expect(Buffer.concat(chunks).toString("utf8")).toBe("abcdef");
   });
 
   it("fails closed when the source entity cannot be identified", () => {
@@ -325,6 +351,44 @@ describe("OpenSea normalization", () => {
     }
   });
 
+  it("recovers an abandoned stale-lock reclamation marker", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-stale-reclaim-test-"),
+    );
+    try {
+      const collectionsHash = createHash("sha256")
+        .update(JSON.stringify(["artfi-test"]))
+        .digest("hex");
+      const spoolDirectory = join(
+        spoolParentDirectory,
+        `snapshot-${collectionsHash.slice(0, 24)}`,
+      );
+      const lockPath = join(spoolDirectory, "active.lock");
+      await mkdir(spoolDirectory, { recursive: true });
+      await writeFile(lockPath, "2147483647\n", { mode: 0o600 });
+      await link(lockPath, `${lockPath}.reclaim`);
+
+      const published: NormalizedMarketEvent[] = [];
+      const adapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ asset_events: [listed] }), {
+            status: 200,
+          }),
+      });
+      await adapter.backfill(async (event) => {
+        published.push(event);
+      });
+
+      expect(published).toHaveLength(1);
+      expect(await readdir(spoolParentDirectory)).toEqual([]);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
   it("recovers when a live PID belongs to a different process instance", async () => {
     const spoolParentDirectory = await mkdtemp(
       join(tmpdir(), "artfi-opensea-reused-pid-lock-test-"),
@@ -561,7 +625,7 @@ describe("OpenSea normalization", () => {
     expect(calls).toBe(1);
   });
 
-  it("subscribes to realtime delivery before taking the REST snapshot", async () => {
+  it("buffers realtime delivery until the REST snapshot commits", async () => {
     const observed: string[] = [];
     let liveSink: MarketEventSink | undefined;
     const historic = normalizeOpenSeaEvent(listed);
@@ -595,7 +659,7 @@ describe("OpenSea normalization", () => {
       published.push(event);
     });
     expect(observed).toEqual(["subscribe", "snapshot"]);
-    expect(published).toEqual([live, historic]);
+    expect(published).toEqual([historic, live]);
     stop();
     expect(observed).toEqual(["subscribe", "snapshot", "stop"]);
   });
@@ -639,6 +703,8 @@ describe("OpenSea normalization", () => {
 
   it("stops the realtime subscription when the REST snapshot fails", async () => {
     let stopped = false;
+    const live = normalizeOpenSeaEvent(listed);
+    const published: NormalizedMarketEvent[] = [];
     const adapter: MarketplaceAdapter = {
       source: "opensea",
       capabilities: {
@@ -648,7 +714,8 @@ describe("OpenSea normalization", () => {
         fulfillsOrders: false,
         custody: false,
       },
-      async start() {
+      async start(sink) {
+        await sink(live);
         return () => {
           stopped = true;
         };
@@ -658,8 +725,11 @@ describe("OpenSea normalization", () => {
       },
     };
     await expect(
-      startOpenSeaMirror(adapter, async () => undefined),
+      startOpenSeaMirror(adapter, async (event) => {
+        published.push(event);
+      }),
     ).rejects.toThrow("snapshot failed");
     expect(stopped).toBe(true);
+    expect(published).toEqual([]);
   });
 });
