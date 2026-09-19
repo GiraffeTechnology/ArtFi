@@ -1063,7 +1063,7 @@ describe("OpenSea normalization", () => {
     expect(published).toEqual([]);
   });
 
-  it("aborts atomic snapshot publication when realtime buffering fails during commit", async () => {
+  it("keeps the atomic cutover committed when post-cutover buffering fails", async () => {
     let liveSink: MarketEventSink | undefined;
     const historic = normalizeOpenSeaEvent(listed);
     const secondHistoric = {
@@ -1117,7 +1117,7 @@ describe("OpenSea normalization", () => {
         atomicSnapshot,
       ),
     ).rejects.toThrow("realtime queue capacity exceeded");
-    expect(published).toEqual([]);
+    expect(published).toEqual([historic, secondHistoric]);
   });
 
   it("fails closed when the realtime queue overflows during snapshot commit", async () => {
@@ -1404,6 +1404,63 @@ describe("OpenSea normalization", () => {
     expect(maximumActiveBackfills).toBe(1);
     releaseSecondRecovery();
     await Promise.all([firstRecovery, secondRecovery]);
+    stop();
+  });
+
+  it("holds reconnect gap-fill until the initial atomic commit completes", async () => {
+    let lifecycle: MarketplaceStreamLifecycle | undefined;
+    let backfills = 0;
+    let releaseCommit!: () => void;
+    let commitStarted!: () => void;
+    const commitGate = new Promise<void>((resolve) => {
+      releaseCommit = resolve;
+    });
+    const commitObserved = new Promise<void>((resolve) => {
+      commitStarted = resolve;
+    });
+    const historic = normalizeOpenSeaEvent(listed);
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(_sink, streamLifecycle) {
+        lifecycle = streamLifecycle;
+        return () => undefined;
+      },
+      async backfill(sink) {
+        backfills += 1;
+        await sink(historic);
+      },
+    };
+    const published: NormalizedMarketEvent[] = [];
+    const starting = startOpenSeaMirror(
+      adapter,
+      async (event) => {
+        published.push(event);
+      },
+      async (events) => {
+        const staged: NormalizedMarketEvent[] = [];
+        for await (const event of events) staged.push(event);
+        commitStarted();
+        await commitGate;
+        published.push(...staged);
+      },
+    );
+
+    await commitObserved;
+    const reconnect = lifecycle!.onReconnectReady();
+    await Promise.resolve();
+    expect(backfills).toBe(1);
+    releaseCommit();
+    const stop = await starting;
+    await reconnect;
+    expect(backfills).toBe(2);
+    expect(published).toEqual([historic, historic]);
     stop();
   });
 

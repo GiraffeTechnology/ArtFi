@@ -1037,71 +1037,100 @@ export async function startOpenSeaMirror(
   const realtimeDirectory = await mkdtemp(
     join(tmpdir(), "artfi-opensea-realtime-"),
   );
-  const realtimePath = join(realtimeDirectory, "events.ndjson");
+  const precommitPath = join(realtimeDirectory, "precommit.ndjson");
+  const postcommitPath = join(realtimeDirectory, "postcommit.ndjson");
   const snapshotPath = join(realtimeDirectory, "snapshot.ndjson");
-  let realtimeBuffer: Awaited<ReturnType<typeof open>> | undefined;
+  let precommitBuffer: Awaited<ReturnType<typeof open>> | undefined;
+  let postcommitBuffer: Awaited<ReturnType<typeof open>> | undefined;
   let snapshotBuffer: Awaited<ReturnType<typeof open>> | undefined;
-  let realtimeReady = false;
-  let realtimeFailure: unknown;
+  let realtimePhase: "precommit" | "postcommit" | "draining" | "ready" =
+    "precommit";
+  let precommitFailure: unknown;
+  let postcommitFailure: unknown;
   const snapshotController = new AbortController();
-  const failRealtime = (error: unknown): void => {
-    realtimeFailure ??= error;
-    if (!snapshotController.signal.aborted) {
-      snapshotController.abort(error);
+  const failRealtime = (
+    error: unknown,
+    phase: "precommit" | "postcommit" | "draining" | "ready",
+  ): void => {
+    if (phase === "precommit") {
+      precommitFailure ??= error;
+      if (!snapshotController.signal.aborted) {
+        snapshotController.abort(error);
+      }
+      return;
     }
+    postcommitFailure ??= error;
   };
   let realtimeSequence = Promise.resolve();
   let pendingRealtimeEvents = 0;
   let pendingRealtimeBytes = 0;
-  let retainedRealtimeBytes = 0;
-  let backfillSequence = Promise.resolve();
+  const retainedRealtimeBytes = { precommit: 0, postcommit: 0 };
+  let reconnectSequence = Promise.resolve();
   let backfillFailure: unknown;
+  let releaseInitialCommit!: () => void;
+  const initialCommit = new Promise<void>((resolve) => {
+    releaseInitialCommit = resolve;
+  });
   const scheduleBackfill = (): Promise<void> => {
-    const next = backfillSequence.then(() => {
+    const next = reconnectSequence.then(async () => {
+      await initialCommit;
       if (backfillFailure) throw backfillFailure;
       return adapter.backfill(sink);
     });
-    backfillSequence = next.catch((error: unknown) => {
+    reconnectSequence = next.catch((error: unknown) => {
       backfillFailure ??= error;
     });
     return next;
   };
   try {
-    realtimeBuffer = await open(realtimePath, "wx+", 0o600);
+    precommitBuffer = await open(precommitPath, "wx+", 0o600);
     snapshotBuffer = await open(snapshotPath, "wx+", 0o600);
   } catch (error) {
-    await realtimeBuffer?.close();
+    await precommitBuffer?.close();
     await rm(realtimeDirectory, { force: true, recursive: true });
     throw error;
   }
   const realtimeSink: MarketEventSink = (event) => {
-    const serialized = realtimeReady ? undefined : `${JSON.stringify(event)}\n`;
+    const writePhase = realtimePhase;
+    const spoolPhase =
+      writePhase === "precommit" || writePhase === "postcommit"
+        ? writePhase
+        : undefined;
+    const serialized =
+      writePhase === "precommit" || writePhase === "postcommit"
+        ? `${JSON.stringify(event)}\n`
+        : undefined;
     const serializedBytes = serialized
       ? Buffer.byteLength(serialized, "utf8")
       : 0;
+    const retainedBytes = spoolPhase ? retainedRealtimeBytes[spoolPhase] : 0;
     if (
       serialized &&
       (pendingRealtimeEvents >= MAX_PENDING_REALTIME_EVENTS ||
         pendingRealtimeBytes + serializedBytes > MAX_PENDING_REALTIME_BYTES ||
-        retainedRealtimeBytes + serializedBytes > MAX_REALTIME_SPOOL_BYTES)
+        retainedBytes + serializedBytes > MAX_REALTIME_SPOOL_BYTES)
     ) {
       const error = new Error(
         "OpenSea pre-snapshot realtime queue capacity exceeded",
       );
-      failRealtime(error);
+      failRealtime(error, writePhase);
       return Promise.reject(error);
     }
     if (serialized) {
       pendingRealtimeEvents += 1;
       pendingRealtimeBytes += serializedBytes;
-      retainedRealtimeBytes += serializedBytes;
+      retainedRealtimeBytes[spoolPhase!] += serializedBytes;
     }
+    const targetBuffer =
+      writePhase === "precommit" ? precommitBuffer : postcommitBuffer;
     const next = realtimeSequence
       .then(async () => {
-        if (!realtimeReady && realtimeFailure) throw realtimeFailure;
-        if (!realtimeReady) {
-          await writeAll(realtimeBuffer!, serialized!);
-          await realtimeBuffer!.sync();
+        const failure =
+          writePhase === "precommit" ? precommitFailure : postcommitFailure;
+        if (serialized && failure) throw failure;
+        if (serialized) {
+          await writeAll(targetBuffer!, serialized);
+          await targetBuffer!.sync();
           return;
         }
         await sink(event);
@@ -1113,80 +1142,78 @@ export async function startOpenSeaMirror(
         }
       });
     realtimeSequence = next.catch((error: unknown) => {
-      if (!realtimeReady) failRealtime(error);
+      if (writePhase === "precommit" || writePhase === "postcommit") {
+        failRealtime(error, writePhase);
+      }
     });
     return next;
   };
   const stageSnapshot: MarketEventSink = async (event) => {
-    if (realtimeFailure) throw realtimeFailure;
+    if (precommitFailure) throw precommitFailure;
     await writeAll(snapshotBuffer!, `${JSON.stringify(event)}\n`);
   };
-  let stop: (() => void) | undefined;
-  try {
-    stop = await adapter.start(realtimeSink, {
-      onReconnectReady: scheduleBackfill,
-      onFatal: (error) => {
-        failRealtime(error);
-        stop?.();
-        onFatal(error);
-      },
-    });
-    const initialBackfill = backfillSequence.then(() => {
-      if (backfillFailure) throw backfillFailure;
-      return adapter.backfill(stageSnapshot);
-    });
-    backfillSequence = initialBackfill.catch((error: unknown) => {
-      backfillFailure ??= error;
-    });
-    await initialBackfill;
-    await realtimeSequence;
-    if (realtimeFailure) throw realtimeFailure;
-    await snapshotBuffer.sync();
-    await snapshotBuffer.close();
-    snapshotBuffer = undefined;
-    const snapshotInput = createReadStream(snapshotPath, { encoding: "utf8" });
-    const snapshotLines = createInterface({
-      input: snapshotInput,
-      crlfDelay: Infinity,
-    });
-    const snapshotEvents = async function* () {
-      try {
-        for await (const line of snapshotLines) {
-          if (line !== "") {
-            yield JSON.parse(line) as NormalizedMarketEvent;
-          }
-        }
-      } finally {
-        snapshotLines.close();
-        snapshotInput.destroy();
-      }
-    };
-    await snapshotSink(snapshotEvents(), snapshotController.signal);
-    if (realtimeFailure) throw realtimeFailure;
-    const commitRealtime = realtimeSequence.then(async () => {
-      if (realtimeFailure) throw realtimeFailure;
-      await realtimeBuffer!.sync();
-      await realtimeBuffer!.close();
-      realtimeBuffer = undefined;
-      const input = createReadStream(realtimePath, { encoding: "utf8" });
+  const stagedEvents = async function* (
+    paths: string[],
+  ): AsyncGenerator<NormalizedMarketEvent> {
+    for (const path of paths) {
+      const input = createReadStream(path, { encoding: "utf8" });
       const lines = createInterface({ input, crlfDelay: Infinity });
       try {
         for await (const line of lines) {
           if (line !== "") {
-            await sink(JSON.parse(line) as NormalizedMarketEvent);
+            yield JSON.parse(line) as NormalizedMarketEvent;
           }
         }
       } finally {
         lines.close();
         input.destroy();
       }
-      if (realtimeFailure) throw realtimeFailure;
-      realtimeReady = true;
+    }
+  };
+  let stop: (() => void) | undefined;
+  try {
+    stop = await adapter.start(realtimeSink, {
+      onReconnectReady: scheduleBackfill,
+      onFatal: (error) => {
+        failRealtime(error, realtimePhase);
+        stop?.();
+        onFatal(error);
+      },
     });
-    realtimeSequence = commitRealtime.catch((error: unknown) => {
-      failRealtime(error);
+    await adapter.backfill(stageSnapshot);
+    await realtimeSequence;
+    if (precommitFailure) throw precommitFailure;
+    postcommitBuffer = await open(postcommitPath, "wx+", 0o600);
+    realtimePhase = "postcommit";
+    await realtimeSequence;
+    if (precommitFailure) throw precommitFailure;
+    await precommitBuffer.sync();
+    await precommitBuffer.close();
+    precommitBuffer = undefined;
+    await snapshotBuffer.sync();
+    await snapshotBuffer.close();
+    snapshotBuffer = undefined;
+    await snapshotSink(
+      stagedEvents([snapshotPath, precommitPath]),
+      snapshotController.signal,
+    );
+
+    await realtimeSequence;
+    if (postcommitFailure) throw postcommitFailure;
+    realtimePhase = "draining";
+    const drainRealtime = realtimeSequence.then(async () => {
+      await postcommitBuffer!.sync();
+      await postcommitBuffer!.close();
+      postcommitBuffer = undefined;
+      for await (const event of stagedEvents([postcommitPath])) {
+        await sink(event);
+      }
     });
-    await commitRealtime;
+    realtimeSequence = drainRealtime.catch(() => undefined);
+    await drainRealtime;
+    realtimePhase = "ready";
+    await realtimeSequence;
+    releaseInitialCommit();
     return stop;
   } catch (error) {
     stop?.();
@@ -1195,7 +1222,8 @@ export async function startOpenSeaMirror(
     if (!snapshotController.signal.aborted) {
       snapshotController.abort(new Error("OpenSea snapshot lifecycle ended"));
     }
-    await realtimeBuffer?.close();
+    await precommitBuffer?.close();
+    await postcommitBuffer?.close();
     await snapshotBuffer?.close();
     await rm(realtimeDirectory, { force: true, recursive: true });
   }

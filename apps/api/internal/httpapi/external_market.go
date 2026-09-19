@@ -19,10 +19,7 @@ import (
 	"time"
 )
 
-const (
-	maxMarketSnapshotEventBytes = 1 << 20
-	maxMarketSnapshotEvents     = 100_000
-)
+const maxMarketSnapshotEventBytes = 1 << 20
 
 var (
 	marketSourcePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
@@ -174,10 +171,6 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 			continue
 		}
 		count++
-		if count > maxMarketSnapshotEvents {
-			writeProblem(writer, request, http.StatusRequestEntityTooLarge, "Invalid market snapshot", "The market snapshot exceeds the event limit.")
-			return
-		}
 		input, decodeErr := decodeMarketSnapshotEvent(line)
 		if decodeErr != nil {
 			writeProblem(writer, request, http.StatusBadRequest, "Invalid market snapshot", decodeErr.Error())
