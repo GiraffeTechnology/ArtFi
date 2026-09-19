@@ -1,12 +1,14 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
   access,
+  link,
   mkdir,
   mkdtemp,
   open,
   readFile,
   rm,
+  stat,
   unlink,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -25,6 +27,19 @@ import {
 } from "./adapter.js";
 
 type UnknownRecord = Record<string, unknown>;
+
+interface BackfillLock {
+  ownerText: string;
+}
+
+interface BackfillLockOwner {
+  schemaVersion: "1";
+  pid: number;
+  processInstance: string;
+  token: string;
+}
+
+const PROCESS_STARTED_AT_MS = Math.round(Date.now() - process.uptime() * 1_000);
 
 const ORDER_EVENTS = new Set([
   "item_listed",
@@ -345,7 +360,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     const spoolPath = join(spoolDirectory, "events.ndjson");
     const checkpointPath = join(spoolDirectory, "checkpoints.ndjson");
     const lockPath = join(spoolDirectory, "active.lock");
-    let lock: Awaited<ReturnType<typeof open>> | undefined;
+    let lock: BackfillLock | undefined;
     let spool: Awaited<ReturnType<typeof open>> | undefined;
     let checkpointLog: Awaited<ReturnType<typeof open>> | undefined;
     let completed = false;
@@ -432,10 +447,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       await spool?.close();
       await checkpointLog?.close();
       if (lock) {
-        await lock.close();
-        await unlink(lockPath).catch((error: unknown) => {
-          if (!isMissingFile(error)) throw error;
-        });
+        await releaseBackfillLock(lockPath, lock);
       }
       if (completed || transientParent) {
         await rm(spoolDirectory, { force: true, recursive: true });
@@ -615,50 +627,171 @@ function isMissingFile(error: unknown): boolean {
   return record(error).code === "ENOENT";
 }
 
-async function acquireBackfillLock(
-  lockPath: string,
-): Promise<Awaited<ReturnType<typeof open>>> {
+async function acquireBackfillLock(lockPath: string): Promise<BackfillLock> {
+  const owner: BackfillLockOwner = {
+    schemaVersion: "1",
+    pid: process.pid,
+    processInstance: await readProcessInstance(process.pid),
+    token: randomUUID(),
+  };
+  const ownerText = `${JSON.stringify(owner)}\n`;
+  const candidatePath = `${lockPath}.${owner.token}.candidate`;
+  const reclaimPath = `${lockPath}.reclaim`;
+
   for (;;) {
     try {
-      const lock = await open(lockPath, "wx", 0o600);
-      await lock.writeFile(`${process.pid}\n`);
-      await lock.sync();
-      return lock;
+      await access(reclaimPath);
+      throw fileExistsError(lockPath);
+    } catch (error) {
+      if (!isMissingFile(error)) throw error;
+    }
+
+    let candidate: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      candidate = await open(candidatePath, "wx", 0o600);
+      await candidate.writeFile(ownerText);
+      await candidate.sync();
+      await candidate.close();
+      candidate = undefined;
+      await link(candidatePath, lockPath);
+      return { ownerText };
     } catch (error) {
       if (record(error).code !== "EEXIST") throw error;
       if (!(await removeStaleBackfillLock(lockPath))) throw error;
+    } finally {
+      await candidate?.close();
+      await unlink(candidatePath).catch((error: unknown) => {
+        if (!isMissingFile(error)) throw error;
+      });
     }
   }
 }
 
 async function removeStaleBackfillLock(lockPath: string): Promise<boolean> {
-  let ownerText: string;
+  const reclaimPath = `${lockPath}.reclaim`;
+  let observedOwnerText: string;
   try {
-    ownerText = await readFile(lockPath, "utf8");
+    observedOwnerText = await readFile(lockPath, "utf8");
   } catch (error) {
     if (isMissingFile(error)) return true;
     throw error;
   }
-  const normalizedOwner = ownerText.trim();
-  if (!/^[1-9][0-9]*$/.test(normalizedOwner)) return false;
-  const ownerPid = Number(normalizedOwner);
-  if (!Number.isSafeInteger(ownerPid)) return false;
-  try {
-    process.kill(ownerPid, 0);
+
+  const observedOwner = parseBackfillLockOwner(observedOwnerText);
+  if (!observedOwner || (await backfillLockOwnerIsLive(observedOwner))) {
     return false;
-  } catch (error) {
-    if (record(error).code !== "ESRCH") return false;
   }
 
-  // Re-read immediately before removal so a successor lock is not removed
-  // after another process has already recovered the stale owner.
   try {
-    if ((await readFile(lockPath, "utf8")) !== ownerText) return true;
+    await link(lockPath, reclaimPath);
+  } catch (error) {
+    if (isMissingFile(error)) return true;
+    if (record(error).code === "EEXIST") return false;
+    throw error;
+  }
+
+  try {
+    const reclaimedOwnerText = await readFile(reclaimPath, "utf8");
+    const reclaimedOwner = parseBackfillLockOwner(reclaimedOwnerText);
+    if (!reclaimedOwner || (await backfillLockOwnerIsLive(reclaimedOwner))) {
+      return false;
+    }
+    const [current, reclaimed] = await Promise.all([
+      stat(lockPath),
+      stat(reclaimPath),
+    ]);
+    if (current.dev !== reclaimed.dev || current.ino !== reclaimed.ino) {
+      return true;
+    }
+    await unlink(lockPath);
+  } catch (error) {
+    if (!isMissingFile(error)) throw error;
+  } finally {
+    await unlink(reclaimPath).catch((error: unknown) => {
+      if (!isMissingFile(error)) throw error;
+    });
+  }
+  return true;
+}
+
+async function releaseBackfillLock(
+  lockPath: string,
+  lock: BackfillLock,
+): Promise<void> {
+  try {
+    if ((await readFile(lockPath, "utf8")) !== lock.ownerText) return;
     await unlink(lockPath);
   } catch (error) {
     if (!isMissingFile(error)) throw error;
   }
-  return true;
+}
+
+function parseBackfillLockOwner(
+  ownerText: string,
+): BackfillLockOwner | { pid: number } | undefined {
+  const normalizedOwner = ownerText.trim();
+  if (/^[1-9][0-9]*$/.test(normalizedOwner)) {
+    const pid = Number(normalizedOwner);
+    return Number.isSafeInteger(pid) ? { pid } : undefined;
+  }
+  try {
+    const candidate = JSON.parse(normalizedOwner) as UnknownRecord;
+    if (
+      candidate.schemaVersion !== "1" ||
+      !Number.isSafeInteger(candidate.pid) ||
+      typeof candidate.processInstance !== "string" ||
+      candidate.processInstance === "" ||
+      typeof candidate.token !== "string" ||
+      candidate.token === ""
+    ) {
+      return undefined;
+    }
+    return candidate as unknown as BackfillLockOwner;
+  } catch {
+    return undefined;
+  }
+}
+
+async function backfillLockOwnerIsLive(
+  owner: BackfillLockOwner | { pid: number },
+): Promise<boolean> {
+  try {
+    process.kill(owner.pid, 0);
+  } catch (error) {
+    return record(error).code !== "ESRCH";
+  }
+  if (!("processInstance" in owner)) return true;
+  if (process.platform !== "linux" && owner.pid !== process.pid) return true;
+  return (await readProcessInstance(owner.pid)) === owner.processInstance;
+}
+
+async function readProcessInstance(pid: number): Promise<string> {
+  if (process.platform === "linux") {
+    const [bootId, processStat] = await Promise.all([
+      readFile("/proc/sys/kernel/random/boot_id", "utf8"),
+      readFile(`/proc/${pid}/stat`, "utf8"),
+    ]);
+    const commandEnd = processStat.lastIndexOf(")");
+    const statFields = processStat
+      .slice(commandEnd + 2)
+      .trim()
+      .split(/\s+/);
+    const startTicks = statFields[19];
+    if (commandEnd < 0 || !startTicks) {
+      throw new Error("Unable to read process instance identity");
+    }
+    return `linux:${bootId.trim()}:${startTicks}`;
+  }
+  if (pid !== process.pid) {
+    throw new Error("External process identity is unavailable");
+  }
+  return `${process.platform}:${PROCESS_STARTED_AT_MS}`;
+}
+
+function fileExistsError(path: string): NodeJS.ErrnoException {
+  return Object.assign(new Error(`Backfill lock already exists: ${path}`), {
+    code: "EEXIST",
+  });
 }
 
 export async function startOpenSeaMirror(

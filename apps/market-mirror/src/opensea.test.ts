@@ -325,6 +325,127 @@ describe("OpenSea normalization", () => {
     }
   });
 
+  it("recovers when a live PID belongs to a different process instance", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-reused-pid-lock-test-"),
+    );
+    try {
+      const collectionsHash = createHash("sha256")
+        .update(JSON.stringify(["artfi-test"]))
+        .digest("hex");
+      const spoolDirectory = join(
+        spoolParentDirectory,
+        `snapshot-${collectionsHash.slice(0, 24)}`,
+      );
+      await mkdir(spoolDirectory, { recursive: true });
+      await writeFile(
+        join(spoolDirectory, "active.lock"),
+        `${JSON.stringify({
+          schemaVersion: "1",
+          pid: process.pid,
+          processInstance: "different-process-instance",
+          token: "stale-owner",
+        })}\n`,
+        { mode: 0o600 },
+      );
+
+      const published: NormalizedMarketEvent[] = [];
+      const adapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ asset_events: [listed] }), {
+            status: 200,
+          }),
+      });
+      await adapter.backfill(async (event) => {
+        published.push(event);
+      });
+
+      expect(published).toHaveLength(1);
+      expect(await readdir(spoolParentDirectory)).toEqual([]);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("keeps simultaneous stale-lock recovery single-writer", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-stale-lock-race-test-"),
+    );
+    let markEntered!: () => void;
+    let releaseFetch!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    try {
+      const collectionsHash = createHash("sha256")
+        .update(JSON.stringify(["artfi-test"]))
+        .digest("hex");
+      const spoolDirectory = join(
+        spoolParentDirectory,
+        `snapshot-${collectionsHash.slice(0, 24)}`,
+      );
+      await mkdir(spoolDirectory, { recursive: true });
+      await writeFile(
+        join(spoolDirectory, "active.lock"),
+        `${JSON.stringify({
+          schemaVersion: "1",
+          pid: process.pid,
+          processInstance: "different-process-instance",
+          token: "stale-owner",
+        })}\n`,
+        { mode: 0o600 },
+      );
+
+      let fetchCalls = 0;
+      const createAdapter = () =>
+        new OpenSeaAdapter({
+          apiKey: "test-only",
+          collectionSlugs: ["artfi-test"],
+          spoolParentDirectory,
+          fetchImpl: async () => {
+            fetchCalls += 1;
+            markEntered();
+            await release;
+            return new Response(JSON.stringify({ asset_events: [listed] }), {
+              status: 200,
+            });
+          },
+        });
+      const attempts = [
+        createAdapter().backfill(async () => undefined),
+        createAdapter().backfill(async () => undefined),
+      ].map((attempt) =>
+        attempt.then(
+          () => ({ status: "fulfilled" as const }),
+          (reason: unknown) => ({ status: "rejected" as const, reason }),
+        ),
+      );
+      await entered;
+      const firstOutcome = await Promise.race(attempts);
+      expect(firstOutcome).toMatchObject({
+        status: "rejected",
+        reason: { code: "EEXIST" },
+      });
+      expect(fetchCalls).toBe(1);
+      releaseFetch();
+      const outcomes = await Promise.all(attempts);
+      expect(outcomes.map((outcome) => outcome.status).sort()).toEqual([
+        "fulfilled",
+        "rejected",
+      ]);
+      expect(await readdir(spoolParentDirectory)).toEqual([]);
+    } finally {
+      releaseFetch();
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
   it("rejects a repeated REST cursor without looping", async () => {
     let calls = 0;
     const published: unknown[] = [];
