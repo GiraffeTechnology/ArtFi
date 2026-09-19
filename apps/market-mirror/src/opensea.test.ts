@@ -252,23 +252,21 @@ describe("OpenSea normalization", () => {
         fetchImpl: async (input) => {
           const cursor = new URL(String(input)).searchParams.get("next");
           requestedCursors.push(cursor);
-          const version = cursor === null ? 9 : 8;
+          const event = {
+            ...listed,
+            version: cursor === null ? 9 : 8,
+            payload: {
+              ...listed.payload,
+              event_timestamp:
+                cursor === null
+                  ? "2026-08-19T04:00:02Z"
+                  : "2026-08-19T04:00:01Z",
+            },
+          };
           return new Response(
             JSON.stringify({
-              asset_events: [
-                {
-                  ...listed,
-                  version,
-                  payload: {
-                    ...listed.payload,
-                    event_timestamp:
-                      cursor === null
-                        ? "2026-08-19T04:00:02Z"
-                        : "2026-08-19T04:00:01Z",
-                  },
-                },
-              ],
-              next: null,
+              asset_events: cursor === null ? [event, listed] : [event],
+              next: cursor === null ? "overlap-unused" : null,
             }),
             { status: 200 },
           );
@@ -279,6 +277,98 @@ describe("OpenSea normalization", () => {
       });
       expect(requestedCursors).toEqual([null, "cursor-page-2"]);
       expect(resumedPublished.map((event) => event.version)).toEqual([7, 9, 8]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("traverses recovery overlap pages until the committed boundary", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-overlap-test-"),
+    );
+    try {
+      const firstAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          if (cursor === null) {
+            return new Response(
+              JSON.stringify({
+                asset_events: [listed],
+                next: "cursor-page-2",
+              }),
+              { status: 200 },
+            );
+          }
+          throw new Error("provider interrupted after page one");
+        },
+      });
+      await expect(
+        firstAdapter.backfill(async () => undefined),
+      ).rejects.toThrow("provider interrupted");
+
+      const requestedCursors: Array<string | null> = [];
+      const published: NormalizedMarketEvent[] = [];
+      const eventWithVersion = (version: number) => ({
+        ...listed,
+        version,
+        payload: {
+          ...listed.payload,
+          event_timestamp: new Date(
+            Date.parse("2026-08-19T04:00:00Z") + version * 1_000,
+          ).toISOString(),
+        },
+      });
+      const resumedAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          requestedCursors.push(cursor);
+          if (cursor === null) {
+            return new Response(
+              JSON.stringify({
+                asset_events: [eventWithVersion(10), eventWithVersion(9)],
+                next: "overlap-page-2",
+              }),
+              { status: 200 },
+            );
+          }
+          if (cursor === "overlap-page-2") {
+            return new Response(
+              JSON.stringify({
+                asset_events: [eventWithVersion(8), listed],
+                next: "overlap-unused",
+              }),
+              { status: 200 },
+            );
+          }
+          expect(cursor).toBe("cursor-page-2");
+          return new Response(
+            JSON.stringify({
+              asset_events: [eventWithVersion(6)],
+              next: null,
+            }),
+            { status: 200 },
+          );
+        },
+      });
+      await resumedAdapter.backfill(async (event) => {
+        published.push(event);
+      });
+
+      expect(requestedCursors).toEqual([
+        null,
+        "overlap-page-2",
+        "cursor-page-2",
+      ]);
+      expect(published.map((event) => event.version)).toEqual([7, 10, 9, 8, 6]);
       await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
@@ -330,23 +420,21 @@ describe("OpenSea normalization", () => {
         fetchImpl: async (input) => {
           const cursor = new URL(String(input)).searchParams.get("next");
           requestedCursors.push(cursor);
-          const version = cursor === null ? 9 : 8;
+          const event = {
+            ...listed,
+            version: cursor === null ? 9 : 8,
+            payload: {
+              ...listed.payload,
+              event_timestamp:
+                cursor === null
+                  ? "2026-08-19T04:00:02Z"
+                  : "2026-08-19T04:00:01Z",
+            },
+          };
           return new Response(
             JSON.stringify({
-              asset_events: [
-                {
-                  ...listed,
-                  version,
-                  payload: {
-                    ...listed.payload,
-                    event_timestamp:
-                      cursor === null
-                        ? "2026-08-19T04:00:02Z"
-                        : "2026-08-19T04:00:01Z",
-                  },
-                },
-              ],
-              next: null,
+              asset_events: cursor === null ? [event, listed] : [event],
+              next: cursor === null ? "overlap-unused" : null,
             }),
             { status: 200 },
           );
@@ -788,6 +876,63 @@ describe("OpenSea normalization", () => {
       startOpenSeaMirror(adapter, async () => undefined),
     ).rejects.toThrow("realtime queue capacity exceeded");
     await Promise.all(queued);
+  });
+
+  it("fails closed before the retained realtime spool exceeds capacity", async () => {
+    let liveSink: MarketEventSink | undefined;
+    let releaseSnapshot!: () => void;
+    let snapshotStarted!: () => void;
+    const snapshotGate = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    const snapshotObserved = new Promise<void>((resolve) => {
+      snapshotStarted = resolve;
+    });
+    const historic = normalizeOpenSeaEvent(listed);
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(sink) {
+        liveSink = sink;
+        return () => undefined;
+      },
+      async backfill() {
+        snapshotStarted();
+        await snapshotGate;
+      },
+    };
+    const starting = startOpenSeaMirror(adapter, async () => undefined);
+    await snapshotObserved;
+
+    let overflow: unknown;
+    for (let version = 1; version <= 10; version += 1) {
+      try {
+        await liveSink!({
+          ...historic,
+          version,
+          payload: {
+            ...historic.payload,
+            padding: "x".repeat(600_000),
+          },
+        });
+      } catch (error) {
+        overflow = error;
+        break;
+      }
+    }
+    expect(overflow).toBeInstanceOf(Error);
+    expect((overflow as Error).message).toContain(
+      "realtime queue capacity exceeded",
+    );
+    releaseSnapshot();
+
+    await expect(starting).rejects.toThrow("realtime queue capacity exceeded");
   });
 
   it("fails closed when the realtime queue overflows during snapshot commit", async () => {

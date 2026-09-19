@@ -44,6 +44,7 @@ interface BackfillLockOwner {
 const PROCESS_STARTED_AT_MS = Math.round(Date.now() - process.uptime() * 1_000);
 const MAX_PENDING_REALTIME_EVENTS = 256;
 const MAX_PENDING_REALTIME_BYTES = 4 * 1024 * 1024;
+const MAX_REALTIME_SPOOL_BYTES = 4 * 1024 * 1024;
 
 const ORDER_EVENTS = new Set([
   "item_listed",
@@ -217,6 +218,8 @@ interface BackfillCheckpoint {
   collectionIndex: number;
   spoolBytes: number;
   nextCursor?: string;
+  pageCollectionIndex?: number;
+  pageFingerprints?: string[];
 }
 
 interface BackfillCheckpointState {
@@ -401,24 +404,74 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       checkpointLog = await open(checkpointPath, "a+", 0o600);
 
       // A process can exit after a REST page is checkpointed but before the
-      // realtime buffer is committed. Re-read every collection head before
-      // resuming the saved cursor so events observed during that crash window
-      // are part of the recovered snapshot instead of becoming a silent gap.
+      // realtime buffer is committed. Traverse each checkpointed collection
+      // from its current head until the last committed page boundary is found.
+      // This closes a crash window larger than one provider page without
+      // retaining the transient realtime spool across process lifetimes.
+      let resumedCollectionExhausted = false;
       if (latest) {
-        for (const slug of this.#config.collectionSlugs) {
-          const overlapUrl = new URL(
-            `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
-          );
-          overlapUrl.searchParams.set("limit", "200");
-          const overlap = await this.#fetchBackfillPage(overlapUrl, signal);
-          const overlapEvents = Array.isArray(overlap.asset_events)
-            ? overlap.asset_events
-            : [];
-          for (const event of overlapEvents) {
-            await writeAll(
-              spool,
-              `${JSON.stringify(normalizeOpenSeaEvent(event))}\n`,
+        const boundaryByCollection = new Map<number, Set<string>>();
+        for (const checkpoint of checkpoints) {
+          if (
+            checkpoint.pageCollectionIndex !== undefined &&
+            checkpoint.pageFingerprints
+          ) {
+            boundaryByCollection.set(
+              checkpoint.pageCollectionIndex,
+              new Set(checkpoint.pageFingerprints),
             );
+          }
+        }
+        const checkpointedCollectionCount = latest.nextCursor
+          ? latest.collectionIndex + 1
+          : latest.collectionIndex;
+        for (
+          let overlapCollectionIndex = 0;
+          overlapCollectionIndex < checkpointedCollectionCount;
+          overlapCollectionIndex += 1
+        ) {
+          const slug = this.#config.collectionSlugs[overlapCollectionIndex]!;
+          const boundary = boundaryByCollection.get(overlapCollectionIndex);
+          const observedOverlapCursors = new Set<string>();
+          let overlapCursor: string | undefined;
+          let boundaryReached = false;
+          while (!boundaryReached) {
+            const overlapUrl = new URL(
+              `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
+            );
+            overlapUrl.searchParams.set("limit", "200");
+            if (overlapCursor) {
+              overlapUrl.searchParams.set("next", overlapCursor);
+            }
+            const overlap = await this.#fetchBackfillPage(overlapUrl, signal);
+            const overlapEvents = Array.isArray(overlap.asset_events)
+              ? overlap.asset_events.map(normalizeOpenSeaEvent)
+              : [];
+            for (const event of overlapEvents) {
+              if (boundary?.has(eventFingerprint(event))) {
+                boundaryReached = true;
+                break;
+              }
+              await writeAll(spool, `${JSON.stringify(event)}\n`);
+            }
+            if (boundaryReached) break;
+            const nextCursor = text(overlap.next);
+            if (!nextCursor) {
+              if (
+                latest.nextCursor &&
+                overlapCollectionIndex === latest.collectionIndex
+              ) {
+                resumedCollectionExhausted = true;
+              }
+              break;
+            }
+            if (observedOverlapCursors.has(nextCursor)) {
+              throw new Error(
+                "OpenSea recovery overlap cursor did not advance",
+              );
+            }
+            observedOverlapCursors.add(nextCursor);
+            overlapCursor = nextCursor;
           }
         }
         await spool.sync();
@@ -426,6 +479,10 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
 
       let collectionIndex = latest?.collectionIndex ?? 0;
       let cursor = latest?.nextCursor;
+      if (resumedCollectionExhausted) {
+        collectionIndex += 1;
+        cursor = undefined;
+      }
       while (collectionIndex < this.#config.collectionSlugs.length) {
         const slug = this.#config.collectionSlugs[collectionIndex]!;
         const observedCursors = new Set(
@@ -442,13 +499,10 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
           if (cursor) url.searchParams.set("next", cursor);
           const body = await this.#fetchBackfillPage(url, signal);
           const events = Array.isArray(body.asset_events)
-            ? body.asset_events
+            ? body.asset_events.map(normalizeOpenSeaEvent)
             : [];
           for (const event of events) {
-            await writeAll(
-              spool,
-              `${JSON.stringify(normalizeOpenSeaEvent(event))}\n`,
-            );
+            await writeAll(spool, `${JSON.stringify(event)}\n`);
           }
           await spool.sync();
           const spoolBytes = (await spool.stat()).size;
@@ -464,6 +518,12 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
             collectionIndex: nextCursor ? collectionIndex : collectionIndex + 1,
             spoolBytes,
             ...(nextCursor ? { nextCursor } : {}),
+            ...(events.length > 0
+              ? {
+                  pageCollectionIndex: collectionIndex,
+                  pageFingerprints: events.map(eventFingerprint),
+                }
+              : {}),
           };
           await writeAll(checkpointLog, `${JSON.stringify(nextCheckpoint)}\n`);
           await checkpointLog.sync();
@@ -654,6 +714,12 @@ async function readBackfillCheckpoints(
     }
     const value = record(parsed);
     const nextCursor = text(value.nextCursor);
+    const pageCollectionIndex = value.pageCollectionIndex;
+    const pageFingerprints = Array.isArray(value.pageFingerprints)
+      ? value.pageFingerprints
+      : undefined;
+    const hasPageBoundary =
+      pageCollectionIndex !== undefined || pageFingerprints !== undefined;
     if (
       value.schemaVersion !== "1" ||
       value.collectionsHash !== collectionsHash ||
@@ -663,7 +729,17 @@ async function readBackfillCheckpoints(
       !Number.isSafeInteger(value.spoolBytes) ||
       (value.spoolBytes as number) < 0 ||
       (value.nextCursor !== undefined && nextCursor === undefined) ||
-      ((value.collectionIndex as number) === collectionCount && nextCursor)
+      ((value.collectionIndex as number) === collectionCount && nextCursor) ||
+      (hasPageBoundary &&
+        (!Number.isSafeInteger(pageCollectionIndex) ||
+          (pageCollectionIndex as number) < 0 ||
+          (pageCollectionIndex as number) >= collectionCount ||
+          !pageFingerprints ||
+          pageFingerprints.length < 1 ||
+          pageFingerprints.length > 200 ||
+          pageFingerprints.some(
+            (item) => typeof item !== "string" || !/^[0-9a-f]{64}$/.test(item),
+          )))
     ) {
       throw new Error("OpenSea backfill checkpoint is invalid");
     }
@@ -673,6 +749,12 @@ async function readBackfillCheckpoints(
       collectionIndex: value.collectionIndex as number,
       spoolBytes: value.spoolBytes as number,
       ...(nextCursor ? { nextCursor } : {}),
+      ...(hasPageBoundary
+        ? {
+            pageCollectionIndex: pageCollectionIndex as number,
+            pageFingerprints: pageFingerprints as string[],
+          }
+        : {}),
     };
     const previous = checkpoints.at(-1);
     if (
@@ -890,6 +972,7 @@ export async function startOpenSeaMirror(
   let realtimeSequence = Promise.resolve();
   let pendingRealtimeEvents = 0;
   let pendingRealtimeBytes = 0;
+  let retainedRealtimeBytes = 0;
   try {
     realtimeBuffer = await open(realtimePath, "wx+", 0o600);
   } catch (error) {
@@ -904,7 +987,8 @@ export async function startOpenSeaMirror(
     if (
       serialized &&
       (pendingRealtimeEvents >= MAX_PENDING_REALTIME_EVENTS ||
-        pendingRealtimeBytes + serializedBytes > MAX_PENDING_REALTIME_BYTES)
+        pendingRealtimeBytes + serializedBytes > MAX_PENDING_REALTIME_BYTES ||
+        retainedRealtimeBytes + serializedBytes > MAX_REALTIME_SPOOL_BYTES)
     ) {
       const error = new Error(
         "OpenSea pre-snapshot realtime queue capacity exceeded",
@@ -915,6 +999,7 @@ export async function startOpenSeaMirror(
     if (serialized) {
       pendingRealtimeEvents += 1;
       pendingRealtimeBytes += serializedBytes;
+      retainedRealtimeBytes += serializedBytes;
     }
     const next = realtimeSequence
       .then(async () => {
