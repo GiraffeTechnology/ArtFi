@@ -11,10 +11,32 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title ArtFi whole-artwork market
-/// @notice Signature settlement for a whole artwork (ERC-721). The seller signs an EIP-712 sale
-///         intent off chain; the artwork stays in the seller's wallet and moves only inside the
-///         atomic fill that intent authorized.
-/// @dev `PRD.md` §4.2.2 (client ruling 2026-08-30) requires the non-auction path to settle by
+/// @notice Signature settlement for a whole artwork. The seller signs an EIP-712 sale intent off
+///         chain; the artwork stays in the seller's wallet and moves only inside the atomic fill
+///         that intent authorized.
+/// @dev **Why this is a market of its own.** `PRD.md` §1 lists the product lines, and §1.0.1 gives
+///      them as two asset models. Model A, the full artwork asset receipt, runs
+///      `Artwork -> Custody -> Registry -> ERC-8415 asset representation -> Market transfer`, and
+///      one token stands for one artwork. Model B, the artwork investment fund, is the line §1.0.1
+///      says "the ERC-721 mint, vault, and ERC-20 fractionalization requirements in §4 implement" --
+///      `ArtFiRWA` into `ArtFiVault`, out as `FractionalToken`, traded as ERC-20 in
+///      `ArtFiMarket.sol`. `PRD.md` §3.2.3 carries the same split into the stage table as `S-WA`
+///      and `S-FR`. This contract is the Model A venue; `ArtFiMarket` is Model B's and is left
+///      alone.
+///
+///      **Two readings recorded as correctable, not as settled** (`AGENTS.md` §5).
+///      1. No ERC-8415 asset representation exists in this repository, so Model A has no token of
+///         its own yet. `ArtFiRWA` is a plain ERC-721 and §1.0.1 assigns that stack to Model B.
+///         Until the Model A token exists there is nothing this market should be opened over --
+///         which costs nothing, because it is deployed with no collection allowed and settles
+///         nothing until a token manager opens one.
+///      2. The asset leg is written against the minimal ERC-721 surface -- `ownerOf`,
+///         `isApprovedForAll`, `safeTransferFrom` -- and the collection address is a parameter, not
+///         a constant. If the ERC-8415 representation exposes that surface this works unchanged; if
+///         it does not, only the transfer leg needs an adapter. The intent, the signature scheme,
+///         the revocation model and the UI do not depend on the choice.
+///
+///      `PRD.md` §4.2.2 (client ruling 2026-08-30) requires the non-auction path to settle by
 ///      signature: no `_pullExact` at listing time, both sides pulled at fill time, and no resting
 ///      balance in the contract. `AGENTS.md` §1.1 invariant 6 states the same boundary as never
 ///      custody, never counterparty, and never a user's asset moved without that user's signature
@@ -29,8 +51,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///        identity, which `PRD.md` §4.2.1 requires of a self-operated and intermediary listing
 ///        alike.
 ///
-///      This contract covers the whole artwork only. Fractions are ERC-20 and keep their own path
-///      in `ArtFiMarket.sol`, including the auction escrow that §4.2.2 deliberately retains.
+///      Escrow stays with the auction path in `ArtFiMarket.sol`, which §4.2.2 deliberately
+///      retains. Nothing here escrows, so nothing here can be trapped.
 contract WholeArtworkMarket is AccessControl, EIP712, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 

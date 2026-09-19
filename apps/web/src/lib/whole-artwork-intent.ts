@@ -7,6 +7,10 @@ import { hashTypedData, isAddress, type Address, type Hex } from "viem";
  * the intent here; the artwork never leaves their wallet until the fill that intent authorized
  * (`PRD.md` §4.2.2, `AGENTS.md` §1.1 invariant 6).
  *
+ * One of the two markets `PRD.md` §1 defines: the whole artwork (§1.0.1 model A, stage `S-WA`).
+ * Fractions are model B -- the ERC-721 mint, vault and ERC-20 fractionalization stack -- and trade
+ * through `ArtFiMarket.sol` on their own path, stage `S-FR`.
+ *
  * The field order below fixes the EIP-712 type hash and must match `SALE_INTENT_TYPEHASH` in the
  * contract exactly. The two are not trusted to agree: `WholeArtworkMarket.t.sol` and
  * `whole-artwork-intent.test.ts` both assert against the same fixed digest, so a change on either

@@ -274,14 +274,37 @@ imports nothing from charity.
 
 ### What the whole-artwork slice is, and what it is not
 
-**The gap it closes.** A whole artwork is an ERC-721 — `ArtFiRWA`, minted through `RWARegistry`.
-`ArtFiMarket` trades `IERC20` asset tokens only, so a registered artwork could be minted and held
-but never listed or sold. There was no whole-artwork trading path at all.
+**There are two markets, and the PRD says so.** `PRD.md` §1 lists the product lines and §1.0.1
+gives them as two asset models. Model A, the full artwork asset receipt, is
+`Artwork → Custody → Registry → ERC-8415 asset representation → Market transfer`, one token for one
+artwork. Model B, the artwork investment fund, is the line §1.0.1 states "the ERC-721 mint, vault,
+and ERC-20 fractionalization requirements in §4 implement" — `ArtFiRWA` into `ArtFiVault`, out as
+`FractionalToken`, traded as ERC-20 in `ArtFiMarket.sol`. §3.2.3 carries the same split into the
+stage table as `S-WA` and `S-FR`. **The split is stipulated, not derived here**, and earlier drafts
+of this section cited §4.2.2 for it, which is the settlement rule, not the market split.
 
-**The shape is not a choice made here.** `PRD.md` §4.2.2 (client ruling 2026-08-30) already ruled
-that the non-auction path settles by signature: no pull at listing time, both sides pulled at fill
-time, no resting balance. `AGENTS.md` §1.1 invariant 6 states the same boundary. Escrow is retained
-for auctions only, which is why `ArtFiMarket` is **not** modified.
+**The gap it closes.** `ArtFiMarket` trades `IERC20` asset tokens only — model B's fractions. Model
+A had no venue at all: an artwork could be registered, minted and held, and never listed or sold.
+
+**The settlement shape is not a choice made here either.** `PRD.md` §4.2.2 (client ruling
+2026-08-30) already ruled that the non-auction path settles by signature: no pull at listing time,
+both sides pulled at fill time, no resting balance. `AGENTS.md` §1.1 invariant 6 states the same
+boundary. Escrow is retained for auctions only, which is why `ArtFiMarket` is **not** modified.
+
+**Model A has no token yet — a finding, not a blocker.** No ERC-8415 asset representation exists
+anywhere in this repository; the only occurrences of the term are documentation and code comments.
+`ArtFiRWA` is a plain ERC-721 and §1.0.1 assigns that stack to model B. So the model A venue now
+exists while the model A asset does not. That costs nothing: the market deploys with no collection
+allowed and settles nothing until a token manager opens one, so there is no wrong default to
+inherit. Building the ERC-8415 representation is its own scope item and needs the standard, which
+is not available in this environment — it is reported here, not invented.
+
+Two readings are recorded in the contract header as **correctable** rather than settled
+(`AGENTS.md` §5): that model A currently has no token of its own, and that the asset leg is written
+against the minimal ERC-721 surface (`ownerOf`, `isApprovedForAll`, `safeTransferFrom`) with the
+collection as a parameter rather than a constant. If the ERC-8415 representation exposes that
+surface this works unchanged; if it does not, only the transfer leg needs an adapter — the intent,
+the signature scheme, the revocation model and the UI do not depend on the choice.
 
 **A conflict worth recording, not acting on unasked.** That same ruling says `_pullExact` is
 removed from the fixed-price path. In `ArtFiMarket._createListing` it is still called for
@@ -312,8 +335,11 @@ Nothing in this list is a blocker on anything else, and none of it is a client d
    unconfigured branch by design and offers no control.
 3. **A real catalogue.** `lib/catalog.ts` is still six invented artworks with no on-chain identity
    (M3.7). Every asset page therefore shows the unconfigured branch today.
+4. **A model A token to open the market over**, per the finding above. Pointing it at `ArtFiRWA`
+   would open the model A venue over model B's asset; the allowlist exists so that decision is
+   explicit rather than a default.
 
-Items 2 and 3 are why this is **not** a stage handover: no user can yet carry the function out end
+Items 2, 3 and 4 are why this is **not** a stage handover: no user can yet carry the function out end
 to end, so `PRD.md` §3.2.1 is not met and nothing in `STATUS.md` moves. The path is built, tested
 and counted, which §3.2.6 is explicit is not the same as opened.
 
