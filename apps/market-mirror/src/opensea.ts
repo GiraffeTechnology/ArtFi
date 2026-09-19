@@ -229,6 +229,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
   }
 
   async backfill(sink: MarketEventSink, signal?: AbortSignal): Promise<void> {
+    const stagedEvents: NormalizedMarketEvent[] = [];
     for (const slug of this.#config.collectionSlugs) {
       let cursor: string | undefined;
       const observedCursors = new Set<string>();
@@ -238,17 +239,13 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
         );
         url.searchParams.set("limit", "200");
         if (cursor) url.searchParams.set("next", cursor);
-        const response = await this.#fetchBackfillPage(url, signal);
-        if (!response.ok) {
-          throw new Error(
-            `OpenSea backfill failed with HTTP ${response.status}`,
-          );
-        }
-        const body = record(await response.json());
+        const body = await this.#fetchBackfillPage(url, signal);
         const events = Array.isArray(body.asset_events)
           ? body.asset_events
           : [];
-        for (const event of events) await sink(normalizeOpenSeaEvent(event));
+        for (const event of events) {
+          stagedEvents.push(normalizeOpenSeaEvent(event));
+        }
         const nextCursor = text(body.next);
         if (nextCursor && observedCursors.has(nextCursor)) {
           throw new Error("OpenSea backfill cursor did not advance");
@@ -263,9 +260,13 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
         }
       }
     }
+    for (const event of stagedEvents) await sink(event);
   }
 
-  async #fetchBackfillPage(url: URL, signal?: AbortSignal): Promise<Response> {
+  async #fetchBackfillPage(
+    url: URL,
+    signal?: AbortSignal,
+  ): Promise<UnknownRecord> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= this.#retryAttempts; attempt += 1) {
       let retryDelayMs = this.#retryBaseDelayMs * 2 ** (attempt - 1);
@@ -290,16 +291,25 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
           headers: { "x-api-key": this.#config.apiKey },
           signal: requestController.signal,
         });
-        if (response.ok || !isRetryableStatus(response.status)) return response;
-        lastError = new Error(
-          `OpenSea backfill retryable HTTP ${response.status}`,
-        );
-        retryDelayMs = Math.max(
-          retryDelayMs,
-          retryAfterDelayMs(response.headers.get("retry-after")),
-        );
+        if (!response.ok) {
+          if (!isRetryableStatus(response.status)) {
+            throw new PermanentBackfillError(
+              `OpenSea backfill failed with HTTP ${response.status}`,
+            );
+          }
+          lastError = new Error(
+            `OpenSea backfill retryable HTTP ${response.status}`,
+          );
+          retryDelayMs = Math.max(
+            retryDelayMs,
+            retryAfterDelayMs(response.headers.get("retry-after")),
+          );
+        } else {
+          return record(await response.json());
+        }
       } catch (error) {
         if (signal?.aborted) throw error;
+        if (error instanceof PermanentBackfillError) throw error;
         lastError = timedOut
           ? new Error("OpenSea backfill request timed out")
           : error;
@@ -342,6 +352,8 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
   }
 }
 
+class PermanentBackfillError extends Error {}
+
 function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
@@ -359,14 +371,14 @@ function sleepWithAbort(delayMs: number, signal?: AbortSignal): Promise<void> {
       reject(signal.reason);
       return;
     }
-    const timeout = setTimeout(resolve, delayMs);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timeout);
-        reject(signal.reason);
-      },
-      { once: true },
-    );
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(signal?.reason);
+    };
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }

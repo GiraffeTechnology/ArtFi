@@ -112,6 +112,7 @@ describe("OpenSea normalization", () => {
   });
 
   it("fails closed instead of reporting a truncated REST history", async () => {
+    const published: unknown[] = [];
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
@@ -122,13 +123,17 @@ describe("OpenSea normalization", () => {
           { status: 200 },
         ),
     });
-    await expect(adapter.backfill(async () => undefined)).rejects.toThrow(
-      "incomplete at the configured page limit",
-    );
+    await expect(
+      adapter.backfill(async (event) => {
+        published.push(event);
+      }),
+    ).rejects.toThrow("incomplete at the configured page limit");
+    expect(published).toEqual([]);
   });
 
   it("rejects a repeated REST cursor without looping", async () => {
     let calls = 0;
+    const published: unknown[] = [];
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
@@ -141,10 +146,13 @@ describe("OpenSea normalization", () => {
         );
       },
     });
-    await expect(adapter.backfill(async () => undefined)).rejects.toThrow(
-      "cursor did not advance",
-    );
+    await expect(
+      adapter.backfill(async (event) => {
+        published.push(event);
+      }),
+    ).rejects.toThrow("cursor did not advance");
     expect(calls).toBe(2);
+    expect(published).toEqual([]);
   });
 
   it("honors a bounded Retry-After delay for provider rate limits", async () => {
@@ -191,6 +199,31 @@ describe("OpenSea normalization", () => {
             { once: true },
           );
         }),
+    });
+    await expect(adapter.backfill(async () => undefined)).rejects.toThrow(
+      "request timed out",
+    );
+  });
+
+  it("keeps the timeout active while reading a stalled response body", async () => {
+    const adapter = new OpenSeaAdapter({
+      apiKey: "test-only",
+      collectionSlugs: ["artfi-test"],
+      backfillPages: 1,
+      retryAttempts: 1,
+      requestTimeoutMs: 10,
+      fetchImpl: async (_input, init) => {
+        const body = new ReadableStream({
+          start(controller) {
+            init?.signal?.addEventListener(
+              "abort",
+              () => controller.error(init.signal?.reason),
+              { once: true },
+            );
+          },
+        });
+        return new Response(body, { status: 200 });
+      },
     });
     await expect(adapter.backfill(async () => undefined)).rejects.toThrow(
       "request timed out",
