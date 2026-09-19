@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
-import { link, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  link,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -38,6 +46,14 @@ const listed = {
     payment_token: { symbol: "ETH" },
   },
 };
+
+async function expectStableSnapshotDirectoryClean(
+  spoolParentDirectory: string,
+): Promise<void> {
+  const entries = await readdir(spoolParentDirectory);
+  expect(entries).toHaveLength(1);
+  expect(await readdir(join(spoolParentDirectory, entries[0]!))).toEqual([]);
+}
 
 describe("OpenSea normalization", () => {
   it("normalizes an order without adding execution capability", () => {
@@ -188,7 +204,7 @@ describe("OpenSea normalization", () => {
           }),
       });
       await adapter.backfill(async () => undefined);
-      expect(await readdir(spoolParentDirectory)).toEqual([]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
     }
@@ -259,7 +275,82 @@ describe("OpenSea normalization", () => {
       });
       expect(requestedCursors).toEqual(["cursor-page-2"]);
       expect(resumedPublished.map((event) => event.version)).toEqual([7, 8]);
-      expect(await readdir(spoolParentDirectory)).toEqual([]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("recovers checkpoint and spool tails from the last complete record", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-tail-recovery-test-"),
+    );
+    try {
+      const firstAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          if (cursor === null) {
+            return new Response(
+              JSON.stringify({
+                asset_events: [listed],
+                next: "cursor-page-2",
+              }),
+              { status: 200 },
+            );
+          }
+          throw new Error("provider interrupted after page one");
+        },
+      });
+      await expect(
+        firstAdapter.backfill(async () => undefined),
+      ).rejects.toThrow("provider interrupted");
+
+      const [snapshotDirectory] = await readdir(spoolParentDirectory);
+      const snapshotPath = join(spoolParentDirectory, snapshotDirectory!);
+      await appendFile(join(snapshotPath, "events.ndjson"), '{"partial":');
+      await appendFile(
+        join(snapshotPath, "checkpoints.ndjson"),
+        '{"schemaVersion":',
+      );
+
+      const requestedCursors: Array<string | null> = [];
+      const published: NormalizedMarketEvent[] = [];
+      const resumedAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          requestedCursors.push(cursor);
+          return new Response(
+            JSON.stringify({
+              asset_events: [
+                {
+                  ...listed,
+                  version: 8,
+                  payload: {
+                    ...listed.payload,
+                    event_timestamp: "2026-08-19T04:00:01Z",
+                  },
+                },
+              ],
+              next: null,
+            }),
+            { status: 200 },
+          );
+        },
+      });
+      await resumedAdapter.backfill(async (event) => {
+        published.push(event);
+      });
+
+      expect(requestedCursors).toEqual(["cursor-page-2"]);
+      expect(published.map((event) => event.version)).toEqual([7, 8]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
     }
@@ -306,7 +397,7 @@ describe("OpenSea normalization", () => {
       ).rejects.toMatchObject({ code: "EEXIST" });
       releaseFetch();
       await running;
-      expect(await readdir(spoolParentDirectory)).toEqual([]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       releaseFetch();
       await rm(spoolParentDirectory, { force: true, recursive: true });
@@ -345,7 +436,7 @@ describe("OpenSea normalization", () => {
       });
 
       expect(published).toHaveLength(1);
-      expect(await readdir(spoolParentDirectory)).toEqual([]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
     }
@@ -383,7 +474,7 @@ describe("OpenSea normalization", () => {
       });
 
       expect(published).toHaveLength(1);
-      expect(await readdir(spoolParentDirectory)).toEqual([]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
     }
@@ -428,7 +519,7 @@ describe("OpenSea normalization", () => {
       });
 
       expect(published).toHaveLength(1);
-      expect(await readdir(spoolParentDirectory)).toEqual([]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
     }
@@ -503,7 +594,7 @@ describe("OpenSea normalization", () => {
         "fulfilled",
         "rejected",
       ]);
-      expect(await readdir(spoolParentDirectory)).toEqual([]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       releaseFetch();
       await rm(spoolParentDirectory, { force: true, recursive: true });

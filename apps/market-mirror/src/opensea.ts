@@ -9,8 +9,8 @@ import {
   open,
   readFile,
   rm,
-  rmdir,
   stat,
+  truncate,
   unlink,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -213,7 +213,13 @@ interface BackfillCheckpoint {
   schemaVersion: "1";
   collectionsHash: string;
   collectionIndex: number;
+  spoolBytes: number;
   nextCursor?: string;
+}
+
+interface BackfillCheckpointState {
+  checkpoints: BackfillCheckpoint[];
+  validBytes: number;
 }
 
 type PhoenixFrame = [
@@ -368,13 +374,27 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     let completed = false;
     try {
       lock = await acquireBackfillLock(lockPath);
-      const checkpoints = await readBackfillCheckpoints(
+      const checkpointState = await readBackfillCheckpoints(
         checkpointPath,
         collectionsHash,
         this.#config.collectionSlugs.length,
       );
+      const checkpoints = checkpointState.checkpoints;
       const latest = checkpoints.at(-1);
       if (latest) await access(spoolPath);
+      for (const path of [spoolPath, checkpointPath]) {
+        const created = await open(path, "a", 0o600);
+        await created.close();
+      }
+      const spoolState = await stat(spoolPath);
+      const committedSpoolBytes = latest?.spoolBytes ?? 0;
+      if (spoolState.size < committedSpoolBytes) {
+        throw new Error(
+          "OpenSea backfill spool is shorter than its checkpoint",
+        );
+      }
+      await truncate(spoolPath, committedSpoolBytes);
+      await truncate(checkpointPath, checkpointState.validBytes);
       spool = await open(spoolPath, "a+", 0o600);
       checkpointLog = await open(checkpointPath, "a+", 0o600);
 
@@ -405,6 +425,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
             );
           }
           await spool.sync();
+          const spoolBytes = (await spool.stat()).size;
 
           const nextCursor = text(body.next);
           if (nextCursor && observedCursors.has(nextCursor)) {
@@ -415,6 +436,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
             schemaVersion: "1",
             collectionsHash,
             collectionIndex: nextCursor ? collectionIndex : collectionIndex + 1,
+            spoolBytes,
             ...(nextCursor ? { nextCursor } : {}),
           };
           await writeAll(checkpointLog, `${JSON.stringify(nextCheckpoint)}\n`);
@@ -464,13 +486,6 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       }
       if (lock) {
         await releaseBackfillLock(lockPath, lock);
-      }
-      if (removeSnapshot && !transientParent) {
-        await rmdir(spoolDirectory).catch((error: unknown) => {
-          if (!isMissingFile(error) && record(error).code !== "ENOTEMPTY") {
-            throw error;
-          }
-        });
       }
       if (transientParent) {
         await rm(transientParent, { force: true, recursive: true });
@@ -592,19 +607,19 @@ async function readBackfillCheckpoints(
   checkpointPath: string,
   collectionsHash: string,
   collectionCount: number,
-): Promise<BackfillCheckpoint[]> {
-  let contents: string;
+): Promise<BackfillCheckpointState> {
+  let contents: Buffer;
   try {
-    contents = await readFile(checkpointPath, "utf8");
+    contents = await readFile(checkpointPath);
   } catch (error) {
-    if (isMissingFile(error)) return [];
+    if (isMissingFile(error)) return { checkpoints: [], validBytes: 0 };
     throw error;
   }
-  if (contents !== "" && !contents.endsWith("\n")) {
-    throw new Error("OpenSea backfill checkpoint is truncated");
-  }
+  const finalNewline = contents.lastIndexOf(0x0a);
+  const validBytes = finalNewline + 1;
+  const completeContents = contents.subarray(0, validBytes).toString("utf8");
   const checkpoints: BackfillCheckpoint[] = [];
-  for (const line of contents.split("\n").filter(Boolean)) {
+  for (const line of completeContents.split("\n").filter(Boolean)) {
     let parsed: unknown;
     try {
       parsed = JSON.parse(line);
@@ -619,6 +634,8 @@ async function readBackfillCheckpoints(
       !Number.isSafeInteger(value.collectionIndex) ||
       (value.collectionIndex as number) < 0 ||
       (value.collectionIndex as number) > collectionCount ||
+      !Number.isSafeInteger(value.spoolBytes) ||
+      (value.spoolBytes as number) < 0 ||
       (value.nextCursor !== undefined && nextCursor === undefined) ||
       ((value.collectionIndex as number) === collectionCount && nextCursor)
     ) {
@@ -628,19 +645,21 @@ async function readBackfillCheckpoints(
       schemaVersion: "1",
       collectionsHash,
       collectionIndex: value.collectionIndex as number,
+      spoolBytes: value.spoolBytes as number,
       ...(nextCursor ? { nextCursor } : {}),
     };
     const previous = checkpoints.at(-1);
     if (
       previous &&
-      checkpoint.collectionIndex !== previous.collectionIndex &&
-      checkpoint.collectionIndex !== previous.collectionIndex + 1
+      (checkpoint.spoolBytes < previous.spoolBytes ||
+        (checkpoint.collectionIndex !== previous.collectionIndex &&
+          checkpoint.collectionIndex !== previous.collectionIndex + 1))
     ) {
       throw new Error("OpenSea backfill checkpoint sequence is invalid");
     }
     checkpoints.push(checkpoint);
   }
-  return checkpoints;
+  return { checkpoints, validBytes };
 }
 
 function isMissingFile(error: unknown): boolean {
@@ -835,35 +854,69 @@ export async function startOpenSeaMirror(
   adapter: MarketplaceAdapter,
   sink: MarketEventSink,
 ): Promise<() => void> {
-  const bufferedRealtime: NormalizedMarketEvent[] = [];
+  const realtimeDirectory = await mkdtemp(
+    join(tmpdir(), "artfi-opensea-realtime-"),
+  );
+  const realtimePath = join(realtimeDirectory, "events.ndjson");
+  let realtimeBuffer: Awaited<ReturnType<typeof open>> | undefined;
   let realtimeReady = false;
+  let realtimeFailure: unknown;
   let realtimeSequence = Promise.resolve();
-  const realtimeSink: MarketEventSink = async (event) => {
+  try {
+    realtimeBuffer = await open(realtimePath, "wx+", 0o600);
+  } catch (error) {
+    await rm(realtimeDirectory, { force: true, recursive: true });
+    throw error;
+  }
+  const realtimeSink: MarketEventSink = (event) => {
     const next = realtimeSequence.then(async () => {
+      if (realtimeFailure) throw realtimeFailure;
       if (!realtimeReady) {
-        bufferedRealtime.push(event);
+        await writeAll(realtimeBuffer!, `${JSON.stringify(event)}\n`);
+        await realtimeBuffer!.sync();
         return;
       }
       await sink(event);
     });
-    realtimeSequence = next.catch(() => undefined);
-    await next;
+    realtimeSequence = next.catch((error: unknown) => {
+      realtimeFailure ??= error;
+    });
+    return next;
   };
-  const stop = await adapter.start(realtimeSink);
+  let stop: (() => void) | undefined;
   try {
+    stop = await adapter.start(realtimeSink);
     await adapter.backfill(sink);
     const commitRealtime = realtimeSequence.then(async () => {
-      for (const event of bufferedRealtime) await sink(event);
-      bufferedRealtime.length = 0;
+      if (realtimeFailure) throw realtimeFailure;
+      await realtimeBuffer!.sync();
+      await realtimeBuffer!.close();
+      realtimeBuffer = undefined;
+      const input = createReadStream(realtimePath, { encoding: "utf8" });
+      const lines = createInterface({ input, crlfDelay: Infinity });
+      try {
+        for await (const line of lines) {
+          if (line !== "") {
+            await sink(JSON.parse(line) as NormalizedMarketEvent);
+          }
+        }
+      } finally {
+        lines.close();
+        input.destroy();
+      }
       realtimeReady = true;
     });
-    realtimeSequence = commitRealtime.catch(() => undefined);
+    realtimeSequence = commitRealtime.catch((error: unknown) => {
+      realtimeFailure ??= error;
+    });
     await commitRealtime;
     return stop;
   } catch (error) {
-    bufferedRealtime.length = 0;
-    stop();
+    stop?.();
     throw error;
+  } finally {
+    await realtimeBuffer?.close();
+    await rm(realtimeDirectory, { force: true, recursive: true });
   }
 }
 
