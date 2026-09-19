@@ -14,7 +14,12 @@ const directorDeclaration =
 const inscriptionTerms = readFileSync(
   "release/terms/ArtCCH_ArtFi_NFT_Inscription_Terms_EN_v1.txt",
 );
+const watermarked = Buffer.concat([
+  Buffer.from("89504e470d0a1a0a", "hex"),
+  Buffer.from("watermarked-holder-copy"),
+]);
 writeFileSync(join(directory, "master.png"), master);
+writeFileSync(join(directory, "watermarked.png"), watermarked);
 writeFileSync(join(directory, "nft-terms.txt"), inscriptionTerms);
 
 const packageBase = {
@@ -50,6 +55,8 @@ const packageBase = {
     publicUri: null,
     unwatermarkedAvailable: false,
     preview: false,
+    file: "watermarked.png",
+    sha256: sha256(watermarked),
   },
   rights: {
     basis: "assignment",
@@ -154,7 +161,11 @@ if (
   ) ||
   !result.canonicalMetadata.includes(
     "Artist's sellout-contingent donation undertaking",
-  )
+  ) ||
+  // CH.11's packaging half, proven rather than assumed: the holder file was read and hashed, and
+  // its digest is not the master's.
+  result.holderAssetSha256 !== sha256(watermarked) ||
+  result.holderAssetDistinctFromMaster !== true
 ) {
   throw new Error(
     "charity edition verifier did not reproduce private, no-preview metadata",
@@ -203,6 +214,37 @@ for (const mutate of [
   (value) => (value.inscription.translationsHaveLegalEffect = true),
   (value) => (value.inscription.termsSha256 = "0".repeat(64)),
   (value) => (value.rights.listingActionConfirmed = true),
+  // The formal set (PRD §8.4). A02 is withdrawn and must be hard-rejected; the other three name
+  // no work at all. `^UNIT-A\d{2}$` accepted every one of them.
+  (value) => {
+    value.series.artworkId = "UNIT-A02";
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A02.json";
+  },
+  (value) => {
+    value.series.artworkId = "UNIT-A00";
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A00.json";
+  },
+  (value) => {
+    value.series.artworkId = "UNIT-A39";
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A39.json";
+  },
+  (value) => {
+    value.series.artworkId = "UNIT-A99";
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A99.json";
+  },
+  // CH.11's packaging half: the holder file must not be the master.
+  (value) => (value.holderAsset.sha256 = value.artwork.masterSha256),
+  (value) => delete value.holderAsset.sha256,
+  (value) => delete value.holderAsset.file,
+  (value) => (value.holderAsset.sha256 = "not-a-digest"),
+  // A package that declares one work and publishes another work's metadata.
+  (value) =>
+    (value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A07.json"),
 ]) {
   const invalid = structuredClone(packageBase);
   mutate(invalid);
