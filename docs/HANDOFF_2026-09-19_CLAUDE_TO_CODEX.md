@@ -4,9 +4,15 @@
 | -------- | ------------------------------------------------------------------------------ |
 | Branch   | `claude/ci-all-pr-6dytk9`                                                      |
 | Base     | `main` at `c614994`                                                            |
-| Head     | `f9ef062`, plus one uncommitted change described in §6                         |
+| Head     | Branch tip — working tree clean, nothing outstanding                           |
 | Purpose  | So the delivery side does not rebuild what exists or re-decide what is decided |
 | Standing | **Record only.** See §0                                                        |
+
+> **Why the head is named as a branch tip and not a SHA, and why no commit count appears.** This
+> file's own commit is the head, and that SHA does not exist while the line is being written; a
+> count including it drifts with every correction to this file. `docs/STATUS.md` states the same
+> rule for its change log: a row cannot name its own merge. `git log --oneline c614994..` is the
+> authoritative list.
 
 ## 0. What this document is not
 
@@ -58,7 +64,9 @@ annotated, not rewritten — correcting the wording is the client's call.
 
 ## 2. What is already built on this branch — do not rebuild
 
-Nine commits. Each row says what exists so it is not written twice.
+The commits below are the delivery content, each row saying what exists so it is not written
+twice. `git log --oneline c614994..` also carries later corrections to this file itself, which are
+metadata about the record rather than delivery.
 
 | Commit    | What it delivered                                                                                                                                                  |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -71,6 +79,8 @@ Nine commits. Each row says what exists so it is not written twice.
 | `0c1c652` | **XM.6.** Sale attribution fixed, and `accepted` made reachable                                                                                                    |
 | `ea88ac7` | **Operator view.** `/operations`, read-only dependency status                                                                                                      |
 | `f9ef062` | **Charity release verifier.** Formal-set enforcement, metadata-URI binding, and CH.11's packaging half                                                             |
+| `0268f05` | **Fixture disclosure and holder authority.** The prototype-data notice on every fixture-backed surface, and the three-record standing on a whole-artwork page      |
+| `463d67c` | This handoff record                                                                                                                                                |
 
 ### 2.1 Charity (`S-CH`)
 
@@ -156,9 +166,11 @@ None of them blocks engineering on anything else. Do not invent an answer to any
 
 ---
 
-## 6. Uncommitted work in progress
+## 6. The last change, committed after this file was first written
 
-One change is in the working tree and **not yet pushed** at the time of writing:
+This section originally described work still in the working tree. It landed in `0268f05`, and this
+file was corrected rather than left stale — a handoff that reports pushed work as outstanding
+invites exactly the duplication it exists to prevent. **Nothing is outstanding.**
 
 - `prototype-data-notice.tsx` — a single disclosure component, rendered on `/`, `/projects`,
   `/projects/[slug]`, `/market/rwa/[slug]`, `/market/fractionals` and
@@ -172,13 +184,15 @@ One change is in the working tree and **not yet pushed** at the time of writing:
   surface are **not** labelled as prototype data, and that a fraction page makes no whole-artwork
   holder claim.
 
-Status: typecheck, lint, format and the spec itself pass on desktop; the full desktop-and-mobile
-sweep had not been re-run when this was written. **This discloses; it does not fix.** M3.7 — the
-real catalogue replacing the fixtures — stays `NOT-IMPLEMENTED` and this notice is not evidence
-toward it.
+Status: committed in `0268f05` with every gate green — 98 browser tests across desktop and mobile
+(96 passing, 2 skipped), 106 unit tests, lint, typecheck, build, format, secret scan and chain
+consistency. **This discloses; it does not fix.** M3.7 — the real catalogue replacing the fixtures —
+stays `NOT-IMPLEMENTED` and this notice is not evidence toward it.
 
-`apps/web/playwright.local.config.ts` is a scratch file for running Playwright against this
-environment's Chromium build. **It is not part of the delivery and must not be committed.**
+One note on running the browser suite here: this environment's Playwright build and its installed
+Chromium revision do not match, so the suite was run through a throwaway config pointing at
+`/opt/pw-browsers/chromium_headless_shell-1194`. That file is **not** part of the delivery and is
+not in the repository. `pnpm test:e2e` is the command; it needs a matching browser install.
 
 ---
 
