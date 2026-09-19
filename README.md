@@ -4,39 +4,63 @@ ArtFi is a commercial digital art and real-world asset platform. It is a commerc
 
 This repository is the single source of truth for the rebuilt ArtFi platform.
 
+**It is private.** It is on GitHub so external auditors and VC auditors can read it, not for public distribution. The deployment environment is named in one place, [`docs/DEPLOYMENT_ENVIRONMENT.md`](docs/DEPLOYMENT_ENVIRONMENT.md), so it can be removed at any time with a single deletion; everything else refers to roles and placeholders. Partner and ecosystem identities stay placeholders regardless.
+
 ## Product lines
 
-ArtFi supports three product lines.
+ArtFi supports three product lines. **All trading is available both on ArtFi and on OpenSea, and ArtFi is primary.** OpenSea and other third-party venues are an early-stage state; the target is ArtFi itself as an ERC-8415-standard **artwork RWA market**. That is product direction — until the client rules otherwise, third-party venue support is built, tested and counted exactly as it is today.
 
-### 1. ERC-8415 asset market
+| #   | Product line                | What is traded                          | Venues                               | Opens when                                                                                                |
+| --- | --------------------------- | --------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| 1   | ERC-8415 asset products     | One whole artwork, as a custody receipt | ArtFi + OpenSea                      | Oracle path, ERC-8415 wallet, and ArtCCH registration projected to a third-party registry chain all exist |
+| 2   | Artwork investment products | Fund tokens / fractions of one artwork  | ArtFi + OpenSea                      | Exempt-market compliance is complete                                                                      |
+| 3   | Charity NFT editions        | Fixed 100-unit ERC-1155 editions        | OpenSea first, then ArtFi, in stages | Staged — and delivery stays launch-ready throughout                                                       |
+
+**For a registry-backed asset the registry of record is the holder authority**, and the on-chain token is its projection. Registries of record are a class, not a company: ArtCCH's registry is part of its own-account business and has the same nature as a third-party registry chain. It records the artwork's physical parameters, the holder, and provenance. The authority belongs to the registrar role, so **ArtFi treats ArtCCH as a third party** — no seller allowlist, no admin path that can move its holdings, matching blind to seller identity. **ArtFi is a consumer of registries and operates none of them**, and its own stores are authoritative for nothing.
+
+**On ArtFi, trading settles by signature.** The asset stays in its owner's wallet and moves only in the atomic fill that owner signed. **ArtFi never custodies, never acts as counterparty, and never settles a trade for anyone.** Being a venue is not permission to hold.
+
+**On OpenSea**, ArtFi mirrors attributed listings, offers, sales, transfers and cancellations — each with source, time, freshness and a deep link to the venue — and execution there completes on OpenSea.
+
+The rollout sequence above is a **business** decision about when a capability is switched on. It is not an engineering gate: a track that has not opened is still built, tested and counted in [`docs/STATUS.md`](docs/STATUS.md).
+
+### 1. ERC-8415 asset products — one whole artwork
 
 ArtFi applies ERC-8415 concepts to connect physical artwork identity, custody records, ownership state, and blockchain settlement. ERC-8415 covers asset identity, registry synchronization, ownership-related workflows, and asset lifecycle management.
 
-**Full artwork asset receipt** — individual artwork ownership representation and transfer:
-
 ```text
-Artwork → Custody → Registry → ERC-8415 asset representation → Market transfer
+Artwork → ArtCCH off-chain registration → third-party registry chain → ArtFi / OpenSea
 ```
 
-A token may represent one specific artwork custody certificate.
+A token may represent one specific artwork custody certificate. Opening this line requires an Oracle call path, an ERC-8415 wallet, and off-chain registration at ArtCCH projected onto a third-party registry chain.
 
-**Artwork investment fund** — an asset-specific investment product:
+### 2. Artwork investment products — fractions and fund tokens
+
+An artwork may form an independent investment product with tokenized participation and asset-specific governance.
 
 ```text
 Artwork → Single-asset fund → Fund token → DAO governance
 ```
 
-Each artwork may form an independent investment product with tokenized participation and asset-specific governance.
+Fund token holders participate in governance according to the defined governance rules. For direct artwork receipt products, governance follows the defined asset authority model. **Token possession alone does not define governance rights unless the asset model specifies it.**
 
-### 2. ArtFi DAO governance
+This line opens after exempt-market compliance is complete — a client-side legal step, not an engineering deliverable.
 
-DAO governance follows the underlying asset model. For artwork investment products, fund token holders participate in governance according to the defined governance rules. For direct artwork receipt products, governance follows the defined asset authority model.
+### 3. Charity NFT editions — an independent product line
 
-Token possession alone does not define governance rights unless the asset model specifies it.
+Fixed ERC-1155 editions for cultural and philanthropic fundraising: one artwork, one token ID, exactly 100 units, minted once. They are **not** required to follow the ERC-8415 asset model.
 
-### 3. Charity NFT editions
+The only holder benefit is a high-resolution **watermarked** copy, released after wallet ownership is verified. The unwatermarked master never enters public metadata, a website download, or any browser-delivered object. An edition conveys no copyright, physical title, possession, redemption, commercial-use or reproduction right.
 
-Charity NFT editions are an independent product line for cultural and philanthropic fundraising. They are not required to follow the ERC-8415 asset model.
+All primary proceeds are designated for CCHS. **ArtFi issues no receipt, determines no eligible amount, and promises no tax credit** — holders contact CCHS directly.
+
+Rollout runs OpenSea first, then ArtFi, in stages — **and the build stays launch-ready throughout.**
+
+## Operations
+
+Delivery and the database run on a domestic cloud; on-chain operation runs in the approved **SIN execution zone**. Which vendors these are is bound in [`docs/DEPLOYMENT_ENVIRONMENT.md`](docs/DEPLOYMENT_ENVIRONMENT.md), the only file that names one. An operations agent maintains 24/7 service and reaches a model through a replaceable provider interface — **the model vendor is swappable at any time**, so no prompt, schema or control path may depend on one. Model output is advisory; transaction authority comes from deterministic policy.
+
+Partner and vendor identities appear in governing material only as neutral placeholders.
 
 ## Current status
 
@@ -106,6 +130,13 @@ docker compose config
 
 ## Delivery plan
 
+**ArtFi is delivered in stages, not as one complete end-state handover.** Only the complete RWA
+market is handed over whole. **Every delivery is measured by what is visible and operable in the
+UI** — a stage is delivered when a user in its intended role can carry out its function from the
+ArtFi UI, desktop and mobile, with visual sign-off and the usual evidence. An endpoint, contract,
+test or generated client that no screen reaches is progress, not a handover. The stages are in
+[`docs/PRD.md`](docs/PRD.md) §3.2; a stage does not require mainnet.
+
 **The current baseline is three documents.** Read them before anything else, and see
 [`AGENTS.md`](AGENTS.md) for how they bind:
 
@@ -114,6 +145,8 @@ docker compose config
 - [**Status**](docs/STATUS.md) — where every requirement stands right now, item by item
 
 Client directives override them where they conflict, newest first:
+[2026-09-19 trading and rollout](docs/DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md) (venues,
+phased rollout, operations topology),
 [2026-09-18 charity module](docs/DIRECTIVE_2026-09-18_CHARITY_MODULE.md) (charity requirement
 coverage),
 [2026-09-18 product alignment](docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md) (positioning, asset

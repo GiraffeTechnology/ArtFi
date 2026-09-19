@@ -214,6 +214,25 @@ percentage of elapsed effort, and never in person-days.
 `STATUS.md` is updated on every delivery commit. A commit that changes source without updating it
 is incomplete.
 
+### 6.2 Stage delivery — UI-visible evidence
+
+Client ruling of 2026-09-19 (`DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md` §3). §6 above defines
+when **the complete RWA market** is delivered. This subsection defines the evidence for **one
+stage** of `PRD.md` §3.2.3.
+
+A stage is delivered when, for every requirement in that stage:
+
+1. a user in the stage's intended role can carry out the function **from the ArtFi UI**;
+2. the surface has G1 human visual sign-off, desktop and mobile (§4, G1);
+3. the evidence rules of §3 are satisfied for each item.
+
+**A requirement no screen reaches is not delivered**, whatever its implementation state — a working
+endpoint, a deployed contract, a passing test or a generated client is `IMPLEMENTED-NOT-VERIFIED`,
+not a stage handover. Fixtures presented as live behaviour fail this outright (§3).
+
+This adds no gate and no status value. G1–G4 and the six values of §2 are unchanged, and items 7–10
+of §6 remain the terminus for the complete market only — **a stage does not require mainnet**.
+
 ---
 
 ## 7. Audit instructions (human or agent reviewer)

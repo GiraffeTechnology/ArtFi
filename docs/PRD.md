@@ -5,7 +5,8 @@ Status: Draft for approval
 Repository: `GiraffeTechnology/ArtFi`
 Supersedes: `PRD_AND_DELIVERY_STANDARD.md`
 Amended by: `DIRECTIVE_2026-08-24_HOODI.md` (test chain), `DIRECTIVE_2026-08-30_DELIVERY.md` §1.2.1
-(Hoodi test payload), `DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md` (§1 product definition)
+(Hoodi test payload), `DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md` (§1 product definition),
+`DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md` (§1 trading model and rollout, §3.2 staged delivery)
 
 ---
 
@@ -34,11 +35,62 @@ Amended by `DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md`.
 ArtCCH:ArtFi is a commercial digital art and Real-World-Asset (RWA) platform. **It is a commercial
 application, not a demo**, and it must not be treated as an ERC-8415 demo application.
 
-It supports three product lines:
+It supports three product lines. **All trading is available both on ArtFi and on OpenSea, and ArtFi
+is primary** (client ruling 2026-09-19,
+[`DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md`](DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md)).
+**OpenSea and other third-party venues are an early-stage state.** The target is ArtFi itself as an
+ERC-8415-standard commercial product — an **artwork RWA market**.
 
-1. **ERC-8415 based asset products**
-2. **Artwork investment products**
-3. **Charity NFT editions**
+| #   | Product line                    | What is traded                          | Venues                               | Opens when                                                                                                  |
+| --- | ------------------------------- | --------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| 1   | **ERC-8415 asset products**     | One whole artwork, as a custody receipt | ArtFi + OpenSea                      | Oracle path, ERC-8415 wallet, and ArtCCH off-chain registration projected to `<REGISTRY_CHAIN_A>` all exist |
+| 2   | **Artwork investment products** | Fund tokens / fractions of one artwork  | ArtFi + OpenSea                      | Exempt-market compliance is complete (client-side, legal)                                                   |
+| 3   | **Charity NFT editions**        | Fixed 100-unit ERC-1155 editions        | OpenSea first, then ArtFi, in stages | Staged — **and delivery must be launch-ready at any point in the sequence**                                 |
+
+**On the ArtFi side, trading settles by signature.** ArtFi never custodies, never acts as
+counterparty, and never moves a user's asset without that user's signature for that fill (ruling of
+2026-08-30, §4.2). **Being a venue is not permission to hold.** On the OpenSea side ArtFi mirrors
+attributed data and links out; execution there completes on OpenSea.
+
+> **Conflict recorded, resolved by the later ruling (§0).** Earlier on 2026-09-19 the ruling was
+> that whole-artwork trading happens **only** on OpenSea and ArtFi is a mirror only. The later
+> ruling the same day makes both venues live with ArtFi primary. §0 requires the latest explicit
+> client requirement to control and the conflict to be recorded, so the superseded position is
+> written here rather than deleted. The original PRD (`d754c6b`) matched the superseded position —
+> its J-05 said execution leaves ArtFi — and it is now history on this point.
+
+> **Correction recorded.** This document first read 以本地为主 as "terminus". The client corrected
+> it: **primary**, with third-party venues an early-stage state. The earlier wording is replaced
+> rather than defended.
+
+**What "ArtFi is primary" means, and what it does not.**
+
+**Means.** ArtFi is the product being built, not a front end for someone else's market. Third-party
+venues are how the market is reached while ArtFi's own market matures; the destination is an
+ERC-8415-standard artwork RWA market operated as ArtFi.
+
+**Does not mean.** No engineering consequence is drawn from this here. **Whether, when, or how
+third-party venue support is reduced is a client decision** and is not decided in this document.
+Until such a ruling:
+
+- the external-market mirror (§4.8, XM.1–XM.6) is built, tested and counted exactly as it is now;
+- the charity rollout order — OpenSea first, then ArtFi — is unchanged;
+- the mirror boundary is unchanged: ArtFi never creates, signs, matches, custodies, fulfils or
+  settles on a third-party venue's behalf;
+- **no gate, status value or delivery condition follows from this paragraph.**
+
+It is a statement of product direction, recorded under §0 as a client ruling. It is not a scope
+change.
+
+### 1.0.0 Phased business rollout — not a gate
+
+The "opens when" column above is a **business rollout sequence**. It adds nothing to the G1–G4
+promotion gates, creates no status value, and blocks no requirement. **A track that has not opened
+is still built, tested and counted in `STATUS.md`.**
+
+This is stated explicitly because an agent-authored "gray gate" (`G0`) was dismantled by #91 and
+#94 for inventing a gate nobody asked for. This section describes when a built capability is
+switched on for business, never when engineering may proceed.
 
 ### 1.0.1 Asset models
 
@@ -83,6 +135,74 @@ requirements in §4 and §7 stand on their own.
 **This engagement is not a greenfield build.** A working prototype/MVP already exists and is
 deployed. This engagement converts that prototype into a commercially operable product: real
 backends behind the existing screens, real order flow, real governance, real money, on mainnet.
+
+### 1.0.5 Holder authority
+
+Client ruling of 2026-09-19, in three parts that must be read together.
+
+**1. Registries of record are a class, not a company.** ArtCCH's registry is **part of its
+own-account business**, and its nature is **the same as a third-party registry chain** such as a
+cultural-heritage registry (`<REGISTRY_CHAIN_A>`). They are members of one class with equal
+standing. ArtCCH's is simply the one that originates self-operated registrations.
+
+**2. For a registry-backed asset, the registry of record is the holder authority.** The on-chain
+token is its projection — the ERC-8415 shape already described in §1:
+
+```text
+ArtCCH registry (off-chain)  →  <REGISTRY_CHAIN_A>  →  ERC-8415 token  →  ArtFi / OpenSea
+   record of record               peer registry          projection          venues
+```
+
+**3. Structurally, ArtFi treats ArtCCH as a third party.** The authority belongs to the **registrar
+role**, not to ArtCCH as an operator, and ArtFi grants it no standing in code. Any other registrar
+in the same role has the same authority and travels the same paths. **ArtFi is a consumer of
+registries; it operates none of them.**
+
+#### What ArtCCH's registry records
+
+| Field               | Meaning                                    |
+| ------------------- | ------------------------------------------ |
+| Physical parameters | The artwork as a physical object           |
+| Holder              | Who holds it — the authoritative statement |
+| Provenance          | The ownership and custody history          |
+
+#### This does not reopen the two-roles ruling
+
+`DIRECTIVE_2026-08-30_DELIVERY.md` §1.4.1 stands unchanged:
+
+- **no privileged path** — no seller allowlist, no role restricting who may list, and no
+  administrative interface able to move ArtCCH's holdings, exactly as none may move a customer's;
+- **matching is blind to seller identity** — ArtCCH's own orders receive no ordering, latency,
+  visibility or fee advantage, and the replayable order log is what proves it;
+- **disclosure, not privilege** — a listing discloses whether the seller is ArtCCH, and the
+  self-operated / intermediary distinction is visible to users and accounting but **never branches
+  the settlement path**.
+
+Being the registrar of record for an asset is not a trading privilege over it.
+
+#### What did not change
+
+`DIRECTIVE_2026-08-30_DELIVERY.md` §1.4 says **"Redis and MySQL are not the ownership authority; the
+chain is"**. That is about **ArtFi's own projection tables**, and it stands: ArtFi's position
+projection is read-only, asserts no claim on anyone's property, and is never authoritative for
+anything.
+
+The ruling above names a different record. A registry of record is **not an ArtFi database**. Three
+records now exist, with distinct standing:
+
+| Record                 | Standing                                                                |
+| ---------------------- | ----------------------------------------------------------------------- |
+| The registry of record | **Authority for holdership** of a registry-backed asset                 |
+| The chain              | The projection of that registry, and the settlement record              |
+| ArtFi's projection     | **Authoritative for nothing.** Read-only, reconcilable, no rights claim |
+
+#### Consequence, recorded for decision
+
+With three records, reconciliation has three legs rather than two. `M2.8` already requires the
+projection never to diverge from chain state without reporting the divergence. A registry-versus-chain
+divergence is a new case, and **which way it resolves is a client decision, not an engineering
+one**. Settled either way: **ArtFi never resolves a divergence by asserting its own projection.**
+It reports.
 
 ### 1.1 Brand and attribution
 
@@ -186,6 +306,74 @@ delivery team's.
 
 > Open item: the Gantt window and the task list's stated duration disagree. Reconcile before P1
 > sign-off. The figures are held outside this repository.
+
+### 3.2 Staged delivery — UI-visible is the delivery standard
+
+Client ruling of 2026-09-19, recorded in
+[`DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md`](DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md) §3.
+Two sentences, both binding:
+
+1. **ArtFi is delivered in stages. It is not one complete end-state handover.**
+2. **Every delivery is measured by what is visible and operable in the UI.**
+
+**Only the complete RWA market is a single end-state delivery.** ArtFi as an ERC-8415-standard
+artwork RWA market (§1) is the one thing handed over whole; everything on the way to it is a stage,
+and a stage is handed over when its UI is real.
+
+#### 3.2.1 What "UI-visible" means
+
+A stage is **delivered** when a user in that stage's intended role can carry out the stage's
+function **from the ArtFi UI**, on desktop and mobile, with G1 human visual sign-off and evidence
+per `ACCEPTANCE.md` §3.
+
+Not a stage delivery, on their own:
+
+- a backend endpoint that works but no screen reaches;
+- a deployed contract with no UI path to it;
+- a passing test, a generated client, or an OpenAPI entry;
+- a fixture or mock rendered as if it were live data (`AGENTS.md` §5).
+
+These are real progress and they are counted as `IMPLEMENTED-NOT-VERIFIED` item by item. They are
+not a stage handover. **The screen is the deliverable.**
+
+#### 3.2.2 What this does not change
+
+- **No new gate.** G1–G4 in `ACCEPTANCE.md` §4 are unchanged, and nothing here adds to them.
+- **No new status value.** Item status stays the six values in `ACCEPTANCE.md` §2.
+- **No new requirement and no new scope item.** Every stage below groups requirements that already
+  exist in §4; no `STATUS.md` row is created, moved or renumbered by this section.
+- **`ACCEPTANCE.md` §6 items 7–10 remain the terminus for the complete RWA market**, not for each
+  stage. A stage does not require mainnet.
+- **Stage IDs are labels for grouping, not authority.** Citing one proves nothing; cite the
+  requirement.
+
+#### 3.2.3 The stages
+
+Each row is one product line of §1, plus operations. The UI column is the delivery test for that
+stage.
+
+| Stage   | Scope                       | UI that must be visible and operable                                                                                                | Draws on   |
+| ------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `S-CH`  | Charity NFT editions        | Edition page with the CH.8 rights disclosure, purchase path, wallet-verified holder access to the watermarked copy, venue deep link | CH.1–CH.11 |
+| `S-XM`  | External marketplace mirror | Attributed listings, offers, sales, transfers and cancellations, each with source, time, freshness and a deep link                  | XM.1–XM.6  |
+| `S-WA`  | Whole artwork, ERC-8415     | Asset page showing registry-backed holdership, listing, and a signature-settled fill the user signs                                 | M1, M2, M3 |
+| `S-FR`  | Fractions and fund tokens   | Fractionalization and fund-token surfaces, and the governance surface the asset model defines                                       | M1, M2, M4 |
+| `S-OPS` | Operations                  | Monitoring, alerting and operator surfaces that an operator actually works from                                                     | M6         |
+| `S-MKT` | **The complete RWA market** | The three product lines operating together as one market                                                                            | all of §4  |
+
+`S-MKT` is the end state and the only row delivered whole. `M5` (hardening and security audit) is
+not a stage: it is continuous and gated by G3-A/G3-B.
+
+#### 3.2.4 Stage order is not a build order
+
+The order in which stages are **opened for business** is the client's rollout sequence in §1.0.0 —
+charity first, then whole artwork behind its prerequisites, then fractions behind exempt-market
+compliance. That sequence governs switch-on only.
+
+**A stage that has not opened is still built, tested, counted and kept launch-ready.** Delivery
+order is the client's to set; it is not derived here, and no stage blocks another stage's
+engineering. An agent that reads this table as a gate ladder repeats the `G0` mistake #91 and #94
+removed.
 
 ---
 
@@ -332,9 +520,10 @@ legal question for the client's counsel, not an implementation decision.
 - Preserve Class A visual language: any deviation from `pics/*.png` requires explicit approval and
   is recorded in `STATUS.md`.
 - Eight-language support: `EN / 简 / 繁 / FR / ES / DE / 한 / 日`. English is the authoritative
-  source for FR/ES/DE/KO/JA; Chinese is never an intermediate translation source. AIVAN's
-  translation module is the primary translator; Qwen may proofread only. Translation failure
-  retains authoritative English — never blank content or leaked internal errors.
+  source for FR/ES/DE/KO/JA; Chinese is never an intermediate translation source. The approved
+  translation module is the primary translator; `<LLM_PROVIDER_A>` may proofread only, and is
+  swappable. Translation failure retains authoritative English — never blank content or leaked
+  internal errors.
 
 ### 4.4 M4 — DAO governance and administration
 
@@ -419,9 +608,22 @@ list. These carry the original `MARKET-001`–`MARKET-006` forward; no rule is n
 - **XM.3** A realtime stream and REST gap-fill converge to one correct state under duplication,
   out-of-order delivery, disconnect, reconnect, gaps, stale versions, sale-after-cancel and
   stale-listing-after-sale.
-- **XM.4** A mirror API serves activity, and a transaction intent may be submitted idempotently to an
-  approved external market and its status and receipt received back. Each record retains the external
-  market, order ID, time, freshness and an HTTPS deep link. **The UI does not redirect to OpenSea.**
+- **XM.4** **Mirror API and external deep link.** The mirror API reads activity from approved
+  external marketplaces; **it does not create, sign, match, custody, fulfil or settle on their
+  behalf**. Each record retains the external market, order ID, time, freshness and an **HTTPS deep
+  link out to the venue**, because OpenSea is a live venue for every product line and a user must be
+  able to reach it.
+
+  > **Conflict outstanding — needs a client decision.** `ACCEPTANCE.md` §7.8 still fails the audit
+  > when the public UI exposes an external-marketplace redirect. With OpenSea live as a venue that
+  > rule and the deep link required here cannot both stand. This document does not change
+  > `ACCEPTANCE.md` unilaterally.
+
+  > **Scope note.** `market_orchestration.go` (628 lines) submits transaction intents to an external
+  > market. That is orchestration rather than mirroring. It is retained — `AGENTS.md` §3 forbids
+  > removing working code on provenance alone — and whether it is in scope now follows from §1's
+  > rollout sequence, not from this row. It is not evidence for XM.4.
+
 - **XM.5** Data claims are accurate. Local fixtures are labelled as such; "realtime" may be claimed
   only by a connected adapter reporting observation time and freshness; a mainnet stream event is
   never presented as a testnet one.
@@ -542,10 +744,15 @@ Isolation rules, each an audit failure if broken, by analogy with §7's treatmen
 
 ### 7.1 External marketplace mirroring
 
-- ArtFi mirrors attributed information from approved external marketplaces and displays it inline;
-  the UI does not redirect users to OpenSea.
-- ArtFi may prepare a reviewed external-market transaction for an external wallet but does not
-  sign, custody, match or settle that external transaction.
+- ArtFi mirrors attributed information from approved external marketplaces and displays it inline,
+  and links out to the venue.
+
+  > **Superseded, recorded per §0.** This bullet previously continued "the UI does not redirect
+  > users to OpenSea". OpenSea is a live venue for every product line (§1, ruling of 2026-09-19), so
+  > the UI must be able to send a user there. `ACCEPTANCE.md` §7.8 still says the opposite and awaits
+  > a client decision — see §4.8 XM.4.
+
+- ArtFi does not sign, custody, match or settle any external transaction.
 - If the external marketplace does not support the selected test chain, discovery tests record
   `unsupported-chain` and are deferred to mainnet. No result may be substituted or invented.
 

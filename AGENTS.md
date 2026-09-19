@@ -52,8 +52,10 @@ If two sources conflict, use the higher source. Do not reconcile a conflict by i
 
 ### 1.1 Product invariants
 
-Client ruling of 2026-09-18, recorded in
-[`docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md`](docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md).
+Client rulings of 2026-09-18 and 2026-09-19. Invariants 1–5 are recorded in
+[`docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md`](docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md);
+invariants 6 to 9 are the 2026-09-19 rulings, recorded in `docs/PRD.md` §1, §3.2 and in
+[`docs/DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md`](docs/DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md).
 Priority 2 in the table above. These rules preserve the commercial product design; they are cited,
 not invented, and they create no new delivery obligation.
 
@@ -62,6 +64,25 @@ not invented, and they create no new delivery obligation.
 3. **ERC-8415 boundary.** ERC-8415 applies to asset identity, registry synchronization, ownership-related workflows, and asset lifecycle management.
 4. **Charity NFT boundary.** Charity NFT is an independent product line and must not be forced into the ERC-8415 asset model.
 5. **Governance boundary.** DAO governance follows the underlying product structure. Economic participation and governance authority must be explicitly defined by the corresponding asset model. Token possession alone does not define governance rights.
+6. **Venue and rollout boundary.** Client ruling of 2026-09-19, recorded in [`docs/DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md`](docs/DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md). **All trading is available both on ArtFi and on OpenSea, and ArtFi is primary.** **Third-party venues are an early-stage state**; the target is ArtFi itself as an ERC-8415-standard artwork RWA market. That is product direction, not scope: **whether, when or how third-party venue support is reduced is a client decision**, the external-market mirror stays built, tested and counted until one is made, and no gate, status value or delivery condition follows from the direction.
+   - **On ArtFi**, trading settles by signature. **Never custody, never counterparty, never a user's asset moved without that user's signature for that fill.** Being a venue is not permission to hold.
+   - **On OpenSea**, ArtFi mirrors attributed data and links out; execution there completes on OpenSea. The mirror never creates, signs, matches, custodies, fulfils or settles on the venue's behalf.
+   - **Rollout is staged per product line** — whole artwork behind an Oracle path, an ERC-8415 wallet and ArtCCH registration projected to `<REGISTRY_CHAIN_A>`; fractions behind exempt-market compliance; charity on OpenSea first, then ArtFi, with **delivery launch-ready at any point**.
+   - **The rollout sequence is not a gate.** It adds nothing to G1–G4, creates no status value, and blocks no requirement. **A track that has not opened is still built, tested and counted.** An agent that turns this into a gate repeats the `G0` mistake #91 and #94 removed.
+   - An earlier ruling the same day made OpenSea the sole whole-artwork venue with ArtFi as mirror only. It is superseded; the conflict is recorded in `docs/PRD.md` §1.
+
+7. **Vendor neutrality in operations.** Delivery and the database run on `<CLOUD_PROVIDER_A>`; on-chain operation runs in the **SIN execution zone** on `<CLOUD_PROVIDER_B>`; an operations agent maintains 24/7 service and reaches a model through `<LLM_PROVIDER_A>`. **`<LLM_PROVIDER_A>` is swappable at any time** — ArtFi is not in that vendor's ecosystem. No prompt, schema or control path may depend on one model vendor, and model output stays advisory (§6). Real vendor names never enter governing product material (#110 §4).
+
+8. **Holder authority.** Client ruling of 2026-09-19, recorded in `docs/PRD.md` §1.0.5. **Registries of record are a class, not a company**: ArtCCH's registry is part of its own-account business and has **the same nature as a third-party registry chain** (`<REGISTRY_CHAIN_A>`). For a registry-backed asset the **registry of record is the holder authority**, and the on-chain token is its projection. It records the artwork's physical parameters, the holder, and provenance.
+   - **The authority belongs to the registrar role, not to ArtCCH as an operator.** Structurally ArtFi treats ArtCCH as a third party; any other registrar in the same role is handled by the same paths. **ArtFi is a consumer of registries and operates none of them.**
+   - This does **not** reopen §1.4.1 of the 2026-08-30 ruling. No seller allowlist, no role restricting who may list, no administrative interface able to move ArtCCH's holdings, matching blind to seller identity, and the self-operated / intermediary distinction never branches the settlement path. **Being the registrar of record for an asset is not a trading privilege over it.**
+   - **ArtFi's own stores remain authoritative for nothing.** "Redis and MySQL are not the ownership authority" stands; a registry of record is not an ArtFi database.
+   - Three records — registry of record (authority), chain (projection and settlement), ArtFi's projection (read-only, no rights claim). **ArtFi never resolves a divergence by asserting its own projection; it reports.** Which way a registry-versus-chain divergence resolves is a client decision and must not be invented by an agent.
+
+9. **Delivery standard.** Client ruling of 2026-09-19, recorded in `docs/PRD.md` §3.2 and [`docs/DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md`](docs/DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md) §3. **ArtFi is delivered in stages, not as one complete end-state handover** — only the complete RWA market is handed over whole. **Every delivery is measured by what is visible and operable in the UI**: a stage is delivered when a user in its intended role can carry out its function from the ArtFi UI, desktop and mobile, with G1 sign-off and evidence per `docs/ACCEPTANCE.md` §3 and §6.2. **The screen is the deliverable** — an endpoint, contract, test or generated client that no screen reaches is progress, not a handover.
+   - This is a delivery standard, **not new scope**. It adds no gate (G1–G4 unchanged), no status value (the six values stand), no requirement and no `STATUS.md` row; the stage table in `docs/PRD.md` §3.2.3 groups requirements that already exist in §4.
+   - **A stage does not require mainnet.** `ACCEPTANCE.md` §6 items 7–10 remain the terminus for the complete market only.
+   - **Stage order is not build order.** Opening follows the rollout sequence in invariant 6; engineering does not wait on it, and an unopened track is still built, tested, counted and kept launch-ready.
 
 ---
 
