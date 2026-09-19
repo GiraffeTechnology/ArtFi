@@ -114,7 +114,8 @@ export function createIntentAuthorizer({ ethers, policy, readState, clock }) {
       )
         reject("ADDRESS_INVALID");
     }
-    // First scope is BUY only. Other #84 actions remain unimplemented, not silently granted.
+    // First scope is BUY only. Other actions incorporated by #110 remain
+    // unimplemented, not silently granted.
     if (
       p.actionScope !== "1" ||
       p.maxExecutions !== "1" ||

@@ -2,7 +2,8 @@
 
 Status: IMPLEMENTED-NOT-VERIFIED. This is not a DELIVERY_CANDIDATE.
 
-Authority: repository issue #84 §§9–18 and §§32–34. The slice implements a
+Authority: repository issue #110 §0 Part A, incorporating #84 §§9–18 and
+§§32–34. The slice implements a
 minimum observation, signed-intent, deterministic-policy, execution, verification,
 reconciliation and recovery path. It does not authorize unbounded spending,
 custody, mainnet, real assets or stored user keys.
@@ -70,9 +71,10 @@ limited to read-only operations health input:
 it has no execute, reconcile, revoke, signing, RPC or broadcast capability. The
 contract deliberately remains `productionReady: false`. Integrity, projection,
 database, installation, rollback, alerting, recovery and soak fields describe
-currently unverified implementation evidence only. They do not amend issue #84 or
+currently unverified implementation evidence only. They do not amend issue #110 or
 independently block a bounded stage. This read-only artifact does not implement
-the autonomous responsibilities described by issue #84 sections 30 and 36.
+the autonomous responsibilities incorporated by issue #110 §0 Part A from #84
+sections 30 and 36.
 
 The separately frozen `ArtFiLinkOps` r3 package is audit-only provenance, not
 an executable dependency contract: archive
