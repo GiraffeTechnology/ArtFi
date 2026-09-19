@@ -4,8 +4,8 @@
 
 - Repository: `GiraffeTechnology/ArtFi`
 - Pull request: `#114`
-- Code commit under test: `93081a229d39b604117646e70bee39e1930f9d4b`
-- Code tree under test: `01c2d17df95869963f467d21e228680ee8da3753`
+- Code commit under test: `048283b1913ca3bdb8ee9a58ad39ed40ce162147`
+- Code tree under test: `ab6d0cdaefdc7755dd6837b71d42b6043b7bfa3e`
 - Scope: fail-closed realtime/snapshot convergence, crash-window head overlap,
   bounded disk-spooled realtime buffering, recoverable durable-log tails,
   post-commit sink recovery, crash-safe reclamation, cleanup exclusion, and
@@ -19,7 +19,7 @@ wallet material, RPC values, or internal filesystem locations.
 | Gate                                 | Result                                    |
 | ------------------------------------ | ----------------------------------------- |
 | Prettier                             | PASS                                      |
-| Market-mirror focused suite          | PASS — 32/32                              |
+| Market-mirror focused suite          | PASS — 33/33                              |
 | Forced no-cache Turbo matrix         | PASS — 15/15 tasks, 0 cached              |
 | Web unit suite                       | PASS — 106/106                            |
 | Wallet extension suite               | PASS — 6/6                                |
@@ -50,6 +50,8 @@ boundary:
   commits;
 - event-count and byte-count limits fail startup closed before queued promise
   closures can grow without bound;
+- queue overflow while the committed spool is replaying still fails startup
+  closed before realtime readiness is published;
 - after snapshot commit, one rejected sink delivery does not disable later
   realtime events;
 - a failed REST snapshot discards buffered realtime events;
