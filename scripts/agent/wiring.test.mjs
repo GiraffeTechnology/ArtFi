@@ -372,7 +372,7 @@ test("drifted evidence cannot hydrate; historical state cannot overwrite authori
     /MINT_AUTHORITY_PATCH_STATE_REFUSED/,
   );
 });
-test("new runtime discovers committed STARTED without HTTP IDs, retries DB outage and reconciles without execute", async () => {
+test("new runtime survives observer failure, retries DB outage and reconciles STARTED without execute", async () => {
   const f = fixture("STARTED");
   f.setAvailable(false);
   const controller = new AbortController();
@@ -418,6 +418,7 @@ test("new runtime discovers committed STARTED without HTTP IDs, retries DB outag
       if (outcomes.length === 1) {
         assert.equal(result.state, "SAFE_DEGRADED");
         f.setAvailable(true);
+        throw Error("OBSERVER_UNAVAILABLE");
       } else controller.abort();
     },
   });

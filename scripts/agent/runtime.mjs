@@ -65,7 +65,12 @@ export function createDurableRuntime({
               reason: "RECOVERY_DEPENDENCY_UNAVAILABLE",
             };
           }
-          await onBatch(result);
+          try {
+            await onBatch(result);
+          } catch {
+            // Batch observation is non-authoritative. A broken metrics/logging
+            // sink must not stop durable recovery or strand eligible rows.
+          }
           if (signal.aborted) break;
           await new Promise((resolve) => {
             const done = () => {
