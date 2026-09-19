@@ -476,3 +476,62 @@ Two things this environment could not run, recorded rather than skipped silently
 - any **on-chain** execution. There is still **no runtime chain evidence on any chain**, and the
   G2 runtime matrix on Hoodi remains the single cheapest step: it converts a large share of the 37
   `IMPLEMENTED-NOT-VERIFIED` items without a line of feature code.
+
+---
+
+## 9. Supervision side paused here — pick-up notes
+
+Work stopped at `claude/ci-all-pr-6dytk9`, working tree clean, everything pushed, local tip equal to
+the remote. Nothing is half-finished: every commit below builds, lints, formats and tests green on
+its own. There is no uncommitted work and no branch left dangling.
+
+**Before anything else, read §7.1.1.** This branch is the base of open PR #114 and is append-only.
+
+### 9.1 What is finished and how it was checked
+
+| Lane                        | State                                                                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Whole artwork `S-WA` (§7.2) | Contract, browser signer, asset-page surface, Hoodi deploy script. 23 Foundry tests, 19 vitest, 6 Playwright           |
+| Fractions `S-FR` (§7.3)     | Fixed-price path moved to signature settlement, escrow closed on that path and retained for auctions. 21 Foundry tests |
+| Charity `S-CH` (§7.1)       | Deployment-and-test requirements written. **Not executed. Unowned.**                                                   |
+
+`forge test` 135 pass · `vitest run src` 125 pass across 11 files · `tsc --noEmit`, `eslint .`,
+`forge fmt --check`, `forge lint`, `prettier --check .`, `check-secrets.mjs`,
+`verify-chain-consistency.mjs` (18 layers, Hoodi 560048) and `contracts:deploy-tooling:check` all
+clean at the tip.
+
+Negative assertions in both new suites were checked by mutation rather than assumed: each deletion
+of a guard fails exactly the tests that name it, and no others. The specific mutations are listed in
+the commit messages for `8a39400` and `e26270d`.
+
+### 9.2 What `docs/STATUS.md` says, and does not
+
+**No status value moved in any of this.** `VERIFIED` is where it was. M2.5 and M2.6 stay
+`NOT-IMPLEMENTED` with evidence noting that the on-chain half now exists while no backend stores or
+amends an intent and no screen reaches either. Promotion is a separate decision against a reviewed
+commit with runtime evidence, per `ACCEPTANCE.md` §3 — it is not implied by any of this.
+
+### 9.3 The next bounded piece in each lane, if it is picked up
+
+Stated so it does not have to be re-derived. None of it is a blocker and none is a client decision.
+
+1. **Deploy `WholeArtworkMarket` on Hoodi.** `DeployWholeArtworkMarket.s.sol` is Hoodi-gated and
+   reads `ARTFI_ADMIN`, `ARTFI_PAUSER`, `ARTFI_TOKEN_MANAGER`. It allows no collection and no
+   payment token on deployment, so it settles nothing until a token manager opens one. Then set
+   `NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS` and the panel leaves its unconfigured branch.
+2. **Run the charity plan** in `TESTPLAN_HOODI_CHARITY.md`. It is the cheapest runtime evidence
+   available and it is currently unowned.
+3. **The fractions intent has no backend and no screen.** The contract path is done; M2.5, M2.6 and
+   a surface over them are not, and that is what keeps `S-FR` short of a stage delivery.
+4. **`PRD.md` §4.2.2's opening sentence is stale** — it describes the escrow that has now been
+   removed. It sits against the client's ruling text, so correcting it is the client's call, not an
+   agent's (§7.3).
+
+### 9.4 One environment note that will save an hour
+
+Foundry is not preinstalled in the supervision environment and `foundryup` fails here: the proxy
+returns 403 on its attestation download. The release tarball itself works —
+`https://github.com/foundry-rs/foundry/releases/download/stable/foundry_stable_linux_amd64.tar.gz`
+extracts a usable `forge`. Run `forge fmt` **from `packages/contracts`**, never from the repository
+root: the root has no `foundry.toml`, so the default 120-column width reflows files that
+`contracts:format:check` then rejects at the configured 100.
