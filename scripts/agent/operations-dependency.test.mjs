@@ -15,7 +15,7 @@ const contract = JSON.parse(
 
 const healthySnapshot = (observedAt = 1_000_000) => ({
   schemaVersion: 2,
-  hostRole: "ctyun-abcdyi",
+  hostRole: contract.healthContract.hostRole,
   observedAt,
   readOnly: true,
   overallHealthy: true,
@@ -29,6 +29,7 @@ const healthySnapshot = (observedAt = 1_000_000) => ({
 
 test("wallet and DAO operations handoff remains a required but fail-closed production dependency", () => {
   const result = validateOperationsDependencyContract(contract);
+  assert.equal(contract.healthContract.hostRole, "artfi-delivery-link");
   assert.equal(result.productionReady, false);
   assert.deepEqual(result.blockers, [
     "independentIntegrity",
@@ -88,6 +89,15 @@ test("wallet and DAO operations handoff remains a required but fail-closed produ
   inconsistent.overallHealthy = false;
   assert.throws(
     () => evaluateOperationsDependency(contract, inconsistent, 1_001_000),
+    /OPERATIONS_DEPENDENCY_CONTRACT_INVALID/,
+  );
+});
+
+test("operations dependency rejects a deployment-vendor-specific host role", () => {
+  const invalid = structuredClone(contract);
+  invalid.healthContract.hostRole = "legacy-vendor-specific-host";
+  assert.throws(
+    () => validateOperationsDependencyContract(invalid),
     /OPERATIONS_DEPENDENCY_CONTRACT_INVALID/,
   );
 });

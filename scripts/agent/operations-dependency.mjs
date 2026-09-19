@@ -10,6 +10,8 @@ const requiredChecks = Object.freeze([
   "db-select1",
 ]);
 
+const expectedHostRole = "artfi-delivery-link";
+
 const requiredGates = Object.freeze([
   "independentIntegrity",
   "completeHttpProjection",
@@ -82,7 +84,7 @@ export function validateOperationsDependencyContract(input) {
       !digest(contract.artifact.integritySha256)) ||
     !digest(contract.artifact.testResultsSha256) ||
     contract.healthContract?.snapshotSchemaVersion !== 2 ||
-    contract.healthContract?.hostRole !== "ctyun-abcdyi" ||
+    contract.healthContract?.hostRole !== expectedHostRole ||
     contract.healthContract?.freshnessSeconds !== 180 ||
     !Array.isArray(contract.healthContract?.requiredChecks) ||
     contract.healthContract.requiredChecks.length !== requiredChecks.length ||

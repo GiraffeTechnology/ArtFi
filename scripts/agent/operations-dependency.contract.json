@@ -12,7 +12,7 @@
   },
   "healthContract": {
     "snapshotSchemaVersion": 2,
-    "hostRole": "ctyun-abcdyi",
+    "hostRole": "artfi-delivery-link",
     "freshnessSeconds": 180,
     "requiredChecks": [
       "tunnel-service",

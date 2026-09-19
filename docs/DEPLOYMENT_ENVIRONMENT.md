@@ -67,18 +67,12 @@ not an environment. It is not resolved in this file and must not be named elsewh
 
 ## Known deviation
 
-Deletability is **not yet true**. Real vendor names currently appear in seventeen files outside this
-one, including three code and contract values:
+Deletability is **not yet true**. The operations-dependency behavioural contract now uses the
+vendor-neutral host role `artfi-delivery-link`, and its regression test rejects the former
+deployment-specific value. Real vendor names still appear in historical and operational documents,
+including a file whose name is a vendor name
+(`docs/CTYUN_MYSQL_DEPLOYMENT_CONTRACT.md`).
 
-```
-scripts/agent/operations-dependency.mjs        hostRole comparison
-scripts/agent/operations-dependency.contract.json   hostRole value
-scripts/agent/operations-dependency.test.mjs   hostRole fixture
-```
-
-Those three are a behavioural contract: changing the value changes what the operations-dependency
-check accepts. The remaining fourteen are documentation, including a file whose name is a vendor
-name (`docs/CTYUN_MYSQL_DEPLOYMENT_CONTRACT.md`).
-
-Until those are consolidated here, deleting this file removes the binding table but **not** the
-vendor names elsewhere. Recorded as a known deviation rather than presented as satisfied.
+Until those documents are consolidated here, deleting this file removes the binding table but
+**not** every vendor name elsewhere. Recorded as a known deviation rather than presented as
+satisfied.
