@@ -4,10 +4,10 @@
 
 - Repository: `GiraffeTechnology/ArtFi`
 - Pull request: `#114`
-- Code commit under test: `6906092ab325640c4aed77328988071d6e67b6da`
-- Code tree under test: `7d1074ba12b3cdb38a75bb0236aa51eb681da579`
-- Scope: atomic stale-owner recovery and process-instance lock identity for the
-  durable OpenSea backfill
+- Code commit under test: `3f34c6b5ac8cfe96f9ec9650e3b0c70b659d665b`
+- Code tree under test: `e523166dbf7ff76557ee00d7e32e39df228481c6`
+- Scope: fail-closed realtime/snapshot convergence, complete durable writes,
+  crash-safe reclamation, cleanup exclusion, and process-instance lock identity
 
 This report contains no credentials, private endpoints, host names, IP addresses,
 wallet material, RPC values, or internal filesystem locations.
@@ -17,7 +17,7 @@ wallet material, RPC values, or internal filesystem locations.
 | Gate                                 | Result                                    |
 | ------------------------------------ | ----------------------------------------- |
 | Prettier                             | PASS                                      |
-| Market-mirror focused suite          | PASS — 27/27                              |
+| Market-mirror focused suite          | PASS — 29/29                              |
 | Forced no-cache Turbo matrix         | PASS — 15/15 tasks, 0 cached              |
 | Web unit suite                       | PASS — 106/106                            |
 | Wallet extension suite               | PASS — 6/6                                |
@@ -38,6 +38,11 @@ boundary:
 - a complete owner record is fsynced before an atomic hard-link publishes it;
 - concurrent stale-owner contenders preserve exclusive single-writer behavior;
 - process-instance identity distinguishes an exited owner from a reused PID;
+- an abandoned stale reclamation marker is recoverable;
+- short durable-log writes complete before fsync and cursor advancement;
+- realtime events remain buffered until the REST snapshot commits;
+- a failed REST snapshot discards buffered realtime events;
+- completed snapshot payloads are removed while exclusion remains held;
 - a live owner remains protected from reclamation;
 - recovered work resumes without exposing a partial snapshot;
 - successful replay removes the completed snapshot state.
