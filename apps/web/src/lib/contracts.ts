@@ -97,6 +97,31 @@ export const charityEditionsAbi = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
+    // The public view of one edition. `masterArtworkHash` is a commitment, never a locator: it
+    // names no object and resolves to nothing a browser can fetch (CH.6, CH.7).
+    type: "function",
+    name: "series",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "artworkId", type: "bytes32" },
+          { name: "masterArtworkHash", type: "bytes32" },
+          { name: "metadataHash", type: "bytes32" },
+          { name: "distributionWallet", type: "address" },
+          { name: "createdAt", type: "uint64" },
+          { name: "soldOutAt", type: "uint64" },
+          { name: "physicalDonationRecordedAt", type: "uint64" },
+          { name: "selloutEvidenceHash", type: "bytes32" },
+          { name: "physicalDonationEvidenceHash", type: "bytes32" },
+          { name: "metadataURI", type: "string" },
+        ],
+      },
+    ],
+  },
+  {
     type: "function",
     name: "createSeries",
     stateMutability: "nonpayable",
