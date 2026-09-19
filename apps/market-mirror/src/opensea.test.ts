@@ -790,6 +790,48 @@ describe("OpenSea normalization", () => {
     await Promise.all(queued);
   });
 
+  it("fails closed when the realtime queue overflows during snapshot commit", async () => {
+    let liveSink: MarketEventSink | undefined;
+    let releaseReplay!: () => void;
+    let replayStarted!: () => void;
+    const replayGate = new Promise<void>((resolve) => {
+      releaseReplay = resolve;
+    });
+    const replayObserved = new Promise<void>((resolve) => {
+      replayStarted = resolve;
+    });
+    const historic = normalizeOpenSeaEvent(listed);
+    const queued: Promise<void>[] = [];
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(sink) {
+        liveSink = sink;
+        await sink(historic);
+        return () => undefined;
+      },
+      async backfill() {},
+    };
+    const starting = startOpenSeaMirror(adapter, async () => {
+      replayStarted();
+      await replayGate;
+    });
+    await replayObserved;
+    for (let version = 1; version <= 257; version += 1) {
+      queued.push(liveSink!({ ...historic, version }).catch(() => undefined));
+    }
+    releaseReplay();
+
+    await expect(starting).rejects.toThrow("realtime queue capacity exceeded");
+    await Promise.all(queued);
+  });
+
   it("continues realtime delivery after an individual sink failure", async () => {
     let liveSink: MarketEventSink | undefined;
     const historic = normalizeOpenSeaEvent(listed);

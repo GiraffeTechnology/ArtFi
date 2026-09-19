@@ -348,9 +348,10 @@ invisible until all configured collections reach cursor exhaustion. The stream p
 Phoenix join reply and waits for every remote collection subscription acknowledgement before the
 first REST page is requested.
 
-Evidence on the candidate derived from `463d67c`: `opensea.test.ts` adds seventeen focused cases,
+Evidence on the candidate derived from `463d67c`: `opensea.test.ts` adds eighteen focused cases,
 including a 25-page history beyond the former deployment cap; the market-mirror suite passes
-32/32, including acknowledged subscription readiness, bounded disk-spooled realtime publication, durable cursor
+33/33, including acknowledged subscription readiness, bounded disk-spooled realtime publication, commit-window
+queue overflow rejection, durable cursor
 resume from incomplete journal/spool tails, complete short-write handling, abandoned-reclaim recovery, atomic concurrent stale-owner
 reclamation, process-instance identity against PID reuse, single-writer enforcement, post-commit sink recovery and subscription
 shutdown without publication when snapshotting fails. Full format, lint, typecheck, Node unit, production-mode build,

@@ -958,6 +958,7 @@ export async function startOpenSeaMirror(
         lines.close();
         input.destroy();
       }
+      if (realtimeFailure) throw realtimeFailure;
       realtimeReady = true;
     });
     realtimeSequence = commitRealtime.catch((error: unknown) => {
