@@ -24,6 +24,7 @@ import {
 import type {
   MarketEventSink,
   MarketplaceAdapter,
+  MarketplaceStreamLifecycle,
   NormalizedMarketEvent,
 } from "./adapter.js";
 
@@ -576,6 +577,41 @@ describe("OpenSea normalization", () => {
     }
   });
 
+  it("does not steal a stale lock while another live reclaimer owns the marker", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-live-reclaim-test-"),
+    );
+    try {
+      const collectionsHash = createHash("sha256")
+        .update(JSON.stringify(["artfi-test"]))
+        .digest("hex");
+      const spoolDirectory = join(
+        spoolParentDirectory,
+        `snapshot-${collectionsHash.slice(0, 24)}`,
+      );
+      const lockPath = join(spoolDirectory, "active.lock");
+      await mkdir(spoolDirectory, { recursive: true });
+      await writeFile(lockPath, "2147483647\n", { mode: 0o600 });
+      await writeFile(`${lockPath}.reclaim`, `${process.pid}\n`, {
+        mode: 0o600,
+      });
+
+      const adapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async () => {
+          throw new Error("live reclaimer must retain exclusion");
+        },
+      });
+      await expect(
+        adapter.backfill(async () => undefined),
+      ).rejects.toMatchObject({ code: "EEXIST" });
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
   it("recovers when a live PID belongs to a different process instance", async () => {
     const spoolParentDirectory = await mkdtemp(
       join(tmpdir(), "artfi-opensea-reused-pid-lock-test-"),
@@ -935,6 +971,65 @@ describe("OpenSea normalization", () => {
     await expect(starting).rejects.toThrow("realtime queue capacity exceeded");
   });
 
+  it("withholds the REST snapshot after realtime buffering fails", async () => {
+    let liveSink: MarketEventSink | undefined;
+    let releaseSnapshot!: () => void;
+    let snapshotStarted!: () => void;
+    const snapshotGate = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    const snapshotObserved = new Promise<void>((resolve) => {
+      snapshotStarted = resolve;
+    });
+    const historic = normalizeOpenSeaEvent(listed);
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(sink) {
+        liveSink = sink;
+        return () => undefined;
+      },
+      async backfill(sink) {
+        snapshotStarted();
+        await snapshotGate;
+        await sink(historic);
+      },
+    };
+    const published: NormalizedMarketEvent[] = [];
+    const starting = startOpenSeaMirror(adapter, async (event) => {
+      published.push(event);
+    });
+    await snapshotObserved;
+
+    let overflow: unknown;
+    for (let version = 1; version <= 10; version += 1) {
+      try {
+        await liveSink!({
+          ...historic,
+          version,
+          payload: {
+            ...historic.payload,
+            padding: "x".repeat(600_000),
+          },
+        });
+      } catch (error) {
+        overflow = error;
+        break;
+      }
+    }
+    expect(overflow).toBeInstanceOf(Error);
+    releaseSnapshot();
+
+    await expect(starting).rejects.toThrow("realtime queue capacity exceeded");
+    expect(published).toEqual([]);
+  });
+
   it("fails closed when the realtime queue overflows during snapshot commit", async () => {
     let liveSink: MarketEventSink | undefined;
     let releaseReplay!: () => void;
@@ -1048,6 +1143,164 @@ describe("OpenSea normalization", () => {
     );
     await waiting;
     expect(resolved).toBe(true);
+  });
+
+  it("runs recovery only after every collection rejoins a later connection", async () => {
+    let reconnects = 0;
+    let reconnectObserved!: () => void;
+    const reconnected = new Promise<void>((resolve) => {
+      reconnectObserved = resolve;
+    });
+    const readiness = new OpenSeaJoinReadiness(
+      ["artfi-test", "artfi-second"],
+      1_000,
+      async () => {
+        reconnects += 1;
+        reconnectObserved();
+      },
+    );
+    const acknowledge = (topic: string, generation: number) =>
+      readiness.observe(
+        Buffer.from(
+          JSON.stringify([
+            String(generation),
+            String(generation),
+            topic,
+            "phx_reply",
+            { status: "ok" },
+          ]),
+        ),
+        generation,
+      );
+
+    const initialGeneration = readiness.beginConnection();
+    acknowledge("collection:artfi-test", initialGeneration);
+    acknowledge("collection:artfi-second", initialGeneration);
+    await readiness.wait();
+    expect(reconnects).toBe(0);
+
+    const reconnectGeneration = readiness.beginConnection();
+    acknowledge("collection:artfi-test", reconnectGeneration);
+    await Promise.resolve();
+    expect(reconnects).toBe(0);
+    acknowledge("collection:artfi-second", reconnectGeneration);
+    await reconnected;
+    expect(reconnects).toBe(1);
+
+    acknowledge("collection:artfi-second", initialGeneration);
+    await Promise.resolve();
+    expect(reconnects).toBe(1);
+  });
+
+  it("fails closed when reconnect recovery rejects", async () => {
+    let fatalError: unknown;
+    let fatalObserved!: () => void;
+    const failed = new Promise<void>((resolve) => {
+      fatalObserved = resolve;
+    });
+    const readiness = new OpenSeaJoinReadiness(
+      ["artfi-test"],
+      1_000,
+      async () => {
+        throw new Error("reconnect gap-fill failed");
+      },
+      (error) => {
+        fatalError = error;
+        fatalObserved();
+      },
+    );
+    const acknowledge = (generation: number) =>
+      readiness.observe(
+        Buffer.from(
+          JSON.stringify([
+            String(generation),
+            String(generation),
+            "collection:artfi-test",
+            "phx_reply",
+            { status: "ok" },
+          ]),
+        ),
+        generation,
+      );
+
+    const initialGeneration = readiness.beginConnection();
+    acknowledge(initialGeneration);
+    await readiness.wait();
+    const reconnectGeneration = readiness.beginConnection();
+    acknowledge(reconnectGeneration);
+    await failed;
+    expect(fatalError).toEqual(new Error("reconnect gap-fill failed"));
+  });
+
+  it("serializes a reconnect gap-fill through the mirror coordinator", async () => {
+    let lifecycle: MarketplaceStreamLifecycle | undefined;
+    let backfills = 0;
+    let activeBackfills = 0;
+    let maximumActiveBackfills = 0;
+    let releaseFirstRecovery!: () => void;
+    let releaseSecondRecovery!: () => void;
+    let firstRecoveryStarted!: () => void;
+    let secondRecoveryStarted!: () => void;
+    const firstRecoveryGate = new Promise<void>((resolve) => {
+      releaseFirstRecovery = resolve;
+    });
+    const secondRecoveryGate = new Promise<void>((resolve) => {
+      releaseSecondRecovery = resolve;
+    });
+    const firstRecoveryObserved = new Promise<void>((resolve) => {
+      firstRecoveryStarted = resolve;
+    });
+    const secondRecoveryObserved = new Promise<void>((resolve) => {
+      secondRecoveryStarted = resolve;
+    });
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(_sink, streamLifecycle) {
+        lifecycle = streamLifecycle;
+        return () => undefined;
+      },
+      async backfill() {
+        backfills += 1;
+        activeBackfills += 1;
+        maximumActiveBackfills = Math.max(
+          maximumActiveBackfills,
+          activeBackfills,
+        );
+        try {
+          if (backfills === 2) {
+            firstRecoveryStarted();
+            await firstRecoveryGate;
+          } else if (backfills === 3) {
+            secondRecoveryStarted();
+            await secondRecoveryGate;
+          }
+        } finally {
+          activeBackfills -= 1;
+        }
+      },
+    };
+
+    const stop = await startOpenSeaMirror(adapter, async () => undefined);
+    expect(backfills).toBe(1);
+    const firstRecovery = lifecycle!.onReconnectReady();
+    const secondRecovery = lifecycle!.onReconnectReady();
+    await firstRecoveryObserved;
+    expect(backfills).toBe(2);
+    expect(maximumActiveBackfills).toBe(1);
+    releaseFirstRecovery();
+    await secondRecoveryObserved;
+    expect(backfills).toBe(3);
+    expect(maximumActiveBackfills).toBe(1);
+    releaseSecondRecovery();
+    await Promise.all([firstRecovery, secondRecovery]);
+    stop();
   });
 
   it("stops the realtime subscription when the REST snapshot fails", async () => {

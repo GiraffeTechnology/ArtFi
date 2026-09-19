@@ -42,7 +42,10 @@ async function publish(event: NormalizedMarketEvent): Promise<void> {
   }
 }
 
-const stop = await startOpenSeaMirror(adapter, publish);
+const stop = await startOpenSeaMirror(adapter, publish, (error) => {
+  console.error("OpenSea mirror reconnect recovery failed", error);
+  process.exitCode = 1;
+});
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     stop();

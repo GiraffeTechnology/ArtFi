@@ -25,6 +25,7 @@ import {
   type MarketEventFamily,
   type MarketEventSink,
   type MarketplaceAdapter,
+  type MarketplaceStreamLifecycle,
   type NormalizedMarketEvent,
 } from "./adapter.js";
 
@@ -236,27 +237,46 @@ type PhoenixFrame = [
 ];
 
 export class OpenSeaJoinReadiness {
-  readonly #pendingTopics: Set<string>;
+  readonly #topics: string[];
   readonly #promise: Promise<void>;
-  readonly #timeout: ReturnType<typeof setTimeout>;
+  readonly #timeoutMs: number;
+  readonly #onReconnectReady?: () => Promise<void>;
+  readonly #onFatal?: (error: unknown) => void;
+  #pendingTopics: Set<string>;
+  #timeout: ReturnType<typeof setTimeout>;
   #resolve!: () => void;
   #reject!: (reason?: unknown) => void;
   #settled = false;
+  #generation = 0;
 
-  constructor(collectionSlugs: string[], timeoutMs: number) {
-    this.#pendingTopics = new Set(
-      collectionSlugs.map((slug) => `collection:${slug}`),
-    );
+  constructor(
+    collectionSlugs: string[],
+    timeoutMs: number,
+    onReconnectReady?: () => Promise<void>,
+    onFatal?: (error: unknown) => void,
+  ) {
+    this.#topics = collectionSlugs.map((slug) => `collection:${slug}`);
+    this.#pendingTopics = new Set(this.#topics);
+    this.#timeoutMs = timeoutMs;
+    this.#onReconnectReady = onReconnectReady;
+    this.#onFatal = onFatal;
     this.#promise = new Promise<void>((resolve, reject) => {
       this.#resolve = resolve;
       this.#reject = reject;
     });
-    this.#timeout = setTimeout(() => {
-      this.reject(new Error("OpenSea stream subscription timed out"));
-    }, timeoutMs);
+    this.#timeout = this.#armTimeout(0);
   }
 
-  observe(data: RawData): void {
+  beginConnection(): number {
+    this.#generation += 1;
+    this.#pendingTopics = new Set(this.#topics);
+    clearTimeout(this.#timeout);
+    this.#timeout = this.#armTimeout(this.#generation);
+    return this.#generation;
+  }
+
+  observe(data: RawData, generation = this.#generation): void {
+    if (generation !== this.#generation) return;
     let parsed: unknown;
     try {
       parsed = JSON.parse(data.toString());
@@ -294,10 +314,28 @@ export class OpenSeaJoinReadiness {
   }
 
   #finish(): void {
-    if (this.#settled) return;
-    this.#settled = true;
     clearTimeout(this.#timeout);
-    this.#resolve();
+    if (!this.#settled) {
+      this.#settled = true;
+      this.#resolve();
+      return;
+    }
+    if (this.#generation === 0 || !this.#onReconnectReady) return;
+    void this.#onReconnectReady().catch((error: unknown) => {
+      this.#onFatal?.(error);
+    });
+  }
+
+  #armTimeout(generation: number): ReturnType<typeof setTimeout> {
+    return setTimeout(() => {
+      if (generation !== this.#generation) return;
+      const error = new Error("OpenSea stream subscription timed out");
+      if (this.#settled) {
+        this.#onFatal?.(error);
+        return;
+      }
+      this.reject(error);
+    }, this.#timeoutMs);
   }
 }
 
@@ -643,17 +681,23 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       : new Error("OpenSea backfill request failed");
   }
 
-  async start(sink: MarketEventSink): Promise<() => void> {
+  async start(
+    sink: MarketEventSink,
+    lifecycle?: MarketplaceStreamLifecycle,
+  ): Promise<() => void> {
     const storagePath =
       process.env.OPENSEA_STREAM_STORAGE_PATH ?? ".opensea-stream";
     const readiness = new OpenSeaJoinReadiness(
       this.#config.collectionSlugs,
       this.#streamJoinTimeoutMs,
+      lifecycle?.onReconnectReady,
+      lifecycle?.onFatal,
     );
     class AcknowledgedOpenSeaWebSocket extends WebSocket {
       constructor(address: string | URL, protocols?: string | string[]) {
         super(address, protocols);
-        this.on("message", (data) => readiness.observe(data));
+        const generation = readiness.beginConnection();
+        this.on("message", (data) => readiness.observe(data, generation));
       }
     }
     const client = new OpenSeaStreamClient({
@@ -801,7 +845,11 @@ async function acquireBackfillLock(lockPath: string): Promise<BackfillLock> {
       return { ownerText };
     } catch (error) {
       if (record(error).code !== "EEXIST") throw error;
-      if (!(await removeStaleBackfillLock(lockPath))) throw error;
+      if (
+        !(await removeStaleBackfillLock(lockPath, candidatePath, ownerText))
+      ) {
+        throw error;
+      }
     } finally {
       await candidate?.close();
       await unlink(candidatePath).catch((error: unknown) => {
@@ -825,17 +873,32 @@ async function removeStaleReclaimMarker(lockPath: string): Promise<boolean> {
   if (!owner || (await backfillLockOwnerIsLive(owner))) return false;
   try {
     await unlink(reclaimPath);
+    if ("token" in owner) {
+      await unlink(`${lockPath}.${owner.token}.candidate`).catch(
+        (error: unknown) => {
+          if (!isMissingFile(error)) throw error;
+        },
+      );
+    }
   } catch (error) {
     if (!isMissingFile(error)) throw error;
   }
   return true;
 }
 
-async function removeStaleBackfillLock(lockPath: string): Promise<boolean> {
+async function removeStaleBackfillLock(
+  lockPath: string,
+  candidatePath: string,
+  reclaimerText: string,
+): Promise<boolean> {
   const reclaimPath = `${lockPath}.reclaim`;
   let observedOwnerText: string;
+  let observedLock: Awaited<ReturnType<typeof stat>>;
   try {
-    observedOwnerText = await readFile(lockPath, "utf8");
+    [observedOwnerText, observedLock] = await Promise.all([
+      readFile(lockPath, "utf8"),
+      stat(lockPath),
+    ]);
   } catch (error) {
     if (isMissingFile(error)) return true;
     throw error;
@@ -847,7 +910,7 @@ async function removeStaleBackfillLock(lockPath: string): Promise<boolean> {
   }
 
   try {
-    await link(lockPath, reclaimPath);
+    await link(candidatePath, reclaimPath);
   } catch (error) {
     if (isMissingFile(error)) return true;
     if (record(error).code === "EEXIST") return false;
@@ -855,25 +918,31 @@ async function removeStaleBackfillLock(lockPath: string): Promise<boolean> {
   }
 
   try {
-    const reclaimedOwnerText = await readFile(reclaimPath, "utf8");
-    const reclaimedOwner = parseBackfillLockOwner(reclaimedOwnerText);
-    if (!reclaimedOwner || (await backfillLockOwnerIsLive(reclaimedOwner))) {
+    if ((await readFile(reclaimPath, "utf8")) !== reclaimerText) {
       return false;
     }
-    const [current, reclaimed] = await Promise.all([
+    const [currentOwnerText, current] = await Promise.all([
+      readFile(lockPath, "utf8"),
       stat(lockPath),
-      stat(reclaimPath),
     ]);
-    if (current.dev !== reclaimed.dev || current.ino !== reclaimed.ino) {
+    if (
+      currentOwnerText !== observedOwnerText ||
+      current.dev !== observedLock.dev ||
+      current.ino !== observedLock.ino
+    ) {
       return true;
     }
     await unlink(lockPath);
   } catch (error) {
     if (!isMissingFile(error)) throw error;
   } finally {
-    await unlink(reclaimPath).catch((error: unknown) => {
+    try {
+      if ((await readFile(reclaimPath, "utf8")) === reclaimerText) {
+        await unlink(reclaimPath);
+      }
+    } catch (error) {
       if (!isMissingFile(error)) throw error;
-    });
+    }
   }
   return true;
 }
@@ -961,6 +1030,7 @@ function fileExistsError(path: string): NodeJS.ErrnoException {
 export async function startOpenSeaMirror(
   adapter: MarketplaceAdapter,
   sink: MarketEventSink,
+  onFatal: (error: unknown) => void = () => undefined,
 ): Promise<() => void> {
   const realtimeDirectory = await mkdtemp(
     join(tmpdir(), "artfi-opensea-realtime-"),
@@ -973,6 +1043,18 @@ export async function startOpenSeaMirror(
   let pendingRealtimeEvents = 0;
   let pendingRealtimeBytes = 0;
   let retainedRealtimeBytes = 0;
+  let backfillSequence = Promise.resolve();
+  let backfillFailure: unknown;
+  const scheduleBackfill = (): Promise<void> => {
+    const next = backfillSequence.then(() => {
+      if (backfillFailure) throw backfillFailure;
+      return adapter.backfill(sink);
+    });
+    backfillSequence = next.catch((error: unknown) => {
+      backfillFailure ??= error;
+    });
+    return next;
+  };
   try {
     realtimeBuffer = await open(realtimePath, "wx+", 0o600);
   } catch (error) {
@@ -1022,10 +1104,28 @@ export async function startOpenSeaMirror(
     });
     return next;
   };
+  const snapshotSink: MarketEventSink = async (event) => {
+    if (realtimeFailure) throw realtimeFailure;
+    await sink(event);
+  };
   let stop: (() => void) | undefined;
   try {
-    stop = await adapter.start(realtimeSink);
-    await adapter.backfill(sink);
+    stop = await adapter.start(realtimeSink, {
+      onReconnectReady: scheduleBackfill,
+      onFatal: (error) => {
+        realtimeFailure ??= error;
+        stop?.();
+        onFatal(error);
+      },
+    });
+    const initialBackfill = backfillSequence.then(() => {
+      if (backfillFailure) throw backfillFailure;
+      return adapter.backfill(snapshotSink);
+    });
+    backfillSequence = initialBackfill.catch((error: unknown) => {
+      backfillFailure ??= error;
+    });
+    await initialBackfill;
     const commitRealtime = realtimeSequence.then(async () => {
       if (realtimeFailure) throw realtimeFailure;
       await realtimeBuffer!.sync();
