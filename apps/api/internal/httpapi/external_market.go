@@ -1,17 +1,27 @@
 package httpapi
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	maxMarketSnapshotEventBytes = 1 << 20
+	maxMarketSnapshotEvents     = 100_000
 )
 
 var (
@@ -85,6 +95,14 @@ type marketActivityResponse struct {
 	Custody       bool             `json:"custody"`
 }
 
+type preparedMarketEvent struct {
+	input          marketEventRequest
+	eventID        string
+	payload        []byte
+	payloadHash    []byte
+	eventTimestamp time.Time
+}
+
 func parseMarketplaceSources(value string) map[string]struct{} {
 	result := map[string]struct{}{}
 	if strings.TrimSpace(value) == "" {
@@ -104,8 +122,7 @@ func (service *rwaService) ingestMarketEvent(writer http.ResponseWriter, request
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "Durable persistence and an indexer credential are required.")
 		return
 	}
-	provided := sha256.Sum256([]byte(request.Header.Get("X-Indexer-Key")))
-	if subtle.ConstantTimeCompare(provided[:], service.indexerKeyHash[:]) != 1 {
+	if !service.authorizeMarketIndexer(request) {
 		writeProblem(writer, request, http.StatusUnauthorized, "Indexer authentication failed", "A valid indexer credential is required.")
 		return
 	}
@@ -114,29 +131,131 @@ func (service *rwaService) ingestMarketEvent(writer http.ResponseWriter, request
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid market event", err.Error())
 		return
 	}
-	input.Source = strings.ToLower(strings.TrimSpace(input.Source))
-	input.Chain = strings.ToLower(strings.TrimSpace(input.Chain))
-	input.EventType = strings.ToLower(strings.TrimSpace(input.EventType))
-	input.EventFamily = strings.ToLower(strings.TrimSpace(input.EventFamily))
-	if err := service.validateMarketEvent(input); err != nil {
+	prepared, err := service.prepareMarketEvent(input)
+	if err != nil {
 		writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid market event", err.Error())
 		return
 	}
-	payload, err := json.Marshal(input.Payload)
-	if err != nil {
-		writeProblem(writer, request, http.StatusBadRequest, "Invalid market event", "The source payload is not valid JSON.")
-		return
-	}
-	payloadHash := sha256.Sum256(payload)
-	eventIDMaterial := fmt.Sprintf("%s|%s|%s|%s|%d|%s|%s", input.SchemaVersion, input.Source, input.EventFamily, input.EntityKey, input.Version, input.EventType, input.EventTimestamp)
-	eventID := sha256.Sum256([]byte(eventIDMaterial))
-	status, err := service.persistMarketEvent(request, input, hex.EncodeToString(eventID[:]), payload, payloadHash[:])
+	status, err := service.persistMarketEvent(request, prepared)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The normalized event could not be stored durably.")
 		return
 	}
 	service.bumpCacheNamespace(request.Context(), "market")
-	writeJSON(writer, status, map[string]any{"eventId": hex.EncodeToString(eventID[:]), "status": "mirrored"})
+	writeJSON(writer, status, map[string]any{"eventId": prepared.eventID, "status": "mirrored"})
+}
+
+func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, request *http.Request) {
+	if service.db == nil || !service.indexerEnabled {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "Durable persistence and an indexer credential are required.")
+		return
+	}
+	if !service.authorizeMarketIndexer(request) {
+		writeProblem(writer, request, http.StatusUnauthorized, "Indexer authentication failed", "A valid indexer credential is required.")
+		return
+	}
+	if strings.TrimSpace(strings.Split(request.Header.Get("Content-Type"), ";")[0]) != "application/x-ndjson" {
+		writeProblem(writer, request, http.StatusUnsupportedMediaType, "Invalid market snapshot", "Market snapshots must use application/x-ndjson.")
+		return
+	}
+	tx, err := service.db.BeginTx(request.Context(), nil)
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The atomic snapshot transaction could not be started.")
+		return
+	}
+	defer tx.Rollback()
+	scanner := bufio.NewScanner(request.Body)
+	scanner.Buffer(make([]byte, 64<<10), maxMarketSnapshotEventBytes)
+	count := 0
+	created := 0
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		count++
+		if count > maxMarketSnapshotEvents {
+			writeProblem(writer, request, http.StatusRequestEntityTooLarge, "Invalid market snapshot", "The market snapshot exceeds the event limit.")
+			return
+		}
+		input, decodeErr := decodeMarketSnapshotEvent(line)
+		if decodeErr != nil {
+			writeProblem(writer, request, http.StatusBadRequest, "Invalid market snapshot", decodeErr.Error())
+			return
+		}
+		prepared, prepareErr := service.prepareMarketEvent(input)
+		if prepareErr != nil {
+			writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid market snapshot", prepareErr.Error())
+			return
+		}
+		inserted, persistErr := service.persistMarketEventTx(request.Context(), tx, prepared)
+		if persistErr != nil {
+			writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The atomic snapshot could not be stored durably.")
+			return
+		}
+		if inserted {
+			created++
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		writeProblem(writer, request, http.StatusRequestEntityTooLarge, "Invalid market snapshot", "The NDJSON snapshot stream is invalid or exceeds the event size limit.")
+		return
+	}
+	if count == 0 {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid market snapshot", "The market snapshot must contain at least one event.")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The atomic snapshot could not be committed.")
+		return
+	}
+	service.bumpCacheNamespace(request.Context(), "market")
+	writeJSON(writer, http.StatusCreated, map[string]any{
+		"status": "mirrored", "events": count, "created": created,
+	})
+}
+
+func (service *rwaService) authorizeMarketIndexer(request *http.Request) bool {
+	provided := sha256.Sum256([]byte(request.Header.Get("X-Indexer-Key")))
+	return subtle.ConstantTimeCompare(provided[:], service.indexerKeyHash[:]) == 1
+}
+
+func decodeMarketSnapshotEvent(line []byte) (marketEventRequest, error) {
+	var input marketEventRequest
+	decoder := json.NewDecoder(bytes.NewReader(line))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		return marketEventRequest{}, fmt.Errorf("snapshot lines must be valid market events with known fields")
+	}
+	if decoder.Decode(&struct{}{}) != io.EOF {
+		return marketEventRequest{}, fmt.Errorf("snapshot lines must contain exactly one market event")
+	}
+	return input, nil
+}
+
+func (service *rwaService) prepareMarketEvent(input marketEventRequest) (preparedMarketEvent, error) {
+	input.Source = strings.ToLower(strings.TrimSpace(input.Source))
+	input.Chain = strings.ToLower(strings.TrimSpace(input.Chain))
+	input.EventType = strings.ToLower(strings.TrimSpace(input.EventType))
+	input.EventFamily = strings.ToLower(strings.TrimSpace(input.EventFamily))
+	if err := service.validateMarketEvent(input); err != nil {
+		return preparedMarketEvent{}, err
+	}
+	payload, err := json.Marshal(input.Payload)
+	if err != nil {
+		return preparedMarketEvent{}, fmt.Errorf("the source payload is not valid JSON")
+	}
+	eventTimestamp, err := time.Parse(time.RFC3339, input.EventTimestamp)
+	if err != nil {
+		return preparedMarketEvent{}, err
+	}
+	payloadHash := sha256.Sum256(payload)
+	eventIDMaterial := fmt.Sprintf("%s|%s|%s|%s|%d|%s|%s", input.SchemaVersion, input.Source, input.EventFamily, input.EntityKey, input.Version, input.EventType, input.EventTimestamp)
+	eventID := sha256.Sum256([]byte(eventIDMaterial))
+	return preparedMarketEvent{
+		input: input, eventID: hex.EncodeToString(eventID[:]), payload: payload,
+		payloadHash: payloadHash[:], eventTimestamp: eventTimestamp,
+	}, nil
 }
 
 func (service *rwaService) validateMarketEvent(input marketEventRequest) error {
@@ -194,17 +313,28 @@ func (service *rwaService) validateMarketEvent(input marketEventRequest) error {
 	return nil
 }
 
-func (service *rwaService) persistMarketEvent(request *http.Request, input marketEventRequest, eventID string, payload []byte, payloadHash []byte) (int, error) {
-	eventTimestamp, err := time.Parse(time.RFC3339, input.EventTimestamp)
-	if err != nil {
-		return 0, err
-	}
+func (service *rwaService) persistMarketEvent(request *http.Request, prepared preparedMarketEvent) (int, error) {
 	tx, err := service.db.BeginTx(request.Context(), nil)
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(request.Context(), `
+	inserted, err := service.persistMarketEventTx(request.Context(), tx, prepared)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	if !inserted {
+		return http.StatusOK, nil
+	}
+	return http.StatusCreated, nil
+}
+
+func (service *rwaService) persistMarketEventTx(ctx context.Context, tx *sql.Tx, prepared preparedMarketEvent) (bool, error) {
+	input := prepared.input
+	result, err := tx.ExecContext(ctx, `
 		INSERT IGNORE INTO external_market_events
 		    (event_id, schema_version, source, event_type, event_family, entity_key, event_version,
 		     chain_name, collection_slug, order_hash, transaction_hash, contract_address, token_id,
@@ -213,21 +343,21 @@ func (service *rwaService) persistMarketEvent(request *http.Request, input marke
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''),
 		        NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''),
 		        NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)`,
-		eventID, input.SchemaVersion, input.Source, input.EventType, input.EventFamily, input.EntityKey,
+		prepared.eventID, input.SchemaVersion, input.Source, input.EventType, input.EventFamily, input.EntityKey,
 		input.Version, input.Chain, input.CollectionSlug, strings.ToLower(input.OrderHash),
 		strings.ToLower(input.TransactionHash), strings.ToLower(input.ContractAddress), input.TokenID,
 		strings.ToLower(input.MakerAddress), input.Price, strings.ToLower(input.PaymentTokenAddress),
-		input.PaymentSymbol, input.MarketplaceURL, eventTimestamp, payload, payloadHash)
+		input.PaymentSymbol, input.MarketplaceURL, prepared.eventTimestamp, prepared.payload, prepared.payloadHash)
 	if err != nil {
-		return 0, err
+		return false, err
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return 0, err
+		return false, err
 	}
 	if input.EventFamily == "order" && input.OrderHash != "" {
 		status := marketOrderStatus(input.EventType)
-		_, err = tx.ExecContext(request.Context(), `
+		_, err = tx.ExecContext(ctx, `
 			INSERT INTO external_market_orders
 			    (source, chain_name, order_hash, event_version, status, collection_slug,
 			     contract_address, token_id, maker_address, price, payment_token_address,
@@ -250,13 +380,13 @@ func (service *rwaService) persistMarketEvent(request *http.Request, input marke
 			input.Source, input.Chain, strings.ToLower(input.OrderHash), input.Version, status,
 			input.CollectionSlug, strings.ToLower(input.ContractAddress), input.TokenID,
 			strings.ToLower(input.MakerAddress), input.Price, strings.ToLower(input.PaymentTokenAddress),
-			input.PaymentSymbol, input.MarketplaceURL, eventTimestamp, payload)
+			input.PaymentSymbol, input.MarketplaceURL, prepared.eventTimestamp, prepared.payload)
 		if err != nil {
-			return 0, err
+			return false, err
 		}
 	}
 	if input.EventFamily == "sale" && input.OrderHash != "" {
-		_, err = tx.ExecContext(request.Context(), `
+		_, err = tx.ExecContext(ctx, `
 			INSERT INTO external_market_orders
 			    (source, chain_name, order_hash, event_version, status, collection_slug,
 			     contract_address, token_id, maker_address, price, payment_token_address,
@@ -273,22 +403,16 @@ func (service *rwaService) persistMarketEvent(request *http.Request, input marke
 			input.Source, input.Chain, strings.ToLower(input.OrderHash), input.Version,
 			input.CollectionSlug, strings.ToLower(input.ContractAddress), input.TokenID,
 			strings.ToLower(input.MakerAddress), input.Price, strings.ToLower(input.PaymentTokenAddress),
-			input.PaymentSymbol, input.MarketplaceURL, eventTimestamp, eventTimestamp,
-			strings.ToLower(input.TransactionHash), payload)
+			input.PaymentSymbol, input.MarketplaceURL, prepared.eventTimestamp, prepared.eventTimestamp,
+			strings.ToLower(input.TransactionHash), prepared.payload)
 		if err != nil {
-			return 0, err
+			return false, err
 		}
 	}
-	if err := reconcileMarketIntents(tx, input, eventTimestamp); err != nil {
-		return 0, err
+	if err := reconcileMarketIntents(tx, input, prepared.eventTimestamp); err != nil {
+		return false, err
 	}
-	if err := tx.Commit(); err != nil {
-		return 0, err
-	}
-	if rows == 0 {
-		return http.StatusOK, nil
-	}
-	return http.StatusCreated, nil
+	return rows > 0, nil
 }
 
 func marketOrderStatus(eventType string) string {

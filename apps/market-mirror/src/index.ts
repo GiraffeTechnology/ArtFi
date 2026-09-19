@@ -1,3 +1,5 @@
+import { Readable } from "node:stream";
+
 import type { NormalizedMarketEvent } from "./adapter.js";
 import {
   eventFingerprint,
@@ -42,10 +44,43 @@ async function publish(event: NormalizedMarketEvent): Promise<void> {
   }
 }
 
-const stop = await startOpenSeaMirror(adapter, publish, (error) => {
-  console.error("OpenSea mirror reconnect recovery failed", error);
-  process.exitCode = 1;
-});
+async function publishSnapshot(
+  events: AsyncIterable<NormalizedMarketEvent>,
+  signal: AbortSignal,
+): Promise<void> {
+  const body = Readable.from(
+    (async function* () {
+      for await (const event of events) {
+        yield `${JSON.stringify(event)}\n`;
+      }
+    })(),
+  );
+  const response = await fetch(`${apiURL}/v1/indexer/market-snapshots`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-ndjson",
+      "X-Indexer-Key": indexerKey,
+    },
+    body: body as unknown as BodyInit,
+    signal,
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+  if (!response.ok) {
+    throw new Error(
+      `ArtFi mirror snapshot ingestion failed with HTTP ${response.status}`,
+    );
+  }
+}
+
+const stop = await startOpenSeaMirror(
+  adapter,
+  publish,
+  publishSnapshot,
+  (error) => {
+    console.error("OpenSea mirror reconnect recovery failed", error);
+    process.exitCode = 1;
+  },
+);
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     stop();

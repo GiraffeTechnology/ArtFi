@@ -23,10 +23,25 @@ import {
 } from "./opensea.js";
 import type {
   MarketEventSink,
+  MarketSnapshotSink,
   MarketplaceAdapter,
   MarketplaceStreamLifecycle,
   NormalizedMarketEvent,
 } from "./adapter.js";
+
+function atomicSnapshotSink(sink: MarketEventSink): MarketSnapshotSink {
+  return async (events, signal) => {
+    const staged: NormalizedMarketEvent[] = [];
+    for await (const event of events) {
+      if (signal.aborted) throw signal.reason;
+      staged.push(event);
+    }
+    if (signal.aborted) throw signal.reason;
+    for (const event of staged) {
+      await sink(event);
+    }
+  };
+}
 
 const listed = {
   event_type: "item_listed",
@@ -878,9 +893,14 @@ describe("OpenSea normalization", () => {
       },
     };
     const published: NormalizedMarketEvent[] = [];
-    const stop = await startOpenSeaMirror(adapter, async (event) => {
+    const publish: MarketEventSink = async (event) => {
       published.push(event);
-    });
+    };
+    const stop = await startOpenSeaMirror(
+      adapter,
+      publish,
+      atomicSnapshotSink(publish),
+    );
     expect(observed).toEqual(["subscribe", "snapshot"]);
     expect(published).toEqual([historic, live]);
     stop();
@@ -909,7 +929,11 @@ describe("OpenSea normalization", () => {
     };
 
     await expect(
-      startOpenSeaMirror(adapter, async () => undefined),
+      startOpenSeaMirror(
+        adapter,
+        async () => undefined,
+        atomicSnapshotSink(async () => undefined),
+      ),
     ).rejects.toThrow("realtime queue capacity exceeded");
     await Promise.all(queued);
   });
@@ -943,7 +967,11 @@ describe("OpenSea normalization", () => {
         await snapshotGate;
       },
     };
-    const starting = startOpenSeaMirror(adapter, async () => undefined);
+    const starting = startOpenSeaMirror(
+      adapter,
+      async () => undefined,
+      atomicSnapshotSink(async () => undefined),
+    );
     await snapshotObserved;
 
     let overflow: unknown;
@@ -1002,9 +1030,14 @@ describe("OpenSea normalization", () => {
       },
     };
     const published: NormalizedMarketEvent[] = [];
-    const starting = startOpenSeaMirror(adapter, async (event) => {
+    const publish: MarketEventSink = async (event) => {
       published.push(event);
-    });
+    };
+    const starting = startOpenSeaMirror(
+      adapter,
+      publish,
+      atomicSnapshotSink(publish),
+    );
     await snapshotObserved;
 
     let overflow: unknown;
@@ -1027,6 +1060,63 @@ describe("OpenSea normalization", () => {
     releaseSnapshot();
 
     await expect(starting).rejects.toThrow("realtime queue capacity exceeded");
+    expect(published).toEqual([]);
+  });
+
+  it("aborts atomic snapshot publication when realtime buffering fails during commit", async () => {
+    let liveSink: MarketEventSink | undefined;
+    const historic = normalizeOpenSeaEvent(listed);
+    const secondHistoric = {
+      ...historic,
+      entityKey: `${historic.entityKey}:second`,
+      version: historic.version + 1,
+    };
+    const queued: Promise<void>[] = [];
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(sink) {
+        liveSink = sink;
+        return () => undefined;
+      },
+      async backfill(sink) {
+        await sink(historic);
+        await sink(secondHistoric);
+      },
+    };
+    const published: NormalizedMarketEvent[] = [];
+    const atomicSnapshot: MarketSnapshotSink = async (events, signal) => {
+      const staged: NormalizedMarketEvent[] = [];
+      for await (const event of events) {
+        staged.push(event);
+        if (staged.length === 1) {
+          for (let version = 1; version <= 257; version += 1) {
+            queued.push(
+              liveSink!({ ...historic, version }).catch(() => undefined),
+            );
+          }
+          await Promise.all(queued);
+        }
+      }
+      if (signal.aborted) throw signal.reason;
+      published.push(...staged);
+    };
+
+    await expect(
+      startOpenSeaMirror(
+        adapter,
+        async (event) => {
+          published.push(event);
+        },
+        atomicSnapshot,
+      ),
+    ).rejects.toThrow("realtime queue capacity exceeded");
     expect(published).toEqual([]);
   });
 
@@ -1058,10 +1148,15 @@ describe("OpenSea normalization", () => {
       },
       async backfill() {},
     };
-    const starting = startOpenSeaMirror(adapter, async () => {
+    const publish: MarketEventSink = async () => {
       replayStarted();
       await replayGate;
-    });
+    };
+    const starting = startOpenSeaMirror(
+      adapter,
+      publish,
+      atomicSnapshotSink(publish),
+    );
     await replayObserved;
     for (let version = 1; version <= 257; version += 1) {
       queued.push(liveSink!({ ...historic, version }).catch(() => undefined));
@@ -1092,11 +1187,16 @@ describe("OpenSea normalization", () => {
     };
     let attempts = 0;
     const published: NormalizedMarketEvent[] = [];
-    const stop = await startOpenSeaMirror(adapter, async (event) => {
+    const publish: MarketEventSink = async (event) => {
       attempts += 1;
       if (attempts === 1) throw new Error("transient sink failure");
       published.push(event);
-    });
+    };
+    const stop = await startOpenSeaMirror(
+      adapter,
+      publish,
+      atomicSnapshotSink(publish),
+    );
 
     await expect(liveSink?.(historic)).rejects.toThrow(
       "transient sink failure",
@@ -1287,7 +1387,11 @@ describe("OpenSea normalization", () => {
       },
     };
 
-    const stop = await startOpenSeaMirror(adapter, async () => undefined);
+    const stop = await startOpenSeaMirror(
+      adapter,
+      async () => undefined,
+      atomicSnapshotSink(async () => undefined),
+    );
     expect(backfills).toBe(1);
     const firstRecovery = lifecycle!.onReconnectReady();
     const secondRecovery = lifecycle!.onReconnectReady();
@@ -1327,9 +1431,15 @@ describe("OpenSea normalization", () => {
       },
     };
     await expect(
-      startOpenSeaMirror(adapter, async (event) => {
-        published.push(event);
-      }),
+      startOpenSeaMirror(
+        adapter,
+        async (event) => {
+          published.push(event);
+        },
+        atomicSnapshotSink(async (event) => {
+          published.push(event);
+        }),
+      ),
     ).rejects.toThrow("snapshot failed");
     expect(stopped).toBe(true);
     expect(published).toEqual([]);

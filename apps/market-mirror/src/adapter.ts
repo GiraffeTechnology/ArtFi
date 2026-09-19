@@ -34,6 +34,11 @@ export interface MarketplaceCapabilities {
 
 export type MarketEventSink = (event: NormalizedMarketEvent) => Promise<void>;
 
+export type MarketSnapshotSink = (
+  events: AsyncIterable<NormalizedMarketEvent>,
+  signal: AbortSignal,
+) => Promise<void>;
+
 export interface MarketplaceStreamLifecycle {
   onReconnectReady(): Promise<void>;
   onFatal(error: unknown): void;
