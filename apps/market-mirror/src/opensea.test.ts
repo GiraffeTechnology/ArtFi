@@ -62,7 +62,6 @@ describe("OpenSea normalization", () => {
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
-      backfillPages: 1,
     });
     expect(adapter.capabilities).toEqual({
       realtime: true,
@@ -78,7 +77,6 @@ describe("OpenSea normalization", () => {
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
-      backfillPages: 3,
       fetchImpl: async (input) => {
         const cursor = new URL(String(input)).searchParams.get("next");
         requestedCursors.push(cursor);
@@ -111,24 +109,31 @@ describe("OpenSea normalization", () => {
     expect(events).toHaveLength(2);
   });
 
-  it("fails closed instead of reporting a truncated REST history", async () => {
-    const published: unknown[] = [];
+  it("continues beyond the former deployment page cap until history is exhausted", async () => {
+    const requestedCursors: Array<string | null> = [];
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
-      backfillPages: 1,
-      fetchImpl: async () =>
-        new Response(
-          JSON.stringify({ asset_events: [listed], next: "more-history" }),
+      fetchImpl: async (input) => {
+        const cursor = new URL(String(input)).searchParams.get("next");
+        requestedCursors.push(cursor);
+        const page = cursor === null ? 0 : Number(cursor.slice("page-".length));
+        return new Response(
+          JSON.stringify({
+            asset_events: [{ ...listed, version: page + 1 }],
+            next: page < 24 ? `page-${page + 1}` : null,
+          }),
           { status: 200 },
-        ),
+        );
+      },
     });
-    await expect(
-      adapter.backfill(async (event) => {
-        published.push(event);
-      }),
-    ).rejects.toThrow("incomplete at the configured page limit");
-    expect(published).toEqual([]);
+    const published: unknown[] = [];
+    await adapter.backfill(async (event) => {
+      published.push(event);
+    });
+    expect(requestedCursors).toHaveLength(25);
+    expect(requestedCursors.at(-1)).toBe("page-24");
+    expect(published).toHaveLength(25);
   });
 
   it("rejects a repeated REST cursor without looping", async () => {
@@ -137,7 +142,6 @@ describe("OpenSea normalization", () => {
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
-      backfillPages: 3,
       fetchImpl: async () => {
         calls += 1;
         return new Response(
@@ -161,7 +165,6 @@ describe("OpenSea normalization", () => {
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
-      backfillPages: 1,
       retryAttempts: 2,
       retryBaseDelayMs: 10,
       sleep: async (delay) => {
@@ -188,7 +191,6 @@ describe("OpenSea normalization", () => {
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
-      backfillPages: 1,
       retryAttempts: 1,
       requestTimeoutMs: 10,
       fetchImpl: async (_input, init) =>
@@ -209,7 +211,6 @@ describe("OpenSea normalization", () => {
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
-      backfillPages: 1,
       retryAttempts: 1,
       requestTimeoutMs: 10,
       fetchImpl: async (_input, init) => {
@@ -235,7 +236,6 @@ describe("OpenSea normalization", () => {
     const adapter = new OpenSeaAdapter({
       apiKey: "test-only",
       collectionSlugs: ["artfi-test"],
-      backfillPages: 1,
       retryAttempts: 3,
       sleep: async () => {
         throw new Error("permanent rejection must not sleep");

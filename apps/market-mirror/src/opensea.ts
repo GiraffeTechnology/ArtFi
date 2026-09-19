@@ -170,7 +170,6 @@ export function eventFingerprint(event: NormalizedMarketEvent): string {
 export interface OpenSeaAdapterConfig {
   apiKey: string;
   collectionSlugs: string[];
-  backfillPages: number;
   fetchImpl?: typeof fetch;
   retryAttempts?: number;
   retryBaseDelayMs?: number;
@@ -205,9 +204,6 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     const retryBaseDelayMs = config.retryBaseDelayMs ?? 500;
     const requestTimeoutMs = config.requestTimeoutMs ?? 10_000;
     if (
-      !Number.isSafeInteger(config.backfillPages) ||
-      config.backfillPages < 1 ||
-      config.backfillPages > 1_000 ||
       !Number.isSafeInteger(retryAttempts) ||
       retryAttempts < 1 ||
       retryAttempts > 5 ||
@@ -233,7 +229,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     for (const slug of this.#config.collectionSlugs) {
       let cursor: string | undefined;
       const observedCursors = new Set<string>();
-      for (let page = 0; page < this.#config.backfillPages; page += 1) {
+      while (true) {
         const url = new URL(
           `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
         );
@@ -253,11 +249,6 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
         if (nextCursor) observedCursors.add(nextCursor);
         cursor = nextCursor;
         if (!cursor) break;
-        if (page === this.#config.backfillPages - 1) {
-          throw new Error(
-            "OpenSea backfill is incomplete at the configured page limit",
-          );
-        }
       }
     }
     for (const event of stagedEvents) await sink(event);

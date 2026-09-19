@@ -18,10 +18,6 @@ const adapter = new OpenSeaAdapter({
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean),
-  backfillPages: Math.max(
-    1,
-    Math.min(20, Number(process.env.OPENSEA_BACKFILL_PAGES ?? "2")),
-  ),
 });
 
 async function publish(event: NormalizedMarketEvent): Promise<void> {
