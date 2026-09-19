@@ -4,11 +4,13 @@
 
 - Repository: `GiraffeTechnology/ArtFi`
 - Pull request: `#114`
-- Code commit under test: `b0f08b15c8d81bf14b6d901485905696d0fb4f8f`
-- Code tree under test: `f83e42d46a0001247c2a676a218a43873dc35e71`
+- Code commit under test: `2d910cc1d678a8fb88eefabb3749af524afc7ceb`
+- Code tree under test: `3ad9c6e6898610b7a88a9059cbe9dd744badc309`
 - Scope: fail-closed realtime/snapshot convergence, crash-window head overlap,
+  reconnect-triggered REST gap-fill,
   bounded disk-spooled realtime buffering, recoverable durable-log tails,
-  post-commit sink recovery, crash-safe reclamation, cleanup exclusion, and
+  snapshot withholding after realtime-buffer failure, post-commit sink
+  recovery, reclaimer-owned crash-safe reclamation, cleanup exclusion, and
   process-instance lock identity
 
 This report contains no credentials, private endpoints, host names, IP addresses,
@@ -19,7 +21,7 @@ wallet material, RPC values, or internal filesystem locations.
 | Gate                                 | Result                                    |
 | ------------------------------------ | ----------------------------------------- |
 | Prettier                             | PASS                                      |
-| Market-mirror focused suite          | PASS — 35/35                              |
+| Market-mirror focused suite          | PASS — 40/40                              |
 | Forced no-cache Turbo matrix         | PASS — 15/15 tasks, 0 cached              |
 | Web unit suite                       | PASS — 106/106                            |
 | Wallet extension suite               | PASS — 6/6                                |
@@ -41,6 +43,8 @@ boundary:
 - concurrent stale-owner contenders preserve exclusive single-writer behavior;
 - process-instance identity distinguishes an exited owner from a reused PID;
 - an abandoned stale reclamation marker is recoverable;
+- a live reclaimer owns its marker, so a contender cannot remove the marker
+  and steal the stale lock;
 - short durable-log writes complete before fsync and cursor advancement;
 - incomplete spool and checkpoint tails recover from the latest committed byte
   offset;
@@ -53,6 +57,8 @@ boundary:
   closures can grow without bound;
 - a separate cumulative byte limit prevents the retained realtime spool from
   consuming unbounded disk during a long snapshot;
+- realtime-buffer failure withholds the REST snapshot instead of exposing an
+  incomplete view;
 - queue overflow while the committed spool is replaying still fails startup
   closed before realtime readiness is published;
 - after snapshot commit, one rejected sink delivery does not disable later
@@ -64,6 +70,12 @@ boundary:
 - a live owner remains protected from reclamation;
 - recovered work resumes without exposing a partial snapshot;
 - successful replay removes the completed snapshot state.
+- the initial connection waits for every collection acknowledgement without
+  launching a duplicate recovery crawl;
+- each later fully acknowledged connection generation schedules exactly one
+  serialized REST gap-fill, while stale socket replies are ignored;
+- a rejected reconnect gap-fill is surfaced as a fatal stream failure so the
+  service exits and startup recovery can run again.
 
 ## Limits
 
