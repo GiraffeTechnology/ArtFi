@@ -90,3 +90,65 @@ is not imported into this machine contract and cannot enable execution.
 
 Initial supported execution is one bounded TEST_ONLY NFT BUY, not every PRD action.
 All other actions remain outstanding; this slice does not redefine final delivery.
+
+## Conditional Oracle observation adapter
+
+The optional `oracleAttestation` composition option wraps the existing `observe`
+dependencies for both kernel and service. D1 `mintAuthority` and its
+`EXCLUSIVE_AT_PINNED_BLOCK` contract remain unchanged. Projection history and
+finality are distinct from attestation validity. Registration remains optional.
+
+Trusted composition supplies `resolveRequiredAttestation(request, signal)` and
+an application-facing verifier created with `createOracleApiVerifier`. The verifier
+calls only Oracle's `POST /v1/rwa/attestations/verify` boundary. Its endpoint and
+fetch implementation are injected by the composition root; no environment,
+credential or fallback service is guessed. Only explicit `null` from that trusted
+resolver selects a flow without an attestation requirement.
+Otherwise it supplies `{ attestation, expectedSubject }` with the existing
+flow's assetId/chainId/contract/tokenId/purpose binding. Caller JSON cannot select
+an opt-out. No purpose, registration requirement or token convention is defined.
+
+Valid evidence establishes current grounding without removing an existing
+restriction or negative grounding result. NOT_CURRENT clears groundingCurrent;
+REVOKED sets assetRestricted. Source failures clear available/current. The
+existing deterministic policy refuses ineligible observations. Before STARTED,
+the kernel persists bounded Oracle evidence separately from D1 mint authority;
+a refusal preserves PREPARED and returns SAFE_DEGRADED. STARTED recovery skips
+new observation checks. No proof/signature bytes are stored in that evidence.
+
+The existing console shows the stored verdict as a historical check, not current
+authority. Durable reads and independent wallet revocation remain available
+through source outage. The wrapper never calls export, settlement, or custody.
+Omitting the option preserves existing behavior, including existing errors.
+
+Tests use explicit verifier/store/chain fakes and the existing policy tests;
+they do not establish live Oracle, cryptographic, database or production proof.
+Browser evidence uses the existing console with fixture API/wallet adapters.
+No remote deployment or global PreMint gate is included.
+
+Required-flow evidence includes bounded `attestationId` and the exact
+`expectedSubject` assetId/chainId/contract/tokenId/purpose tuple. The adapter and
+durable hydration bind chainId/contract/tokenId to the immutable request. Valid
+verdicts without identity are refused. Source-resolution failures can remain
+identity-free failure records. No raw proof or signature is persisted.
+
+### Opt-in real SDK integration test
+
+Run `node --test scripts/agent/oracle-sdk.integration.mjs` with
+`ARTFI_ORACLE_TEST_CHECKOUT` set to an absolute path containing Oracle main
+`f2ba4bc5fa6e88330a19c3f8684764e524917dd0`. The test verifies Git blob
+identities for all five imported source files before importing the real SDK,
+attestation service, revocation registry and resilient source adapter. It fails
+if the path is missing or any source differs; it does not skip or substitute a
+fake. Source files are external test dependencies, not copied into ArtFi.
+
+Those five blobs are unchanged from the earlier `8350a65` handoff; the current
+main pin preserves the merged projection/finality/conformance corrections through
+Oracle PR #41. Direct SDK composition is retained only as a synthetic compatibility
+test. Runtime ArtFi composition uses the Oracle application-facing API.
+
+This test uses ephemeral in-memory Ed25519 keys and synthetic source transport.
+It covers valid, exact expiry, revoked, subject mismatch, source timeout/circuit
+open without verifier invocation, and recovery. It proves real-SDK compatibility,
+not live deployment, source authority or production composition. The default
+agent suite remains self-contained with its useful contract-fake coverage.
