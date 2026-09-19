@@ -69,10 +69,18 @@ not an environment. It is not resolved in this file and must not be named elsewh
 
 Deletability is **not yet true**. The operations-dependency behavioural contract now uses the
 vendor-neutral host role `artfi-delivery-link`, and its regression test rejects the former
-deployment-specific value. Real vendor names still appear in historical and operational documents,
-including a file whose name is a vendor name
-(`docs/CTYUN_MYSQL_DEPLOYMENT_CONTRACT.md`).
+deployment-specific value. The Agent durable-store contract names the database by the
+`<CLOUD_PROVIDER_A>` role rather than a vendor.
 
-Until those documents are consolidated here, deleting this file removes the binding table but
-**not** every vendor name elsewhere. Recorded as a known deviation rather than presented as
-satisfied.
+One executable compatibility exception remains explicit:
+`scripts/release/verify-ye-yongrun-mint-batch.mjs` reads the legacy
+`infrastructureAttestation.abcdyiSshRecovered` field from the already-recorded
+`release/mint-batches/ye-yongrun-unit-a01-a38.intent.json`. That field is historical evidence, not
+a permitted name for a new deployment contract. A future versioned evidence schema must replace it
+with a role-named field; silently renaming the existing evidence would destroy compatibility. Real
+vendor names also remain in historical and operational documents, including a file whose name is a
+vendor name (`docs/CTYUN_MYSQL_DEPLOYMENT_CONTRACT.md`).
+
+Until those documents and the versioned compatibility field are consolidated, deleting this file
+removes the binding table but **not** every vendor name elsewhere. Recorded as a known deviation
+rather than presented as satisfied.

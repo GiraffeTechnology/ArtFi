@@ -1,10 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   eventFingerprint,
   normalizeOpenSeaEvent,
   OpenSeaAdapter,
+  OpenSeaJoinReadiness,
+  startOpenSeaMirror,
 } from "./opensea.js";
+import type {
+  MarketEventSink,
+  MarketplaceAdapter,
+  NormalizedMarketEvent,
+} from "./adapter.js";
 
 const listed = {
   event_type: "item_listed",
@@ -136,6 +146,146 @@ describe("OpenSea normalization", () => {
     expect(published).toHaveLength(25);
   });
 
+  it("spools complete histories outside the process heap and removes the spool", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-test-"),
+    );
+    try {
+      const adapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ asset_events: [listed] }), {
+            status: 200,
+          }),
+      });
+      await adapter.backfill(async () => undefined);
+      expect(await readdir(spoolParentDirectory)).toEqual([]);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("resumes a durable snapshot from its last fsynced cursor", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-resume-test-"),
+    );
+    try {
+      const firstPublished: unknown[] = [];
+      const firstAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          if (cursor === null) {
+            return new Response(
+              JSON.stringify({
+                asset_events: [listed],
+                next: "cursor-page-2",
+              }),
+              { status: 200 },
+            );
+          }
+          throw new Error("provider interrupted after page one");
+        },
+      });
+      await expect(
+        firstAdapter.backfill(async (event) => {
+          firstPublished.push(event);
+        }),
+      ).rejects.toThrow("provider interrupted");
+      expect(firstPublished).toEqual([]);
+      expect(await readdir(spoolParentDirectory)).toHaveLength(1);
+
+      const requestedCursors: Array<string | null> = [];
+      const resumedPublished: NormalizedMarketEvent[] = [];
+      const resumedAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          requestedCursors.push(cursor);
+          return new Response(
+            JSON.stringify({
+              asset_events: [
+                {
+                  ...listed,
+                  version: 8,
+                  payload: {
+                    ...listed.payload,
+                    event_timestamp: "2026-08-19T04:00:01Z",
+                  },
+                },
+              ],
+              next: null,
+            }),
+            { status: 200 },
+          );
+        },
+      });
+      await resumedAdapter.backfill(async (event) => {
+        resumedPublished.push(event);
+      });
+      expect(requestedCursors).toEqual(["cursor-page-2"]);
+      expect(resumedPublished.map((event) => event.version)).toEqual([7, 8]);
+      expect(await readdir(spoolParentDirectory)).toEqual([]);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("keeps a durable snapshot single-writer", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-lock-test-"),
+    );
+    let markEntered!: () => void;
+    let releaseFetch!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      markEntered = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    try {
+      const firstAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async () => {
+          markEntered();
+          await release;
+          return new Response(JSON.stringify({ asset_events: [listed] }), {
+            status: 200,
+          });
+        },
+      });
+      const running = firstAdapter.backfill(async () => undefined);
+      await entered;
+
+      const competingAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async () => {
+          throw new Error("competing process must not fetch");
+        },
+      });
+      await expect(
+        competingAdapter.backfill(async () => undefined),
+      ).rejects.toMatchObject({ code: "EEXIST" });
+      releaseFetch();
+      await running;
+      expect(await readdir(spoolParentDirectory)).toEqual([]);
+    } finally {
+      releaseFetch();
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
   it("rejects a repeated REST cursor without looping", async () => {
     let calls = 0;
     const published: unknown[] = [];
@@ -249,5 +399,107 @@ describe("OpenSea normalization", () => {
       "HTTP 401",
     );
     expect(calls).toBe(1);
+  });
+
+  it("subscribes to realtime delivery before taking the REST snapshot", async () => {
+    const observed: string[] = [];
+    let liveSink: MarketEventSink | undefined;
+    const historic = normalizeOpenSeaEvent(listed);
+    const live = {
+      ...historic,
+      version: historic.version + 1,
+      eventTimestamp: "2026-08-19T04:00:01.000Z",
+    };
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(sink) {
+        observed.push("subscribe");
+        liveSink = sink;
+        return () => observed.push("stop");
+      },
+      async backfill(sink) {
+        observed.push("snapshot");
+        await liveSink?.(live);
+        await sink(historic);
+      },
+    };
+    const published: NormalizedMarketEvent[] = [];
+    const stop = await startOpenSeaMirror(adapter, async (event) => {
+      published.push(event);
+    });
+    expect(observed).toEqual(["subscribe", "snapshot"]);
+    expect(published).toEqual([live, historic]);
+    stop();
+    expect(observed).toEqual(["subscribe", "snapshot", "stop"]);
+  });
+
+  it("waits for every remote collection join acknowledgement", async () => {
+    const readiness = new OpenSeaJoinReadiness(
+      ["artfi-test", "artfi-second"],
+      1_000,
+    );
+    let resolved = false;
+    const waiting = readiness.wait().then(() => {
+      resolved = true;
+    });
+    readiness.observe(
+      Buffer.from(
+        JSON.stringify([
+          "1",
+          "1",
+          "collection:artfi-test",
+          "phx_reply",
+          { status: "ok" },
+        ]),
+      ),
+    );
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    readiness.observe(
+      Buffer.from(
+        JSON.stringify([
+          "2",
+          "2",
+          "collection:artfi-second",
+          "phx_reply",
+          { status: "ok" },
+        ]),
+      ),
+    );
+    await waiting;
+    expect(resolved).toBe(true);
+  });
+
+  it("stops the realtime subscription when the REST snapshot fails", async () => {
+    let stopped = false;
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start() {
+        return () => {
+          stopped = true;
+        };
+      },
+      async backfill() {
+        throw new Error("snapshot failed");
+      },
+    };
+    await expect(
+      startOpenSeaMirror(adapter, async () => undefined),
+    ).rejects.toThrow("snapshot failed");
+    expect(stopped).toBe(true);
   });
 });

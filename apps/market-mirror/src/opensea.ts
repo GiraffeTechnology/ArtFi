@@ -1,7 +1,20 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  open,
+  readFile,
+  rm,
+  unlink,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
 import { LocalStorage } from "node-localstorage";
 import { EventType, OpenSeaStreamClient } from "@opensea/stream-js";
-import { WebSocket } from "ws";
+import { type RawData, WebSocket } from "ws";
 
 import {
   MARKET_EVENT_SCHEMA_VERSION,
@@ -174,7 +187,90 @@ export interface OpenSeaAdapterConfig {
   retryAttempts?: number;
   retryBaseDelayMs?: number;
   requestTimeoutMs?: number;
+  spoolParentDirectory?: string;
+  streamJoinTimeoutMs?: number;
   sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
+}
+
+interface BackfillCheckpoint {
+  schemaVersion: "1";
+  collectionsHash: string;
+  collectionIndex: number;
+  nextCursor?: string;
+}
+
+type PhoenixFrame = [
+  joinReference: unknown,
+  reference: unknown,
+  topic: unknown,
+  event: unknown,
+  payload: unknown,
+];
+
+export class OpenSeaJoinReadiness {
+  readonly #pendingTopics: Set<string>;
+  readonly #promise: Promise<void>;
+  readonly #timeout: ReturnType<typeof setTimeout>;
+  #resolve!: () => void;
+  #reject!: (reason?: unknown) => void;
+  #settled = false;
+
+  constructor(collectionSlugs: string[], timeoutMs: number) {
+    this.#pendingTopics = new Set(
+      collectionSlugs.map((slug) => `collection:${slug}`),
+    );
+    this.#promise = new Promise<void>((resolve, reject) => {
+      this.#resolve = resolve;
+      this.#reject = reject;
+    });
+    this.#timeout = setTimeout(() => {
+      this.reject(new Error("OpenSea stream subscription timed out"));
+    }, timeoutMs);
+  }
+
+  observe(data: RawData): void {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
+    if (!Array.isArray(parsed) || parsed.length !== 5) return;
+    const frame = parsed as PhoenixFrame;
+    const topic = typeof frame[2] === "string" ? frame[2] : undefined;
+    if (!topic || !this.#pendingTopics.has(topic) || frame[3] !== "phx_reply") {
+      return;
+    }
+    const payload = record(frame[4]);
+    if (payload.status === "ok") {
+      this.#pendingTopics.delete(topic);
+      if (this.#pendingTopics.size === 0) this.#finish();
+      return;
+    }
+    this.reject(new Error(`OpenSea stream subscription failed for ${topic}`));
+  }
+
+  reject(reason: unknown): void {
+    if (this.#settled) return;
+    this.#settled = true;
+    clearTimeout(this.#timeout);
+    this.#reject(
+      reason instanceof Error
+        ? reason
+        : new Error("OpenSea stream subscription failed"),
+    );
+  }
+
+  wait(): Promise<void> {
+    return this.#promise;
+  }
+
+  #finish(): void {
+    if (this.#settled) return;
+    this.#settled = true;
+    clearTimeout(this.#timeout);
+    this.#resolve();
+  }
 }
 
 export class OpenSeaAdapter implements MarketplaceAdapter {
@@ -192,6 +288,8 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
   readonly #retryAttempts: number;
   readonly #retryBaseDelayMs: number;
   readonly #requestTimeoutMs: number;
+  readonly #spoolParentDirectory?: string;
+  readonly #streamJoinTimeoutMs: number;
   readonly #sleep: (delayMs: number, signal?: AbortSignal) => Promise<void>;
 
   constructor(config: OpenSeaAdapterConfig) {
@@ -203,6 +301,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     const retryAttempts = config.retryAttempts ?? 3;
     const retryBaseDelayMs = config.retryBaseDelayMs ?? 500;
     const requestTimeoutMs = config.requestTimeoutMs ?? 10_000;
+    const streamJoinTimeoutMs = config.streamJoinTimeoutMs ?? 10_000;
     if (
       !Number.isSafeInteger(retryAttempts) ||
       retryAttempts < 1 ||
@@ -212,7 +311,10 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       retryBaseDelayMs > 30_000 ||
       !Number.isSafeInteger(requestTimeoutMs) ||
       requestTimeoutMs < 1 ||
-      requestTimeoutMs > 120_000
+      requestTimeoutMs > 120_000 ||
+      !Number.isSafeInteger(streamJoinTimeoutMs) ||
+      streamJoinTimeoutMs < 1 ||
+      streamJoinTimeoutMs > 120_000
     ) {
       throw new Error("OpenSea backfill configuration is invalid");
     }
@@ -221,37 +323,128 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     this.#retryAttempts = retryAttempts;
     this.#retryBaseDelayMs = retryBaseDelayMs;
     this.#requestTimeoutMs = requestTimeoutMs;
+    this.#spoolParentDirectory = config.spoolParentDirectory;
+    this.#streamJoinTimeoutMs = streamJoinTimeoutMs;
     this.#sleep = config.sleep ?? sleepWithAbort;
   }
 
   async backfill(sink: MarketEventSink, signal?: AbortSignal): Promise<void> {
-    const stagedEvents: NormalizedMarketEvent[] = [];
-    for (const slug of this.#config.collectionSlugs) {
-      let cursor: string | undefined;
-      const observedCursors = new Set<string>();
-      while (true) {
-        const url = new URL(
-          `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
+    const transientParent = this.#spoolParentDirectory
+      ? undefined
+      : await mkdtemp(join(tmpdir(), "artfi-opensea-backfill-"));
+    const spoolParentDirectory = this.#spoolParentDirectory ?? transientParent!;
+    await mkdir(spoolParentDirectory, { mode: 0o700, recursive: true });
+    const collectionsHash = createHash("sha256")
+      .update(JSON.stringify(this.#config.collectionSlugs))
+      .digest("hex");
+    const spoolDirectory = join(
+      spoolParentDirectory,
+      `snapshot-${collectionsHash.slice(0, 24)}`,
+    );
+    await mkdir(spoolDirectory, { mode: 0o700, recursive: true });
+    const spoolPath = join(spoolDirectory, "events.ndjson");
+    const checkpointPath = join(spoolDirectory, "checkpoints.ndjson");
+    const lockPath = join(spoolDirectory, "active.lock");
+    let lock: Awaited<ReturnType<typeof open>> | undefined;
+    let spool: Awaited<ReturnType<typeof open>> | undefined;
+    let checkpointLog: Awaited<ReturnType<typeof open>> | undefined;
+    let completed = false;
+    try {
+      lock = await open(lockPath, "wx", 0o600);
+      await lock.writeFile(`${process.pid}\n`);
+      const checkpoints = await readBackfillCheckpoints(
+        checkpointPath,
+        collectionsHash,
+        this.#config.collectionSlugs.length,
+      );
+      const latest = checkpoints.at(-1);
+      if (latest) await access(spoolPath);
+      spool = await open(spoolPath, "a+", 0o600);
+      checkpointLog = await open(checkpointPath, "a+", 0o600);
+
+      let collectionIndex = latest?.collectionIndex ?? 0;
+      let cursor = latest?.nextCursor;
+      while (collectionIndex < this.#config.collectionSlugs.length) {
+        const slug = this.#config.collectionSlugs[collectionIndex]!;
+        const observedCursors = new Set(
+          checkpoints
+            .filter((item) => item.collectionIndex === collectionIndex)
+            .map((item) => item.nextCursor)
+            .filter((item): item is string => item !== undefined),
         );
-        url.searchParams.set("limit", "200");
-        if (cursor) url.searchParams.set("next", cursor);
-        const body = await this.#fetchBackfillPage(url, signal);
-        const events = Array.isArray(body.asset_events)
-          ? body.asset_events
-          : [];
-        for (const event of events) {
-          stagedEvents.push(normalizeOpenSeaEvent(event));
+        while (collectionIndex < this.#config.collectionSlugs.length) {
+          const url = new URL(
+            `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
+          );
+          url.searchParams.set("limit", "200");
+          if (cursor) url.searchParams.set("next", cursor);
+          const body = await this.#fetchBackfillPage(url, signal);
+          const events = Array.isArray(body.asset_events)
+            ? body.asset_events
+            : [];
+          for (const event of events) {
+            await spool.write(
+              `${JSON.stringify(normalizeOpenSeaEvent(event))}\n`,
+            );
+          }
+          await spool.sync();
+
+          const nextCursor = text(body.next);
+          if (nextCursor && observedCursors.has(nextCursor)) {
+            throw new Error("OpenSea backfill cursor did not advance");
+          }
+          if (nextCursor) observedCursors.add(nextCursor);
+          const nextCheckpoint: BackfillCheckpoint = {
+            schemaVersion: "1",
+            collectionsHash,
+            collectionIndex: nextCursor ? collectionIndex : collectionIndex + 1,
+            ...(nextCursor ? { nextCursor } : {}),
+          };
+          await checkpointLog.write(`${JSON.stringify(nextCheckpoint)}\n`);
+          await checkpointLog.sync();
+          checkpoints.push(nextCheckpoint);
+          cursor = nextCursor;
+          if (cursor) continue;
+          collectionIndex += 1;
+          cursor = undefined;
+          break;
         }
-        const nextCursor = text(body.next);
-        if (nextCursor && observedCursors.has(nextCursor)) {
-          throw new Error("OpenSea backfill cursor did not advance");
+      }
+      await spool.sync();
+      await spool.close();
+      spool = undefined;
+      const input = createReadStream(spoolPath, { encoding: "utf8" });
+      const lines = createInterface({
+        input,
+        crlfDelay: Infinity,
+      });
+      try {
+        for await (const line of lines) {
+          if (line !== "") {
+            await sink(JSON.parse(line) as NormalizedMarketEvent);
+          }
         }
-        if (nextCursor) observedCursors.add(nextCursor);
-        cursor = nextCursor;
-        if (!cursor) break;
+      } finally {
+        lines.close();
+        input.destroy();
+      }
+      completed = true;
+    } finally {
+      await spool?.close();
+      await checkpointLog?.close();
+      if (lock) {
+        await lock.close();
+        await unlink(lockPath).catch((error: unknown) => {
+          if (!isMissingFile(error)) throw error;
+        });
+      }
+      if (completed || transientParent) {
+        await rm(spoolDirectory, { force: true, recursive: true });
+      }
+      if (transientParent) {
+        await rm(transientParent, { force: true, recursive: true });
       }
     }
-    for (const event of stagedEvents) await sink(event);
   }
 
   async #fetchBackfillPage(
@@ -321,9 +514,23 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
   async start(sink: MarketEventSink): Promise<() => void> {
     const storagePath =
       process.env.OPENSEA_STREAM_STORAGE_PATH ?? ".opensea-stream";
+    const readiness = new OpenSeaJoinReadiness(
+      this.#config.collectionSlugs,
+      this.#streamJoinTimeoutMs,
+    );
+    class AcknowledgedOpenSeaWebSocket extends WebSocket {
+      constructor(address: string | URL, protocols?: string | string[]) {
+        super(address, protocols);
+        this.on("message", (data) => readiness.observe(data));
+      }
+    }
     const client = new OpenSeaStreamClient({
       token: this.#config.apiKey,
-      connectOptions: { transport: WebSocket, sessionStorage: LocalStorage },
+      connectOptions: {
+        transport: AcknowledgedOpenSeaWebSocket,
+        sessionStorage: LocalStorage,
+      },
+      onError: (error) => readiness.reject(error),
     });
     // The SDK constructs LocalStorage internally; an explicit path keeps session state out of
     // source directories when the implementation requests it.
@@ -336,10 +543,90 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       }),
     );
     client.connect();
+    try {
+      await readiness.wait();
+    } catch (error) {
+      for (const stop of unsubscribe) stop();
+      client.disconnect();
+      throw error;
+    }
     return () => {
       for (const stop of unsubscribe) stop();
       client.disconnect();
     };
+  }
+}
+
+async function readBackfillCheckpoints(
+  checkpointPath: string,
+  collectionsHash: string,
+  collectionCount: number,
+): Promise<BackfillCheckpoint[]> {
+  let contents: string;
+  try {
+    contents = await readFile(checkpointPath, "utf8");
+  } catch (error) {
+    if (isMissingFile(error)) return [];
+    throw error;
+  }
+  if (contents !== "" && !contents.endsWith("\n")) {
+    throw new Error("OpenSea backfill checkpoint is truncated");
+  }
+  const checkpoints: BackfillCheckpoint[] = [];
+  for (const line of contents.split("\n").filter(Boolean)) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      throw new Error("OpenSea backfill checkpoint is invalid");
+    }
+    const value = record(parsed);
+    const nextCursor = text(value.nextCursor);
+    if (
+      value.schemaVersion !== "1" ||
+      value.collectionsHash !== collectionsHash ||
+      !Number.isSafeInteger(value.collectionIndex) ||
+      (value.collectionIndex as number) < 0 ||
+      (value.collectionIndex as number) > collectionCount ||
+      (value.nextCursor !== undefined && nextCursor === undefined) ||
+      ((value.collectionIndex as number) === collectionCount && nextCursor)
+    ) {
+      throw new Error("OpenSea backfill checkpoint is invalid");
+    }
+    const checkpoint: BackfillCheckpoint = {
+      schemaVersion: "1",
+      collectionsHash,
+      collectionIndex: value.collectionIndex as number,
+      ...(nextCursor ? { nextCursor } : {}),
+    };
+    const previous = checkpoints.at(-1);
+    if (
+      previous &&
+      checkpoint.collectionIndex !== previous.collectionIndex &&
+      checkpoint.collectionIndex !== previous.collectionIndex + 1
+    ) {
+      throw new Error("OpenSea backfill checkpoint sequence is invalid");
+    }
+    checkpoints.push(checkpoint);
+  }
+  return checkpoints;
+}
+
+function isMissingFile(error: unknown): boolean {
+  return record(error).code === "ENOENT";
+}
+
+export async function startOpenSeaMirror(
+  adapter: MarketplaceAdapter,
+  sink: MarketEventSink,
+): Promise<() => void> {
+  const stop = await adapter.start(sink);
+  try {
+    await adapter.backfill(sink);
+    return stop;
+  } catch (error) {
+    stop();
+    throw error;
   }
 }
 
