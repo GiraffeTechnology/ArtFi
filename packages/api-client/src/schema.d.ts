@@ -159,7 +159,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** @description Atomically commits a complete NDJSON marketplace snapshot; any invalid or interrupted line rolls back the whole snapshot. */
+    /** @description Atomically commits a complete NDJSON marketplace snapshot; any invalid or interrupted line rolls back the whole snapshot, while an empty body records a valid zero-event cutover. */
     post: operations["ingestExternalMarketSnapshot"];
     delete?: never;
     options?: never;

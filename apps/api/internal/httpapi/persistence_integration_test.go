@@ -385,6 +385,20 @@ func TestMySQLExternalMarketSnapshotIsAtomic(t *testing.T) {
 		handler.ServeHTTP(recorder, request)
 		return recorder
 	}
+	empty := send("")
+	if empty.Code != http.StatusCreated {
+		t.Fatalf("empty atomic cutover: status=%d body=%s", empty.Code, empty.Body.String())
+	}
+	var emptyResponse struct {
+		Events  int `json:"events"`
+		Created int `json:"created"`
+	}
+	if err := json.Unmarshal(empty.Body.Bytes(), &emptyResponse); err != nil {
+		t.Fatal(err)
+	}
+	if emptyResponse.Events != 0 || emptyResponse.Created != 0 {
+		t.Fatalf("empty atomic cutover returned %+v", emptyResponse)
+	}
 
 	rejected := send(string(first) + "\n" + `{"unknown":true}` + "\n")
 	if rejected.Code != http.StatusBadRequest {

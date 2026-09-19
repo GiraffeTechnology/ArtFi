@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -10,7 +11,71 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
+
+type snapshotDeadlineRecorder struct {
+	*httptest.ResponseRecorder
+	readDeadline  time.Time
+	writeDeadline time.Time
+	readSet       bool
+	writeSet      bool
+}
+
+func (recorder *snapshotDeadlineRecorder) SetReadDeadline(deadline time.Time) error {
+	recorder.readDeadline = deadline
+	recorder.readSet = true
+	return nil
+}
+
+func (recorder *snapshotDeadlineRecorder) SetWriteDeadline(deadline time.Time) error {
+	recorder.writeDeadline = deadline
+	recorder.writeSet = true
+	return nil
+}
+
+func TestMarketSnapshotClearsOrdinaryServerDeadlines(t *testing.T) {
+	recorder := &snapshotDeadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	allowLongMarketSnapshot(recorder)
+	if !recorder.readSet || !recorder.writeSet || !recorder.readDeadline.IsZero() || !recorder.writeDeadline.IsZero() {
+		t.Fatalf("snapshot deadlines were not cleared: read=%s write=%s", recorder.readDeadline, recorder.writeDeadline)
+	}
+}
+
+func TestMarketSnapshotKeepsOrdinaryDeadlinesUntilRequestIsAuthorized(t *testing.T) {
+	db, err := sql.Open("mysql", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	service.db = db
+	service.indexerEnabled = true
+	service.indexerKeyHash = sha256.Sum256([]byte("external-market-indexer-key"))
+	for _, test := range []struct {
+		name        string
+		indexerKey  string
+		contentType string
+		wantStatus  int
+	}{
+		{name: "unauthorized", indexerKey: "wrong-key", contentType: "application/x-ndjson", wantStatus: http.StatusUnauthorized},
+		{name: "wrong media type", indexerKey: "external-market-indexer-key", contentType: "application/json", wantStatus: http.StatusUnsupportedMediaType},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := &snapshotDeadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+			request := httptest.NewRequest(http.MethodPost, "/v1/indexer/market-snapshots", strings.NewReader(""))
+			request.Header.Set("X-Indexer-Key", test.indexerKey)
+			request.Header.Set("Content-Type", test.contentType)
+			newHandler(service).ServeHTTP(recorder, request)
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("status=%d, want %d", recorder.Code, test.wantStatus)
+			}
+			if recorder.readSet || recorder.writeSet {
+				t.Fatal("unaccepted snapshot request cleared ordinary server deadlines")
+			}
+		})
+	}
+}
 
 func TestHealth(t *testing.T) {
 	recorder := request(t, http.MethodGet, "/healthz")

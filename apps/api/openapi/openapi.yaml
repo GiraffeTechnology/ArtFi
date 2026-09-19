@@ -211,7 +211,7 @@ paths:
   /v1/indexer/market-snapshots:
     post:
       operationId: ingestExternalMarketSnapshot
-      description: Atomically commits a complete NDJSON marketplace snapshot; any invalid or interrupted line rolls back the whole snapshot.
+      description: Atomically commits a complete NDJSON marketplace snapshot; any invalid or interrupted line rolls back the whole snapshot, while an empty body records a valid zero-event cutover.
       parameters:
         - name: X-Indexer-Key
           in: header

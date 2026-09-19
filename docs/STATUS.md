@@ -355,8 +355,10 @@ capacity, multi-page recovery overlap, commit-window queue overflow rejection, d
 resume from incomplete journal/spool tails, complete short-write handling, abandoned-reclaim recovery, atomic concurrent stale-owner
 reclamation, process-instance identity against PID reuse, single-writer enforcement, post-commit sink recovery and subscription
 shutdown without publication when snapshotting fails. Full format, lint, typecheck, Node unit, production-mode build,
-secret scan, chain-consistency, release-schema and charity-verifier gates pass locally. The exact
-commit still needs CI and independent runtime evidence. **No count or status moves:** XM.3 remains
+secret scan, chain-consistency, release-schema and charity-verifier gates pass locally. The
+snapshot handler also clears the ordinary server connection deadlines for authenticated full-history
+streams and accepts a zero-event atomic cutover; dedicated regressions bind both behaviors.
+The exact commit still needs CI and independent runtime evidence. **No count or status moves:** XM.3 remains
 `IMPLEMENTED-NOT-VERIFIED`, and no live provider connection is claimed.
 
 ### 2026-09-19 — `claude/ci-all-pr-6dytk9`: fixture disclosure and holder authority

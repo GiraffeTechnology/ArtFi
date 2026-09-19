@@ -155,6 +155,7 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 		writeProblem(writer, request, http.StatusUnsupportedMediaType, "Invalid market snapshot", "Market snapshots must use application/x-ndjson.")
 		return
 	}
+	allowLongMarketSnapshot(writer)
 	tx, err := service.db.BeginTx(request.Context(), nil)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The atomic snapshot transaction could not be started.")
@@ -194,10 +195,6 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 		writeProblem(writer, request, http.StatusRequestEntityTooLarge, "Invalid market snapshot", "The NDJSON snapshot stream is invalid or exceeds the event size limit.")
 		return
 	}
-	if count == 0 {
-		writeProblem(writer, request, http.StatusBadRequest, "Invalid market snapshot", "The market snapshot must contain at least one event.")
-		return
-	}
 	if err := tx.Commit(); err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The atomic snapshot could not be committed.")
 		return
@@ -206,6 +203,16 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 	writeJSON(writer, http.StatusCreated, map[string]any{
 		"status": "mirrored", "events": count, "created": created,
 	})
+}
+
+func allowLongMarketSnapshot(writer http.ResponseWriter) {
+	// A complete provider history can legitimately take longer than the API
+	// server's ordinary request deadline. Clear the connection deadlines only
+	// after the indexer credential and media type have been accepted, then keep
+	// each streamed event bounded and commit the resulting snapshot atomically.
+	controller := http.NewResponseController(writer)
+	_ = controller.SetReadDeadline(time.Time{})
+	_ = controller.SetWriteDeadline(time.Time{})
 }
 
 func (service *rwaService) authorizeMarketIndexer(request *http.Request) bool {
