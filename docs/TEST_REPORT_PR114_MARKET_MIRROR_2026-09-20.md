@@ -4,8 +4,8 @@
 
 - Repository: `GiraffeTechnology/ArtFi`
 - Pull request: `#114`
-- Code commit under test: `048283b1913ca3bdb8ee9a58ad39ed40ce162147`
-- Code tree under test: `ab6d0cdaefdc7755dd6837b71d42b6043b7bfa3e`
+- Code commit under test: `b0f08b15c8d81bf14b6d901485905696d0fb4f8f`
+- Code tree under test: `f83e42d46a0001247c2a676a218a43873dc35e71`
 - Scope: fail-closed realtime/snapshot convergence, crash-window head overlap,
   bounded disk-spooled realtime buffering, recoverable durable-log tails,
   post-commit sink recovery, crash-safe reclamation, cleanup exclusion, and
@@ -19,7 +19,7 @@ wallet material, RPC values, or internal filesystem locations.
 | Gate                                 | Result                                    |
 | ------------------------------------ | ----------------------------------------- |
 | Prettier                             | PASS                                      |
-| Market-mirror focused suite          | PASS — 33/33                              |
+| Market-mirror focused suite          | PASS — 35/35                              |
 | Forced no-cache Turbo matrix         | PASS — 15/15 tasks, 0 cached              |
 | Web unit suite                       | PASS — 106/106                            |
 | Wallet extension suite               | PASS — 6/6                                |
@@ -45,11 +45,14 @@ boundary:
 - incomplete spool and checkpoint tails recover from the latest committed byte
   offset;
 - a resumed snapshot overlaps every collection head before continuing its saved
-  cursor, recovering realtime events from the prior process's crash window;
+  cursor, traversing provider pages until the last committed event boundary and
+  recovering crash windows larger than one provider page;
 - realtime events are spooled outside the process heap until the REST snapshot
   commits;
 - event-count and byte-count limits fail startup closed before queued promise
   closures can grow without bound;
+- a separate cumulative byte limit prevents the retained realtime spool from
+  consuming unbounded disk during a long snapshot;
 - queue overflow while the committed spool is replaying still fails startup
   closed before realtime readiness is published;
 - after snapshot commit, one rejected sink delivery does not disable later
