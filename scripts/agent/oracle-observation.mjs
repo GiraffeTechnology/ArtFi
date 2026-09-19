@@ -1,5 +1,7 @@
-// Trusted optional composition. Inject Oracle's SDK verifier; never treat
-// projection finality or D1 mint authority as an attestation-validity verdict.
+// Trusted optional composition. Runtime callers inject Oracle's application API
+// verifier. Direct SDK injection remains only for the explicit synthetic
+// compatibility test. Projection finality and D1 mint authority never become
+// an attestation-validity verdict.
 export function createOracleApiVerifier({ mode, verifyUrl, fetchImpl }) {
   let endpoint;
   try {
