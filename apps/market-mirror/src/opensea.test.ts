@@ -252,15 +252,19 @@ describe("OpenSea normalization", () => {
         fetchImpl: async (input) => {
           const cursor = new URL(String(input)).searchParams.get("next");
           requestedCursors.push(cursor);
+          const version = cursor === null ? 9 : 8;
           return new Response(
             JSON.stringify({
               asset_events: [
                 {
                   ...listed,
-                  version: 8,
+                  version,
                   payload: {
                     ...listed.payload,
-                    event_timestamp: "2026-08-19T04:00:01Z",
+                    event_timestamp:
+                      cursor === null
+                        ? "2026-08-19T04:00:02Z"
+                        : "2026-08-19T04:00:01Z",
                   },
                 },
               ],
@@ -273,8 +277,8 @@ describe("OpenSea normalization", () => {
       await resumedAdapter.backfill(async (event) => {
         resumedPublished.push(event);
       });
-      expect(requestedCursors).toEqual(["cursor-page-2"]);
-      expect(resumedPublished.map((event) => event.version)).toEqual([7, 8]);
+      expect(requestedCursors).toEqual([null, "cursor-page-2"]);
+      expect(resumedPublished.map((event) => event.version)).toEqual([7, 9, 8]);
       await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
@@ -326,15 +330,19 @@ describe("OpenSea normalization", () => {
         fetchImpl: async (input) => {
           const cursor = new URL(String(input)).searchParams.get("next");
           requestedCursors.push(cursor);
+          const version = cursor === null ? 9 : 8;
           return new Response(
             JSON.stringify({
               asset_events: [
                 {
                   ...listed,
-                  version: 8,
+                  version,
                   payload: {
                     ...listed.payload,
-                    event_timestamp: "2026-08-19T04:00:01Z",
+                    event_timestamp:
+                      cursor === null
+                        ? "2026-08-19T04:00:02Z"
+                        : "2026-08-19T04:00:01Z",
                   },
                 },
               ],
@@ -348,8 +356,8 @@ describe("OpenSea normalization", () => {
         published.push(event);
       });
 
-      expect(requestedCursors).toEqual(["cursor-page-2"]);
-      expect(published.map((event) => event.version)).toEqual([7, 8]);
+      expect(requestedCursors).toEqual([null, "cursor-page-2"]);
+      expect(published.map((event) => event.version)).toEqual([7, 9, 8]);
       await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
@@ -753,6 +761,69 @@ describe("OpenSea normalization", () => {
     expect(published).toEqual([historic, live]);
     stop();
     expect(observed).toEqual(["subscribe", "snapshot", "stop"]);
+  });
+
+  it("fails closed when the pre-snapshot realtime queue reaches capacity", async () => {
+    const historic = normalizeOpenSeaEvent(listed);
+    const queued: Promise<void>[] = [];
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(sink) {
+        for (let version = 1; version <= 257; version += 1) {
+          queued.push(sink({ ...historic, version }).catch(() => undefined));
+        }
+        return () => undefined;
+      },
+      async backfill() {},
+    };
+
+    await expect(
+      startOpenSeaMirror(adapter, async () => undefined),
+    ).rejects.toThrow("realtime queue capacity exceeded");
+    await Promise.all(queued);
+  });
+
+  it("continues realtime delivery after an individual sink failure", async () => {
+    let liveSink: MarketEventSink | undefined;
+    const historic = normalizeOpenSeaEvent(listed);
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(sink) {
+        liveSink = sink;
+        return () => undefined;
+      },
+      async backfill() {},
+    };
+    let attempts = 0;
+    const published: NormalizedMarketEvent[] = [];
+    const stop = await startOpenSeaMirror(adapter, async (event) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("transient sink failure");
+      published.push(event);
+    });
+
+    await expect(liveSink?.(historic)).rejects.toThrow(
+      "transient sink failure",
+    );
+    await liveSink?.({ ...historic, version: historic.version + 1 });
+    expect(published.map((event) => event.version)).toEqual([
+      historic.version + 1,
+    ]);
+    stop();
   });
 
   it("waits for every remote collection join acknowledgement", async () => {

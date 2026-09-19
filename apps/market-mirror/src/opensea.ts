@@ -42,6 +42,8 @@ interface BackfillLockOwner {
 }
 
 const PROCESS_STARTED_AT_MS = Math.round(Date.now() - process.uptime() * 1_000);
+const MAX_PENDING_REALTIME_EVENTS = 256;
+const MAX_PENDING_REALTIME_BYTES = 4 * 1024 * 1024;
 
 const ORDER_EVENTS = new Set([
   "item_listed",
@@ -397,6 +399,30 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       await truncate(checkpointPath, checkpointState.validBytes);
       spool = await open(spoolPath, "a+", 0o600);
       checkpointLog = await open(checkpointPath, "a+", 0o600);
+
+      // A process can exit after a REST page is checkpointed but before the
+      // realtime buffer is committed. Re-read every collection head before
+      // resuming the saved cursor so events observed during that crash window
+      // are part of the recovered snapshot instead of becoming a silent gap.
+      if (latest) {
+        for (const slug of this.#config.collectionSlugs) {
+          const overlapUrl = new URL(
+            `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
+          );
+          overlapUrl.searchParams.set("limit", "200");
+          const overlap = await this.#fetchBackfillPage(overlapUrl, signal);
+          const overlapEvents = Array.isArray(overlap.asset_events)
+            ? overlap.asset_events
+            : [];
+          for (const event of overlapEvents) {
+            await writeAll(
+              spool,
+              `${JSON.stringify(normalizeOpenSeaEvent(event))}\n`,
+            );
+          }
+        }
+        await spool.sync();
+      }
 
       let collectionIndex = latest?.collectionIndex ?? 0;
       let cursor = latest?.nextCursor;
@@ -862,6 +888,8 @@ export async function startOpenSeaMirror(
   let realtimeReady = false;
   let realtimeFailure: unknown;
   let realtimeSequence = Promise.resolve();
+  let pendingRealtimeEvents = 0;
+  let pendingRealtimeBytes = 0;
   try {
     realtimeBuffer = await open(realtimePath, "wx+", 0o600);
   } catch (error) {
@@ -869,17 +897,43 @@ export async function startOpenSeaMirror(
     throw error;
   }
   const realtimeSink: MarketEventSink = (event) => {
-    const next = realtimeSequence.then(async () => {
-      if (realtimeFailure) throw realtimeFailure;
-      if (!realtimeReady) {
-        await writeAll(realtimeBuffer!, `${JSON.stringify(event)}\n`);
-        await realtimeBuffer!.sync();
-        return;
-      }
-      await sink(event);
-    });
-    realtimeSequence = next.catch((error: unknown) => {
+    const serialized = realtimeReady ? undefined : `${JSON.stringify(event)}\n`;
+    const serializedBytes = serialized
+      ? Buffer.byteLength(serialized, "utf8")
+      : 0;
+    if (
+      serialized &&
+      (pendingRealtimeEvents >= MAX_PENDING_REALTIME_EVENTS ||
+        pendingRealtimeBytes + serializedBytes > MAX_PENDING_REALTIME_BYTES)
+    ) {
+      const error = new Error(
+        "OpenSea pre-snapshot realtime queue capacity exceeded",
+      );
       realtimeFailure ??= error;
+      return Promise.reject(error);
+    }
+    if (serialized) {
+      pendingRealtimeEvents += 1;
+      pendingRealtimeBytes += serializedBytes;
+    }
+    const next = realtimeSequence
+      .then(async () => {
+        if (!realtimeReady && realtimeFailure) throw realtimeFailure;
+        if (!realtimeReady) {
+          await writeAll(realtimeBuffer!, serialized!);
+          await realtimeBuffer!.sync();
+          return;
+        }
+        await sink(event);
+      })
+      .finally(() => {
+        if (serialized) {
+          pendingRealtimeEvents -= 1;
+          pendingRealtimeBytes -= serializedBytes;
+        }
+      });
+    realtimeSequence = next.catch((error: unknown) => {
+      if (!realtimeReady) realtimeFailure ??= error;
     });
     return next;
   };
