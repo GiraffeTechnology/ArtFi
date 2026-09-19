@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { mkdtemp, open, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
 import { LocalStorage } from "node-localstorage";
 import { EventType, OpenSeaStreamClient } from "@opensea/stream-js";
 import { WebSocket } from "ws";
@@ -174,6 +179,7 @@ export interface OpenSeaAdapterConfig {
   retryAttempts?: number;
   retryBaseDelayMs?: number;
   requestTimeoutMs?: number;
+  spoolParentDirectory?: string;
   sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
 }
 
@@ -192,6 +198,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
   readonly #retryAttempts: number;
   readonly #retryBaseDelayMs: number;
   readonly #requestTimeoutMs: number;
+  readonly #spoolParentDirectory: string;
   readonly #sleep: (delayMs: number, signal?: AbortSignal) => Promise<void>;
 
   constructor(config: OpenSeaAdapterConfig) {
@@ -221,37 +228,70 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     this.#retryAttempts = retryAttempts;
     this.#retryBaseDelayMs = retryBaseDelayMs;
     this.#requestTimeoutMs = requestTimeoutMs;
+    this.#spoolParentDirectory = config.spoolParentDirectory ?? tmpdir();
     this.#sleep = config.sleep ?? sleepWithAbort;
   }
 
   async backfill(sink: MarketEventSink, signal?: AbortSignal): Promise<void> {
-    const stagedEvents: NormalizedMarketEvent[] = [];
-    for (const slug of this.#config.collectionSlugs) {
-      let cursor: string | undefined;
-      const observedCursors = new Set<string>();
-      while (true) {
-        const url = new URL(
-          `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
-        );
-        url.searchParams.set("limit", "200");
-        if (cursor) url.searchParams.set("next", cursor);
-        const body = await this.#fetchBackfillPage(url, signal);
-        const events = Array.isArray(body.asset_events)
-          ? body.asset_events
-          : [];
-        for (const event of events) {
-          stagedEvents.push(normalizeOpenSeaEvent(event));
+    const spoolDirectory = await mkdtemp(
+      join(this.#spoolParentDirectory, "artfi-opensea-backfill-"),
+    );
+    const spoolPath = join(spoolDirectory, "events.ndjson");
+    let spool: Awaited<ReturnType<typeof open>> | undefined = await open(
+      spoolPath,
+      "wx",
+      0o600,
+    );
+    try {
+      for (const slug of this.#config.collectionSlugs) {
+        let cursor: string | undefined;
+        const observedCursors = new Set<string>();
+        while (true) {
+          const url = new URL(
+            `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
+          );
+          url.searchParams.set("limit", "200");
+          if (cursor) url.searchParams.set("next", cursor);
+          const body = await this.#fetchBackfillPage(url, signal);
+          const events = Array.isArray(body.asset_events)
+            ? body.asset_events
+            : [];
+          for (const event of events) {
+            await spool.write(
+              `${JSON.stringify(normalizeOpenSeaEvent(event))}\n`,
+            );
+          }
+          const nextCursor = text(body.next);
+          if (nextCursor && observedCursors.has(nextCursor)) {
+            throw new Error("OpenSea backfill cursor did not advance");
+          }
+          if (nextCursor) observedCursors.add(nextCursor);
+          cursor = nextCursor;
+          if (!cursor) break;
         }
-        const nextCursor = text(body.next);
-        if (nextCursor && observedCursors.has(nextCursor)) {
-          throw new Error("OpenSea backfill cursor did not advance");
-        }
-        if (nextCursor) observedCursors.add(nextCursor);
-        cursor = nextCursor;
-        if (!cursor) break;
       }
+      await spool.sync();
+      await spool.close();
+      spool = undefined;
+      const input = createReadStream(spoolPath, { encoding: "utf8" });
+      const lines = createInterface({
+        input,
+        crlfDelay: Infinity,
+      });
+      try {
+        for await (const line of lines) {
+          if (line !== "") {
+            await sink(JSON.parse(line) as NormalizedMarketEvent);
+          }
+        }
+      } finally {
+        lines.close();
+        input.destroy();
+      }
+    } finally {
+      await spool?.close();
+      await rm(spoolDirectory, { force: true, recursive: true });
     }
-    for (const event of stagedEvents) await sink(event);
   }
 
   async #fetchBackfillPage(
@@ -340,6 +380,20 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       for (const stop of unsubscribe) stop();
       client.disconnect();
     };
+  }
+}
+
+export async function startOpenSeaMirror(
+  adapter: MarketplaceAdapter,
+  sink: MarketEventSink,
+): Promise<() => void> {
+  const stop = await adapter.start(sink);
+  try {
+    await adapter.backfill(sink);
+    return stop;
+  } catch (error) {
+    stop();
+    throw error;
   }
 }
 

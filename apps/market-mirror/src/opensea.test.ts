@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   eventFingerprint,
   normalizeOpenSeaEvent,
   OpenSeaAdapter,
+  startOpenSeaMirror,
 } from "./opensea.js";
+import type {
+  MarketEventSink,
+  MarketplaceAdapter,
+  NormalizedMarketEvent,
+} from "./adapter.js";
 
 const listed = {
   event_type: "item_listed",
@@ -136,6 +145,27 @@ describe("OpenSea normalization", () => {
     expect(published).toHaveLength(25);
   });
 
+  it("spools complete histories outside the process heap and removes the spool", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-test-"),
+    );
+    try {
+      const adapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ asset_events: [listed] }), {
+            status: 200,
+          }),
+      });
+      await adapter.backfill(async () => undefined);
+      expect(await readdir(spoolParentDirectory)).toEqual([]);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
   it("rejects a repeated REST cursor without looping", async () => {
     let calls = 0;
     const published: unknown[] = [];
@@ -249,5 +279,70 @@ describe("OpenSea normalization", () => {
       "HTTP 401",
     );
     expect(calls).toBe(1);
+  });
+
+  it("subscribes to realtime delivery before taking the REST snapshot", async () => {
+    const observed: string[] = [];
+    let liveSink: MarketEventSink | undefined;
+    const historic = normalizeOpenSeaEvent(listed);
+    const live = {
+      ...historic,
+      version: historic.version + 1,
+      eventTimestamp: "2026-08-19T04:00:01.000Z",
+    };
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(sink) {
+        observed.push("subscribe");
+        liveSink = sink;
+        return () => observed.push("stop");
+      },
+      async backfill(sink) {
+        observed.push("snapshot");
+        await liveSink?.(live);
+        await sink(historic);
+      },
+    };
+    const published: NormalizedMarketEvent[] = [];
+    const stop = await startOpenSeaMirror(adapter, async (event) => {
+      published.push(event);
+    });
+    expect(observed).toEqual(["subscribe", "snapshot"]);
+    expect(published).toEqual([live, historic]);
+    stop();
+    expect(observed).toEqual(["subscribe", "snapshot", "stop"]);
+  });
+
+  it("stops the realtime subscription when the REST snapshot fails", async () => {
+    let stopped = false;
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start() {
+        return () => {
+          stopped = true;
+        };
+      },
+      async backfill() {
+        throw new Error("snapshot failed");
+      },
+    };
+    await expect(
+      startOpenSeaMirror(adapter, async () => undefined),
+    ).rejects.toThrow("snapshot failed");
+    expect(stopped).toBe(true);
   });
 });

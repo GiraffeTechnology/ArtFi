@@ -1,5 +1,9 @@
 import type { NormalizedMarketEvent } from "./adapter.js";
-import { eventFingerprint, OpenSeaAdapter } from "./opensea.js";
+import {
+  eventFingerprint,
+  OpenSeaAdapter,
+  startOpenSeaMirror,
+} from "./opensea.js";
 import { assertSinPublicChainExecution } from "./runtime-boundary.js";
 
 function required(name: string): string {
@@ -37,8 +41,7 @@ async function publish(event: NormalizedMarketEvent): Promise<void> {
   }
 }
 
-await adapter.backfill(publish);
-const stop = await adapter.start(publish);
+const stop = await startOpenSeaMirror(adapter, publish);
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     stop();
