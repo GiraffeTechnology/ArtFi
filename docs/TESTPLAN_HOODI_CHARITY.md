@@ -28,12 +28,26 @@ moves in `STATUS.md`, against the six values in `ACCEPTANCE.md` §2 and on the e
 
 ### 1.1 Required, and only the delivery side has them
 
-| Input                              | Note                                                                                                                                     |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Hoodi RPC egress                   | Reads and writes                                                                                                                         |
-| A funded Hoodi key                 | **Supplied to Forge as a signing method. Never written to this repository, an env file in Git, CI, or a log.** `AGENTS.md` §6            |
-| The Hoodi AI test payload (`VD.3`) | `PRD.md` §7.0 makes producing it the delivery side's. It does not exist yet — **`VD.3` is `NOT-IMPLEMENTED`**                            |
-| An S3-compatible object store      | A local one is sufficient. `charity-object-store.ts` accepts an `http://127.0.0.1:…` loopback endpoint, so no production store is needed |
+| Input                              | Note                                                                                                                                                                                                                                                                                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hoodi RPC egress                   | Reads and writes                                                                                                                                                                                                                                                                     |
+| Funded Hoodi accounts              | **Held by the delivery side** — the ERC-8415 wallet carries Hoodi test funds across two accounts (`artfi1`, `artfi2`). Funding is not a blocker. The signing method is supplied to Forge and **never written to this repository, an env file in Git, CI, or a log** (`AGENTS.md` §6) |
+| The Hoodi AI test payload (`VD.3`) | `PRD.md` §7.0 makes producing it the delivery side's. It does not exist yet — **`VD.3` is `NOT-IMPLEMENTED`**                                                                                                                                                                        |
+| An S3-compatible object store      | A local one is sufficient. `charity-object-store.ts` accepts an `http://127.0.0.1:…` loopback endpoint, so no production store is needed                                                                                                                                             |
+
+**Two accounts is exactly what this plan needs.** Step E requires a holder distinct from the
+distribution wallet, and Step F requires a wallet that holds **zero** units. Use one account as the
+distribution wallet and the other as the holder; the zero-balance case can be a third address that
+never receives anything, and it needs no funds to fail the way it must.
+
+> **The same wallet holds Sepolia funds. This plan never spends them.**
+>
+> Sepolia carries the frozen real batch — 37 works, 3,700 units, a completed record of real assets
+> that `PRD.md` §7.0 says **does not migrate, is never re-minted and never rewritten**. Having
+> spendable Sepolia funds in the same wallet is the one way this run could do irreversible damage,
+> so it is named here rather than left to care: **every transaction in this plan goes to Hoodi
+> `560048`.** `DeployCharityEditions` reverts `UnsupportedChain` anywhere else, which is a guard to
+> rely on, not one to route around. Touching the Sepolia batch is a stop condition (§5).
 
 If the payload does not exist yet, produce it first under §7.0's isolation rules. **Do not
 substitute the real Sepolia artworks for it under any circumstances.**
@@ -148,7 +162,7 @@ lists nothing. **An empty page that looks healthy is a failure** — `ACCEPTANCE
 
 This is `CH.5`, and it is the step that has never been executed anywhere.
 
-1. Transfer some units from the distribution wallet to a second test wallet.
+1. Transfer some units from the distribution wallet to the second account (§1.1).
 2. Put a **watermarked** test file in the object store. It must **not** be byte-identical to the
    master and must not hash to the master's digest — `CH.11`.
 3. Configure the descriptor and the store:
