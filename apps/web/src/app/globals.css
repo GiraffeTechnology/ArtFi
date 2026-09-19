@@ -1469,6 +1469,15 @@ p {
   font-size: 0.85rem;
 }
 
+/* The attributed venue link (#110 §2 XM.4). It leaves ArtFi, so it is marked as leaving. */
+.market-venue-link {
+  align-self: start;
+  font-size: 0.9rem;
+}
+.market-venue-link::after {
+  content: " ↗";
+}
+
 .market-intent-panel dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1524,20 +1533,21 @@ p {
   font-size: 13px;
   line-height: 1.4;
 }
+/* A wrapping grid rather than a single flex row: XM.4 puts source, order, order ID, observed time
+   and freshness on every record, and a row that cannot wrap clips the last of them off the card. */
 .market-mirror-card dl {
   margin: 0;
   padding-top: 14px;
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 14px 24px;
   border-top: 1px solid var(--line);
   font-family: "IBM Plex Mono", Consolas, monospace;
   font-size: 12px;
   text-transform: uppercase;
 }
-.market-mirror-card dl div:last-child {
-  color: var(--wall-red);
-  text-align: right;
+.market-mirror-card dd {
+  overflow-wrap: anywhere;
 }
 .market-mirror-card dd {
   margin: 5px 0 0;
