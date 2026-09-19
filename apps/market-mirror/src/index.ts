@@ -22,6 +22,7 @@ const adapter = new OpenSeaAdapter({
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean),
+  spoolParentDirectory: required("OPENSEA_BACKFILL_STATE_DIRECTORY"),
 });
 
 async function publish(event: NormalizedMarketEvent): Promise<void> {
