@@ -536,8 +536,7 @@ test("optional Oracle runtime adapter persists rejection evidence through durabl
           purpose: "test-required-flow",
         },
       }),
-      attestationService: { verify() {} },
-      verifyOracleAttestation: async () => ({
+      verifyAttestation: async () => ({
         valid: false,
         errorCode: "REVOKED",
       }),
@@ -562,6 +561,38 @@ test("optional Oracle runtime adapter persists rejection evidence through durabl
   assert.equal(restored.mintAuthority.status, "EXCLUSIVE_AT_PINNED_BLOCK");
   assert.equal(restored.oracleAttestation.errorCode, "REVOKED");
   assert.equal(f.row.lease_token, null);
+});
+
+test("durable runtime refuses direct SDK composition outside the synthetic compatibility test", () => {
+  const f = fixture();
+  const unused = async () => {};
+  assert.throws(
+    () =>
+      createDurableRuntime({
+        pool: f.pool,
+        kernelOptions: {
+          observe: unused,
+          authorize: unused,
+          execute: unused,
+          verify: unused,
+          reconcile: unused,
+          mintAuthority: unused,
+        },
+        serviceOptions: {
+          ethers,
+          policy: servicePolicy,
+          planFor: unused,
+          observe: unused,
+          inspectRevocation: unused,
+        },
+        oracleAttestation: {
+          resolveRequiredAttestation: unused,
+          attestationService: { verify() {} },
+          verifyOracleAttestation: unused,
+        },
+      }),
+    /ORACLE_RUNTIME_API_VERIFIER_REQUIRED/,
+  );
 });
 
 for (const errorCode of [null, "NOT_CURRENT", "REVOKED"]) {
