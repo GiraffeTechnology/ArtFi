@@ -59,6 +59,7 @@ export function validateOperationsDependencyContract(input) {
     ]) ||
     !exactKeys(contract.healthContract, [
       "snapshotSchemaVersion",
+      "producerHostRole",
       "hostRole",
       "freshnessSeconds",
       "requiredChecks",
@@ -73,7 +74,7 @@ export function validateOperationsDependencyContract(input) {
       "broadcast",
     ]) ||
     !exactKeys(contract.gates, requiredGates) ||
-    contract.schemaVersion !== 1 ||
+    contract.schemaVersion !== 2 ||
     contract.dependencyRole !== "OPERATIONS_HEALTH_INPUT" ||
     contract.satisfiesOperationsAgent !== false ||
     !/^[A-Za-z0-9_-]{1,128}$/.test(contract.artifact.name) ||
@@ -84,6 +85,7 @@ export function validateOperationsDependencyContract(input) {
       !digest(contract.artifact.integritySha256)) ||
     !digest(contract.artifact.testResultsSha256) ||
     contract.healthContract?.snapshotSchemaVersion !== 2 ||
+    contract.healthContract?.producerHostRole !== "ctyun-abcdyi" ||
     contract.healthContract?.hostRole !== expectedHostRole ||
     contract.healthContract?.freshnessSeconds !== 180 ||
     !Array.isArray(contract.healthContract?.requiredChecks) ||
@@ -130,7 +132,7 @@ export function evaluateOperationsDependency(
       "checks",
     ]) ||
     snapshot.schemaVersion !== expected.snapshotSchemaVersion ||
-    snapshot.hostRole !== expected.hostRole ||
+    snapshot.hostRole !== expected.producerHostRole ||
     !Number.isSafeInteger(snapshot.observedAt) ||
     snapshot.observedAt < 0 ||
     snapshot.observedAt > nowMs + 5000 ||

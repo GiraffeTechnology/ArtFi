@@ -68,7 +68,10 @@ not an environment. It is not resolved in this file and must not be named elsewh
 ## Known deviation
 
 Deletability is **not yet true**. The operations-dependency behavioural contract now uses the
-vendor-neutral host role `artfi-delivery-link`, and its regression test rejects the former
+vendor-neutral host role `artfi-delivery-link`. The frozen r2 producer's legacy
+role is accepted only by the versioned compatibility boundary; its regression
+tests reject unknown producer roles and prevent the legacy value from becoming
+ArtFi's internal role.
 deployment-specific value. The Agent durable-store contract names the database by the
 `<CLOUD_PROVIDER_A>` role rather than a vendor.
 

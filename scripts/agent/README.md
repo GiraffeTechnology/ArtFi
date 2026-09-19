@@ -74,6 +74,11 @@ currently unverified implementation evidence only. They do not amend issue #84 o
 independently block a bounded stage. This read-only artifact does not implement
 the autonomous responsibilities described by issue #84 sections 30 and 36.
 
+The frozen r2 producer predates the vendor-neutral host-role ruling. Its exact
+`producerHostRole` is accepted only at this versioned compatibility boundary and
+is normalized to `artfi-delivery-link` for ArtFi's internal contract. New
+producers and schemas may not reuse the legacy producer field.
+
 The separately frozen `ArtFiLinkOps` r3 package is audit-only provenance, not
 an executable dependency contract: archive
 `E95AB4436F276C3831A35CAD498C903C061716B9F5E8D10EB36F04F6B487D000`,
