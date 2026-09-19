@@ -1,127 +1,270 @@
-# Test plan — charity editions on Hoodi
+# Deployment and test requirements — charity editions on Hoodi
 
 | Field    | Value                                                                      |
 | -------- | -------------------------------------------------------------------------- |
 | Scope    | Charity NFT editions (`S-CH`) only. No other product line, no other module |
 | Chain    | Hoodi `560048`. Nothing here ever touches Sepolia, mainnet or a real asset |
-| For      | The delivery side, to execute and report back                              |
+| For      | The delivery side, to deploy, execute and report back                      |
 | Standing | **Record only.** It creates no requirement — see §0                        |
 
-## 0. What this plan is, and is not
+## 0. What this document is, and is not
 
-Every check below is an **existing** requirement — `PRD.md` §4.7 `CH.1`–`CH.11`, §7.0, and the
-evidence rules in `ACCEPTANCE.md` §3. This file is priority 6 in the `AGENTS.md` §1 authority order:
-it restates them as an executable sequence and **adds nothing**. If a step here has no cited
-requirement, it is a defect in this file, not a new obligation.
+Every requirement below is an **existing** one — `PRD.md` §4.7 `CH.1`–`CH.11`, §7.0, the topology
+ruling of 2026-09-05 (#74), and the evidence rules in `ACCEPTANCE.md` §3. This file is priority 6 in
+the `AGENTS.md` §1 authority order: it restates them as an executable sequence and **adds nothing**.
+If a step here has no cited requirement, it is a defect in this file, not a new obligation.
 
 **It proves the technical path only.** Client ruling of 2026-09-19, recorded in `PRD.md` §7.0: the
 test chain holds no real asset and carries no legal liability, so **no CCHS or ArtCCH document is a
-precondition for any step**. Nothing in this run is evidence about money, donations, receipts or
-legal effect, and no step may produce a claim about them.
+precondition for any step**. Nothing here is evidence about money, donations, receipts or legal
+effect, and no step may produce a claim about them.
 
-**It does not promote anything by itself.** A green run is evidence; whoever records it decides what
-moves in `STATUS.md`, against the six values in `ACCEPTANCE.md` §2 and on the exact reviewed commit.
+**It promotes nothing by itself.** A green run is evidence; whoever records it decides what moves in
+`STATUS.md`, against the six values in `ACCEPTANCE.md` §2 and on the exact reviewed commit.
 
 ---
 
-## 1. Before starting
+## 1. Naming rule — no real address, host or IP, anywhere
 
-### 1.1 Required, and only the delivery side has them
+**#110 §4 and `ACCEPTANCE.md` §7.8.** Every endpoint in this document is a placeholder, and the rule
+applies to what the run produces as much as to the run itself:
 
-| Input                              | Note                                                                                                                                                                                                                                                                                 |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Hoodi RPC egress                   | Reads and writes                                                                                                                                                                                                                                                                     |
-| Funded Hoodi accounts              | **Held by the delivery side** — the ERC-8415 wallet carries Hoodi test funds across two accounts (`artfi1`, `artfi2`). Funding is not a blocker. The signing method is supplied to Forge and **never written to this repository, an env file in Git, CI, or a log** (`AGENTS.md` §6) |
-| The Hoodi AI test payload (`VD.3`) | `PRD.md` §7.0 makes producing it the delivery side's. It does not exist yet — **`VD.3` is `NOT-IMPLEMENTED`**                                                                                                                                                                        |
-| An S3-compatible object store      | A local one is sufficient. `charity-object-store.ts` accepts an `http://127.0.0.1:…` loopback endpoint, so no production store is needed                                                                                                                                             |
+| Placeholder           | Means                                              |
+| --------------------- | -------------------------------------------------- |
+| `<HOODI_RPC>`         | The Hoodi JSON-RPC endpoint                        |
+| `<OBJECT_STORE>`      | The S3-compatible endpoint holding the holder file |
+| `<OBJECT_BUCKET>`     | Its bucket                                         |
+| `<WEB_ORIGIN>`        | The origin the web app is served from              |
+| `<EDITIONS_CONTRACT>` | The deployed Hoodi contract address                |
 
-**Two accounts is exactly what this plan needs.** Step E requires a holder distinct from the
-distribution wallet, and Step F requires a wallet that holds **zero** units. Use one account as the
-distribution wallet and the other as the holder; the zero-balance case can be a third address that
-never receives anything, and it needs no funds to fail the way it must.
+**Never written into this repository, a report, a commit message, a log or a screenshot:** a real
+hostname, a real IP address, an internal topology detail, a bucket name that identifies an
+organization, or any key, seed phrase or credential (`AGENTS.md` §6).
+
+**Screenshots are the easy way to leak one.** Step E captures browser screenshots, and a browser
+shows its address bar. **Serve the app from `localhost` for the run, or crop the address bar.** A
+contract address is public on chain and may be recorded; a host is not.
+
+---
+
+## 2. What the charity path actually needs
+
+Verified against the code, because deploying more than is needed is its own risk.
+
+### 2.1 Required
+
+| Component              | Why                                                                                                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hoodi RPC access       | Both browser and server read the chain directly                                                                                                                        |
+| `ArtFiCharityEditions` | Deployed on Hoodi                                                                                                                                                      |
+| The web runtime        | `/charity`, `/charity/[tokenId]` and the four `/api/charity/*` routes                                                                                                  |
+| An S3-compatible store | Holds the watermarked holder file. **A loopback endpoint is sufficient** — `charity-object-store.ts` accepts `http://127.0.0.1:…` and requires HTTPS for anything else |
+
+### 2.2 Not required — do not stand these up for this run
+
+**The charity path never calls the Go API, MySQL or Redis.** `/charity` and `/charity/[tokenId]`
+read the contract through the browser's chain client; the four API routes are Next.js server routes
+that read the chain, an env-held descriptor and the object store. No charity component references
+`NEXT_PUBLIC_API_URL`.
+
+If a charity step appears to need a database, **stop** — either the step is wrong, or something
+outside this scope is being exercised.
+
+### 2.3 Two accounts, three roles
+
+The delivery side holds Hoodi test funds in the ERC-8415 wallet across two accounts (`artfi1`,
+`artfi2`). **Funding is not a blocker.** They map onto what the run needs:
+
+| Role                | Use               | Why                                                                                          |
+| ------------------- | ----------------- | -------------------------------------------------------------------------------------------- |
+| Distribution wallet | `artfi1`          | Receives all 100 units at series creation                                                    |
+| Holder              | `artfi2`          | §6 F requires a holder **distinct from** the distribution wallet                             |
+| Zero-balance wallet | any third address | §6 G requires a wallet holding **zero** units. **It needs no funds** to fail the way it must |
 
 > **The same wallet holds Sepolia funds. This plan never spends them.**
 >
 > Sepolia carries the frozen real batch — 37 works, 3,700 units, a completed record of real assets
-> that `PRD.md` §7.0 says **does not migrate, is never re-minted and never rewritten**. Having
-> spendable Sepolia funds in the same wallet is the one way this run could do irreversible damage,
-> so it is named here rather than left to care: **every transaction in this plan goes to Hoodi
-> `560048`.** `DeployCharityEditions` reverts `UnsupportedChain` anywhere else, which is a guard to
-> rely on, not one to route around. Touching the Sepolia batch is a stop condition (§5).
-
-If the payload does not exist yet, produce it first under §7.0's isolation rules. **Do not
-substitute the real Sepolia artworks for it under any circumstances.**
-
-### 1.2 Fixed before the first transaction
-
-Record these now; they are what the report is checked against.
-
-- the commit SHA under test;
-- `EDITIONS_PER_ARTWORK` and `PRIMARY_PRICE_WEI` as compiled;
-- the four role addresses;
-- the distribution wallet.
+> that `PRD.md` §7.0 says **does not migrate, is never re-minted and never rewritten**. Spendable
+> Sepolia funds in the wallet running a Hoodi plan is the one way this run could do irreversible
+> damage, so it is named here rather than left to care: **every transaction goes to Hoodi
+> `560048`.** `DeployCharityEditions` reverts `UnsupportedChain` anywhere else — a guard to rely on,
+> not one to route around. Touching the Sepolia batch is a stop condition (§8).
 
 ---
 
-## 2. Isolation rules — breaking any one of these stops the run
+## 3. Deployment requirements
 
-From `PRD.md` §7.0. Each is an audit failure, not a warning. If one breaks, **stop and report**;
-do not continue and note it afterwards.
+### 3.1 The execution-zone gate — read this before debugging anything
+
+`charity-holder-auth.ts` **refuses to read the chain** unless the runtime declares itself in the
+approved execution zone:
+
+```
+ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE=sin
+```
+
+Without it, ownership verification throws `Charity holder chain verification is restricted to the
+SIN execution zone`, and §6 F and G fail for a reason that has nothing to do with charity logic.
+This is the topology ruling of 2026-09-05 (#74) enforced in code: public-chain operation runs in the
+approved zone, and the check **fails closed** rather than assuming.
+
+**Set it deliberately, and only where the ruling allows.** Setting it to make a test pass in a zone
+the ruling does not cover defeats the control rather than satisfying it — report that instead.
+
+### 3.2 Environment
+
+Server-side. **None of these may be committed.**
+
+| Variable                                        | Value                                  | Requirement    |
+| ----------------------------------------------- | -------------------------------------- | -------------- |
+| `ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE`             | `sin`                                  | §3.1           |
+| `ARTFI_RPC_URL`                                 | `<HOODI_RPC>`                          | `CH.5`         |
+| `ARTFI_CHARITY_EDITIONS_ADDRESS`                | `<EDITIONS_CONTRACT>`                  | `CH.5`         |
+| `ARTFI_CHARITY_HOLDER_SESSION_SECRET`           | 32+ characters, random                 | `CH.5`         |
+| `ARTFI_WEB_URL`                                 | `<WEB_ORIGIN>` — HTTPS, or `localhost` | `CH.5`         |
+| `ARTFI_CHARITY_HOLDER_ASSET_MANIFEST`           | the reviewed descriptor, §3.4          | `CH.6`         |
+| `ARTFI_CHARITY_HOLDER_OBJECT_ENDPOINT`          | `<OBJECT_STORE>`                       | `CH.5`         |
+| `ARTFI_CHARITY_HOLDER_OBJECT_BUCKET`            | `<OBJECT_BUCKET>`                      | `CH.5`         |
+| `ARTFI_CHARITY_HOLDER_OBJECT_ACCESS_KEY_ID`     | store credential                       | `AGENTS.md` §6 |
+| `ARTFI_CHARITY_HOLDER_OBJECT_SECRET_ACCESS_KEY` | store credential                       | `AGENTS.md` §6 |
+
+Browser-side. **A public contract address only — never a signer or a credential.**
+
+| Variable                                     | Value                 |
+| -------------------------------------------- | --------------------- |
+| `NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS` | `<EDITIONS_CONTRACT>` |
+| `NEXT_PUBLIC_HOODI_RPC_URL`                  | `<HOODI_RPC>`         |
+
+A **partial** object-store configuration is treated as none, by design: the run reports delivery
+unavailable rather than guessing the rest of a credential set.
+
+### 3.3 The object store
+
+One bucket, **not public**. `CH.6` keeps charity masters out of public storage, and this store is
+deliberately separate from the `R2_*` bucket, which is published under a public base URL.
+
+Put two files in it for the run:
+
+- a **master** stand-in, from the test payload;
+- a **watermarked** holder file that is **not** byte-identical to the master and does **not** hash to
+  the master's digest (`CH.11`).
+
+### 3.4 The descriptor
+
+`ARTFI_CHARITY_HOLDER_ASSET_MANIFEST` is JSON keyed by token ID:
+
+```json
+{
+  "<tokenId>": {
+    "class": "watermarked-holder",
+    "tokenId": "<tokenId>",
+    "sha256": "<digest of the watermarked file>",
+    "masterSha256": "<digest of the master>",
+    "contentType": "image/png",
+    "byteLength": 0,
+    "objectKey": "<key in the bucket>"
+  }
+}
+```
+
+Every field is checked. A missing class, a digest equal to `masterSha256`, or any `previewUrl` is
+refused and yields no bytes.
+
+### 3.5 Secrets
+
+The signing method is supplied to Forge. **No key, seed phrase or credential is written to this
+repository, an env file in Git, CI, or a log** (`AGENTS.md` §6). Role variables hold **addresses**,
+not keys.
+
+---
+
+## 4. Before the first transaction
+
+### 4.1 Preconditions the delivery side owns
+
+| Input                              | State                                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Hoodi RPC egress                   | Required                                                                                                      |
+| Funded Hoodi accounts              | **Held** — §2.3                                                                                               |
+| The Hoodi AI test payload (`VD.3`) | **Does not exist yet.** `VD.3` is `NOT-IMPLEMENTED`, and `PRD.md` §7.0 makes producing it the delivery side's |
+| An S3-compatible store             | Loopback is sufficient — §2.1                                                                                 |
+
+If the payload does not exist, produce it first under §5. **Do not substitute the real Sepolia
+artworks for it under any circumstances.**
+
+### 4.2 Fixed and recorded now
+
+These are what the report is checked against: the commit SHA under test; `EDITIONS_PER_ARTWORK` and
+`PRIMARY_PRICE_WEI` as compiled; the four role addresses; the distribution wallet.
+
+---
+
+## 5. Isolation rules — breaking any one stops the run
+
+From `PRD.md` §7.0. Each is an audit failure, not a warning. **Stop and report**; do not continue
+and note it afterwards.
 
 1. **Its own namespace.** Never written into `release/mint-batches/ye-yongrun-unit-a01-a38` or any
    existing batch directory.
-2. **Its own deployment.** Never the Sepolia `ArtFiCharityEditions` instance. The deploy script
-   reverts `UnsupportedChain` off Hoodi — do not work around that.
-3. **No real artist's name, signature, work title or style description**, and no image that could
-   be confused with a real work.
+2. **Its own deployment.** Never the Sepolia `ArtFiCharityEditions` instance.
+3. **No real artist's name, signature, work title or style description**, and no image that could be
+   confused with a real work.
 4. **Never in a production or mainnet manifest.**
 5. **No CCHS donation, receipt, valuation or holder-advantage language anywhere in the payload.**
    That path belongs to the real batch alone. Its absence is the point, not an omission to fix.
 
-And the markers. `TESTNET`, `NO REAL-WORLD VALUE`, `NO LEGAL EFFECT` must be present in **all four**
+And the markers. `TESTNET`, `NO REAL-WORLD VALUE`, `NO LEGAL EFFECT` must appear in **all four**
 places §7.0 names: token metadata, contract or series level at deployment, on screen wherever the
 set is displayed, and as a top-level field in the batch manifest. **Check all four. Three is a
 failure.**
 
 ---
 
-## 3. The sequence
+## 6. The sequence
 
-### Step A — Deploy
+### A — Deploy
 
 ```bash
 # Roles are addresses, not keys. The signing method is supplied to Forge.
 export ARTFI_ADMIN=0x… ARTFI_EDITION_CREATOR=0x… ARTFI_DONATION_RECORDER=0x… ARTFI_PAUSER=0x…
-forge script script/DeployCharityEditions.s.sol --rpc-url <hoodi> --broadcast
+forge script script/DeployCharityEditions.s.sol --rpc-url <HOODI_RPC> --broadcast
 ```
 
-Then fill a deployment manifest from
+Fill a deployment manifest from
 `packages/contracts/deployments/sepolia-charity-editions.example.json`, **with `chainId` set to
 `560048`** — the example carries Sepolia's `11155111` and is a template, not a value to copy.
 
 **Capture:** deployment transaction hash, contract address, runtime bytecode SHA-256, the four role
-addresses as actually set on chain, block number.
+addresses **as actually set on chain**, block number.
 
 **Proves:** the contract deploys and its roles are what the manifest claims.
 **Does not prove:** anything about a series, a holder, or a file.
 
-### Step B — Create one series from the test payload
+### B — Deployment verification, before any charity test
+
+Prove the environment is what §3 requires, so that a later failure is a charity failure and not a
+configuration one.
+
+- `EDITIONS_PER_ARTWORK` reads `100` and `PRIMARY_PRICE_WEI` reads `10000000000000000` **from the
+  deployed contract**, not from source;
+- the web runtime answers `/api/health` with `chainId: 560048`;
+- `/operations` reports **Chain: ok** against Hoodi, and names no endpoint or host;
+- the object store answers a signed read for the holder key.
+
+### C — Create one series from the test payload
 
 Call `createSeries(artworkId, masterArtworkHash, metadataHash, distributionWallet, metadataURI)`.
 
-**Capture:** transaction hash, the emitted `SeriesCreated`, the resulting token ID, and a read-back
-of `series(tokenId)`, `totalSupply(tokenId)` and `balanceOf(distributionWallet, tokenId)`.
+**Capture:** transaction hash, the emitted `SeriesCreated`, the token ID, and a read-back of
+`series(tokenId)`, `totalSupply(tokenId)` and `balanceOf(distributionWallet, tokenId)`.
 
-**Assert:**
+**Assert:** `totalSupply == 100` exactly (`CH.1`); the distribution wallet holds all 100 at creation;
+the recorded unit price reads `0.01 ETH` (`CH.2`); the metadata carries the three §5 markers and
+**no** artwork preview field (`CH.7`).
 
-- `totalSupply == 100` exactly — `CH.1`;
-- the distribution wallet holds all 100 at creation;
-- the recorded unit price reads `0.01 ETH` — `CH.2`;
-- the metadata carries the three §7.0 markers and **no** artwork preview field — `CH.7`.
+### D — Prove the supply is fixed
 
-### Step C — Prove the supply is fixed
-
-Four rejections, each its own transaction attempt. **Capture the revert reason for each.**
+Four rejections, each its own attempt. **Capture the revert reason for each.**
 
 | Attempt                                           | Must revert with         | Requirement |
 | ------------------------------------------------- | ------------------------ | ----------- |
@@ -132,62 +275,35 @@ Four rejections, each its own transaction attempt. **Capture the revert reason f
 
 There is no additional-mint and no external burn entry point. **Do not add one to test one.**
 
-### Step D — Read it back from the UI
+### E — Read it back from the UI
 
-Configure and start the web app:
+Open `/charity` and `/charity/<tokenId>`, **desktop and mobile**. **Capture screenshots at both
+widths, with no host visible (§1).**
 
-```
-NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS=<contract>
-NEXT_PUBLIC_HOODI_RPC_URL=<hoodi>
-ARTFI_CHARITY_EDITIONS_ADDRESS=<contract>
-ARTFI_CHARITY_HOLDER_SESSION_SECRET=<32+ chars>
-```
+**Assert:** every figure matches the chain read from C — exactly, not approximately;
+`Artwork preview: Not provided` and **no image element anywhere on either page** (`CH.7`); the rights
+notice states all four `CH.8`/`CH.9` facts on both pages (`CH.8`); the §5 markers are on screen —
+the third of the four places; and **no buy, bid, offer or settle control exists** (`CH.2`).
 
-Open `/charity` and `/charity/<tokenId>`, **desktop and mobile**.
+Then a negative: point the app at an address with no series. It must report unavailable and list
+nothing. **An empty page that looks healthy is a failure** — `ACCEPTANCE.md` §3.
 
-**Capture:** screenshots of both at both widths.
+### F — The holder benefit, end to end
 
-**Assert:**
+`CH.5`, and the step that has never been executed anywhere.
 
-- every figure matches the chain read from Step B — not approximately, exactly;
-- `Artwork preview: Not provided`, and **no image element anywhere on either page** — `CH.7`;
-- the rights notice states all four `CH.8`/`CH.9` facts on both pages — `CH.8`;
-- the §7.0 markers are on screen — this is the third of the four places;
-- **no buy, bid, offer or settle control exists** — `CH.2`.
-
-Then a negative: point the app at an address with no series and confirm it reports unavailable and
-lists nothing. **An empty page that looks healthy is a failure** — `ACCEPTANCE.md` §3.
-
-### Step E — The holder benefit, end to end
-
-This is `CH.5`, and it is the step that has never been executed anywhere.
-
-1. Transfer some units from the distribution wallet to the second account (§1.1).
-2. Put a **watermarked** test file in the object store. It must **not** be byte-identical to the
-   master and must not hash to the master's digest — `CH.11`.
-3. Configure the descriptor and the store:
-
-```
-ARTFI_CHARITY_HOLDER_ASSET_MANIFEST={"<tokenId>":{"class":"watermarked-holder","tokenId":"<tokenId>","sha256":"…","masterSha256":"…","contentType":"image/png","byteLength":…,"objectKey":"…"}}
-ARTFI_CHARITY_HOLDER_OBJECT_ENDPOINT=http://127.0.0.1:9000
-ARTFI_CHARITY_HOLDER_OBJECT_BUCKET=…
-ARTFI_CHARITY_HOLDER_OBJECT_ACCESS_KEY_ID=…
-ARTFI_CHARITY_HOLDER_OBJECT_SECRET_ACCESS_KEY=…
-```
-
-4. From `/charity/<tokenId>`, connect the **holding** wallet, verify ownership, and download.
+1. Transfer units from the distribution wallet to the second account (§2.3).
+2. From `/charity/<tokenId>`, connect the **holding** wallet, verify ownership, download.
 
 **Capture:** the SHA-256 of the file actually received, and the response headers.
 
-**Assert:**
+**Assert:** the received digest equals the descriptor's `sha256` and **differs from the master's**
+(`CH.11`); `Content-Disposition: attachment` and the file does not render inline (`CH.6`); the page
+never displayed the master and no route served it (`CH.6`).
 
-- the received digest equals the descriptor's `sha256` and **differs from the master's** — `CH.11`;
-- `Content-Disposition: attachment` and the file does not render inline — `CH.6`;
-- the page never displayed the master and no route served it — `CH.6`.
+### G — Prove the gate is real
 
-### Step F — Prove the gate is real
-
-The same flow, but each of these **must fail**, and the report must say how. Capture status codes.
+Each **must fail**, and the report must say how. **Capture status codes.**
 
 | Attempt                                                         | Expected              | Requirement |
 | --------------------------------------------------------------- | --------------------- | ----------- |
@@ -198,20 +314,18 @@ The same flow, but each of these **must fail**, and the report must say how. Cap
 | Swap the stored object for the master, leaving the descriptor   | `409`, nothing served | `CH.6`      |
 | Unset the object store, keep the descriptor                     | `503`, nothing served | `CH.5`      |
 
-**A step that yields bytes where the table says it must not is the most serious result this plan can
-produce. Stop and report it immediately.**
+**A row that yields bytes where the table says it must not is the most serious result this document
+can produce. Stop and report it immediately.**
 
-### Step G — Lifecycle, in order
+### H — Lifecycle, in order
 
 1. Move all remaining units out of the distribution wallet.
-2. `recordSellout` — now it must succeed. **Capture the receipt** — `CH.3`.
-3. `recordPhysicalDonation` — now it must succeed. **Capture the receipt** — `CH.4`.
-4. `recordPhysicalDonation` again — must revert `PhysicalDonationAlreadyRecorded` — `CH.4`.
+2. `recordSellout` — must now succeed. **Capture the receipt** (`CH.3`).
+3. `recordPhysicalDonation` — must now succeed. **Capture the receipt** (`CH.4`).
+4. `recordPhysicalDonation` again — must revert `PhysicalDonationAlreadyRecorded` (`CH.4`).
 5. `pause`, then attempt a series creation and a transfer; both must be blocked. `unpause`.
 
-### Step H — A release package for the series you created
-
-Build a package manifest for it and run:
+### I — A release package for the series you created
 
 ```bash
 node scripts/release/verify-charity-edition-package.mjs <manifest.json> --local-assets
@@ -220,20 +334,18 @@ node scripts/release/verify-charity-edition-package.mjs <manifest.json> --local-
 Include `holderAsset.file` and `holderAsset.sha256` — the 37 frozen packages predate that binding,
 so **this is the first package for which `CH.11`'s packaging half can be proven at all**.
 
-**Assert:** it passes, and the output reports `holderAssetDistinctFromMaster: true`.
-
-Then confirm the verifier still refuses what it must: set `artworkId` to `UNIT-A02` and re-run — it
-must reject by name — `PRD.md` §8.4 and `ACCEPTANCE.md` §7.9.
+**Assert:** it passes and reports `holderAssetDistinctFromMaster: true`. Then set `artworkId` to
+`UNIT-A02` and re-run: it must reject by name (`PRD.md` §8.4, `ACCEPTANCE.md` §7.9).
 
 ---
 
-## 4. What to report back
+## 7. What to report back
 
-One report, against the commit SHA fixed in §1.2. Per `ACCEPTANCE.md` §3, a claim without a citation
+One report, against the commit SHA fixed in §4.2. Per `ACCEPTANCE.md` §3, a claim without a citation
 is not evidence.
 
-**Per step:** what ran, the transaction hashes and receipts, the exact assertion outcomes, and the
-screenshots for Step D.
+**Per step:** what ran, transaction hashes and receipts, the exact assertion outcomes, and the
+screenshots from E — **with no host or IP visible**.
 
 **Then, plainly:**
 
@@ -241,27 +353,37 @@ screenshots for Step D.
 - **What failed**, with the actual output — not a description of it.
 - **What was not run**, and why. A skipped step is a result; recording it as untested costs nothing
   and hiding it costs the next person a day.
-- **Anything observed that this plan did not anticipate.** That is the most useful part of any run.
+- **Anything observed that this document did not anticipate.** That is the most useful part of any
+  run.
 
 **Do not** mark any `STATUS.md` row `VERIFIED` as part of executing this. The run produces evidence;
 promotion is a separate decision against the exact reviewed commit.
 
 ---
 
-## 5. Stop conditions
+## 8. Stop conditions
 
-Stop the run and report immediately if any of these occurs. None of them is something to work
-around.
+Stop and report immediately. None of these is something to work around.
 
-- Any §2 isolation rule breaks.
-- Any Step F row yields bytes.
+- Any §5 isolation rule breaks.
+- Any §6 G row yields bytes.
 - A master is reachable by any route, or appears in any public object or metadata field.
 - The deploy script is asked to run on a chain other than Hoodi.
 - A key, seed phrase or credential would have to be written into the repository, CI or a log to
   continue.
+- A real host, IP or internal topology detail would have to appear in the report or a screenshot.
 - The real Sepolia batch or its artworks would have to be touched, re-minted or rewritten.
 
-## 6. What a fully green run does and does not establish
+## 9. Teardown
+
+The deployment is a test artifact. Keep the manifest, the transaction hashes and the report — that
+is the evidence. **Remove the object-store credentials from the runtime afterwards**, and leave the
+descriptor manifest unset once the run is over, so a later environment cannot serve a holder file
+nobody is watching.
+
+Do **not** delete the on-chain record. It is immutable and it is the proof.
+
+## 10. What a fully green run does and does not establish
 
 **Does:** the charity path works end to end on a test chain — deploy, fixed supply, the refusals
 that keep it fixed, the UI reading real chain state, a verified holder receiving a watermarked file
