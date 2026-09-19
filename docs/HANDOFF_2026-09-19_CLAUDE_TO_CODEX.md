@@ -310,18 +310,18 @@ this replaces it.
 | Oracle verification API consumer        | delivery    | PR #113, draft · `scripts/agent/*`                                                                                                        |
 | Whole-artwork settlement (`S-WA`)       | supervision | `WholeArtworkMarket.sol` + test, `DeployWholeArtworkMarket.s.sol`, `whole-artwork-intent.ts`, `whole-artwork-listing.tsx` and their tests |
 | Fractions settlement (`S-FR`, §7.3)     | supervision | `ArtFiMarket.sol`, `FractionSaleIntent.t.sol`, `MarketGovernance.t.sol`                                                                   |
-| Charity on Hoodi (`S-CH` verification)  | **unowned** | `TESTPLAN_HOODI_CHARITY.md` is written and needs a chain. See the note below                                                              |
+| Charity on Hoodi (`S-CH` verification)  | delivery    | Client instruction 2026-09-19 · `TESTPLAN_HOODI_CHARITY.md`, now with the §11 assignment and coverage map                                 |
 
 Measured from the shared base, the two sides' file sets intersect in `docs/STATUS.md` and nothing
 else. This branch has never touched `apps/market-mirror/*` or `scripts/agent/*`; Codex's branches
 have never touched `packages/contracts/*` or the whole-artwork web surface.
 
-> **Charity has no owner right now.** `TESTPLAN_HOODI_CHARITY.md` (§7.1) was written for the
-> delivery side to execute, but all three open Codex PRs exclude it — #114's own body says "no
-> Charity, deployment, or later-stage scope is pulled into this PR." Nothing is blocked by this and
-> nothing about it is a client decision; it is an **unassigned task**, recorded here so it is not
-> assumed to be in progress. The supervision side cannot run it: this environment has no chain
-> egress and holds no funded wallet.
+> **Charity is assigned to the delivery side.** Client instruction, 2026-09-19, resolving the gap
+> recorded here earlier: all three open Codex PRs had excluded it — #114's own body says "no
+> Charity, deployment, or later-stage scope is pulled into this PR" — so it had no owner. It does
+> now. `TESTPLAN_HOODI_CHARITY.md` is the whole brief; its §11 names the owner and maps each of the
+> eleven `CH` rows to the steps that produce its evidence. The supervision side still cannot run it:
+> this environment has no chain egress and holds no funded wallet.
 
 ### What the whole-artwork slice is, and what it is not
 
@@ -520,7 +520,7 @@ Stated so it does not have to be re-derived. None of it is a blocker and none is
    payment token on deployment, so it settles nothing until a token manager opens one. Then set
    `NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS` and the panel leaves its unconfigured branch.
 2. **Run the charity plan** in `TESTPLAN_HOODI_CHARITY.md`. It is the cheapest runtime evidence
-   available and it is currently unowned.
+   available, and it is now the delivery side's per the client instruction of 2026-09-19.
 3. **The fractions intent has no backend and no screen.** The contract path is done; M2.5, M2.6 and
    a surface over them are not, and that is what keeps `S-FR` short of a stage delivery.
 4. **`PRD.md` §4.2.2's opening sentence is stale** — it describes the escrow that has now been

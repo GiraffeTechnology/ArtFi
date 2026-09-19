@@ -337,6 +337,18 @@ so **this is the first package for which `CH.11`'s packaging half can be proven 
 **Assert:** it passes and reports `holderAssetDistinctFromMaster: true`. Then set `artworkId` to
 `UNIT-A02` and re-run: it must reject by name (`PRD.md` §8.4, `ACCEPTANCE.md` §7.9).
 
+Then `CH.10`, which nothing else in this sequence reaches. The verifier requires
+`rights.listingActionConfirmed` to be exactly `false` — a package that claims a listing action was
+confirmed must not pass. Re-run twice more:
+
+| `rights.listingActionConfirmed` | Expected             | Requirement |
+| ------------------------------- | -------------------- | ----------- |
+| `true`                          | rejected             | `CH.10`     |
+| absent from the manifest        | rejected, not passed | `CH.10`     |
+
+The second row is the one worth running: a missing field must fail closed rather than be read as a
+default.
+
 ---
 
 ## 7. What to report back
@@ -392,3 +404,43 @@ that is provably not the master, the lifecycle order, and a package that passes 
 **Does not:** say anything about real assets, money, donations, receipts, tax or legal effect;
 establish production readiness, availability or operations; or clear `G3-A`, `G3-B` or `G4`. It is
 the technical path, which is exactly what the client asked it to be.
+
+---
+
+## 11. Assignment and coverage
+
+**Owner: the delivery side (Codex).** Client instruction, 2026-09-19. The supervision side wrote
+these requirements and cannot execute them — no chain egress and no funded wallet — so this document
+is the whole of the brief. Where it is wrong or incomplete, say so in the report rather than working
+around it silently; §7's last bullet exists for exactly that.
+
+All eleven `CH` rows in `docs/STATUS.md` are `IMPLEMENTED-NOT-VERIFIED`. This run is the runtime
+evidence they lack. It does not promote them — §7 is explicit, and promotion is a separate decision
+against the exact reviewed commit under `ACCEPTANCE.md` §3.
+
+| Row     | Steps that produce its evidence | Note                                                                                  |
+| ------- | ------------------------------- | ------------------------------------------------------------------------------------- |
+| `CH.1`  | C, D                            | 100 units exactly, and the two duplicate rejections                                   |
+| `CH.2`  | C, E                            | Price read from the deployed contract; no buy, bid, offer or settle control on screen |
+| `CH.3`  | D, H                            | Refused before sellout, accepted after                                                |
+| `CH.4`  | D, H                            | Refused before sellout, accepted after, refused on replay                             |
+| `CH.5`  | F, G                            | The benefit end to end, and all six ways it must fail closed                          |
+| `CH.6`  | F, G                            | Master never served, never rendered, and the swapped-object rejection                 |
+| `CH.7`  | C, E                            | No preview field in metadata, no image element on either page                         |
+| `CH.8`  | E                               | The rights notice on both pages, desktop and mobile                                   |
+| `CH.9`  | E                               | **Disclosure half only** — see below                                                  |
+| `CH.10` | I                               | Added above; nothing else in the sequence reaches it                                  |
+| `CH.11` | F, G, I                         | Holder file differs from master by hash, at runtime and in the package                |
+
+**Two rows this run cannot fully establish, stated so the report does not overclaim.**
+
+- **`CH.9`** is "proceeds to the CCHS wallet; ArtFi issues no receipt". On a test chain there are no
+  proceeds. The run can prove the disclosure is on screen and that ArtFi exposes no settlement or
+  receipt path at all; it cannot prove where real money went, and must not be written up as though
+  it did.
+- **`CH.2`**'s second half is the same shape: that ArtFi settles nothing is proven by the absence of
+  a control and a path, not by a payment that was observed to go elsewhere.
+
+This is the §10 distinction applied per row. A green run here establishes that the technical path
+works on Hoodi. It establishes nothing economic and nothing legal, and no CCHS or ArtCCH document is
+a precondition for any of it (`PRD.md` §7.0).
