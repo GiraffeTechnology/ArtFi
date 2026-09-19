@@ -399,15 +399,20 @@ export function WholeArtworkListing({
       >
         <p className="eyebrow">Sale by signature</p>
         <h2 id="whole-artwork-listing">
-          Settlement is not configured for this artwork.
+          Settlement on ArtFi is not configured for this artwork.
         </h2>
         <p>
-          Trading a whole artwork needs a deployed whole-artwork market and the
+          Settling a sale here needs a deployed whole-artwork market and the
           artwork&apos;s own contract address.{" "}
           {market ? "" : "No market address is configured. "}
           {collectionAddress ? "" : "No artwork contract is configured. "}
           Until both are present this surface offers nothing, rather than
           showing a sale it could not settle.
+        </p>
+        <p>
+          This is about settlement on ArtFi, not about the artwork. Whole
+          artworks trade on ArtFi and on OpenSea both, and the external market
+          records on this site carry a link out to the venue.
         </p>
       </section>
     );

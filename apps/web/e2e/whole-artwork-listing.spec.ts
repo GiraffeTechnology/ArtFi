@@ -27,7 +27,7 @@ test("an unconfigured market says so and offers no way to sign or settle", async
 }) => {
   await page.goto(assetPath);
   const panel = page.getByRole("region", {
-    name: /Settlement is not configured/i,
+    name: /Settlement on ArtFi is not configured/i,
   });
   await expect(panel).toBeVisible();
   await expect(

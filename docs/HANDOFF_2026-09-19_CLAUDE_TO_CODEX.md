@@ -283,28 +283,36 @@ and ERC-20 fractionalization requirements in §4 implement" — `ArtFiRWA` into 
 stage table as `S-WA` and `S-FR`. **The split is stipulated, not derived here**, and earlier drafts
 of this section cited §4.2.2 for it, which is the settlement rule, not the market split.
 
-**The gap it closes.** `ArtFiMarket` trades `IERC20` asset tokens only — model B's fractions. Model
-A had no venue at all: an artwork could be registered, minted and held, and never listed or sold.
+**The gap it closes — the ArtFi leg, not the first venue.** A whole artwork already trades. §1's
+table gives its venues as **ArtFi + OpenSea**, and §4.8 XM.4 states that **OpenSea is a live venue
+for every product line and a user must be able to reach it**. `AGENTS.md` §1.1 invariant 6 sets out
+two phases per line: until a line opens on ArtFi, ArtFi mirrors that line only; once it opens,
+ArtFi also trades, settled by signature. The mirror half is built (`S-XM`). What was missing was
+the **ArtFi-side settlement leg** — `ArtFiMarket` trades `IERC20` asset tokens only, which is the
+fractions line — so the whole artwork had no way to settle _on ArtFi_. Invariant 6 is explicit that
+a line's trading surface is built, tested and counted before it opens, which is what this is.
+
+An earlier draft of this section said the whole artwork had no venue at all. That was wrong and is
+corrected here: it has had one throughout.
 
 **The settlement shape is not a choice made here either.** `PRD.md` §4.2.2 (client ruling
 2026-08-30) already ruled that the non-auction path settles by signature: no pull at listing time,
 both sides pulled at fill time, no resting balance. `AGENTS.md` §1.1 invariant 6 states the same
 boundary. Escrow is retained for auctions only, which is why `ArtFiMarket` is **not** modified.
 
-**Model A has no token yet — a finding, not a blocker.** No ERC-8415 asset representation exists
-anywhere in this repository; the only occurrences of the term are documentation and code comments.
-`ArtFiRWA` is a plain ERC-721 and §1.0.1 assigns that stack to model B. So the model A venue now
-exists while the model A asset does not. That costs nothing: the market deploys with no collection
-allowed and settles nothing until a token manager opens one, so there is no wrong default to
-inherit. Building the ERC-8415 representation is its own scope item and needs the standard, which
-is not available in this environment — it is reported here, not invented.
+**One reading is recorded in the contract header as correctable** rather than settled
+(`AGENTS.md` §5): the asset leg is written against the minimal ERC-721 surface (`ownerOf`,
+`isApprovedForAll`, `safeTransferFrom`), with the collection carried in the signed intent rather
+than fixed as a constant. ERC-8415 governs asset identity, registry synchronization, ownership
+workflows and lifecycle (invariant 3); whether the whole artwork's token as deployed already
+exposes that transfer surface is a conformance question about the token, not about this contract.
+If it does, this works unchanged; if it does not, only the transfer leg needs an adapter — the
+intent, the signature scheme, the revocation model and the UI do not depend on the choice.
 
-Two readings are recorded in the contract header as **correctable** rather than settled
-(`AGENTS.md` §5): that model A currently has no token of its own, and that the asset leg is written
-against the minimal ERC-721 surface (`ownerOf`, `isApprovedForAll`, `safeTransferFrom`) with the
-collection as a parameter rather than a constant. If the ERC-8415 representation exposes that
-surface this works unchanged; if it does not, only the transfer leg needs an adapter — the intent,
-the signature scheme, the revocation model and the UI do not depend on the choice.
+A related observation, recorded and not acted on: the term ERC-8415 appears in this repository only
+in documentation and comments, never in a contract. That is a conformance question for the
+whole-artwork token to answer against the standard, which is not available in this environment. It
+is **not** a claim that the line lacks an asset or a venue — it has both.
 
 **A conflict worth recording, not acting on unasked.** That same ruling says `_pullExact` is
 removed from the fixed-price path. In `ArtFiMarket._createListing` it is still called for
@@ -335,9 +343,8 @@ Nothing in this list is a blocker on anything else, and none of it is a client d
    unconfigured branch by design and offers no control.
 3. **A real catalogue.** `lib/catalog.ts` is still six invented artworks with no on-chain identity
    (M3.7). Every asset page therefore shows the unconfigured branch today.
-4. **A model A token to open the market over**, per the finding above. Pointing it at `ArtFiRWA`
-   would open the model A venue over model B's asset; the allowlist exists so that decision is
-   explicit rather than a default.
+4. **A token-manager decision on which collection to open**, which is what the allowlist is for: a
+   fresh deployment allows none, so opening one is an explicit act rather than a default.
 
 Items 2, 3 and 4 are why this is **not** a stage handover: no user can yet carry the function out end
 to end, so `PRD.md` §3.2.1 is not met and nothing in `STATUS.md` moves. The path is built, tested
