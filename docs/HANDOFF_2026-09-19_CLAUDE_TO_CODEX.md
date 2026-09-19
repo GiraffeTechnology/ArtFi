@@ -250,6 +250,16 @@ Restated from `AGENTS.md`, not added by it.
   choose the least-expansive reversible implementation and record the reading as correctable
   (`AGENTS.md` §5). Referring it upward is not neutrality — it stops delivery and answers nothing.
 
+## 7.1 The charity Hoodi run
+
+[`TESTPLAN_HOODI_CHARITY.md`](TESTPLAN_HOODI_CHARITY.md) is the executable sequence for the one
+thing this side cannot do: run the charity path on Hoodi. It restates `CH.1`–`CH.11` and §7.0 as
+steps, says what each one proves and does not prove, and lists the stop conditions.
+
+Two notes on it. **No CCHS or ArtCCH document is a precondition** — the test chain proves the
+technical path (client ruling of 2026-09-19, `PRD.md` §7.0). And **executing it promotes nothing**:
+it produces evidence, and promotion is a separate decision against the exact reviewed commit.
+
 ## 8. Reproducing the checks
 
 ```bash

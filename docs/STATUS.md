@@ -305,6 +305,26 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 
 ## Change log
 
+### 2026-09-19 — `claude/ci-all-pr-6dytk9`: the charity Hoodi test plan
+
+`TESTPLAN_HOODI_CHARITY.md` — the executable sequence for the one thing this side cannot do, since
+it has no chain access: deploy on Hoodi, create a series from the test payload, prove the supply is
+fixed by the four refusals that keep it fixed, read it back from `/charity` on desktop and mobile,
+run the holder benefit end to end against a loopback object store, prove the gate with six cases
+that must yield **no bytes**, walk the lifecycle in order, and verify a release package that is the
+first to carry a holder-file binding.
+
+It restates `CH.1`–`CH.11`, §7.0 and `ACCEPTANCE.md` §3 as steps and **adds no requirement** — a
+step with no cited requirement is a defect in that file. Each step says what it proves **and what it
+does not**, and §6 states plainly that a fully green run establishes the technical path and nothing
+about money, receipts, legal effect, production readiness or `G3`/`G4`.
+
+`VD.3` — the Hoodi AI test payload — is `NOT-IMPLEMENTED` and §7.0 makes producing it the delivery
+side's. The plan names it as a precondition rather than assuming it exists.
+
+**Executing the plan promotes nothing by itself.** It produces evidence; promotion is a separate
+decision on the exact reviewed commit. No count moves with this commit.
+
 ### 2026-09-19 — correction: the CCHS gate never applied to the test chain
 
 Client ruling: **the deliverable is that it runs on Hoodi.** The test chain holds no real asset and
