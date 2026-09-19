@@ -260,6 +260,72 @@ Two notes on it. **No CCHS or ArtCCH document is a precondition** — the test c
 technical path (client ruling of 2026-09-19, `PRD.md` §7.0). And **executing it promotes nothing**:
 it produces evidence, and promotion is a separate decision against the exact reviewed commit.
 
+## 7.2 Parallel work split — whole artwork is taken
+
+Two tracks are open at once. This section exists so neither side builds the other's work twice.
+
+| Track                                   | Owner       | Files                                                                                                                                                          |
+| --------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Charity on Hoodi (`S-CH` verification)  | delivery    | `ArtFiCharityEditions.sol`, `DeployCharityEditions.s.sol`, `charity-*` web libs and components, per §7.1                                                       |
+| Whole-artwork settlement (`S-WA` slice) | supervision | `WholeArtworkMarket.sol`, `WholeArtworkMarket.t.sol`, `DeployWholeArtworkMarket.s.sol`, `whole-artwork-intent.ts`, `whole-artwork-listing.tsx` and their tests |
+
+The two do not touch the same files. Charity imports nothing from the market, and the market
+imports nothing from charity.
+
+### What the whole-artwork slice is, and what it is not
+
+**The gap it closes.** A whole artwork is an ERC-721 — `ArtFiRWA`, minted through `RWARegistry`.
+`ArtFiMarket` trades `IERC20` asset tokens only, so a registered artwork could be minted and held
+but never listed or sold. There was no whole-artwork trading path at all.
+
+**The shape is not a choice made here.** `PRD.md` §4.2.2 (client ruling 2026-08-30) already ruled
+that the non-auction path settles by signature: no pull at listing time, both sides pulled at fill
+time, no resting balance. `AGENTS.md` §1.1 invariant 6 states the same boundary. Escrow is retained
+for auctions only, which is why `ArtFiMarket` is **not** modified.
+
+**A conflict worth recording, not acting on unasked.** That same ruling says `_pullExact` is
+removed from the fixed-price path. In `ArtFiMarket._createListing` it is still called for
+`FixedPrice` as well as `Auction`, and `buyFixed` still credits the seller into `credits[...]`. So
+the fractions fixed-price path escrows and holds a resting balance, which §4.2.2 forbids. That is a
+**finding against `ArtFiMarket`, separate from this slice** — baseline `PRD.md` §4.2.2, evidence
+`ArtFiMarket.sol` `_createListing` and `buyFixed`. It is not fixed here, because changing the
+fractions market is its own reviewable change with its own test surface. Whoever takes it should
+know the ruling's two stated consequences are the acceptance test: the fixed-price path holds
+nothing at rest, and one seller may keep the same tokens listed in several places at once.
+
+**The wire format is locked across the two implementations.** One fixed intent, domain and digest
+(`0x29a4bedd…`) is asserted in both `WholeArtworkMarket.t.sol::testDigestMatchesTheBrowserSigner`
+and `whole-artwork-intent.test.ts`. A renamed field, a reordered struct or a changed domain string
+fails a test on both sides rather than producing signatures the market rejects at fill time. Do not
+"fix" a drift by editing one side.
+
+### What it still needs — and who supplies it
+
+Nothing in this list is a blocker on anything else, and none of it is a client decision.
+
+1. **Deployment on Hoodi.** `DeployWholeArtworkMarket.s.sol` is Hoodi-gated and reads
+   `ARTFI_ADMIN`, `ARTFI_PAUSER`, `ARTFI_TOKEN_MANAGER`. It deploys with no collection and no
+   payment token allowed, so a fresh deployment can settle nothing until the token manager opens
+   one. This side has no chain egress; the delivery side has the funded wallets.
+2. **`NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS`**, plus the artwork's own contract address
+   and token id reaching the asset page. Until both are present the panel renders its
+   unconfigured branch by design and offers no control.
+3. **A real catalogue.** `lib/catalog.ts` is still six invented artworks with no on-chain identity
+   (M3.7). Every asset page therefore shows the unconfigured branch today.
+
+Items 2 and 3 are why this is **not** a stage handover: no user can yet carry the function out end
+to end, so `PRD.md` §3.2.1 is not met and nothing in `STATUS.md` moves. The path is built, tested
+and counted, which §3.2.6 is explicit is not the same as opened.
+
+### One retired claim removed from the UI
+
+The asset page read "Minting unlocks in Stage 2" and "Trading unlocks in Stage 4". That ladder is
+`docs/ROADMAP.md`, priority 6 under `AGENTS.md` §1; the strings `Stage 1`–`Stage 4` appear nowhere
+in `PRD.md`, and §3.2.6 states that stage order is not a gate. Adding a signing surface also made
+the neighbouring "never requests a transaction or signature" false on that page. The fractional
+page keeps an accurate version: the fraction market exists on chain and no screen reaches it
+(M3.1). `whole-artwork-listing.spec.ts` fails if either phrasing returns.
+
 ## 8. Reproducing the checks
 
 ```bash
