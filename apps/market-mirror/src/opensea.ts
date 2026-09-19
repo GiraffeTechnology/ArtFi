@@ -350,8 +350,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     let checkpointLog: Awaited<ReturnType<typeof open>> | undefined;
     let completed = false;
     try {
-      lock = await open(lockPath, "wx", 0o600);
-      await lock.writeFile(`${process.pid}\n`);
+      lock = await acquireBackfillLock(lockPath);
       const checkpoints = await readBackfillCheckpoints(
         checkpointPath,
         collectionsHash,
@@ -614,6 +613,52 @@ async function readBackfillCheckpoints(
 
 function isMissingFile(error: unknown): boolean {
   return record(error).code === "ENOENT";
+}
+
+async function acquireBackfillLock(
+  lockPath: string,
+): Promise<Awaited<ReturnType<typeof open>>> {
+  for (;;) {
+    try {
+      const lock = await open(lockPath, "wx", 0o600);
+      await lock.writeFile(`${process.pid}\n`);
+      await lock.sync();
+      return lock;
+    } catch (error) {
+      if (record(error).code !== "EEXIST") throw error;
+      if (!(await removeStaleBackfillLock(lockPath))) throw error;
+    }
+  }
+}
+
+async function removeStaleBackfillLock(lockPath: string): Promise<boolean> {
+  let ownerText: string;
+  try {
+    ownerText = await readFile(lockPath, "utf8");
+  } catch (error) {
+    if (isMissingFile(error)) return true;
+    throw error;
+  }
+  const normalizedOwner = ownerText.trim();
+  if (!/^[1-9][0-9]*$/.test(normalizedOwner)) return false;
+  const ownerPid = Number(normalizedOwner);
+  if (!Number.isSafeInteger(ownerPid)) return false;
+  try {
+    process.kill(ownerPid, 0);
+    return false;
+  } catch (error) {
+    if (record(error).code !== "ESRCH") return false;
+  }
+
+  // Re-read immediately before removal so a successor lock is not removed
+  // after another process has already recovered the stale owner.
+  try {
+    if ((await readFile(lockPath, "utf8")) !== ownerText) return true;
+    await unlink(lockPath);
+  } catch (error) {
+    if (!isMissingFile(error)) throw error;
+  }
+  return true;
 }
 
 export async function startOpenSeaMirror(

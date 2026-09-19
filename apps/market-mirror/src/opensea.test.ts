@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -282,6 +283,44 @@ describe("OpenSea normalization", () => {
       expect(await readdir(spoolParentDirectory)).toEqual([]);
     } finally {
       releaseFetch();
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("recovers a durable snapshot after its lock owner exits", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-stale-lock-test-"),
+    );
+    try {
+      const collectionsHash = createHash("sha256")
+        .update(JSON.stringify(["artfi-test"]))
+        .digest("hex");
+      const spoolDirectory = join(
+        spoolParentDirectory,
+        `snapshot-${collectionsHash.slice(0, 24)}`,
+      );
+      await mkdir(spoolDirectory, { recursive: true });
+      await writeFile(join(spoolDirectory, "active.lock"), "2147483647\n", {
+        mode: 0o600,
+      });
+
+      const published: NormalizedMarketEvent[] = [];
+      const adapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ asset_events: [listed] }), {
+            status: 200,
+          }),
+      });
+      await adapter.backfill(async (event) => {
+        published.push(event);
+      });
+
+      expect(published).toHaveLength(1);
+      expect(await readdir(spoolParentDirectory)).toEqual([]);
+    } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
     }
   });
