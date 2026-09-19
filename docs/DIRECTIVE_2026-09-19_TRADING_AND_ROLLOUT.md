@@ -222,7 +222,22 @@ the verification gates are function, not styling.
 never existed in the repository and are the single `BLOCKED` item. If the Figma work replaces that
 baseline, G1's reference changes — **which artefact G1 tests against is a client decision.**
 
-### 3.2 Boundaries
+### 3.2 The production version is assembled once, at the end
+
+Same date: **the production version is done last, in one piece.** Production assembly is a
+client-scheduled step, not a per-stage obligation.
+
+A stage delivers against the test chain and carries no production build, production deployment,
+production-grade visual design or go-live packaging; it is not incomplete for lacking them.
+`ACCEPTANCE.md` §6 items 7–10 stay with the complete market (`S-MKT`). **No stage may be blocked on
+production readiness, and no agent may pull production work forward to prepare for it.**
+
+**Building is not assembling.** An unopened or not-yet-productionised track is still built, tested
+and counted — `M6` operations code is written when its requirements say so.
+
+Recorded in `PRD.md` §3.2.5.
+
+### 3.3 Boundaries
 
 This is a delivery standard, not new scope. It **does not**:
 

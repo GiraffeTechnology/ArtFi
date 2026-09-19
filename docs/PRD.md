@@ -389,7 +389,27 @@ Three consequences, and no more:
 > item (M3.10). If the Figma work replaces that baseline, G1's reference changes. **Which artefact
 > G1 tests against after the redesign is a client decision** and is not made here.
 
-#### 3.2.5 Stage order is not a build order
+#### 3.2.5 The production version is assembled once, at the end
+
+Client ruling of 2026-09-19: **the production version is done last, in one piece.**
+
+It follows the same shape as §3.2.4 — production assembly is a client-scheduled step, not a
+per-stage obligation. Concretely:
+
+- **A stage delivers against the test chain.** It carries no production build, production
+  deployment, production-grade visual design or go-live packaging, and it is not incomplete for
+  lacking them.
+- **`ACCEPTANCE.md` §6 items 7–10 stay where they are** — mainnet deployment, production
+  deployment, 48-hour stability and operator handover belong to the complete market (`S-MKT`), the
+  one row delivered whole.
+- **No stage may be blocked on production readiness**, and no agent may pull production work
+  forward to "prepare" for it. That is the §4 anti-black-hole rule in `AGENTS.md` applied to this
+  ruling.
+- **Building is not assembling.** An unopened or not-yet-productionised track is still built,
+  tested and counted; `M6` operations code is written when its requirements say so, and waiting for
+  final assembly is not a reason to leave it unbuilt.
+
+#### 3.2.6 Stage order is not a build order
 
 The order in which stages are **opened for business** is the client's rollout sequence in §1.0.0 —
 charity first, then whole artwork behind its prerequisites, then fractions behind exempt-market
