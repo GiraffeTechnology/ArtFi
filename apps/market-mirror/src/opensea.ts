@@ -172,6 +172,10 @@ export interface OpenSeaAdapterConfig {
   collectionSlugs: string[];
   backfillPages: number;
   fetchImpl?: typeof fetch;
+  retryAttempts?: number;
+  retryBaseDelayMs?: number;
+  requestTimeoutMs?: number;
+  sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
 }
 
 export class OpenSeaAdapter implements MarketplaceAdapter {
@@ -186,6 +190,10 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
 
   readonly #config: OpenSeaAdapterConfig;
   readonly #fetch: typeof fetch;
+  readonly #retryAttempts: number;
+  readonly #retryBaseDelayMs: number;
+  readonly #requestTimeoutMs: number;
+  readonly #sleep: (delayMs: number, signal?: AbortSignal) => Promise<void>;
 
   constructor(config: OpenSeaAdapterConfig) {
     if (!config.apiKey || config.collectionSlugs.length === 0) {
@@ -193,23 +201,44 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
         "OpenSea API key and at least one collection slug are required",
       );
     }
+    const retryAttempts = config.retryAttempts ?? 3;
+    const retryBaseDelayMs = config.retryBaseDelayMs ?? 500;
+    const requestTimeoutMs = config.requestTimeoutMs ?? 10_000;
+    if (
+      !Number.isSafeInteger(config.backfillPages) ||
+      config.backfillPages < 1 ||
+      config.backfillPages > 1_000 ||
+      !Number.isSafeInteger(retryAttempts) ||
+      retryAttempts < 1 ||
+      retryAttempts > 5 ||
+      !Number.isSafeInteger(retryBaseDelayMs) ||
+      retryBaseDelayMs < 1 ||
+      retryBaseDelayMs > 30_000 ||
+      !Number.isSafeInteger(requestTimeoutMs) ||
+      requestTimeoutMs < 1 ||
+      requestTimeoutMs > 120_000
+    ) {
+      throw new Error("OpenSea backfill configuration is invalid");
+    }
     this.#config = config;
     this.#fetch = config.fetchImpl ?? fetch;
+    this.#retryAttempts = retryAttempts;
+    this.#retryBaseDelayMs = retryBaseDelayMs;
+    this.#requestTimeoutMs = requestTimeoutMs;
+    this.#sleep = config.sleep ?? sleepWithAbort;
   }
 
   async backfill(sink: MarketEventSink, signal?: AbortSignal): Promise<void> {
     for (const slug of this.#config.collectionSlugs) {
       let cursor: string | undefined;
+      const observedCursors = new Set<string>();
       for (let page = 0; page < this.#config.backfillPages; page += 1) {
         const url = new URL(
           `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
         );
         url.searchParams.set("limit", "200");
         if (cursor) url.searchParams.set("next", cursor);
-        const response = await this.#fetch(url, {
-          headers: { "x-api-key": this.#config.apiKey },
-          signal,
-        });
+        const response = await this.#fetchBackfillPage(url, signal);
         if (!response.ok) {
           throw new Error(
             `OpenSea backfill failed with HTTP ${response.status}`,
@@ -220,10 +249,72 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
           ? body.asset_events
           : [];
         for (const event of events) await sink(normalizeOpenSeaEvent(event));
-        cursor = text(body.next);
+        const nextCursor = text(body.next);
+        if (nextCursor && observedCursors.has(nextCursor)) {
+          throw new Error("OpenSea backfill cursor did not advance");
+        }
+        if (nextCursor) observedCursors.add(nextCursor);
+        cursor = nextCursor;
         if (!cursor) break;
+        if (page === this.#config.backfillPages - 1) {
+          throw new Error(
+            "OpenSea backfill is incomplete at the configured page limit",
+          );
+        }
       }
     }
+  }
+
+  async #fetchBackfillPage(url: URL, signal?: AbortSignal): Promise<Response> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= this.#retryAttempts; attempt += 1) {
+      let retryDelayMs = this.#retryBaseDelayMs * 2 ** (attempt - 1);
+      const requestController = new AbortController();
+      let timedOut = false;
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        requestController.abort(
+          new Error("OpenSea backfill request timed out"),
+        );
+      }, this.#requestTimeoutMs);
+      const onAbort = () => {
+        requestController.abort(
+          signal?.reason ?? new Error("OpenSea backfill aborted"),
+        );
+      };
+      if (signal?.aborted) onAbort();
+      else signal?.addEventListener("abort", onAbort, { once: true });
+
+      try {
+        const response = await this.#fetch(url, {
+          headers: { "x-api-key": this.#config.apiKey },
+          signal: requestController.signal,
+        });
+        if (response.ok || !isRetryableStatus(response.status)) return response;
+        lastError = new Error(
+          `OpenSea backfill retryable HTTP ${response.status}`,
+        );
+        retryDelayMs = Math.max(
+          retryDelayMs,
+          retryAfterDelayMs(response.headers.get("retry-after")),
+        );
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        lastError = timedOut
+          ? new Error("OpenSea backfill request timed out")
+          : error;
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
+      }
+
+      if (attempt < this.#retryAttempts) {
+        await this.#sleep(retryDelayMs, signal);
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("OpenSea backfill request failed");
   }
 
   async start(sink: MarketEventSink): Promise<() => void> {
@@ -249,4 +340,33 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       client.disconnect();
     };
   }
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function retryAfterDelayMs(value: string | null): number {
+  if (value === null || !/^(0|[1-9][0-9]*)$/.test(value)) return 0;
+  const seconds = Number(value);
+  if (!Number.isSafeInteger(seconds)) return 0;
+  return Math.min(seconds * 1_000, 30_000);
+}
+
+function sleepWithAbort(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const timeout = setTimeout(resolve, delayMs);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
 }
