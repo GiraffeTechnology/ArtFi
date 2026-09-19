@@ -314,15 +314,11 @@ in documentation and comments, never in a contract. That is a conformance questi
 whole-artwork token to answer against the standard, which is not available in this environment. It
 is **not** a claim that the line lacks an asset or a venue — it has both.
 
-**A conflict worth recording, not acting on unasked.** That same ruling says `_pullExact` is
-removed from the fixed-price path. In `ArtFiMarket._createListing` it is still called for
-`FixedPrice` as well as `Auction`, and `buyFixed` still credits the seller into `credits[...]`. So
-the fractions fixed-price path escrows and holds a resting balance, which §4.2.2 forbids. That is a
-**finding against `ArtFiMarket`, separate from this slice** — baseline `PRD.md` §4.2.2, evidence
-`ArtFiMarket.sol` `_createListing` and `buyFixed`. It is not fixed here, because changing the
-fractions market is its own reviewable change with its own test surface. Whoever takes it should
-know the ruling's two stated consequences are the acceptance test: the fixed-price path holds
-nothing at rest, and one seller may keep the same tokens listed in several places at once.
+**A conflict that was found here and has since been closed.** The same ruling says `_pullExact` is
+removed from the fixed-price path. `ArtFiMarket._createListing` was still calling it for
+`FixedPrice` as well as `Auction`, and `buyFixed` still credited the seller into `credits[...]`, so
+the fractions fixed-price path escrowed and held a resting balance — which §4.2.2 forbids. It was
+first recorded here as a finding to be taken separately; it was then taken. See §7.3.
 
 **The wire format is locked across the two implementations.** One fixed intent, domain and digest
 (`0x29a4bedd…`) is asserted in both `WholeArtworkMarket.t.sol::testDigestMatchesTheBrowserSigner`
@@ -358,6 +354,56 @@ in `PRD.md`, and §3.2.6 states that stage order is not a gate. Adding a signing
 the neighbouring "never requests a transaction or signature" false on that page. The fractional
 page keeps an accurate version: the fraction market exists on chain and no screen reaches it
 (M3.1). `whole-artwork-listing.spec.ts` fails if either phrasing returns.
+
+## 7.3 The fractions market now settles fixed price by signature
+
+The second of the two markets, `PRD.md` §1.0.1 model B, stage `S-FR`. Also supervision-side; it
+touches nothing the charity run uses.
+
+**What was wrong.** `PRD.md` §4.2.2, client ruling 2026-08-30, is explicit: "the fixed-price and
+order-book path settles by signature — assets remain in the owner's wallet and move only in the
+atomic fill the owner signed. `_pullExact` on listing is removed from that path; the market
+contract pulls from both parties at fill time and never holds a resting balance." The shipped
+contract did the opposite on that path: `_createListing` pulled the seller's tokens in for
+`FixedPrice` as well as `Auction`, and `buyFixed` credited proceeds to `credits[...]` until
+withdrawn. Both stated consequences of the ruling were false in code — the path held assets at
+rest, and a seller could not keep the same tokens authorized in two places because the first
+listing had already taken them.
+
+**What changed.** `ArtFiMarket` now carries an EIP-712 `SaleIntent`. `fillIntent` verifies the
+seller's signature and moves payment buyer-to-seller and fractions seller-to-buyer in one
+transaction, with the contract on neither side and no credit entry. Partial fills follow §4.2:
+`intentFilled[digest]` accumulates, a fill past the signed maximum reverts whole rather than being
+clipped, and an exhausted or revoked authorization cannot be filled again. Sellers revoke on chain,
+one intent at a time or in bulk by epoch, and both work while the market is paused — an
+administrative pause must not keep a live claim on someone's tokens alive. Signatures go through
+`SignatureChecker`, so a contract wallet authorizes over EIP-1271 on the same path as an EOA.
+
+`createListing` now rejects `ListingKind.FixedPrice` with `FixedPriceSettlesBySignature`. Leaving
+the escrowing path reachable would have kept the contradiction the ruling closed. The enum value is
+retained so `Auction` keeps its ordinal and the `listings` getter stays ABI-compatible.
+
+**What deliberately did not change.** §4.2.2 **retains escrow for auctions**, so
+`createAuctionListing`, `placeBid`, `settleAuction`, `cancelListing`, the offering path and the
+credit ledger they use are untouched. PR #46's property — a pause must never trap a seller's
+escrowed asset — now rides on the auction path, which is the only one that still escrows;
+`testPauseDoesNotTrapEscrowedListing` keeps its name and proves it there.
+
+**Evidence.** `forge test`: 135 pass, 0 fail (114 before, 21 added in `FractionSaleIntent.t.sol`).
+Negative assertions checked by mutation: removing the cumulative cap fails exactly the two overfill
+tests and both revocation tests; removing the signature check fails exactly the forged-signature
+and altered-terms tests; removing the `FixedPriceSettlesBySignature` guard fails exactly the two
+tests that assert the escrow path is closed.
+
+**`STATUS.md` moved nothing.** M2.5 and M2.6 stay `NOT-IMPLEMENTED`; their evidence now records
+that the on-chain half exists while no backend stores or amends an intent and no screen reaches
+either. M1.1 and M1.8 evidence text was corrected for the test count and for where the PR #46
+property now lives.
+
+**One stale sentence left alone on purpose.** `PRD.md` §4.2.2 opens by describing the code as it
+was — "`ArtFiMarket.sol` currently escrows…" — which is now out of date. That paragraph sits
+directly against the client's ruling text, and editing it is the client's call, not an agent's
+(`AGENTS.md` §0). It is recorded here instead, the same posture taken with `ACCEPTANCE.md` §7.8.
 
 ## 8. Reproducing the checks
 
