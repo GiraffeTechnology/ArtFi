@@ -4,11 +4,12 @@
 
 - Repository: `GiraffeTechnology/ArtFi`
 - Pull request: `#114`
-- Code commit under test: `4abb5864537d21b19a7386c919ef4a02c39f76fb`
-- Code tree under test: `8f132a816466fe314bbbeb9bbc883597d3f1b054`
-- Scope: fail-closed realtime/snapshot convergence, bounded disk-spooled
-  realtime buffering, recoverable durable-log tails, crash-safe reclamation,
-  cleanup exclusion, and process-instance lock identity
+- Code commit under test: `93081a229d39b604117646e70bee39e1930f9d4b`
+- Code tree under test: `01c2d17df95869963f467d21e228680ee8da3753`
+- Scope: fail-closed realtime/snapshot convergence, crash-window head overlap,
+  bounded disk-spooled realtime buffering, recoverable durable-log tails,
+  post-commit sink recovery, crash-safe reclamation, cleanup exclusion, and
+  process-instance lock identity
 
 This report contains no credentials, private endpoints, host names, IP addresses,
 wallet material, RPC values, or internal filesystem locations.
@@ -18,7 +19,7 @@ wallet material, RPC values, or internal filesystem locations.
 | Gate                                 | Result                                    |
 | ------------------------------------ | ----------------------------------------- |
 | Prettier                             | PASS                                      |
-| Market-mirror focused suite          | PASS — 30/30                              |
+| Market-mirror focused suite          | PASS — 32/32                              |
 | Forced no-cache Turbo matrix         | PASS — 15/15 tasks, 0 cached              |
 | Web unit suite                       | PASS — 106/106                            |
 | Wallet extension suite               | PASS — 6/6                                |
@@ -43,8 +44,14 @@ boundary:
 - short durable-log writes complete before fsync and cursor advancement;
 - incomplete spool and checkpoint tails recover from the latest committed byte
   offset;
+- a resumed snapshot overlaps every collection head before continuing its saved
+  cursor, recovering realtime events from the prior process's crash window;
 - realtime events are spooled outside the process heap until the REST snapshot
   commits;
+- event-count and byte-count limits fail startup closed before queued promise
+  closures can grow without bound;
+- after snapshot commit, one rejected sink delivery does not disable later
+  realtime events;
 - a failed REST snapshot discards buffered realtime events;
 - completed snapshot payloads are removed while exclusion remains held;
 - the stable snapshot directory survives writer handoff without recursive
