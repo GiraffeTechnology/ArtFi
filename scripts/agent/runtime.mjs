@@ -54,6 +54,17 @@ export function createDurableRuntime({
         throw Error("RUNTIME_CONFIGURATION_INVALID");
       if (running) throw Error("RUNTIME_ALREADY_RUNNING");
       running = true;
+      let observerRunning = false;
+      const notify = (result) => {
+        if (observerRunning) return;
+        observerRunning = true;
+        void Promise.resolve()
+          .then(() => onBatch(structuredClone(result)))
+          .catch(() => {})
+          .finally(() => {
+            observerRunning = false;
+          });
+      };
       try {
         while (!signal.aborted) {
           let result;
@@ -65,12 +76,10 @@ export function createDurableRuntime({
               reason: "RECOVERY_DEPENDENCY_UNAVAILABLE",
             };
           }
-          try {
-            await onBatch(result);
-          } catch {
-            // Batch observation is non-authoritative. A broken metrics/logging
-            // sink must not stop durable recovery or strand eligible rows.
-          }
+          // Batch observation is non-authoritative. A broken or permanently
+          // hung metrics/logging sink cannot stop durable recovery. At most one
+          // notification remains in flight; later snapshots may be dropped.
+          notify(result);
           if (signal.aborted) break;
           await new Promise((resolve) => {
             const done = () => {

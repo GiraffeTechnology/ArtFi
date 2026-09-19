@@ -372,7 +372,10 @@ test("drifted evidence cannot hydrate; historical state cannot overwrite authori
     /MINT_AUTHORITY_PATCH_STATE_REFUSED/,
   );
 });
-test("new runtime survives observer failure, retries DB outage and reconciles STARTED without execute", async () => {
+test(
+  "new runtime survives a hung observer, retries DB outage and reconciles STARTED without execute",
+  { timeout: 2000 },
+  async () => {
   const f = fixture("STARTED");
   f.setAvailable(false);
   const controller = new AbortController();
@@ -409,25 +412,26 @@ test("new runtime survives observer failure, retries DB outage and reconciles ST
       inspectRevocation: unused,
     },
   });
-  const outcomes = [];
-  await runtime.run({
-    signal: controller.signal,
-    intervalMs: 10,
-    onBatch: (result) => {
-      outcomes.push(result);
-      if (outcomes.length === 1) {
+    let observations = 0;
+    await runtime.run({
+      signal: controller.signal,
+      intervalMs: 10,
+      onBatch: (result) => {
+        observations++;
+        assert.equal(observations, 1);
         assert.equal(result.state, "SAFE_DEGRADED");
         f.setAvailable(true);
-        throw Error("OBSERVER_UNAVAILABLE");
-      } else controller.abort();
-    },
-  });
-  assert.equal(outcomes[1].outcomes[0].state, "SETTLED");
-  assert.equal(sends, 0);
-  assert.equal(authorityCalls, 0);
-  assert.equal(hydrateOperation(f.row).state, "SETTLED");
-  assert.equal(f.row.lease_token, null);
-});
+        setTimeout(() => controller.abort(), 100);
+        return new Promise(() => {});
+      },
+    });
+    assert.equal(observations, 1);
+    assert.equal(sends, 0);
+    assert.equal(authorityCalls, 0);
+    assert.equal(hydrateOperation(f.row).state, "SETTLED");
+    assert.equal(f.row.lease_token, null);
+  },
+);
 
 test("durable runtime scans confirmed revoked PREPARED, persists terminal and excludes next batch", async () => {
   const f = fixture();
