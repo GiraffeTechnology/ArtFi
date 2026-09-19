@@ -250,6 +250,15 @@ of §6 remain the terminus for the complete market only — **a stage does not r
 8. Fail the audit if any A01–A38 compliant preview is missing, or if the public UI exposes an
    external-marketplace redirect, an unwatermarked master, a master download path, a private key,
    a server credential, a raw signed transaction, a prohibited IP or internal topology.
+
+   > **The redirect clause does not govern, as of the client ruling of 2026-09-19.** That ruling
+   > makes third-party venues the early-stage state and requires ArtFi to do **mirroring only**
+   > until a product line opens on ArtFi — and mirroring is attributed data plus an HTTPS link out
+   > to the venue (`PRD.md` §4.8, XM.4, carrying the original `MARKET-004`). This file is priority 4
+   > in `AGENTS.md` §1: it may record a higher source, never contradict one. **Every other item in
+   > this clause stands unchanged** and still fails an audit. The wording above is left as written
+   > rather than edited, because correcting it is the client's call, not an agent's.
+
 9. Fail the audit if A02 enters the formal 37-work set or any mainnet manifest.
 10. Fail the audit if tested, deployed and documented commits differ.
 11. Fail the audit if a non-mainnet-only requirement is deferred without completed test evidence.

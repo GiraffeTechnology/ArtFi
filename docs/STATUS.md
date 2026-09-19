@@ -334,10 +334,16 @@ stylesheet work rather than rebuilt components. No functional behaviour changed 
 relaxed. G1's `pics/*.png` baseline still does not exist and M3.10 stays `BLOCKED`; whether the
 Figma work replaces that baseline is a client decision, recorded here and not made.
 
-Not included, and deliberately: the venue deep link named in the `S-CH` stage row. `ACCEPTANCE.md`
-§7.8 fails the audit on an external-marketplace redirect in the public UI, which cannot stand beside
-the 2026-09-19 ruling that OpenSea is a live venue ArtFi links to. That conflict is a client
-decision and is recorded, not resolved here.
+The venue deep link was left out of this commit and is **no longer held**. A further ruling of
+2026-09-19 settled it: third-party venues are the early-stage state, ArtFi has trading of its own
+opened per product line, and **until a line opens on ArtFi, ArtFi does mirroring only** — mirroring
+being attributed data plus a link out. The original PRD's J-05 and `MARKET-004` describe that first
+phase correctly and were never a conflict; the earlier reading here treated them as one.
+
+`PRD.md` §1 and §4.8 XM.4 now record this, and `ACCEPTANCE.md` §7.8 carries an annotation: under the
+authority order in `AGENTS.md` §1 its redirect clause does not govern, while every other item in it
+— no master, key, credential, raw signed transaction, prohibited IP or internal topology — still
+fails an audit. No link has been added to any surface yet; that is a code change, not this one.
 
 Local evidence refresh (2026-09-13): the required wallet+DAO production
 dependency's read-only health input advances from r1 to frozen r2 with exact

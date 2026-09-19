@@ -65,7 +65,26 @@ What does **not** change: the intermediary invariant of 2026-08-30. On the ArtFi
 settles by signature. **ArtFi never custodies, never acts as counterparty, and never moves a
 user's asset without that user's signature for that fill.** Being a venue is not permission to hold.
 
-### 1.1 Correction recorded
+### 1.1 Two phases per product line
+
+Third-party venues are the **early-stage state**. ArtFi has trading of its own, opened per product
+line by the rollout sequence in §2. **Until a line opens on ArtFi, ArtFi does mirroring only for
+that line**; once it opens, ArtFi also trades, settled by signature.
+
+The original PRD (`d754c6b`) describes that first phase and nothing more — its J-05 and
+`MARKET-004` are the mirror-only phase stated correctly, **not a superseded position**. There is no
+conflict to resolve between it and this directive.
+
+**Mirror-only describes what is switched on, never what may be written.** The ArtFi trading surface
+for an unopened line is still built, tested and counted, and the mirror boundary is identical in
+both phases: ArtFi never creates, signs, matches, custodies, fulfils or settles on a venue's behalf.
+
+Because mirroring _is_ attributed data plus a link out, the deep link required by `PRD.md` §4.8
+XM.4 stands. `ACCEPTANCE.md` §7.8 forbids an external-marketplace redirect in the public UI; under
+the authority order in `AGENTS.md` §1 that file may not contradict a higher source, so on that one
+point it does not govern. Every other item in §7.8 is untouched.
+
+### 1.2 Correction recorded
 
 This directive first read 以本地为主 as "ArtFi is the terminus". The client corrected it:
 **primary**, with third-party venues an early-stage state on the way to ArtFi's own market. The
@@ -85,7 +104,7 @@ anything would be agent-authored scope (`AGENTS.md` §0).
 
 ---
 
-## 1.2 Holder authority
+## 1.3 Holder authority
 
 Three parts, read together.
 
@@ -105,11 +124,11 @@ ArtCCH registry (off-chain)  →  <REGISTRY_CHAIN_A>  →  ERC-8415 token  →  
 role**, not to ArtCCH as an operator. Any other registrar in the same role has the same authority
 and travels the same code paths. **ArtFi is a consumer of registries; it operates none of them.**
 
-### 1.2.1 What ArtCCH's registry records
+### 1.3.1 What ArtCCH's registry records
 
 Physical parameters of the artwork, the **holder**, and **provenance**.
 
-### 1.2.2 This does not reopen the two-roles ruling
+### 1.3.2 This does not reopen the two-roles ruling
 
 §1.4.1 of the 2026-08-30 directive stands: no seller allowlist, no role restricting who may list, no
 administrative interface able to move ArtCCH's holdings, matching blind to seller identity, and the
@@ -117,14 +136,14 @@ self-operated / intermediary distinction never branching the settlement path.
 
 **Being the registrar of record for an asset is not a trading privilege over it.**
 
-### 1.2.3 What did not change
+### 1.3.3 What did not change
 
 §1.4 of the 2026-08-30 directive says Redis and MySQL are not the ownership authority, the chain is.
 That is about **ArtFi's own projection tables** and it stands. A registry of record is not an ArtFi
 database. Three records, distinct standing: the registry is authority for holdership, the chain is
 its projection and the settlement record, and ArtFi's projection is authoritative for nothing.
 
-### 1.2.4 Open consequence
+### 1.3.4 Open consequence
 
 A registry-versus-chain divergence is a new case and **which way it resolves is a client decision**.
 Settled either way: ArtFi never resolves it by asserting its own projection. It reports. Recorded

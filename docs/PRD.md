@@ -52,16 +52,41 @@ counterparty, and never moves a user's asset without that user's signature for t
 2026-08-30, §4.2). **Being a venue is not permission to hold.** On the OpenSea side ArtFi mirrors
 attributed data and links out; execution there completes on OpenSea.
 
-> **Conflict recorded, resolved by the later ruling (§0).** Earlier on 2026-09-19 the ruling was
-> that whole-artwork trading happens **only** on OpenSea and ArtFi is a mirror only. The later
-> ruling the same day makes both venues live with ArtFi primary. §0 requires the latest explicit
-> client requirement to control and the conflict to be recorded, so the superseded position is
-> written here rather than deleted. The original PRD (`d754c6b`) matched the superseded position —
-> its J-05 said execution leaves ArtFi — and it is now history on this point.
+> **Superseded ruling, recorded.** Earlier on 2026-09-19 the ruling was that whole-artwork trading
+> happens **only** on OpenSea, with ArtFi a mirror and nothing more. A later ruling the same day
+> replaced it: both venues live, ArtFi primary. §0 requires the latest explicit client requirement
+> to control and the superseded position to be written down rather than deleted.
+
+> **The original PRD is not part of that conflict — two phases of one arc.** Client ruling of
+> 2026-09-19: third-party venues are
+> the **early-stage state**; ArtFi has trading of its own, opened per product line by the rollout
+> sequence; **until a line is opened on ArtFi, ArtFi does mirroring only for that line.** The
+> original PRD (`d754c6b`) described the early phase and nothing more — its J-05 ("execution leaves
+> ArtFi") and `MARKET-004` ("read-only API and external deep link") are the **mirror-only phase**
+> stated correctly, not a superseded position. The earlier reading on this page treated them as a
+> conflict; the client's reading replaces it.
 
 > **Correction recorded.** This document first read 以本地为主 as "terminus". The client corrected
 > it: **primary**, with third-party venues an early-stage state. The earlier wording is replaced
 > rather than defended.
+
+#### Two phases per product line
+
+Client ruling of 2026-09-19. Each product line passes through the same two phases, and the rollout
+sequence in §1.0.0 decides only **when** the second begins.
+
+| Phase                 | On ArtFi                                                                         | On OpenSea                    |
+| --------------------- | -------------------------------------------------------------------------------- | ----------------------------- |
+| Before the line opens | **Mirroring only** — attributed data with source, time, freshness and a link out | The venue; execution there    |
+| After the line opens  | Trading, settled by signature (§4.2)                                             | Still a venue; still mirrored |
+
+Two things this does **not** license:
+
+- **It is not a build gate.** The ArtFi trading surface for an unopened line is still built, tested
+  and counted (§1.0.0). Mirror-only describes what is _switched on_, never what may be written.
+- **The mirror boundary is identical in both phases.** ArtFi never creates, signs, matches,
+  custodies, fulfils or settles on a venue's behalf, and opening a line on ArtFi does not change
+  that — on ArtFi the asset still moves only in the fill its owner signed.
 
 **What "ArtFi is primary" means, and what it does not.**
 
@@ -659,10 +684,20 @@ list. These carry the original `MARKET-001`–`MARKET-006` forward; no rule is n
   link out to the venue**, because OpenSea is a live venue for every product line and a user must be
   able to reach it.
 
-  > **Conflict outstanding — needs a client decision.** `ACCEPTANCE.md` §7.8 still fails the audit
-  > when the public UI exposes an external-marketplace redirect. With OpenSea live as a venue that
-  > rule and the deep link required here cannot both stand. This document does not change
-  > `ACCEPTANCE.md` unilaterally.
+  > **Settled by the ruling of 2026-09-19 and the authority order.** The client ruled that
+  > third-party venues are the early-stage state and that **until a line opens on ArtFi, ArtFi does
+  > mirroring only** — and mirroring is exactly this row: attributed data plus a link out. The link
+  > is therefore required, not optional.
+  >
+  > `ACCEPTANCE.md` §7.8 still reads that the audit fails when the public UI exposes an
+  > external-marketplace redirect. `AGENTS.md` §1 decides which one governs: `ACCEPTANCE.md` is
+  > priority 4 and may record a higher source but never contradict one, so **to the extent §7.8
+  > forbids the deep link this row requires, it does not govern.** The rest of §7.8 — no master, no
+  > key, no credential, no raw signed transaction, no prohibited IP or internal topology in the
+  > public UI — is untouched and still fails an audit.
+  >
+  > §7.8's text is annotated rather than rewritten here: this document does not edit
+  > `ACCEPTANCE.md`, and the wording is the client's to correct.
 
   > **Scope note.** `market_orchestration.go` (628 lines) submits transaction intents to an external
   > market. That is orchestration rather than mirroring. It is retained — `AGENTS.md` §3 forbids
