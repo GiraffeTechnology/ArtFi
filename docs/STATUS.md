@@ -190,8 +190,11 @@ comes from. No rule is new and no status is promoted by the act of listing it.
 **CH.5, CH.6 and CH.8 are the product.** The contract and release layers were always the strongest part of this module; the buyer-facing half now exists as a surface — catalog, edition
 page, rights disclosure, verification and gated delivery. What remains missing is not code but
 configuration and a deployment: no environment holds a descriptor store or an object store, so
-no file has yet been delivered to a holder anywhere. Go-live additionally depends on the CCHS-side
-written evidence in `CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md`; that gates release, not implementation.
+no file has yet been delivered to a holder anywhere. **Go-live** with the real batch additionally depends on the CCHS-side written evidence in
+`CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md`. That gates release of real assets — **it does not gate a
+Hoodi run**: client ruling of 2026-09-19, `PRD.md` §7.0. The Hoodi payload is a separate AI test
+payload that §7.0 forbids to carry CCHS donation, receipt or valuation language at all, so no CCHS
+document can be a precondition for exercising it.
 
 ---
 
@@ -301,6 +304,27 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 ---
 
 ## Change log
+
+### 2026-09-19 — correction: the CCHS gate never applied to the test chain
+
+Client ruling: **the deliverable is that it runs on Hoodi.** The test chain holds no real asset and
+carries no legal liability, so **no CCHS or ArtCCH issued document is a precondition for it**. The
+purpose of a test-chain run is to prove the technical path, not an economic or legal one. Recorded
+in `PRD.md` §7.0 and `AGENTS.md` §6.
+
+**This corrects an assessment made in this session, not a document.** Asked whether the charity
+module was deliverable, this side listed "CCHS written evidence" among the things still required.
+That was wrong, and it was wrong against text that already existed: `PRD.md` §7.0 isolation rule 5
+says the CCHS donation, receipt, valuation and holder-advantage path **belongs to the real batch
+alone**. A Hoodi payload is forbidden to carry that language at all, so no CCHS document can be a
+precondition for exercising one. Requiring it imported the real batch's gate into a payload that
+may not touch it — a blocker invented out of a rule that says the opposite.
+
+`CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md` is unchanged and still governs the real Sepolia batch.
+Real assets, real money and mainnet still require separate written approval (`AGENTS.md` §6).
+Neither gates Hoodi.
+
+No count moves and no status value changes.
 
 ### 2026-09-19 — `claude/ci-all-pr-6dytk9`: three parked questions decided, not referred
 

@@ -820,6 +820,21 @@ token metadata (as `TESTNET`, `NO REAL-WORLD VALUE`, `NO LEGAL EFFECT`), at cont
 level at deployment, on screen wherever the set is displayed, and as a top-level field in the batch
 manifest.
 
+> **What the test chain therefore does not require.** Client ruling of 2026-09-19: **the deliverable
+> is that it runs on Hoodi.** The test chain holds no real asset and carries no legal liability, so
+> **no CCHS or ArtCCH issued document is a precondition for it**. The purpose of a test-chain run is
+> to prove the technical path, not an economic or legal one.
+>
+> This is not a relaxation; it is isolation rule 5 read the right way round. The CCHS donation,
+> receipt, valuation and holder-advantage path belongs to the **real batch alone** and stays gated
+> on written evidence — so it is precisely the thing a test payload must **not** carry. Requiring a
+> CCHS document before a Hoodi run would import the real batch's gate into a payload that is
+> forbidden to touch it.
+>
+> Unchanged: real assets, real money and mainnet still require separate written approval
+> (`AGENTS.md` §6), and `CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md` still governs the real Sepolia
+> batch. Neither of those gates the Hoodi payload.
+
 Isolation rules, each an audit failure if broken, by analogy with §7's treatment of A02:
 
 1. Its own namespace — never written into `release/mint-batches/ye-yongrun-unit-a01-a38` or any
