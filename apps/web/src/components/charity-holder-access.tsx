@@ -197,29 +197,29 @@ export function CharityHolderAccess({ tokenId }: { tokenId: string }) {
       )}
 
       {step === "verified" && descriptor && (
-        <div className="charity-holder-access__grant">
-          <dl>
+        <>
+          <section aria-label="Watermarked file" className="contract-facts">
             <div>
-              <dt>File type</dt>
-              <dd>{descriptor.contentType}</dd>
+              <span>File type</span>
+              <strong>{descriptor.contentType}</strong>
             </div>
             <div>
-              <dt>Size</dt>
-              <dd>{descriptor.byteLength.toLocaleString()} bytes</dd>
+              <span>Size</span>
+              <strong>{descriptor.byteLength.toLocaleString()} bytes</strong>
             </div>
             <div>
-              <dt>SHA-256</dt>
-              <dd className="charity-digest" data-no-translate>
+              <span>SHA-256</span>
+              <strong className="charity-digest" data-no-translate>
                 {descriptor.sha256}
-              </dd>
+              </strong>
             </div>
             {expiresAt && (
               <div>
-                <dt>Access expires</dt>
-                <dd>{new Date(expiresAt).toLocaleString()}</dd>
+                <span>Access expires</span>
+                <strong>{new Date(expiresAt).toLocaleString()}</strong>
               </div>
             )}
-          </dl>
+          </section>
           <a
             className="primary"
             download
@@ -231,7 +231,7 @@ export function CharityHolderAccess({ tokenId }: { tokenId: string }) {
             The file downloads rather than opening in the browser, and the
             unwatermarked master is never served by any route.
           </p>
-        </div>
+        </>
       )}
     </section>
   );

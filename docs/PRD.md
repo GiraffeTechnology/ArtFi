@@ -364,7 +364,32 @@ stage.
 `S-MKT` is the end state and the only row delivered whole. `M5` (hardening and security audit) is
 not a stage: it is continuous and gated by G3-A/G3-B.
 
-#### 3.2.4 Stage order is not a build order
+#### 3.2.4 Visual design is the client's track; a stage is verified on function
+
+Client ruling of 2026-09-19: **the UI is being redone in Figma, and the delivered version is
+verified on functional delivery.**
+
+So "UI-visible" in §3.2.1 means **the function is operable from a screen** — not that the screen is
+final, and not that a reviewer is accepting its visual design. A stage passes on what a user can
+do, not on how it looks.
+
+Three consequences, and no more:
+
+- **A pending Figma redesign neither blocks nor invalidates a stage delivery.** The visual layer is
+  a client-side track, like exempt-market compliance in §2.3 of the rollout directive.
+- **Delivery builds should re-skin cheaply.** Prefer the existing shared classes and semantic
+  markup over surfaces styled bespoke, so replacing the design costs stylesheet work rather than
+  rebuilt components. This is an engineering consequence of the ruling, not a new requirement.
+- **Nothing about the function relaxes.** Fail-closed behaviour, the absence of a preview, the
+  rights disclosure and the verification gates are functional requirements, not styling, and a
+  redesign may not drop them.
+
+> **Recorded, not decided.** G1 in `ACCEPTANCE.md` §4 tests parity against `pics/*.png` and
+> `fractional_steps/*`, which have never existed in this repository — they are the single `BLOCKED`
+> item (M3.10). If the Figma work replaces that baseline, G1's reference changes. **Which artefact
+> G1 tests against after the redesign is a client decision** and is not made here.
+
+#### 3.2.5 Stage order is not a build order
 
 The order in which stages are **opened for business** is the client's rollout sequence in §1.0.0 —
 charity first, then whole artwork behind its prerequisites, then fractions behind exempt-market

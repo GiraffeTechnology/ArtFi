@@ -150,24 +150,32 @@ export function CharityEditionCatalog() {
     <section className="charity-catalog">
       <CharityEditionRightsNotice className="charity-rights-notice" />
 
-      <dl className="charity-terms" data-testid="charity-edition-terms">
+      <section
+        aria-label="Charity edition terms"
+        className="contract-facts"
+        data-testid="charity-edition-terms"
+      >
         <div>
-          <dt>Units per edition</dt>
-          <dd>{editionsPerArtwork ? editionsPerArtwork.toString() : "—"}</dd>
+          <span>Units per edition</span>
+          <strong>
+            {editionsPerArtwork ? editionsPerArtwork.toString() : "—"}
+          </strong>
         </div>
         <div>
-          <dt>Recorded primary unit price</dt>
-          <dd>{unitPriceWei ? `${formatEther(unitPriceWei)} ETH` : "—"}</dd>
+          <span>Recorded primary unit price</span>
+          <strong>
+            {unitPriceWei ? `${formatEther(unitPriceWei)} ETH` : "—"}
+          </strong>
         </div>
         <div>
-          <dt>Artwork preview</dt>
-          <dd>Not provided</dd>
+          <span>Artwork preview</span>
+          <strong>Not provided</strong>
         </div>
         <div>
-          <dt>Settlement by ArtFi</dt>
-          <dd>None</dd>
+          <span>Settlement by ArtFi</span>
+          <strong>None</strong>
         </div>
-      </dl>
+      </section>
 
       {state === "unconfigured" && (
         <div className="market-runtime-state" role="alert">
@@ -217,9 +225,7 @@ export function CharityEditionCatalog() {
                   Charity edition {edition.tokenId}
                 </Link>
               </h3>
-              <p className="charity-edition-card__state">
-                {editionAvailability(edition)}
-              </p>
+              <p>{editionAvailability(edition)}</p>
               <dl>
                 <div>
                   <dt>Units minted</dt>

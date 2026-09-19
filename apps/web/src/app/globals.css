@@ -1267,7 +1267,8 @@ p {
   width: 16px;
   height: 16px;
 }
-.market-mirror-card {
+.market-mirror-card,
+.charity-edition-card {
   width: 100%;
   min-width: 0;
   overflow: hidden;
@@ -1297,7 +1298,8 @@ p {
   font-size: 11px;
   text-transform: uppercase;
 }
-.market-mirror-card__body {
+.market-mirror-card__body,
+.charity-edition-card {
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -1617,7 +1619,8 @@ p {
   margin: 0;
   font-size: 17px;
 }
-.market-mirror-grid {
+.market-mirror-grid,
+.charity-edition-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
@@ -2303,56 +2306,17 @@ p {
   }
 }
 
-/* Charity editions (#110 §2 CH.5 to CH.9). No rule here reserves space for an artwork image:
-   a charity edition publishes no preview, so the layout has nowhere to put one. */
+/* Charity editions (#110 §2 CH.5 to CH.9).
+   The visual language is the client's, being redone in Figma; delivery is verified on function.
+   So this holds only what has no equivalent above — the grids, cards and fact tiles join the
+   existing rules rather than restating them, and nothing here reserves space for an artwork image,
+   because a charity edition publishes no preview. */
 .charity-catalog,
 .charity-detail {
   display: grid;
   gap: 32px;
 }
-.charity-rights-notice {
-  padding: 22px;
-  border: 1px solid var(--ink);
-  background: var(--paper);
-}
-.charity-rights-notice h3 {
-  margin: 0 0 12px;
-  font-size: 15px;
-}
-.charity-rights-notice ul {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 8px;
-  font-size: 14px;
-}
-.charity-terms {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 20px;
-  margin: 0;
-}
-.charity-terms > div {
-  display: grid;
-  gap: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-.charity-terms dt {
-  font-family: "IBM Plex Mono", Consolas, monospace;
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.charity-terms dd {
-  margin: 0;
-  font-size: 15px;
-  overflow-wrap: anywhere;
-}
 .charity-edition-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -2361,34 +2325,11 @@ p {
   display: grid;
   gap: 12px;
   align-content: start;
+}
+.charity-rights-notice {
   padding: 22px;
-  border: 1px solid rgb(184 174 162 / 60%);
-  background: var(--white);
-}
-.charity-edition-card h3 {
-  margin: 0;
-  font-size: 20px;
-}
-.charity-edition-card dl {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 0;
-}
-.charity-edition-card dt {
-  font-family: "IBM Plex Mono", Consolas, monospace;
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.charity-edition-card dd {
-  margin: 0;
-  font-size: 15px;
-}
-.charity-edition-card__state {
-  margin: 0;
-  font-size: 14px;
-  color: var(--muted);
+  border: 1px solid var(--ink);
+  background: var(--paper);
 }
 .charity-holder-access {
   display: grid;
@@ -2396,75 +2337,27 @@ p {
   padding: 24px;
   border: 1px solid var(--line);
   background: var(--paper);
-}
-.charity-holder-access h3 {
-  margin: 0;
-  font-size: 18px;
-}
-.charity-holder-access p {
-  margin: 0;
-  max-width: 62ch;
-  font-size: 15px;
-}
-.charity-holder-access__status {
-  font-family: "IBM Plex Mono", Consolas, monospace;
-  font-size: 12px;
-  text-transform: uppercase;
-  color: var(--muted);
+  justify-items: start;
 }
 .charity-holder-access__message {
   padding: 12px 14px;
   border-left: 3px solid var(--ink);
   background: var(--white);
 }
-.charity-holder-access__grant {
-  display: grid;
-  gap: 16px;
-  justify-items: start;
-}
-.charity-holder-access__grant dl {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  width: 100%;
-  margin: 0;
-}
-.charity-holder-access__grant dt {
-  font-family: "IBM Plex Mono", Consolas, monospace;
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.charity-holder-access__grant dd {
-  margin: 0;
-  font-size: 15px;
-}
 .charity-digest {
   font-family: "IBM Plex Mono", Consolas, monospace;
   font-size: 12px;
   overflow-wrap: anywhere;
 }
-.charity-detail__settlement {
-  margin: 0;
-  max-width: 72ch;
-  font-size: 15px;
-}
 
 @media (max-width: 980px) {
-  .charity-terms,
   .charity-edition-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 680px) {
-  .charity-terms,
-  .charity-edition-grid,
-  .charity-edition-card dl,
-  .charity-holder-access__grant dl {
+  .charity-edition-grid {
     grid-template-columns: 1fr;
-  }
-  .charity-holder-access {
-    padding: 18px;
   }
 }

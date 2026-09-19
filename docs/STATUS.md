@@ -326,6 +326,14 @@ One count moves: CH.5 `NOT-IMPLEMENTED` → `IMPLEMENTED-NOT-VERIFIED`. `VERIFIE
 no other row changes. **Nothing here is runtime evidence on a deployed environment**: no environment
 has a descriptor store or an object store configured, so no holder has received a file anywhere.
 
+Client ruling the same day: **the UI is being redone in Figma and the delivered version is verified
+on functional delivery** (`PRD.md` §3.2.4). The charity surface was refitted onto the existing
+shared classes accordingly — `contract-facts` for the fact tiles, the market grid and card rules for
+the catalog — cutting the bespoke stylesheet from about 155 lines to under 60 so a re-skin costs
+stylesheet work rather than rebuilt components. No functional behaviour changed and no test was
+relaxed. G1's `pics/*.png` baseline still does not exist and M3.10 stays `BLOCKED`; whether the
+Figma work replaces that baseline is a client decision, recorded here and not made.
+
 Not included, and deliberately: the venue deep link named in the `S-CH` stage row. `ACCEPTANCE.md`
 §7.8 fails the audit on an external-marketplace redirect in the public UI, which cannot stand beside
 the 2026-09-19 ruling that OpenSea is a live venue ArtFi links to. That conflict is a client

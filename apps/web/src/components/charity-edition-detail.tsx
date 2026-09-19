@@ -161,42 +161,46 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
 
       {state === "ready" && edition && (
         <>
-          <dl className="charity-terms" data-testid="charity-edition-facts">
+          <section
+            aria-label="Charity edition facts"
+            className="contract-facts"
+            data-testid="charity-edition-facts"
+          >
             <div>
-              <dt>Units minted</dt>
-              <dd>{edition.mintedUnits.toString()}</dd>
+              <span>Units minted</span>
+              <strong>{edition.mintedUnits.toString()}</strong>
             </div>
             <div>
-              <dt>Held by the distribution wallet</dt>
-              <dd>{edition.distributorUnits.toString()}</dd>
+              <span>Held by the distribution wallet</span>
+              <strong>{edition.distributorUnits.toString()}</strong>
             </div>
             <div>
-              <dt>Recorded primary unit price</dt>
-              <dd>{formatEther(edition.unitPriceWei)} ETH</dd>
+              <span>Recorded primary unit price</span>
+              <strong>{formatEther(edition.unitPriceWei)} ETH</strong>
             </div>
             <div>
-              <dt>Artwork preview</dt>
-              <dd>Not provided</dd>
+              <span>Artwork preview</span>
+              <strong>Not provided</strong>
             </div>
             <div>
-              <dt>Sellout recorded</dt>
-              <dd>{timestamp(edition.soldOutAt)}</dd>
+              <span>Sellout recorded</span>
+              <strong>{timestamp(edition.soldOutAt)}</strong>
             </div>
             <div>
-              <dt>Physical donation recorded</dt>
-              <dd>{timestamp(edition.physicalDonationRecordedAt)}</dd>
+              <span>Physical donation recorded</span>
+              <strong>{timestamp(edition.physicalDonationRecordedAt)}</strong>
             </div>
             <div>
-              <dt>Series created</dt>
-              <dd>{timestamp(edition.createdAt)}</dd>
+              <span>Series created</span>
+              <strong>{timestamp(edition.createdAt)}</strong>
             </div>
             <div>
-              <dt>Metadata hash</dt>
-              <dd className="charity-digest" data-no-translate>
+              <span>Metadata hash</span>
+              <strong className="charity-digest" data-no-translate>
                 {edition.metadataHash}
-              </dd>
+              </strong>
             </div>
-          </dl>
+          </section>
 
           <p className="charity-detail__settlement">
             ArtFi creates, signs, matches, fulfils and settles no order for this

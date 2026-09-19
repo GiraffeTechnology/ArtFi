@@ -205,7 +205,24 @@ handover. **The screen is the deliverable.**
 Recorded in `PRD.md` §3.2, with the stage table in §3.2.3 and the evidence rule in
 `ACCEPTANCE.md` §6.2.
 
-### 3.1 Boundaries
+### 3.1 Visual design is a separate, client-side track
+
+Same date, same ruling: **the UI is being redone in Figma, and the delivered version is verified on
+functional delivery.**
+
+"UI-visible" therefore means the function is **operable from a screen**, not that the screen is
+final and not that its visual design is being accepted. A pending redesign neither blocks nor
+invalidates a stage delivery, and delivery builds should prefer shared classes and semantic markup
+so a re-skin costs stylesheet work rather than rebuilt components.
+
+Nothing functional relaxes: fail-closed behaviour, the absent preview, the rights disclosure and
+the verification gates are function, not styling.
+
+**Recorded, not decided.** G1 tests parity against `pics/*.png` and `fractional_steps/*`, which have
+never existed in the repository and are the single `BLOCKED` item. If the Figma work replaces that
+baseline, G1's reference changes — **which artefact G1 tests against is a client decision.**
+
+### 3.2 Boundaries
 
 This is a delivery standard, not new scope. It **does not**:
 
