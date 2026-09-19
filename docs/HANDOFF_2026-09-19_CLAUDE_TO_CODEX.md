@@ -243,6 +243,11 @@ Restated from `AGENTS.md`, not added by it.
 - **Do not present fixtures as live.** Where a fixture is used for presentation evidence, label it
   as one, as `market-unavailable.spec.ts` and the new specs do.
 - **Do not duplicate PR #66.** The monitor engine is that draft's scope.
+- **Do not duplicate an open PR, and do not delete across lanes.** §7.2 lists who holds what and
+  §7.1.1 the branch topology. Check the open PRs before starting, not after; if a change would
+  touch another lane's files, raise it there instead of editing them. Removing or reverting the
+  other side's work is out of bounds even when it looks superseded — say what looks wrong and let
+  its owner answer.
 - **Report a gap; do not legislate it.** If no trace to #110 or a client ruling exists, it is not a
   requirement.
 - **Do not park a technical question as a client decision.** The client does not rule on technical
@@ -260,17 +265,63 @@ Two notes on it. **No CCHS or ArtCCH document is a precondition** — the test c
 technical path (client ruling of 2026-09-19, `PRD.md` §7.0). And **executing it promotes nothing**:
 it produces evidence, and promotion is a separate decision against the exact reviewed commit.
 
+## 7.1.1 Branch topology — read this before any history rewrite
+
+**`claude/ci-all-pr-6dytk9` is the base branch of open PR #114**, and #115 is stacked on #114's
+head. Verified against the PRs themselves, not assumed.
+
+```text
+#113  codex/oracle-api-consumer-forward-20260919 → main        (draft, scripts/agent/*)
+#114  codex/s-xm-backfill-resilience-r2-20260919 → claude/ci-all-pr-6dytk9
+#115  codex/vendor-neutral-operations-20260919   → codex/s-xm-backfill-resilience-r2-20260919
+```
+
+Two rules follow, and they are not stylistic:
+
+- **This branch is append-only.** No force-push, no rebase, no reset, no amending a commit that has
+  already been pushed. Rewriting history here moves or destroys the base of someone else's open PR.
+- **Neither side edits the other's files.** The lanes are in §7.2. Where both must touch one file,
+  it is `docs/STATUS.md`, and each side writes only its own rows.
+
+### Verified: no work has been lost in either direction
+
+The Codex branches **contain** this branch's earlier commits — `0c1c652` (XM.6) and `0268f05`
+(fixture disclosure and holder authority) are ancestors of all three — so they build on this work
+rather than re-deriving it. `market_orchestration.go` still carries `planIntentTransitions`,
+`submittedMatch`, `external-order-filled-by-another-transaction` and `external-sale-unattributed`;
+`asset-holder-authority.tsx`, `prototype-data-notice.tsx` and `ops-checks.ts` are all present.
+
+Measured from the shared base `fbca417`, this branch changed 17 files and #114 changed 7. **The
+intersection is one file, `docs/STATUS.md`.** A dry-run merge of #114's head into this branch's tip
+is clean (`git merge-tree --write-tree`, tree `d1c91d0`, no conflicted paths), and the merged
+`STATUS.md` keeps both sides: this branch's M1/M2 evidence rows and Codex's XM rows and dated entry.
+Re-run that check before merging rather than trusting this paragraph.
+
 ## 7.2 Parallel work split — whole artwork is taken
 
-Two tracks are open at once. This section exists so neither side builds the other's work twice.
+Several tracks are open at once. This table is taken from the branches and PR bodies as they stand,
+not from an intention stated earlier; where an earlier draft of this section guessed at the split,
+this replaces it.
 
-| Track                                   | Owner       | Files                                                                                                                                                          |
-| --------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Charity on Hoodi (`S-CH` verification)  | delivery    | `ArtFiCharityEditions.sol`, `DeployCharityEditions.s.sol`, `charity-*` web libs and components, per §7.1                                                       |
-| Whole-artwork settlement (`S-WA` slice) | supervision | `WholeArtworkMarket.sol`, `WholeArtworkMarket.t.sol`, `DeployWholeArtworkMarket.s.sol`, `whole-artwork-intent.ts`, `whole-artwork-listing.tsx` and their tests |
+| Track                                   | Owner       | Where                                                                                                                                     |
+| --------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| XM.3 mirror reliability, REST gap fill  | delivery    | PR #114 · `apps/market-mirror/*`, `.env.example`, its own test report                                                                     |
+| Operations host role, vendor neutrality | delivery    | PR #115, stacked on #114 · `scripts/agent/*` operations naming                                                                            |
+| Oracle verification API consumer        | delivery    | PR #113, draft · `scripts/agent/*`                                                                                                        |
+| Whole-artwork settlement (`S-WA`)       | supervision | `WholeArtworkMarket.sol` + test, `DeployWholeArtworkMarket.s.sol`, `whole-artwork-intent.ts`, `whole-artwork-listing.tsx` and their tests |
+| Fractions settlement (`S-FR`, §7.3)     | supervision | `ArtFiMarket.sol`, `FractionSaleIntent.t.sol`, `MarketGovernance.t.sol`                                                                   |
+| Charity on Hoodi (`S-CH` verification)  | **unowned** | `TESTPLAN_HOODI_CHARITY.md` is written and needs a chain. See the note below                                                              |
 
-The two do not touch the same files. Charity imports nothing from the market, and the market
-imports nothing from charity.
+Measured from the shared base, the two sides' file sets intersect in `docs/STATUS.md` and nothing
+else. This branch has never touched `apps/market-mirror/*` or `scripts/agent/*`; Codex's branches
+have never touched `packages/contracts/*` or the whole-artwork web surface.
+
+> **Charity has no owner right now.** `TESTPLAN_HOODI_CHARITY.md` (§7.1) was written for the
+> delivery side to execute, but all three open Codex PRs exclude it — #114's own body says "no
+> Charity, deployment, or later-stage scope is pulled into this PR." Nothing is blocked by this and
+> nothing about it is a client decision; it is an **unassigned task**, recorded here so it is not
+> assumed to be in progress. The supervision side cannot run it: this environment has no chain
+> egress and holds no funded wallet.
 
 ### What the whole-artwork slice is, and what it is not
 
