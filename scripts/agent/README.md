@@ -145,7 +145,8 @@ fake. Source files are external test dependencies, not copied into ArtFi.
 Those five blobs are unchanged from the earlier `8350a65` handoff; the current
 main pin preserves the merged projection/finality/conformance corrections through
 Oracle PR #41. Direct SDK composition is retained only as a synthetic compatibility
-test. Runtime ArtFi composition uses the Oracle application-facing API.
+test. Runtime ArtFi composition requires `verifyAttestation` from the Oracle
+application-facing API client and rejects direct SDK fields.
 
 This test uses ephemeral in-memory Ed25519 keys and synthetic source transport.
 It covers valid, exact expiry, revoked, subject mismatch, source timeout/circuit
