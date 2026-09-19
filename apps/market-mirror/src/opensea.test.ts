@@ -72,4 +72,149 @@ describe("OpenSea normalization", () => {
       custody: false,
     });
   });
+
+  it("follows REST cursors until the collection history is exhausted", async () => {
+    const requestedCursors: Array<string | null> = [];
+    const adapter = new OpenSeaAdapter({
+      apiKey: "test-only",
+      collectionSlugs: ["artfi-test"],
+      backfillPages: 3,
+      fetchImpl: async (input) => {
+        const cursor = new URL(String(input)).searchParams.get("next");
+        requestedCursors.push(cursor);
+        return new Response(
+          JSON.stringify({
+            asset_events: [
+              {
+                ...listed,
+                version: cursor === null ? 7 : 8,
+                payload: {
+                  ...listed.payload,
+                  event_timestamp:
+                    cursor === null
+                      ? "2026-08-19T03:59:59Z"
+                      : "2026-08-19T04:00:01Z",
+                },
+              },
+            ],
+            next: cursor === null ? "cursor-page-2" : null,
+          }),
+          { status: 200 },
+        );
+      },
+    });
+    const events: unknown[] = [];
+    await adapter.backfill(async (event) => {
+      events.push(event);
+    });
+    expect(requestedCursors).toEqual([null, "cursor-page-2"]);
+    expect(events).toHaveLength(2);
+  });
+
+  it("fails closed instead of reporting a truncated REST history", async () => {
+    const adapter = new OpenSeaAdapter({
+      apiKey: "test-only",
+      collectionSlugs: ["artfi-test"],
+      backfillPages: 1,
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({ asset_events: [listed], next: "more-history" }),
+          { status: 200 },
+        ),
+    });
+    await expect(adapter.backfill(async () => undefined)).rejects.toThrow(
+      "incomplete at the configured page limit",
+    );
+  });
+
+  it("rejects a repeated REST cursor without looping", async () => {
+    let calls = 0;
+    const adapter = new OpenSeaAdapter({
+      apiKey: "test-only",
+      collectionSlugs: ["artfi-test"],
+      backfillPages: 3,
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response(
+          JSON.stringify({ asset_events: [listed], next: "stuck-cursor" }),
+          { status: 200 },
+        );
+      },
+    });
+    await expect(adapter.backfill(async () => undefined)).rejects.toThrow(
+      "cursor did not advance",
+    );
+    expect(calls).toBe(2);
+  });
+
+  it("honors a bounded Retry-After delay for provider rate limits", async () => {
+    const delays: number[] = [];
+    let calls = 0;
+    const adapter = new OpenSeaAdapter({
+      apiKey: "test-only",
+      collectionSlugs: ["artfi-test"],
+      backfillPages: 1,
+      retryAttempts: 2,
+      retryBaseDelayMs: 10,
+      sleep: async (delay) => {
+        delays.push(delay);
+      },
+      fetchImpl: async () => {
+        calls += 1;
+        return calls === 1
+          ? new Response("{}", {
+              status: 429,
+              headers: { "retry-after": "2" },
+            })
+          : new Response(JSON.stringify({ asset_events: [listed] }), {
+              status: 200,
+            });
+      },
+    });
+    await adapter.backfill(async () => undefined);
+    expect(delays).toEqual([2_000]);
+    expect(calls).toBe(2);
+  });
+
+  it("times out a stalled REST request", async () => {
+    const adapter = new OpenSeaAdapter({
+      apiKey: "test-only",
+      collectionSlugs: ["artfi-test"],
+      backfillPages: 1,
+      retryAttempts: 1,
+      requestTimeoutMs: 10,
+      fetchImpl: async (_input, init) =>
+        await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(init.signal?.reason),
+            { once: true },
+          );
+        }),
+    });
+    await expect(adapter.backfill(async () => undefined)).rejects.toThrow(
+      "request timed out",
+    );
+  });
+
+  it("does not retry a permanent provider rejection", async () => {
+    let calls = 0;
+    const adapter = new OpenSeaAdapter({
+      apiKey: "test-only",
+      collectionSlugs: ["artfi-test"],
+      backfillPages: 1,
+      retryAttempts: 3,
+      sleep: async () => {
+        throw new Error("permanent rejection must not sleep");
+      },
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response("{}", { status: 401 });
+      },
+    });
+    await expect(adapter.backfill(async () => undefined)).rejects.toThrow(
+      "HTTP 401",
+    );
+    expect(calls).toBe(1);
+  });
 });
