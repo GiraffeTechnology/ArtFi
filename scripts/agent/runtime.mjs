@@ -15,6 +15,13 @@ export function createDurableRuntime({
 }) {
   const mode = "TEST_ONLY_NO_REAL_VALUE";
   const store = createDurableStore({ ...storeOptions, mode, pool });
+  if (
+    oracleAttestation !== undefined &&
+    (typeof oracleAttestation?.verifyAttestation !== "function" ||
+      Object.hasOwn(oracleAttestation, "verifyOracleAttestation") ||
+      Object.hasOwn(oracleAttestation, "attestationService"))
+  )
+    throw Error("ORACLE_RUNTIME_API_VERIFIER_REQUIRED");
   const wrapObservation = (observe) =>
     oracleAttestation === undefined
       ? observe
