@@ -80,9 +80,10 @@ for an unopened line is still built, tested and counted, and the mirror boundary
 both phases: ArtFi never creates, signs, matches, custodies, fulfils or settles on a venue's behalf.
 
 Because mirroring _is_ attributed data plus a link out, the deep link required by `PRD.md` §4.8
-XM.4 stands. `ACCEPTANCE.md` §7.8 forbids an external-marketplace redirect in the public UI; under
-the authority order in `AGENTS.md` §1 that file may not contradict a higher source, so on that one
-point it does not govern. Every other item in §7.8 is untouched.
+XM.4 stands. `ACCEPTANCE.md` §7.8 listed an external-marketplace redirect in the public UI as an
+audit failure; an item that forbids what a requirement mandates cannot be an audit condition, and
+under the authority order in `AGENTS.md` §1 that file may not contradict a higher source. **That one
+item is removed.** Every other exposure listed in §7.8 is untouched and still fails an audit.
 
 ### 1.2 Correction recorded
 
@@ -143,11 +144,13 @@ That is about **ArtFi's own projection tables** and it stands. A registry of rec
 database. Three records, distinct standing: the registry is authority for holdership, the chain is
 its projection and the settlement record, and ArtFi's projection is authoritative for nothing.
 
-### 1.3.4 Open consequence
+### 1.3.4 Consequence, resolved
 
-A registry-versus-chain divergence is a new case and **which way it resolves is a client decision**.
-Settled either way: ArtFi never resolves it by asserting its own projection. It reports. Recorded
-rather than decided here.
+A registry-versus-chain divergence looked like a case needing a ruling. It is not: the assignment
+above already gives each record a **different question** — the registry answers who holds it, the
+chain answers what settled and when — so there is no tie to break. On divergence ArtFi reports both
+and substitutes neither for the other, and never answers either from its own projection. Written
+out in `PRD.md` §1.0.5.
 
 ---
 
@@ -239,7 +242,8 @@ the verification gates are function, not styling.
 
 **Recorded, not decided.** G1 tests parity against `pics/*.png` and `fractional_steps/*`, which have
 never existed in the repository and are the single `BLOCKED` item. If the Figma work replaces that
-baseline, G1's reference changes — **which artefact G1 tests against is a client decision.**
+baseline, it becomes G1's reference. **The block is a missing artefact, not a pending decision** —
+no reading of any document produces a screenshot. Nothing else waits on it.
 
 ### 3.2 The production version is assembled once, at the end
 

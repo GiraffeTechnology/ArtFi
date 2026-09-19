@@ -151,18 +151,52 @@ Stated plainly so the delivery side does not act on the old text.
 
 ---
 
-## 5. Open client decisions — these are the only real blockers
+## 5. What is actually outstanding — and what is not a blocker
 
-None of them blocks engineering on anything else. Do not invent an answer to any of them.
+**Client ruling of 2026-09-19: do not treat a client decision as a blocker. The client does not
+rule on technical questions.** An earlier version of this section listed six "open client
+decisions". That framing was wrong and is replaced. Three of those six were technical questions
+already answered by the documents — they are now decided and written down. The rest are not
+decisions at all: they are **missing inputs**, things only the client's side can physically supply.
 
-| #   | Decision                                                                                              | Consequence                                                                                                      |
-| --- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| 1   | **Registry-versus-chain divergence**: which way it resolves                                           | Determines how the M2.8 reconciliation is implemented. `PRD.md` §1.0.5 records it open                           |
-| 2   | **Open item 6**: CH.1's 13-work first supply versus the 37 already minted                             | The verifier deliberately does **not** enforce the 13-work list; enforcing it would take a side                  |
-| 3   | **`ACCEPTANCE.md` §7.8 wording**                                                                      | Annotated, not rewritten. The redirect clause does not govern; the text is the client's to correct               |
-| 4   | **G1's visual baseline** once the Figma work lands                                                    | `pics/*.png` has never existed in this repository; M3.10 is the matrix's only `BLOCKED`                          |
-| 5   | **Seventeen files still carrying real vendor names**, three of them code contract values (`hostRole`) | `docs/DEPLOYMENT_ENVIRONMENT.md` records this as a known deviation: one-command deletability is **not yet true** |
-| 6   | **Alert notification target and channel** (open item 12)                                              | This is what gates M6.3. Local fixtures cannot supply delivery-to-a-person evidence                              |
+### 5.1 Decided from the documents, not referred upward
+
+| Question                             | Resolution                                                                                                                                                                                                                                         |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Registry-versus-chain divergence     | Not a tie. `PRD.md` §1.0.5 already gives each record a different question — registry answers who holds it, chain answers what settled. ArtFi reports both, substitutes neither, and answers neither from its own projection. Written out in §1.0.5 |
+| Open item 6: 13 works versus 37      | Not a conflict. CH.1 says the **first** supply is 13; §8.4 says the **formal set** is 37. All 13 are inside the 37 and none is `UNIT-A02`. **13 is the first tranche of the 37.** Item 6 is closed                                                 |
+| `ACCEPTANCE.md` §7.8's redirect item | Removed, not suspended. An audit item that forbids what a requirement mandates cannot be an audit condition. Every other exposure listed there still fails an audit                                                                                |
+
+Each is read from text that already existed. If the client intends a different reading, the cited
+section is where it is corrected — but none of them waits on that.
+
+### 5.2 Missing inputs — nothing to decide, something to supply
+
+These are not rulings. No reading of the documents produces them, and no agent can invent them.
+
+| Input                                                                  | Why it cannot be derived                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pics/*.png` and `fractional_steps/*`                                  | G1 compares against prototype screenshots that have never existed in this repository. M3.10 is the matrix's only `BLOCKED`, and it is blocked on an **asset**, not an opinion. The Figma work may replace this baseline entirely |
+| An alert notification target and channel (open item 12)                | M6.3's promotion evidence is delivery of an alert **to a person**. A local fixture cannot supply a real channel                                                                                                                  |
+| A funded test wallet and chain access                                  | There is still no runtime chain evidence on any chain. The G2 matrix on Hoodi needs an environment, not a decision                                                                                                               |
+| A descriptor store and a private object store for charity holder files | CH.5 runs end to end in code; no environment has either configured, so no holder has received a file anywhere                                                                                                                    |
+
+### 5.3 Technical work that was parked and should not have been
+
+**Seventeen files still carry real vendor names**, three of them code contract values
+(`hostRole`). `docs/DEPLOYMENT_ENVIRONMENT.md` records this as a known deviation: one-command
+deletability is **not yet true**. This was listed as awaiting a decision. It is not — the client
+already ruled that the deployment environment is named in one file and must be removable, so
+consolidating the other sixteen is **execution**. The three contract values change behaviour and
+need their tests updated with them; that is engineering caution, not a question for the client.
+
+--- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 1 | **Registry-versus-chain divergence**: which way it resolves | Determines how the M2.8 reconciliation is implemented. `PRD.md` §1.0.5 records it open |
+| 2 | **Open item 6**: CH.1's 13-work first supply versus the 37 already minted | The verifier deliberately does **not** enforce the 13-work list; enforcing it would take a side |
+| 3 | **`ACCEPTANCE.md` §7.8 wording** | Annotated, not rewritten. The redirect clause does not govern; the text is the client's to correct |
+| 4 | **G1's visual baseline** once the Figma work lands | `pics/*.png` has never existed in this repository; M3.10 is the matrix's only `BLOCKED` |
+| 5 | **Seventeen files still carrying real vendor names**, three of them code contract values (`hostRole`) | `docs/DEPLOYMENT_ENVIRONMENT.md` records this as a known deviation: one-command deletability is **not yet true** |
+| 6 | **Alert notification target and channel** (open item 12) | This is what gates M6.3. Local fixtures cannot supply delivery-to-a-person evidence |
 
 ---
 
@@ -211,6 +245,10 @@ Restated from `AGENTS.md`, not added by it.
 - **Do not duplicate PR #66.** The monitor engine is that draft's scope.
 - **Report a gap; do not legislate it.** If no trace to #110 or a client ruling exists, it is not a
   requirement.
+- **Do not park a technical question as a client decision.** The client does not rule on technical
+  questions. Where the documents already answer one, read them and decide; where they do not,
+  choose the least-expansive reversible implementation and record the reading as correctable
+  (`AGENTS.md` §5). Referring it upward is not neutrality — it stops delivery and answers nothing.
 
 ## 8. Reproducing the checks
 

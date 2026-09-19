@@ -221,13 +221,27 @@ records now exist, with distinct standing:
 | The chain              | The projection of that registry, and the settlement record              |
 | ArtFi's projection     | **Authoritative for nothing.** Read-only, reconcilable, no rights claim |
 
-#### Consequence, recorded for decision
+#### Consequence, resolved by the authority already assigned
 
 With three records, reconciliation has three legs rather than two. `M2.8` already requires the
-projection never to diverge from chain state without reporting the divergence. A registry-versus-chain
-divergence is a new case, and **which way it resolves is a client decision, not an engineering
-one**. Settled either way: **ArtFi never resolves a divergence by asserting its own projection.**
-It reports.
+projection never to diverge from chain state without reporting the divergence.
+
+A registry-versus-chain divergence looked like a new case needing a ruling. It is not: the rulings
+above already assign each record a **different question**, so there is no tie to break.
+
+| Question                | Authoritative record    |
+| ----------------------- | ----------------------- |
+| Who holds it?           | The registry of record  |
+| What settled, and when? | The chain               |
+| Anything at all         | Never ArtFi's own store |
+
+The engineering rule follows. On divergence ArtFi **reports both records**, shows each one against
+the question it is authoritative for, and substitutes neither for the other. It never answers
+"who holds it" from the chain when the registry disagrees, never answers "what settled" from the
+registry, and never answers either from its own projection.
+
+This is read from §1.0.5, not added to it. If the client intends a different resolution, this
+paragraph is where it is corrected.
 
 ### 1.1 Brand and attribution
 
@@ -409,10 +423,13 @@ Three consequences, and no more:
   rights disclosure and the verification gates are functional requirements, not styling, and a
   redesign may not drop them.
 
-> **Recorded, not decided.** G1 in `ACCEPTANCE.md` §4 tests parity against `pics/*.png` and
-> `fractional_steps/*`, which have never existed in this repository — they are the single `BLOCKED`
-> item (M3.10). If the Figma work replaces that baseline, G1's reference changes. **Which artefact
-> G1 tests against after the redesign is a client decision** and is not made here.
+> **Waiting on an asset, not on a ruling.** G1 in `ACCEPTANCE.md` §4 tests parity against
+> `pics/*.png` and `fractional_steps/*`, which have never existed in this repository — they are the
+> single `BLOCKED` item (M3.10). **The block is a missing artefact, not a pending decision**: no
+> reading of any document produces a screenshot, and no agent can invent one. If the Figma work
+> supplies that baseline it becomes G1's reference; until some baseline exists, G1's visual
+> comparison has nothing to run against and the functional standard in §3.2 is what a stage is
+> measured by. Nothing else waits on this.
 
 #### 3.2.5 The production version is assembled once, at the end
 
@@ -638,8 +655,16 @@ The rules below are not new. They are the product rules already stated in
 - **CH.1** The first fixed charity supply is **13 works** — `UNIT-A01/04/05/11/14/15/16/17/20/21/22/23/24`,
   with a repeated `A16` counted once. Each is one ERC-1155 token ID with exactly `100` units, minted
   once and permanently fixed, at a recorded unit price of `0.01 ETH`. No additional-mint and no
-  external burn entry point exists. **Open item 6 records the unresolved conflict**: 37 works /
-  3,700 units were minted on Sepolia against this requirement's 13 / 1,300.
+  external burn entry point exists.
+
+  > **The 13-versus-37 conflict was a misreading and is closed.** This requirement says the
+  > **first** supply is 13 works; §8.4 says the **formal set** is `UNIT-A01` and
+  > `UNIT-A03`–`UNIT-A38`, 37 works. Every one of the 13 is inside that 37 and none of them is the
+  > withdrawn `UNIT-A02`, so the two sentences are both true at once: **13 is the first tranche of
+  > the 37, not a rival count.** Open item 6 recorded them as an unresolved conflict; there was
+  > nothing to resolve. The release verifier enforces the formal set, because that is the rule a
+  > per-package check can apply; which works make up a tranche is a batch fact, not a package one.
+
 - **CH.2** The recorded primary unit price is `0.01 ETH`. ArtFi does not create, sign, match, fulfil
   or settle marketplace orders for these editions.
 - **CH.3** Sellout may be recorded only after the distribution wallet holds a zero balance and the
@@ -829,8 +854,9 @@ Isolation rules, each an audit failure if broken, by analogy with §7's treatmen
 
   > **Superseded, recorded per §0.** This bullet previously continued "the UI does not redirect
   > users to OpenSea". OpenSea is a live venue for every product line (§1, ruling of 2026-09-19), so
-  > the UI must be able to send a user there. `ACCEPTANCE.md` §7.8 still says the opposite and awaits
-  > a client decision — see §4.8 XM.4.
+  > the UI must be able to send a user there. `ACCEPTANCE.md` §7.8 said the opposite; that one item
+  > is now removed, because an audit condition cannot forbid what a requirement mandates — see
+  > §4.8 XM.4.
 
 - ArtFi does not sign, custody, match or settle any external transaction.
 - If the external marketplace does not support the selected test chain, discovery tests record
