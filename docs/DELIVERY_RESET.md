@@ -1,6 +1,6 @@
 # ArtFi delivery reset
 
-This document controls sequencing only. Product scope comes from issue #84 or an explicit later client ruling.
+This document controls sequencing only. Product scope comes from issue #110 (which incorporates #84) or an explicit later client ruling.
 
 ## Current bounded stage
 

@@ -134,6 +134,7 @@ One narrow gap and one tension remain, both precise:
 - Go-live still depends on the CCHS-side written evidence in
   `CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md` under "Release blockers". Those gate **release, not
   implementation**: `CH.1`–`CH.10` are built and tested against TEST_ONLY fixtures without them.
-- Issue #84 carries no charity requirement and is locked. Only the client can amend it. Until then
-  the charity module traces to this directive and to `CHARITY_EDITIONS.md`, both priority 2 and
-  below under `AGENTS.md` §1.
+- Issue #84 carries no charity requirement and is locked. **Issue #110 closes that gap**: it is the
+  product baseline, incorporates #84 by reference, and carries the charity module at §2 and
+  external-marketplace mirroring at §3. This directive remains the record of the ruling that
+  produced them.
