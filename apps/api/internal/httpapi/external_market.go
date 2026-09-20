@@ -19,7 +19,50 @@ import (
 	"time"
 )
 
-const maxMarketSnapshotEventBytes = 1 << 20
+const (
+	maxMarketSnapshotEventBytes = 1 << 20
+	marketSnapshotIdleTimeout   = 15 * time.Second
+)
+
+type marketSnapshotProgressReader struct {
+	reader     io.Reader
+	controller *http.ResponseController
+	now        func() time.Time
+}
+
+func newMarketSnapshotProgressReader(
+	writer http.ResponseWriter,
+	reader io.Reader,
+	now func() time.Time,
+) (*marketSnapshotProgressReader, error) {
+	progressReader := &marketSnapshotProgressReader{
+		reader:     reader,
+		controller: http.NewResponseController(writer),
+		now:        now,
+	}
+	if err := progressReader.extendDeadlines(); err != nil {
+		return nil, err
+	}
+	return progressReader, nil
+}
+
+func (reader *marketSnapshotProgressReader) Read(buffer []byte) (int, error) {
+	read, err := reader.reader.Read(buffer)
+	if read > 0 {
+		if deadlineErr := reader.extendDeadlines(); deadlineErr != nil {
+			return read, deadlineErr
+		}
+	}
+	return read, err
+}
+
+func (reader *marketSnapshotProgressReader) extendDeadlines() error {
+	deadline := reader.now().Add(marketSnapshotIdleTimeout)
+	if err := reader.controller.SetReadDeadline(deadline); err != nil {
+		return err
+	}
+	return reader.controller.SetWriteDeadline(deadline)
+}
 
 var (
 	marketSourcePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
@@ -155,14 +198,18 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 		writeProblem(writer, request, http.StatusUnsupportedMediaType, "Invalid market snapshot", "Market snapshots must use application/x-ndjson.")
 		return
 	}
-	allowLongMarketSnapshot(writer)
+	snapshotBody, err := newMarketSnapshotProgressReader(writer, request.Body, time.Now)
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The snapshot connection cannot enforce a bounded idle timeout.")
+		return
+	}
 	tx, err := service.db.BeginTx(request.Context(), nil)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The atomic snapshot transaction could not be started.")
 		return
 	}
 	defer tx.Rollback()
-	scanner := bufio.NewScanner(request.Body)
+	scanner := bufio.NewScanner(snapshotBody)
 	scanner.Buffer(make([]byte, 64<<10), maxMarketSnapshotEventBytes)
 	count := 0
 	created := 0
@@ -203,16 +250,6 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 	writeJSON(writer, http.StatusCreated, map[string]any{
 		"status": "mirrored", "events": count, "created": created,
 	})
-}
-
-func allowLongMarketSnapshot(writer http.ResponseWriter) {
-	// A complete provider history can legitimately take longer than the API
-	// server's ordinary request deadline. Clear the connection deadlines only
-	// after the indexer credential and media type have been accepted, then keep
-	// each streamed event bounded and commit the resulting snapshot atomically.
-	controller := http.NewResponseController(writer)
-	_ = controller.SetReadDeadline(time.Time{})
-	_ = controller.SetWriteDeadline(time.Time{})
 }
 
 func (service *rwaService) authorizeMarketIndexer(request *http.Request) bool {

@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,11 +35,31 @@ func (recorder *snapshotDeadlineRecorder) SetWriteDeadline(deadline time.Time) e
 	return nil
 }
 
-func TestMarketSnapshotClearsOrdinaryServerDeadlines(t *testing.T) {
+func TestMarketSnapshotRefreshesIdleDeadlinesWithProgress(t *testing.T) {
 	recorder := &snapshotDeadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
-	allowLongMarketSnapshot(recorder)
-	if !recorder.readSet || !recorder.writeSet || !recorder.readDeadline.IsZero() || !recorder.writeDeadline.IsZero() {
-		t.Fatalf("snapshot deadlines were not cleared: read=%s write=%s", recorder.readDeadline, recorder.writeDeadline)
+	now := time.Date(2026, time.September, 20, 0, 0, 0, 0, time.UTC)
+	reader, err := newMarketSnapshotProgressReader(
+		recorder,
+		strings.NewReader("{\"schemaVersion\":1}\n"),
+		func() time.Time { return now },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantInitial := now.Add(marketSnapshotIdleTimeout)
+	if recorder.readDeadline != wantInitial || recorder.writeDeadline != wantInitial {
+		t.Fatalf("initial idle deadline: read=%s write=%s want=%s", recorder.readDeadline, recorder.writeDeadline, wantInitial)
+	}
+	now = now.Add(30 * time.Minute)
+	if _, err := io.ReadAll(reader); err != nil {
+		t.Fatal(err)
+	}
+	wantProgress := now.Add(marketSnapshotIdleTimeout)
+	if recorder.readDeadline != wantProgress || recorder.writeDeadline != wantProgress {
+		t.Fatalf("progress idle deadline: read=%s write=%s want=%s", recorder.readDeadline, recorder.writeDeadline, wantProgress)
+	}
+	if recorder.readDeadline.IsZero() || recorder.writeDeadline.IsZero() {
+		t.Fatal("snapshot progress disabled the idle deadline")
 	}
 }
 
