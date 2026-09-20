@@ -392,26 +392,34 @@ invisible until all configured collections reach cursor exhaustion. The stream p
 Phoenix join reply and waits for every remote collection subscription acknowledgement before the
 first REST page is requested.
 
-Evidence on the candidate derived from `463d67c`: `opensea.test.ts` adds twenty-two focused cases,
-including a 25-page history beyond the former deployment cap; the market-mirror suite passes
-42/42, including initial and reconnect subscription readiness, serialized reconnect gap-fill with fail-closed recovery, atomic snapshot/realtime cutover, reconnect commit gating, live reclaimer exclusion, bounded disk-spooled realtime publication, retained-spool
-capacity, multi-page recovery overlap, commit-window queue overflow rejection, durable cursor
-resume from incomplete journal/spool tails, complete short-write handling, abandoned-reclaim recovery, atomic concurrent stale-owner
-reclamation, process-instance identity against PID reuse, single-writer enforcement, post-commit sink recovery and subscription
-shutdown without publication when snapshotting fails. Full format, lint, typecheck, Node unit, production-mode build,
-secret scan, chain-consistency, release-schema and charity-verifier gates pass locally. The
-snapshot handler also clears the ordinary server connection deadlines for authenticated full-history
-streams and accepts a zero-event atomic cutover; dedicated regressions bind both behaviors.
-The snapshot connection deadline is now refreshed across the full processing lifecycle: successful
-body reads, every scanned record (including data already buffered by the scanner and empty records),
-after persistence, before commit, and after commit before the success response. Seven directed
-regressions prove those refresh points plus fail-closed rollback before commit and suppression of a
-misleading success response after commit. Fixed Go 1.26.5 validation passed `go mod verify`,
-`gofmt -l`, `go vet ./...`, 50 non-database tests, and six explicit database-test skips; managed
-database execution remains an independent gate.
+Evidence on local code merge `5040ba96f4d3253e6cc42aca9e2a2e8deea4c713`, tree
+`e02a3f477bfaf2a40b48fdca5b71bbc0f9e056f4`, integrated with base
+`c55852d42e08f8ba76d6ee63216f9b466a908566`: the market-mirror suite passes 45/45,
+including initial and reconnect subscription readiness, serialized reconnect gap-fill with
+fail-closed recovery, atomic snapshot/realtime cutover, reconnect commit gating, live reclaimer
+exclusion, bounded disk-spooled realtime publication, retained-spool capacity, multi-page recovery
+overlap, commit-window queue overflow rejection, durable cursor resume, short-write handling,
+abandoned-reclaim recovery, process-instance identity against PID reuse, single-writer enforcement,
+post-commit sink recovery and shutdown without publication when snapshotting fails. Full format,
+lint, typecheck, Node unit, production build, browser, secret, chain, release and charity gates pass.
+The snapshot API retains its complete-history, zero-event cutover and bounded idle-deadline contract.
+Fixed Go 1.26.5 validation passed `gofmt -l`, `go vet ./...`, unit and race tests for both tested
+packages; the server package has no test files. Managed database execution was not run and remains
+an independent gate.
 
-The exact commit still needs CI and independent runtime evidence. **No count or status moves:** XM.3 remains
-`IMPLEMENTED-NOT-VERIFIED`, and no live provider connection is claimed.
+The P2 follow-up removes the second full `snapshot.ndjson` copy. The persistent OpenSea spool is
+replayed directly to snapshot upload through a capacity-one asynchronous handoff. A deferred,
+idempotent `commit`/`abort` lease keeps the source spool, checkpoints and lock authoritative until
+the sink commits. Slow-consumer coverage proves bounded one-in/one-out backpressure. Upload-failure
+coverage proves abort preserves source payload and checkpoints, releases the lock, and lets retry
+succeed and clean up. Zero-history and all-zero cutovers, precommit/postcommit order, stale-lock and
+successor safety, and default/reconnect auto-finalization remain covered. The integrated matrix also
+passed Web 125/125, Playwright 118 passed with two intentional skips, Forge 135/135 and Agent 34/34.
+
+Prior-head GitHub run `35481378549` had five jobs with zero executed steps and is infrastructure
+evidence only. The local merge and documentation heads still need fresh CI and independent runtime
+evidence. **No count or status moves:** XM.3 remains `IMPLEMENTED-NOT-VERIFIED`, and no live
+provider connection is claimed.
 
 ### 2026-09-19 — `claude/ci-all-pr-6dytk9`: fixture disclosure and holder authority
 
