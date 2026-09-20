@@ -59,14 +59,14 @@ export function createAgentHttpApi({
   const base = sameOriginPath(basePath);
 
   async function request(method, path, body) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     const payload = body === undefined ? undefined : JSON.stringify(body);
     if (
       payload !== undefined &&
       new TextEncoder().encode(payload).byteLength > 64 * 1024
     )
       fail("HTTP_REQUEST_TOO_LARGE");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     let response;
     let text;
     try {

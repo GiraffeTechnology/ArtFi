@@ -74,6 +74,22 @@ test("client fails closed on unsafe endpoint configuration and malformed success
   await assert.rejects(api.getIntent("op-1"), /HTTP_RESPONSE_INVALID/);
 });
 
+test("client rejects oversized request before transport", async () => {
+  let calls = 0;
+  const api = createAgentHttpApi({
+    basePath: "/api/agent/v1",
+    fetchImpl: async () => {
+      calls++;
+      return json({});
+    },
+  });
+  await assert.rejects(
+    api.prepareIntent({ value: "x".repeat(70 * 1024) }),
+    /HTTP_REQUEST_TOO_LARGE/,
+  );
+  assert.equal(calls, 0);
+});
+
 test("client maps authentication refusal without exposing response content", async () => {
   const api = createAgentHttpApi({
     basePath: "/api/agent/v1",
