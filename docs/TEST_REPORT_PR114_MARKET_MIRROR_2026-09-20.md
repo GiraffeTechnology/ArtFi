@@ -130,4 +130,3 @@ not a candidate test failure; no retry loop is used.
 - The database integration result and fresh final-head review remain open.
 - XM.3 remains `IMPLEMENTED-NOT-VERIFIED`; no count or status is promoted by
   this report.
-

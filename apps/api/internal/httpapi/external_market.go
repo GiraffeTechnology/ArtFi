@@ -198,7 +198,7 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 		writeProblem(writer, request, http.StatusUnsupportedMediaType, "Invalid market snapshot", "Market snapshots must use application/x-ndjson.")
 		return
 	}
-	snapshotBody, err := newMarketSnapshotProgressReader(writer, request.Body, time.Now)
+	snapshotBody, err := newMarketSnapshotProgressReader(writer, request.Body, service.now)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The snapshot connection cannot enforce a bounded idle timeout.")
 		return
@@ -214,6 +214,10 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 	count := 0
 	created := 0
 	for scanner.Scan() {
+		if err := snapshotBody.extendDeadlines(); err != nil {
+			writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The snapshot connection cannot refresh its bounded idle timeout.")
+			return
+		}
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
 			continue
@@ -234,6 +238,10 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 			writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The atomic snapshot could not be stored durably.")
 			return
 		}
+		if err := snapshotBody.extendDeadlines(); err != nil {
+			writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The snapshot connection cannot refresh its bounded idle timeout.")
+			return
+		}
 		if inserted {
 			created++
 		}
@@ -242,8 +250,16 @@ func (service *rwaService) ingestMarketSnapshot(writer http.ResponseWriter, requ
 		writeProblem(writer, request, http.StatusRequestEntityTooLarge, "Invalid market snapshot", "The NDJSON snapshot stream is invalid or exceeds the event size limit.")
 		return
 	}
+	if err := snapshotBody.extendDeadlines(); err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The snapshot connection cannot refresh its bounded idle timeout.")
+		return
+	}
 	if err := tx.Commit(); err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The atomic snapshot could not be committed.")
+		return
+	}
+	if err := snapshotBody.extendDeadlines(); err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The snapshot connection cannot refresh its bounded idle timeout.")
 		return
 	}
 	service.bumpCacheNamespace(request.Context(), "market")

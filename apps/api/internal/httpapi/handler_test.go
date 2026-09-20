@@ -2,11 +2,14 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +24,9 @@ type snapshotDeadlineRecorder struct {
 	writeDeadline time.Time
 	readSet       bool
 	writeSet      bool
+	deadlinePairs []time.Time
+	writeCalls    int
+	failWriteAt   int
 }
 
 func (recorder *snapshotDeadlineRecorder) SetReadDeadline(deadline time.Time) error {
@@ -30,9 +36,86 @@ func (recorder *snapshotDeadlineRecorder) SetReadDeadline(deadline time.Time) er
 }
 
 func (recorder *snapshotDeadlineRecorder) SetWriteDeadline(deadline time.Time) error {
+	recorder.writeCalls++
+	if recorder.writeCalls == recorder.failWriteAt {
+		return errors.New("injected write-deadline failure")
+	}
 	recorder.writeDeadline = deadline
 	recorder.writeSet = true
+	recorder.deadlinePairs = append(recorder.deadlinePairs, deadline)
 	return nil
+}
+
+type snapshotDeadlineDBState struct {
+	execs        int
+	commits      int
+	rollbacks    int
+	beforeCommit func()
+}
+
+type snapshotDeadlineDriver struct {
+	state *snapshotDeadlineDBState
+}
+
+func (databaseDriver snapshotDeadlineDriver) Open(string) (driver.Conn, error) {
+	return &snapshotDeadlineConn{state: databaseDriver.state}, nil
+}
+
+type snapshotDeadlineConn struct {
+	state *snapshotDeadlineDBState
+}
+
+func (connection *snapshotDeadlineConn) Prepare(string) (driver.Stmt, error) {
+	return nil, driver.ErrSkip
+}
+
+func (connection *snapshotDeadlineConn) Close() error {
+	return nil
+}
+
+func (connection *snapshotDeadlineConn) Begin() (driver.Tx, error) {
+	return connection.BeginTx(context.Background(), driver.TxOptions{})
+}
+
+func (connection *snapshotDeadlineConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
+	return &snapshotDeadlineTx{state: connection.state}, nil
+}
+
+func (connection *snapshotDeadlineConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+	connection.state.execs++
+	return driver.RowsAffected(1), nil
+}
+
+type snapshotDeadlineTx struct {
+	state *snapshotDeadlineDBState
+}
+
+func (transaction *snapshotDeadlineTx) Commit() error {
+	if transaction.state.beforeCommit != nil {
+		transaction.state.beforeCommit()
+	}
+	transaction.state.commits++
+	return nil
+}
+
+func (transaction *snapshotDeadlineTx) Rollback() error {
+	transaction.state.rollbacks++
+	return nil
+}
+
+func openSnapshotDeadlineDB(t *testing.T, name string, state *snapshotDeadlineDBState) *sql.DB {
+	t.Helper()
+	sql.Register(name, snapshotDeadlineDriver{state: state})
+	db, err := sql.Open(name, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return db
 }
 
 func TestMarketSnapshotRefreshesIdleDeadlinesWithProgress(t *testing.T) {
@@ -95,6 +178,101 @@ func TestMarketSnapshotKeepsOrdinaryDeadlinesUntilRequestIsAuthorized(t *testing
 				t.Fatal("unaccepted snapshot request cleared ordinary server deadlines")
 			}
 		})
+	}
+}
+
+func TestMarketSnapshotRefreshesDeadlinesAcrossBufferedProcessingAndCommit(t *testing.T) {
+	state := &snapshotDeadlineDBState{}
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	service.db = openSnapshotDeadlineDB(t, "snapshot-deadline-lifecycle", state)
+	service.indexerEnabled = true
+	service.indexerKeyHash = sha256.Sum256([]byte("external-market-indexer-key"))
+	now := time.Date(2026, time.September, 20, 0, 0, 0, 0, time.UTC)
+	service.now = func() time.Time {
+		current := now
+		now = now.Add(time.Second)
+		return current
+	}
+	recorder := &snapshotDeadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	state.beforeCommit = func() {
+		if got := len(recorder.deadlinePairs); got != 6 {
+			t.Fatalf("deadline refresh pairs before commit=%d, want 6", got)
+		}
+	}
+	requestBody := strings.Join([]string{
+		`{"schemaVersion":"1","source":"opensea","eventType":"item_metadata_updated","eventFamily":"metadata","entityKey":"ethereum:collection:1","version":1,"chain":"ethereum","eventTimestamp":"2026-09-20T00:00:00Z","payload":{"name":"artwork"}}`,
+		" ",
+		"",
+	}, "\n")
+	request := httptest.NewRequest(http.MethodPost, "/v1/indexer/market-snapshots", strings.NewReader(requestBody))
+	request.Header.Set("X-Indexer-Key", "external-market-indexer-key")
+	request.Header.Set("Content-Type", "application/x-ndjson")
+	newHandler(service).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if state.execs != 1 || state.commits != 1 || state.rollbacks != 0 {
+		t.Fatalf("transaction lifecycle: execs=%d commits=%d rollbacks=%d", state.execs, state.commits, state.rollbacks)
+	}
+	if got := len(recorder.deadlinePairs); got != 7 {
+		t.Fatalf("deadline refresh pairs=%d, want 7", got)
+	}
+	for index := 1; index < len(recorder.deadlinePairs); index++ {
+		if !recorder.deadlinePairs[index].After(recorder.deadlinePairs[index-1]) {
+			t.Fatalf("deadline pair %d did not advance: %s <= %s", index, recorder.deadlinePairs[index], recorder.deadlinePairs[index-1])
+		}
+	}
+	var response struct {
+		Status  string `json:"status"`
+		Events  int    `json:"events"`
+		Created int    `json:"created"`
+	}
+	decode(t, recorder.ResponseRecorder, &response)
+	if response.Status != "mirrored" || response.Events != 1 || response.Created != 1 {
+		t.Fatalf("unexpected snapshot response: %+v", response)
+	}
+}
+
+func TestMarketSnapshotDeadlineFailureRollsBackBeforeCommit(t *testing.T) {
+	state := &snapshotDeadlineDBState{}
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	service.db = openSnapshotDeadlineDB(t, "snapshot-deadline-rollback", state)
+	service.indexerEnabled = true
+	service.indexerKeyHash = sha256.Sum256([]byte("external-market-indexer-key"))
+	recorder := &snapshotDeadlineRecorder{ResponseRecorder: httptest.NewRecorder(), failWriteAt: 4}
+	requestBody := `{"schemaVersion":"1","source":"opensea","eventType":"item_metadata_updated","eventFamily":"metadata","entityKey":"ethereum:collection:1","version":1,"chain":"ethereum","eventTimestamp":"2026-09-20T00:00:00Z","payload":{"name":"artwork"}}` + "\n"
+	request := httptest.NewRequest(http.MethodPost, "/v1/indexer/market-snapshots", strings.NewReader(requestBody))
+	request.Header.Set("X-Indexer-Key", "external-market-indexer-key")
+	request.Header.Set("Content-Type", "application/x-ndjson")
+	newHandler(service).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if state.execs != 1 || state.commits != 0 || state.rollbacks != 1 {
+		t.Fatalf("transaction did not fail closed: execs=%d commits=%d rollbacks=%d", state.execs, state.commits, state.rollbacks)
+	}
+}
+
+func TestMarketSnapshotDeadlineFailureAfterCommitSuppressesSuccess(t *testing.T) {
+	state := &snapshotDeadlineDBState{}
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	service.db = openSnapshotDeadlineDB(t, "snapshot-deadline-postcommit", state)
+	service.indexerEnabled = true
+	service.indexerKeyHash = sha256.Sum256([]byte("external-market-indexer-key"))
+	recorder := &snapshotDeadlineRecorder{ResponseRecorder: httptest.NewRecorder(), failWriteAt: 6}
+	requestBody := `{"schemaVersion":"1","source":"opensea","eventType":"item_metadata_updated","eventFamily":"metadata","entityKey":"ethereum:collection:1","version":1,"chain":"ethereum","eventTimestamp":"2026-09-20T00:00:00Z","payload":{"name":"artwork"}}` + "\n"
+	request := httptest.NewRequest(http.MethodPost, "/v1/indexer/market-snapshots", strings.NewReader(requestBody))
+	request.Header.Set("X-Indexer-Key", "external-market-indexer-key")
+	request.Header.Set("Content-Type", "application/x-ndjson")
+	newHandler(service).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if state.execs != 1 || state.commits != 1 || state.rollbacks != 0 {
+		t.Fatalf("post-commit failure lifecycle: execs=%d commits=%d rollbacks=%d", state.execs, state.commits, state.rollbacks)
+	}
+	if strings.Contains(recorder.Body.String(), `"status":"mirrored"`) {
+		t.Fatalf("post-commit deadline failure exposed a success response: %s", recorder.Body.String())
 	}
 }
 
