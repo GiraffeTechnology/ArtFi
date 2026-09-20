@@ -4,8 +4,8 @@
 
 - Repository: `GiraffeTechnology/ArtFi`
 - Pull request: `#114`
-- Code commit under test: `6ee58a88541c33bc92815ee3384df1deca7580b0`
-- Code tree under test: `80c492c5668992ede1ac5606f3223744401e2bb0`
+- Code commit under test: `fb3a949d853f12b69a6dcfe2e26ef35d6bba0180`
+- Code tree under test: `fb5146485e57b2370dcff2eb7483a4037109c1b2`
 - Scope: XM.2-XM.3 external-market adapter resilience, realtime/REST
   convergence, atomic cutover, complete-history streaming, zero-event cutover,
   reconnect recovery, bounded durable buffering, and user-visible mirror
@@ -56,8 +56,10 @@ addresses, wallet material, RPC values, or internal filesystem locations.
 - single-writer lock ownership across stale-owner and process-identity races.
 
 `apps/api/internal/httpapi/handler_test.go` proves that authenticated NDJSON
-snapshot requests may outlive the ordinary API connection deadlines, while
-unauthorized or wrong-media requests retain those deadlines.
+snapshot requests replace the ordinary whole-request deadline with a 15-second
+read/write idle deadline refreshed by each successful body read. Requests fail
+closed before opening a database transaction if that bound cannot be enforced;
+unauthorized or wrong-media requests retain the ordinary deadlines.
 
 `apps/api/internal/httpapi/persistence_integration_test.go` adds the exact
 managed-database regression for atomic rollback, idempotent replay, complete
@@ -73,20 +75,22 @@ the external venue.
 
 ## Authoritative Go evidence
 
-The exact code head and all three changed Go files were hash-bound before the
+The exact code head and both idle-deadline Go files were hash-bound before the
 managed run. A fixed Go 1.26.5 image ran with networking disabled and a
 run-specific temporary cache. `gofmt -l`, `go mod verify`, `go vet ./...`,
-`TestMarketSnapshotClearsOrdinaryServerDeadlines`, and
+`TestMarketSnapshotRefreshesIdleDeadlinesWithProgress`, and
 `TestMarketSnapshotKeepsOrdinaryDeadlinesUntilRequestIsAuthorized` all
-completed successfully. The checkout remained clean and all run-specific
+completed successfully. The non-database HTTP API suite selected 34 top-level
+tests: 33 passed, one existing Redis integration test skipped, and zero failed;
+the skipped integration test is not counted as a pass. The checkout remained clean and all run-specific
 process, cache, container, and temporary residue was removed.
 
 - Terminal evidence SHA-256:
-  `2aa411565667ade8e738dc6156820b0e5230503e3391b91aa980fef14c248cbd`
+  `91218a7f778e5cc56e92f44421ba0e3816b406318bcf84828bb74388f2f3df71`
 - Evidence index SHA-256:
-  `adcf7aae45dbe3a9a945c892fa9d6594089713a2ecd11f533855028f4a5b4fe2`
+  `134bdebc5bd068a1ff500daade8793a73331793df3d445eab4fa2bab516ba76c`
 - Persistent evidence archive SHA-256:
-  `e8dc8337bc95c0aa066b9cee8932a9b60b3bd81d18a36e5b9ad29aebba150fc6`
+  `2dad70ec754c67b82bd51a00413cb743a13ac62f565d1b43e0c8fb77e569cbc5`
 
 ## Managed database boundary
 
@@ -112,11 +116,10 @@ that schema.
 
 ## CI boundary
 
-Exact-head quality run `35474779737` terminated before execution. All five
-jobs reported failure with zero steps and no logs. One bounded failed-jobs
-rerun produced the same zero-step condition, classified as
-`CI_RUNNER_ZERO_STEP_INFRASTRUCTURE_FAILURE`. This is infrastructure
-evidence, not a candidate test failure; no retry loop is used.
+Code-head quality run `35478328795` terminated before execution. All five
+jobs reported failure with zero steps and no logs, classified as
+`CI_RUNNER_ZERO_STEP_INFRASTRUCTURE_FAILURE`. This is infrastructure evidence,
+not a candidate test failure; no retry loop is used.
 
 ## Limits
 
