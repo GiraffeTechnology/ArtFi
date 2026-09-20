@@ -10,6 +10,14 @@ const address = (value) =>
   !/^0x0{40}$/i.test(value);
 const signature = (value) =>
   typeof value === "string" && /^0x[0-9a-fA-F]{130}$/.test(value);
+const uint = (value) =>
+  typeof value === "string" &&
+  /^(0|[1-9][0-9]*)$/.test(value) &&
+  BigInt(value) < 2n ** 256n;
+const bytes32 = (value) =>
+  typeof value === "string" &&
+  /^0x[0-9a-f]{64}$/.test(value) &&
+  !/^0x0{64}$/.test(value);
 const hash = (value) =>
   typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
 const fail = (code) => {
@@ -50,17 +58,18 @@ export function createAgentBrowserWallet({ provider, sendRevocation }) {
   }
 
   async function identity(expectedWallet) {
-    if (!address(expectedWallet)) fail("WALLET_ACCOUNT_REFUSED");
+    if (expectedWallet !== undefined && !address(expectedWallet))
+      fail("WALLET_ACCOUNT_REFUSED");
     const chain = await request("eth_chainId");
     if (typeof chain !== "string" || chain.toLowerCase() !== CHAIN_HEX)
       fail("WALLET_CHAIN_REFUSED");
     const accounts = await request("eth_accounts");
-    if (
-      !Array.isArray(accounts) ||
-      !accounts.some((account) => same(account, expectedWallet))
-    )
+    const active = accounts?.[0];
+    if (!Array.isArray(accounts) || !address(active))
       fail("WALLET_ACCOUNT_REFUSED");
-    return expectedWallet.toLowerCase();
+    if (expectedWallet !== undefined && !same(active, expectedWallet))
+      fail("WALLET_ACCOUNT_REFUSED");
+    return active.toLowerCase();
   }
 
   return Object.freeze({
@@ -79,8 +88,13 @@ export function createAgentBrowserWallet({ provider, sendRevocation }) {
         !address(domain.verifyingContract) ||
         !intent ||
         Object.keys(intent).length !== INTENT_FIELDS.length ||
-        INTENT_FIELDS.some(({ name }) => !Object.hasOwn(intent, name)) ||
-        !address(intent.wallet) ||
+        INTENT_FIELDS.some(({ name, type }) => {
+          if (!Object.hasOwn(intent, name)) return true;
+          if (type === "uint256") return !uint(intent[name]);
+          if (type === "bytes32") return !bytes32(intent[name]);
+          if (type === "address") return !address(intent[name]);
+          return true;
+        }) ||
         !same(intent.wallet, intent.principal)
       )
         fail("WALLET_DRAFT_INVALID");
@@ -112,8 +126,7 @@ export function createAgentBrowserWallet({ provider, sendRevocation }) {
         JSON.stringify(typedData),
       ]);
       if (!signature(result)) fail("WALLET_SIGNATURE_INVALID");
-      if ((await identity(intent.wallet)) !== wallet)
-        fail("WALLET_ACCOUNT_CHANGED");
+      if ((await identity()) !== wallet) fail("WALLET_ACCOUNT_CHANGED");
       return result;
     },
 
@@ -141,8 +154,7 @@ export function createAgentBrowserWallet({ provider, sendRevocation }) {
         providerFailure(error);
       }
       if (!hash(result?.transactionHash)) fail("REVOCATION_RESULT_INVALID");
-      if ((await identity(value.wallet)) !== wallet)
-        fail("WALLET_ACCOUNT_CHANGED");
+      if ((await identity()) !== wallet) fail("WALLET_ACCOUNT_CHANGED");
       return { transactionHash: result.transactionHash.toLowerCase() };
     },
   });

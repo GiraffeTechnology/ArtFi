@@ -29,13 +29,19 @@ const draft = {
   intent,
 };
 
-function fixture({ chainId = "0x88bb0", rejectSign = false } = {}) {
+function fixture({
+  chainId = "0x88bb0",
+  rejectSign = false,
+  accounts = [[wallet], [wallet]],
+} = {}) {
   const calls = [];
+  let accountRead = 0;
   const provider = {
     async request(call) {
       calls.push(structuredClone(call));
       if (call.method === "eth_chainId") return chainId;
-      if (call.method === "eth_accounts") return [wallet];
+      if (call.method === "eth_accounts")
+        return accounts[Math.min(accountRead++, accounts.length - 1)];
       if (call.method === "eth_signTypedData_v4") {
         if (rejectSign)
           throw Object.assign(Error("do not expose"), { code: 4001 });
@@ -99,6 +105,16 @@ test("wallet maps user rejection without exposing provider text", async () => {
     assert.doesNotMatch(error.message, /expose/);
     return true;
   });
+});
+
+test("wallet refuses an account change after signature", async () => {
+  const other = "0x" + "ef".repeat(20);
+  const f = fixture({ accounts: [[wallet], [other]] });
+  const adapter = createAgentBrowserWallet({
+    provider: f.provider,
+    sendRevocation: async () => ({ transactionHash: txHash }),
+  });
+  await assert.rejects(adapter.signIntent(draft), /WALLET_ACCOUNT_CHANGED/);
 });
 
 test("wallet delegates one exact revocation and rechecks identity", async () => {
