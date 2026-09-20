@@ -281,9 +281,24 @@ Open `/charity` and `/charity/<tokenId>`, **desktop and mobile**. **Capture scre
 widths, with no host visible (§1).**
 
 **Assert:** every figure matches the chain read from C — exactly, not approximately;
-`Artwork preview: Not provided` and **no image element anywhere on either page** (`CH.7`); the rights
-notice states all four `CH.8`/`CH.9` facts on both pages (`CH.8`); the §5 markers are on screen —
-the third of the four places; and **no buy, bid, offer or settle control exists** (`CH.2`).
+`Artwork preview: Not provided` (`CH.7`); the rights notice states all four `CH.8`/`CH.9` facts on
+both pages (`CH.8`); the §5 markers are on screen — the third of the four places; and **no buy, bid,
+offer or settle control exists** (`CH.2`).
+
+**On images, assert the source and not the count.** `CH.7` is "public token **metadata** contains no
+artwork preview", and its own text allows an external marketplace to show a generic missing-image
+treatment; `CH.6` forbids the **master** reaching a browser. Neither forbids site chrome. So:
+
+- every `<img>` on a charity surface resolves to the static `/brand/` assets — the brand mark is
+  `next/image`-rewritten, so decode `/_next/image?url=…` before reading the origin;
+- **none** resolves to a `/api/charity/…` route, a `holder-asset` path, or the object store.
+
+> **Corrected after the first run.** This step previously read "no image element anywhere on either
+> page", which is stricter than `CH.7` and `CH.6` require, and the run correctly reported the two
+> brand images against it. That was a defect in this document, not in the product. Judging an image
+> by its filename is the same mistake one level down — the brand mark is
+> `artcch-logo-master.svg`, and a naive `master` pattern flags it — so the assertion is on where the
+> image is served from.
 
 Then a negative: point the app at an address with no series. It must report unavailable and list
 nothing. **An empty page that looks healthy is a failure** — `ACCEPTANCE.md` §3.

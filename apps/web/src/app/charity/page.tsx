@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
 import { CharityEditionCatalog } from "@/components/charity-edition-catalog";
+import { CharityTestAssetMarkers } from "@/components/charity-test-asset-markers";
 
 export const metadata: Metadata = { title: "Charity editions" };
 
 export default function CharityEditionsPage() {
   return (
     <main className="approved-page page-shell">
+      <CharityTestAssetMarkers />
       <div className="module-banner">
         <span>Charity NFT editions</span>
         <strong>Independent product line — not an ERC-8415 asset</strong>
