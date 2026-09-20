@@ -245,6 +245,47 @@ for (const mutate of [
   (value) =>
     (value.metadata.publicURI =
       "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A07.json"),
+  // PRD.md §7.0 — the real batch records real assets and must never claim otherwise.
+  (value) =>
+    (value.testAssetMarkers = [
+      "TESTNET",
+      "NO REAL-WORLD VALUE",
+      "NO LEGAL EFFECT",
+    ]),
+  // A test payload with no markers at all: §7.0's fourth place left empty.
+  (value) => {
+    value.chainId = 560_048;
+    value.series.artworkId = "TEST-A01";
+  },
+  // A test payload carrying only some of the three markers.
+  (value) => {
+    value.chainId = 560_048;
+    value.series.artworkId = "TEST-A01";
+    value.testAssetMarkers = ["TESTNET"];
+  },
+  // A test payload borrowing the real batch's namespace — §5 rule 1 of the Hoodi plan.
+  (value) => {
+    value.chainId = 560_048;
+    value.testAssetMarkers = [
+      "TESTNET",
+      "NO REAL-WORLD VALUE",
+      "NO LEGAL EFFECT",
+    ];
+  },
+  // Neither chain.
+  (value) => (value.chainId = 1),
+  // A test payload publishing under the real batch's metadata path.
+  (value) => {
+    value.chainId = 560_048;
+    value.series.artworkId = "TEST-A01";
+    value.testAssetMarkers = [
+      "TESTNET",
+      "NO REAL-WORLD VALUE",
+      "NO LEGAL EFFECT",
+    ];
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/TEST-A01.json";
+  },
 ]) {
   const invalid = structuredClone(packageBase);
   mutate(invalid);
@@ -262,6 +303,27 @@ for (const mutate of [
   if (!rejected)
     throw new Error("invalid charity edition package was accepted");
 }
+
+// The positive case for the other payload: a Hoodi test package in its own namespace, declaring
+// §7.0's markers, must be accepted. Without this the branch above could reject everything and the
+// rejection tests would still pass.
+const testPayload = structuredClone(packageBase);
+testPayload.chainId = 560_048;
+testPayload.series.artworkId = "TEST-A01";
+// The metadata URI must end in the package's own artwork id, so it moves with it.
+testPayload.metadata.publicURI =
+  "https://io.artcch.com/nft/metadata/hoodi/test-payload/TEST-A01.json";
+testPayload.testAssetMarkers = [
+  "TESTNET",
+  "NO REAL-WORLD VALUE",
+  "NO LEGAL EFFECT",
+];
+writeFileSync(manifestPath, JSON.stringify(testPayload));
+execFileSync(
+  process.execPath,
+  ["scripts/release/verify-charity-edition-package.mjs", manifestPath],
+  { stdio: "pipe" },
+);
 
 process.stdout.write("Charity edition verifier regression tests passed.\n");
 

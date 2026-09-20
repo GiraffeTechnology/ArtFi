@@ -349,6 +349,24 @@ node scripts/release/verify-charity-edition-package.mjs <manifest.json> --local-
 Include `holderAsset.file` and `holderAsset.sha256` — the 37 frozen packages predate that binding,
 so **this is the first package for which `CH.11`'s packaging half can be proven at all**.
 
+**The manifest is a test-payload manifest, and the verifier now knows the difference.** Set
+`chainId` to `560048`, give the series an artwork id **outside** the real batch's `UNIT-` namespace,
+publish its metadata **outside** `…/sepolia/ye-yongrun/`, and declare §7.0's fourth place:
+
+```json
+"testAssetMarkers": ["TESTNET", "NO REAL-WORLD VALUE", "NO LEGAL EFFECT"]
+```
+
+Each of those is enforced, and the mirror of each is too: the Sepolia real batch is rejected if it
+declares the markers, because a frozen record of real assets that called itself valueless would be
+false.
+
+> **Corrected after the first run.** The verifier previously hard-required `chainId === 11155111`,
+> a `UNIT-` artwork id and the real batch's metadata path, so **this step could not have passed on
+> Hoodi at any point** — a defect in the verifier and in this document, found while fixing step E
+> rather than by reaching step I. `PRD.md` §7.0 is titled "two payloads, two chains"; the verifier
+> now branches on that instead of knowing only one of them.
+
 **Assert:** it passes and reports `holderAssetDistinctFromMaster: true`. Then set `artworkId` to
 `UNIT-A02` and re-run: it must reject by name (`PRD.md` §8.4, `ACCEPTANCE.md` §7.9).
 

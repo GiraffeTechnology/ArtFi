@@ -47,15 +47,28 @@ const formalSetArtworkIds = new Set(
     .map((unit) => `UNIT-A${String(unit).padStart(2, "0")}`),
 );
 
+/**
+ * Two payloads, two chains — `PRD.md` §7.0.
+ *
+ * The real batch lives on Sepolia and is frozen. The test payload lives on Hoodi, carries no
+ * real-world value and no legal effect, and must never borrow the real batch's namespace. This
+ * verifier accepted only the first, so a Hoodi package was rejected on its chain id and again on
+ * its artwork id — step I of the Hoodi plan could not pass at all. Both are chain-dependent, so
+ * they branch here rather than being loosened for everyone.
+ */
+const realBatchChainId = 11_155_111;
+const testPayloadChainId = 560_048;
+const isTestPayload = manifest.chainId === testPayloadChainId;
+
 if (
   manifest.schemaVersion !== 1 ||
-  manifest.chainId !== 11_155_111 ||
+  (manifest.chainId !== realBatchChainId && !isTestPayload) ||
   manifest.standard !== "ERC-1155" ||
   manifest.marketplaceMode !== "external-mirror" ||
   manifest.artfiExchangeEnabled !== false
 ) {
   throw new Error(
-    "charity editions must target Sepolia ERC-1155 in external-mirror mode",
+    "charity editions must target the Sepolia real batch or the Hoodi test payload, ERC-1155 in external-mirror mode",
   );
 }
 if (manifest.series?.artworkId === "UNIT-A02") {
@@ -63,8 +76,41 @@ if (manifest.series?.artworkId === "UNIT-A02") {
     "UNIT-A02 is withdrawn from the formal set and must never enter a release manifest",
   );
 }
+
+/**
+ * §7.0's fourth place for the test-asset markers: a top-level field in the batch manifest.
+ *
+ * Required on the test payload and **forbidden on the real batch** — a frozen record of real
+ * assets that declared itself of no real-world value would be false, and the 37 existing packages
+ * carry no such field. §5 rule 1 of the Hoodi plan is enforced here too: the test payload gets its
+ * own namespace and may not reuse the real batch's `UNIT-` ids.
+ */
+const testAssetMarkers = ["TESTNET", "NO REAL-WORLD VALUE", "NO LEGAL EFFECT"];
+if (isTestPayload) {
+  const declared = manifest.testAssetMarkers;
+  if (
+    !Array.isArray(declared) ||
+    testAssetMarkers.some((marker) => !declared.includes(marker))
+  ) {
+    throw new Error(
+      `a test payload must declare testAssetMarkers containing ${testAssetMarkers.join(", ")} (PRD.md §7.0)`,
+    );
+  }
+  if (String(manifest.series?.artworkId ?? "").startsWith("UNIT-")) {
+    throw new Error(
+      "a test payload must not reuse the real batch's UNIT- artwork namespace (PRD.md §7.0)",
+    );
+  }
+} else if (manifest.testAssetMarkers !== undefined) {
+  throw new Error(
+    "the real batch must not declare test-asset markers; it records real assets (PRD.md §7.0)",
+  );
+}
+
 if (
-  !formalSetArtworkIds.has(manifest.series?.artworkId ?? "") ||
+  (!isTestPayload &&
+    !formalSetArtworkIds.has(manifest.series?.artworkId ?? "")) ||
+  !manifest.series?.artworkId ||
   manifest.series?.editions !== 100 ||
   manifest.series?.unitPriceWei !== "10000000000000000" ||
   manifest.series?.currency !== "ETH" ||
@@ -199,14 +245,25 @@ if (
     "CCHS must receive all proceeds and remain the sole receipt decision-maker using approved public donation-received-time ETH/CAD evidence",
   );
 }
+// The directory is the real batch's, whatever the filename under it. Matching on the longer
+// `…/UNIT-A` prefix would let a test payload sit in the frozen record's own folder just by being
+// named differently.
+const realBatchMetadataDirectory =
+  "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/";
+const realBatchMetadataPrefix = `${realBatchMetadataDirectory}UNIT-A`;
+const publicURI = manifest.metadata?.publicURI;
 if (
-  typeof manifest.metadata?.publicURI !== "string" ||
-  !manifest.metadata.publicURI.startsWith(
-    "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A",
-  ) ||
+  typeof publicURI !== "string" ||
+  // The real batch publishes under its own fixed path. The test payload must not: reusing it
+  // would put a test asset where the frozen record lives (`PRD.md` §7.0). It still has to be
+  // HTTPS and still has to name its own work.
+  (isTestPayload
+    ? publicURI.startsWith(realBatchMetadataDirectory) ||
+      !publicURI.startsWith("https://")
+    : !publicURI.startsWith(realBatchMetadataPrefix)) ||
   // Bound to this manifest's own artwork: the prefix and a bare `.json` suffix let a package
   // declare one work and publish another work's metadata.
-  !manifest.metadata.publicURI.endsWith(`/${manifest.series.artworkId}.json`) ||
+  !publicURI.endsWith(`/${manifest.series.artworkId}.json`) ||
   typeof manifest.metadata?.description !== "string" ||
   !Array.isArray(manifest.metadata?.attributes)
 ) {
