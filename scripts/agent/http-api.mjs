@@ -2,8 +2,12 @@ const operationId = (value) =>
   typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const transactionHash = (value) =>
   typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
-const plain = (value) =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
+const plain = (value) => {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
 const fail = (code) => {
   throw Error(code);
 };
@@ -59,7 +63,12 @@ export function createAgentHttpApi({
   const base = sameOriginPath(basePath);
 
   async function request(method, path, body) {
-    const payload = body === undefined ? undefined : JSON.stringify(body);
+    let payload;
+    try {
+      payload = body === undefined ? undefined : JSON.stringify(body);
+    } catch {
+      fail("HTTP_REQUEST_SCHEMA_INVALID");
+    }
     if (
       payload !== undefined &&
       new TextEncoder().encode(payload).byteLength > 64 * 1024

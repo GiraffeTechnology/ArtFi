@@ -93,6 +93,12 @@ test("client rejects oversized request before transport", async () => {
     api.prepareIntent({ value: "x".repeat(70 * 1024) }),
     /HTTP_REQUEST_TOO_LARGE/,
   );
+  const cyclic = {};
+  cyclic.self = cyclic;
+  await assert.rejects(
+    api.prepareIntent(cyclic),
+    /HTTP_REQUEST_SCHEMA_INVALID/,
+  );
   assert.equal(calls, 0);
 });
 
