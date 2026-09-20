@@ -159,3 +159,45 @@ test("wallet rejects draft binding drift before provider access", async () => {
   );
   assert.equal(f.calls.length, 0);
 });
+
+test("wallet rejects oversized revocation nonce before provider access", async () => {
+  const f = fixture();
+  let calls = 0;
+  const adapter = createAgentBrowserWallet({
+    provider: f.provider,
+    sendRevocation: async () => {
+      calls += 1;
+      return { transactionHash: txHash };
+    },
+  });
+  await assert.rejects(
+    adapter.revokeNonce({
+      id: bytes32,
+      wallet,
+      nonce: (2n ** 256n).toString(),
+      executor,
+      chainId: "560048",
+    }),
+    /REVOCATION_REQUEST_INVALID/,
+  );
+  assert.equal(calls, 0);
+  assert.equal(f.calls.length, 0);
+});
+
+test("wallet rejects a zero revocation transaction hash", async () => {
+  const f = fixture();
+  const adapter = createAgentBrowserWallet({
+    provider: f.provider,
+    sendRevocation: async () => ({ transactionHash: "0x" + "00".repeat(32) }),
+  });
+  await assert.rejects(
+    adapter.revokeNonce({
+      id: bytes32,
+      wallet,
+      nonce: "1",
+      executor,
+      chainId: "560048",
+    }),
+    /REVOCATION_RESULT_INVALID/,
+  );
+});

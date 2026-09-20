@@ -19,7 +19,9 @@ const bytes32 = (value) =>
   /^0x[0-9a-f]{64}$/.test(value) &&
   !/^0x0{64}$/.test(value);
 const hash = (value) =>
-  typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
+  typeof value === "string" &&
+  /^0x[0-9a-fA-F]{64}$/.test(value) &&
+  !/^0x0{64}$/i.test(value);
 const fail = (code) => {
   throw Error(code);
 };
@@ -137,8 +139,7 @@ export function createAgentBrowserWallet({ provider, sendRevocation }) {
         Object.keys(value).length !== 5 ||
         !id(value.id) ||
         !address(value.wallet) ||
-        typeof value.nonce !== "string" ||
-        !/^(0|[1-9][0-9]*)$/.test(value.nonce) ||
+        !uint(value.nonce) ||
         !address(value.executor) ||
         String(value.chainId) !== CHAIN_ID
       )
