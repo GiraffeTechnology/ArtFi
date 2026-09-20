@@ -99,8 +99,7 @@ export function createAgentHttpApi({
       const length = response.headers.get("content-length");
       if (
         length !== null &&
-        (!/^(0|[1-9][0-9]*)$/.test(length) ||
-          Number(length) > maxResponseBytes)
+        (!/^(0|[1-9][0-9]*)$/.test(length) || Number(length) > maxResponseBytes)
       )
         fail("HTTP_RESPONSE_TOO_LARGE");
       text = await response.text();
@@ -126,7 +125,11 @@ export function createAgentHttpApi({
   return Object.freeze({
     async prepareIntent(input) {
       if (!plain(input)) fail("HTTP_REQUEST_SCHEMA_INVALID");
-      const value = await request("POST", "/intents/prepare", structuredClone(input));
+      const value = await request(
+        "POST",
+        "/intents/prepare",
+        structuredClone(input),
+      );
       if (
         value.mode !== "TEST_ONLY_NO_REAL_VALUE" ||
         !operationId(value.operationId)
@@ -160,10 +163,7 @@ export function createAgentHttpApi({
         `/intents/${encodeURIComponent(id)}/revocation`,
         { transactionHash: hash.toLowerCase() },
       );
-      if (
-        value.id !== id ||
-        !["PENDING", "CONFIRMED"].includes(value.state)
-      )
+      if (value.id !== id || !["PENDING", "CONFIRMED"].includes(value.state))
         fail("HTTP_RESPONSE_INVALID");
       return value;
     },

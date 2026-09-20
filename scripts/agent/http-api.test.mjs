@@ -31,7 +31,10 @@ test("same-origin client binds the four console methods without authority header
     },
   });
   await api.prepareIntent({ contract: "test" });
-  await api.createIntent({ operationId: "op-1", signature: "private-to-request" });
+  await api.createIntent({
+    operationId: "op-1",
+    signature: "private-to-request",
+  });
   await api.getIntent("op-1");
   await api.recordRevocation("op-1", "0x" + "AB".repeat(32));
 
@@ -51,7 +54,10 @@ test("same-origin client binds the four console methods without authority header
     assert.equal(init.referrerPolicy, "no-referrer");
     assert.equal(Object.hasOwn(init.headers, "authorization"), false);
   }
-  assert.equal(JSON.parse(calls[3].init.body).transactionHash, "0x" + "ab".repeat(32));
+  assert.equal(
+    JSON.parse(calls[3].init.body).transactionHash,
+    "0x" + "ab".repeat(32),
+  );
 });
 
 test("client fails closed on unsafe endpoint configuration and malformed success", async () => {
