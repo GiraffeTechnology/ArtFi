@@ -4,8 +4,8 @@
 
 - Repository: `GiraffeTechnology/ArtFi`
 - Pull request: `#114`
-- Code commit under test: `fb3a949d853f12b69a6dcfe2e26ef35d6bba0180`
-- Code tree under test: `fb5146485e57b2370dcff2eb7483a4037109c1b2`
+- Code commit under test: `9d9c8dbf8c2e1ba75ac55043a203735c2ed3e343`
+- Code tree under test: `6e0c36a3def5ed19f4d9461ed3336b627a4177ca`
 - Scope: XM.2-XM.3 external-market adapter resilience, realtime/REST
   convergence, atomic cutover, complete-history streaming, zero-event cutover,
   reconnect recovery, bounded durable buffering, and user-visible mirror
@@ -35,7 +35,7 @@ addresses, wallet material, RPC values, or internal filesystem locations.
 | Fixed Go 1.26.5 `gofmt -l`                       | PASS — zero output, clean tree                          |
 | Offline `go mod verify`                          | PASS — all modules verified                             |
 | `go vet ./...`                                   | PASS                                                    |
-| Snapshot deadline tests                          | PASS — 2/2                                              |
+| Snapshot deadline tests                          | PASS — 7/7                                              |
 | Managed test-database integration                | NOT RUN — approved opaque TEST_ONLY profile unavailable |
 | Exact-head GitHub CI                             | INFRASTRUCTURE FAILURE — 5 jobs, 0 steps, no logs       |
 
@@ -57,9 +57,11 @@ addresses, wallet material, RPC values, or internal filesystem locations.
 
 `apps/api/internal/httpapi/handler_test.go` proves that authenticated NDJSON
 snapshot requests replace the ordinary whole-request deadline with a 15-second
-read/write idle deadline refreshed by each successful body read. Requests fail
-closed before opening a database transaction if that bound cannot be enforced;
-unauthorized or wrong-media requests retain the ordinary deadlines.
+read/write idle deadline. The deadline is refreshed on successful body reads,
+every scanned record (including scanner-buffered and empty records), after
+persistence, before commit, and after commit before sending success. Setter
+failure rolls back before commit or suppresses a misleading post-commit success
+response; unauthorized or wrong-media requests retain the ordinary deadlines.
 
 `apps/api/internal/httpapi/persistence_integration_test.go` adds the exact
 managed-database regression for atomic rollback, idempotent replay, complete
@@ -78,19 +80,21 @@ the external venue.
 The exact code head and both idle-deadline Go files were hash-bound before the
 managed run. A fixed Go 1.26.5 image ran with networking disabled and a
 run-specific temporary cache. `gofmt -l`, `go mod verify`, `go vet ./...`,
-`TestMarketSnapshotRefreshesIdleDeadlinesWithProgress`, and
-`TestMarketSnapshotKeepsOrdinaryDeadlinesUntilRequestIsAuthorized` all
-completed successfully. The non-database HTTP API suite selected 34 top-level
-tests: 33 passed, one existing Redis integration test skipped, and zero failed;
-the skipped integration test is not counted as a pass. The checkout remained clean and all run-specific
-process, cache, container, and temporary residue was removed.
+seven directed idle-deadline regressions all completed successfully. They cover
+body progress, unauthorized and wrong-media requests, buffered and empty
+records, post-persistence, pre-commit, and post-commit refreshes, pre-commit
+setter failure with rollback, and post-commit setter failure without a false
+success response. The non-database Go matrix reported 50 passing test lines,
+six explicit managed-database skips, and zero failures. The checkout remained
+clean and all run-specific process, cache, container, and temporary residue was
+removed.
 
 - Terminal evidence SHA-256:
-  `91218a7f778e5cc56e92f44421ba0e3816b406318bcf84828bb74388f2f3df71`
+  `62eb3a3f2748d9edc15b7281cbfd5f87c9537b24f6c62aa408764d28f59c4645`
 - Evidence index SHA-256:
-  `134bdebc5bd068a1ff500daade8793a73331793df3d445eab4fa2bab516ba76c`
+  `5dda69fd0dd56e708b0135e8080368846c92b47ad60a5ec9de2f64bde940a59c`
 - Persistent evidence archive SHA-256:
-  `2dad70ec754c67b82bd51a00413cb743a13ac62f565d1b43e0c8fb77e569cbc5`
+  `8667b8e00e3c4af020f553c2fc36de69fc1d85a77741c27e5053dc7694558d34`
 
 ## Managed database boundary
 
@@ -104,7 +108,7 @@ TEST_ONLY profile was available in the execution context. Therefore:
 - the integration test was not skipped and was not reported as passing;
 - run-specific residue is zero.
 
-Stable code: `CTYUN_MYSQL_MANAGED_TEST_PROFILE_UNAVAILABLE`.
+Stable code: `CTYUN_MYSQL_MANAGED_TEST_PROFILE_INJECTION_NOT_AUTHORIZED`.
 
 Gate evidence SHA-256:
 `feb4586cd3fc8c0ee40247e2cbcc063db814a032d93338136758542f9cc701b2`.
@@ -116,7 +120,7 @@ that schema.
 
 ## CI boundary
 
-Code-head quality run `35478328795` terminated before execution. All five
+Prior exact-head quality run `35478383534` terminated before execution. All five
 jobs reported failure with zero steps and no logs, classified as
 `CI_RUNNER_ZERO_STEP_INFRASTRUCTURE_FAILURE`. This is infrastructure evidence,
 not a candidate test failure; no retry loop is used.
