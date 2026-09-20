@@ -39,6 +39,17 @@ export type MarketSnapshotSink = (
   signal: AbortSignal,
 ) => Promise<void>;
 
+export interface MarketplaceBackfillLease {
+  commit(): Promise<void>;
+  abort(): Promise<void>;
+}
+
+export interface MarketplaceBackfillOptions {
+  deferFinalize?: boolean;
+  onLeaseReady?(lease: MarketplaceBackfillLease): void;
+  onSourceSealed?(): Promise<void>;
+}
+
 export interface MarketplaceStreamLifecycle {
   onReconnectReady(): Promise<void>;
   onFatal(error: unknown): void;
@@ -47,7 +58,11 @@ export interface MarketplaceStreamLifecycle {
 export interface MarketplaceAdapter {
   readonly source: string;
   readonly capabilities: MarketplaceCapabilities;
-  backfill(sink: MarketEventSink, signal?: AbortSignal): Promise<void>;
+  backfill(
+    sink: MarketEventSink,
+    signal?: AbortSignal,
+    options?: MarketplaceBackfillOptions,
+  ): Promise<void | MarketplaceBackfillLease>;
   start(
     sink: MarketEventSink,
     lifecycle?: MarketplaceStreamLifecycle,

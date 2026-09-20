@@ -1464,6 +1464,239 @@ describe("OpenSea normalization", () => {
     stop();
   });
 
+  it("streams the durable snapshot with a one-event backpressured handoff and no second snapshot file", async () => {
+    const historic = normalizeOpenSeaEvent(listed);
+    let releaseFirst!: () => void;
+    let observeFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const firstObserved = new Promise<void>((resolve) => {
+      observeFirst = resolve;
+    });
+    let produced = 0;
+    let consumed = 0;
+    let commits = 0;
+    let aborts = 0;
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start() {
+        return () => undefined;
+      },
+      async backfill(sink, _signal, options) {
+        expect(options?.deferFinalize).toBe(true);
+        await options?.onSourceSealed?.();
+        for (let version = 1; version <= 3; version += 1) {
+          produced += 1;
+          await sink({
+            ...historic,
+            entityKey: `${historic.entityKey}:${version}`,
+            version,
+          });
+        }
+        return {
+          async commit() {
+            commits += 1;
+          },
+          async abort() {
+            aborts += 1;
+          },
+        };
+      },
+    };
+    const starting = startOpenSeaMirror(
+      adapter,
+      async () => undefined,
+      async (events) => {
+        for await (const event of events) {
+          consumed += 1;
+          if (consumed === 1) {
+            observeFirst();
+            await firstGate;
+          }
+          expect(event.entityKey).toContain(historic.entityKey);
+        }
+      },
+    );
+
+    await firstObserved;
+    expect(produced).toBe(1);
+    const realtimeDirectories = (
+      await readdir(tmpdir(), { withFileTypes: true })
+    ).filter(
+      (entry) =>
+        entry.isDirectory() && entry.name.startsWith("artfi-opensea-realtime-"),
+    );
+    expect(realtimeDirectories.length).toBeGreaterThan(0);
+    for (const directory of realtimeDirectories) {
+      expect(await readdir(join(tmpdir(), directory.name))).not.toContain(
+        "snapshot.ndjson",
+      );
+    }
+    releaseFirst();
+    const stop = await starting;
+    expect({ produced, consumed, commits, aborts }).toEqual({
+      produced: 3,
+      consumed: 3,
+      commits: 1,
+      aborts: 0,
+    });
+    stop();
+  });
+
+  it("preserves a durable source snapshot and releases its lock when snapshot commit fails", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-lease-test-"),
+    );
+    let leaseAborts = 0;
+    const createDurableAdapter = (): MarketplaceAdapter => {
+      const durable = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        spoolParentDirectory,
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ asset_events: [listed] }), {
+            status: 200,
+          }),
+      });
+      return {
+        source: durable.source,
+        capabilities: durable.capabilities,
+        backfill: (sink, signal, options) =>
+          durable.backfill(
+            sink,
+            signal,
+            options
+              ? {
+                  ...options,
+                  onLeaseReady: (lease) => {
+                    options.onLeaseReady?.({
+                      ...lease,
+                      async abort() {
+                        leaseAborts += 1;
+                        await lease.abort();
+                      },
+                    });
+                  },
+                }
+              : undefined,
+          ),
+        async start() {
+          return () => undefined;
+        },
+      };
+    };
+    try {
+      await expect(
+        startOpenSeaMirror(
+          createDurableAdapter(),
+          async () => undefined,
+          async (events) => {
+            for await (const _event of events) {
+              // Consume the complete source stream, then fail the atomic upload.
+            }
+            throw new Error("snapshot upload failed");
+          },
+        ),
+      ).rejects.toThrow("snapshot upload failed");
+      expect(leaseAborts).toBe(1);
+
+      const [snapshotDirectory] = await readdir(spoolParentDirectory);
+      const retained = await readdir(
+        join(spoolParentDirectory, snapshotDirectory!),
+      );
+      expect(retained).toEqual(
+        expect.arrayContaining(["events.ndjson", "checkpoints.ndjson"]),
+      );
+      expect(retained).not.toContain("active.lock");
+
+      const recovered: NormalizedMarketEvent[] = [];
+      const stop = await startOpenSeaMirror(
+        createDurableAdapter(),
+        async () => undefined,
+        async (events) => {
+          for await (const event of events) recovered.push(event);
+        },
+      );
+      expect(recovered).toHaveLength(1);
+      expect(recovered[0]?.entityKey).toBe(
+        normalizeOpenSeaEvent(listed).entityKey,
+      );
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
+      stop();
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("starts the snapshot sink for a precommit-only tail and an all-zero cutover", async () => {
+    const live = normalizeOpenSeaEvent(listed);
+    const observed: NormalizedMarketEvent[][] = [];
+    let commits = 0;
+    const precommitOnly: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(sink) {
+        await sink(live);
+        return () => undefined;
+      },
+      async backfill(_sink, _signal, options) {
+        await options?.onSourceSealed?.();
+        return {
+          async commit() {
+            commits += 1;
+          },
+          async abort() {
+            throw new Error("unexpected abort");
+          },
+        };
+      },
+    };
+    const precommitStop = await startOpenSeaMirror(
+      precommitOnly,
+      async () => undefined,
+      async (events) => {
+        const snapshot: NormalizedMarketEvent[] = [];
+        for await (const event of events) snapshot.push(event);
+        observed.push(snapshot);
+      },
+    );
+    precommitStop();
+
+    const allZero: MarketplaceAdapter = {
+      ...precommitOnly,
+      async start() {
+        return () => undefined;
+      },
+    };
+    const zeroStop = await startOpenSeaMirror(
+      allZero,
+      async () => undefined,
+      async (events) => {
+        const snapshot: NormalizedMarketEvent[] = [];
+        for await (const event of events) snapshot.push(event);
+        observed.push(snapshot);
+      },
+    );
+    zeroStop();
+
+    expect(observed).toEqual([[live], []]);
+    expect(commits).toBe(2);
+  });
+
   it("stops the realtime subscription when the REST snapshot fails", async () => {
     let stopped = false;
     const live = normalizeOpenSeaEvent(listed);

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { CharityEditionDetail } from "@/components/charity-edition-detail";
+import { CharityTestAssetMarkers } from "@/components/charity-test-asset-markers";
 
 export const metadata: Metadata = { title: "Charity edition" };
 
@@ -24,6 +25,7 @@ export default async function CharityEditionPage({
 
   return (
     <main className="approved-page page-shell">
+      <CharityTestAssetMarkers />
       <div className="module-banner">
         <span>Charity NFT edition</span>
         <strong>

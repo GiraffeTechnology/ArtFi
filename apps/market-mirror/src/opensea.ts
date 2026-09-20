@@ -24,6 +24,8 @@ import {
   MARKET_EVENT_SCHEMA_VERSION,
   type MarketEventFamily,
   type MarketEventSink,
+  type MarketplaceBackfillLease,
+  type MarketplaceBackfillOptions,
   type MarketSnapshotSink,
   type MarketplaceAdapter,
   type MarketplaceStreamLifecycle,
@@ -395,7 +397,11 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     this.#sleep = config.sleep ?? sleepWithAbort;
   }
 
-  async backfill(sink: MarketEventSink, signal?: AbortSignal): Promise<void> {
+  async backfill(
+    sink: MarketEventSink,
+    signal?: AbortSignal,
+    options?: MarketplaceBackfillOptions,
+  ): Promise<void | MarketplaceBackfillLease> {
     const transientParent = this.#spoolParentDirectory
       ? undefined
       : await mkdtemp(join(tmpdir(), "artfi-opensea-backfill-"));
@@ -416,6 +422,46 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     let spool: Awaited<ReturnType<typeof open>> | undefined;
     let checkpointLog: Awaited<ReturnType<typeof open>> | undefined;
     let completed = false;
+    let leaseActive = false;
+    let finalization: Promise<void> | undefined;
+    const finalizeBackfill = (removeSnapshot: boolean): Promise<void> => {
+      finalization ??= (async () => {
+        let cleanupFailure: unknown;
+        if (removeSnapshot && !transientParent) {
+          try {
+            // Delete only the known snapshot payload while the writer lock is
+            // still held. A successor cannot enter until release, and the
+            // final rmdir is non-recursive so it cannot delete successor data.
+            await Promise.all(
+              [spoolPath, checkpointPath].map((path) =>
+                unlink(path).catch((error: unknown) => {
+                  if (!isMissingFile(error)) throw error;
+                }),
+              ),
+            );
+          } catch (error) {
+            cleanupFailure = error;
+          }
+        }
+        try {
+          if (lock) {
+            await releaseBackfillLock(lockPath, lock);
+            lock = undefined;
+          }
+        } catch (error) {
+          cleanupFailure ??= error;
+        }
+        try {
+          if (transientParent) {
+            await rm(transientParent, { force: true, recursive: true });
+          }
+        } catch (error) {
+          cleanupFailure ??= error;
+        }
+        if (cleanupFailure) throw cleanupFailure;
+      })();
+      return finalization;
+    };
     try {
       lock = await acquireBackfillLock(lockPath);
       const checkpointState = await readBackfillCheckpoints(
@@ -577,6 +623,29 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       await spool.sync();
       await spool.close();
       spool = undefined;
+      const deferredLease: MarketplaceBackfillLease | undefined =
+        options?.deferFinalize
+          ? {
+              commit: async () => {
+                leaseActive = false;
+                await finalizeBackfill(true);
+              },
+              abort: async () => {
+                leaseActive = false;
+                await finalizeBackfill(false);
+              },
+            }
+          : undefined;
+      if (deferredLease && options?.onLeaseReady) {
+        leaseActive = true;
+        try {
+          options.onLeaseReady(deferredLease);
+        } catch (error) {
+          leaseActive = false;
+          throw error;
+        }
+      }
+      await options?.onSourceSealed?.();
       const input = createReadStream(spoolPath, { encoding: "utf8" });
       const lines = createInterface({
         input,
@@ -593,27 +662,15 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
         input.destroy();
       }
       completed = true;
+      if (deferredLease) {
+        leaseActive = true;
+        return deferredLease;
+      }
     } finally {
       await spool?.close();
       await checkpointLog?.close();
-      const removeSnapshot = completed || transientParent !== undefined;
-      if (removeSnapshot && !transientParent) {
-        // Delete only the known snapshot payload while the writer lock is still
-        // held. A successor cannot enter until release, and the final rmdir is
-        // non-recursive so it can never delete a successor's files.
-        await Promise.all(
-          [spoolPath, checkpointPath].map((path) =>
-            unlink(path).catch((error: unknown) => {
-              if (!isMissingFile(error)) throw error;
-            }),
-          ),
-        );
-      }
-      if (lock) {
-        await releaseBackfillLock(lockPath, lock);
-      }
-      if (transientParent) {
-        await rm(transientParent, { force: true, recursive: true });
+      if (!leaseActive) {
+        await finalizeBackfill(completed || transientParent !== undefined);
       }
     }
   }
@@ -1028,6 +1085,105 @@ function fileExistsError(path: string): NodeJS.ErrnoException {
   });
 }
 
+function isBackfillLease(value: unknown): value is MarketplaceBackfillLease {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<MarketplaceBackfillLease>;
+  return (
+    typeof candidate.commit === "function" &&
+    typeof candidate.abort === "function"
+  );
+}
+
+function createSnapshotHandoff(): {
+  events: AsyncIterable<NormalizedMarketEvent>;
+  push(event: NormalizedMarketEvent): Promise<void>;
+  close(): void;
+  fail(error: unknown): void;
+} {
+  interface Slot {
+    event: NormalizedMarketEvent;
+    resolve(): void;
+    reject(error: unknown): void;
+  }
+  let slot: Slot | undefined;
+  let inFlight: Slot | undefined;
+  let wakeConsumer: (() => void) | undefined;
+  let closed = false;
+  let failure: unknown;
+  let consumerEnded = false;
+  const wake = (): void => {
+    wakeConsumer?.();
+    wakeConsumer = undefined;
+  };
+  const rejectSlot = (target: Slot | undefined, error: unknown): void => {
+    target?.reject(error);
+  };
+  const events: AsyncIterable<NormalizedMarketEvent> = {
+    async *[Symbol.asyncIterator]() {
+      try {
+        while (true) {
+          while (!slot && !closed && failure === undefined) {
+            await new Promise<void>((resolve) => {
+              wakeConsumer = resolve;
+            });
+          }
+          if (failure !== undefined) throw failure;
+          if (!slot) return;
+          const current = slot;
+          slot = undefined;
+          inFlight = current;
+          yield current.event;
+          current.resolve();
+          if (inFlight === current) inFlight = undefined;
+        }
+      } finally {
+        consumerEnded = true;
+        const error =
+          failure ?? new Error("OpenSea snapshot consumer ended early");
+        rejectSlot(inFlight, error);
+        inFlight = undefined;
+        rejectSlot(slot, error);
+        slot = undefined;
+        wake();
+      }
+    },
+  };
+  return {
+    events,
+    push(event) {
+      if (failure !== undefined) return Promise.reject(failure);
+      if (closed || consumerEnded) {
+        return Promise.reject(
+          new Error("OpenSea snapshot consumer is not accepting events"),
+        );
+      }
+      if (slot || inFlight) {
+        return Promise.reject(
+          new Error("OpenSea snapshot handoff capacity exceeded"),
+        );
+      }
+      const acknowledgement = new Promise<void>((resolve, reject) => {
+        slot = { event, resolve, reject };
+      });
+      wake();
+      return acknowledgement;
+    },
+    close() {
+      closed = true;
+      wake();
+    },
+    fail(error) {
+      failure ??= error;
+      closed = true;
+      rejectSlot(slot, failure);
+      slot = undefined;
+      rejectSlot(inFlight, failure);
+      inFlight = undefined;
+      wake();
+    },
+  };
+}
+
 export async function startOpenSeaMirror(
   adapter: MarketplaceAdapter,
   sink: MarketEventSink,
@@ -1039,10 +1195,8 @@ export async function startOpenSeaMirror(
   );
   const precommitPath = join(realtimeDirectory, "precommit.ndjson");
   const postcommitPath = join(realtimeDirectory, "postcommit.ndjson");
-  const snapshotPath = join(realtimeDirectory, "snapshot.ndjson");
   let precommitBuffer: Awaited<ReturnType<typeof open>> | undefined;
   let postcommitBuffer: Awaited<ReturnType<typeof open>> | undefined;
-  let snapshotBuffer: Awaited<ReturnType<typeof open>> | undefined;
   let realtimePhase: "precommit" | "postcommit" | "draining" | "ready" =
     "precommit";
   let precommitFailure: unknown;
@@ -1075,7 +1229,8 @@ export async function startOpenSeaMirror(
     const next = reconnectSequence.then(async () => {
       await initialCommit;
       if (backfillFailure) throw backfillFailure;
-      return adapter.backfill(sink);
+      const result = await adapter.backfill(sink);
+      if (isBackfillLease(result)) await result.commit();
     });
     reconnectSequence = next.catch((error: unknown) => {
       backfillFailure ??= error;
@@ -1084,7 +1239,6 @@ export async function startOpenSeaMirror(
   };
   try {
     precommitBuffer = await open(precommitPath, "wx+", 0o600);
-    snapshotBuffer = await open(snapshotPath, "wx+", 0o600);
   } catch (error) {
     await precommitBuffer?.close();
     await rm(realtimeDirectory, { force: true, recursive: true });
@@ -1148,9 +1302,42 @@ export async function startOpenSeaMirror(
     });
     return next;
   };
+  let sealPrecommitRun: Promise<void> | undefined;
+  const sealPrecommit = (): Promise<void> => {
+    sealPrecommitRun ??= (async () => {
+      await realtimeSequence;
+      if (precommitFailure) throw precommitFailure;
+      postcommitBuffer = await open(postcommitPath, "wx+", 0o600);
+      realtimePhase = "postcommit";
+      await realtimeSequence;
+      if (precommitFailure) throw precommitFailure;
+      await precommitBuffer!.sync();
+      await precommitBuffer!.close();
+      precommitBuffer = undefined;
+    })();
+    return sealPrecommitRun;
+  };
+  const snapshotHandoff = createSnapshotHandoff();
+  let snapshotRun: Promise<void> | undefined;
+  const ensureSnapshotStarted = (): Promise<void> => {
+    if (!snapshotRun) {
+      snapshotRun = Promise.resolve()
+        .then(() =>
+          snapshotSink(snapshotHandoff.events, snapshotController.signal),
+        )
+        .catch((error: unknown) => {
+          snapshotHandoff.fail(error);
+          throw error;
+        });
+      void snapshotRun.catch(() => undefined);
+    }
+    return snapshotRun;
+  };
   const stageSnapshot: MarketEventSink = async (event) => {
+    await sealPrecommit();
     if (precommitFailure) throw precommitFailure;
-    await writeAll(snapshotBuffer!, `${JSON.stringify(event)}\n`);
+    void ensureSnapshotStarted();
+    await snapshotHandoff.push(event);
   };
   const stagedEvents = async function* (
     paths: string[],
@@ -1170,6 +1357,7 @@ export async function startOpenSeaMirror(
       }
     }
   };
+  let backfillLease: MarketplaceBackfillLease | undefined;
   let stop: (() => void) | undefined;
   try {
     stop = await adapter.start(realtimeSink, {
@@ -1180,23 +1368,24 @@ export async function startOpenSeaMirror(
         onFatal(error);
       },
     });
-    await adapter.backfill(stageSnapshot);
-    await realtimeSequence;
-    if (precommitFailure) throw precommitFailure;
-    postcommitBuffer = await open(postcommitPath, "wx+", 0o600);
-    realtimePhase = "postcommit";
-    await realtimeSequence;
-    if (precommitFailure) throw precommitFailure;
-    await precommitBuffer.sync();
-    await precommitBuffer.close();
-    precommitBuffer = undefined;
-    await snapshotBuffer.sync();
-    await snapshotBuffer.close();
-    snapshotBuffer = undefined;
-    await snapshotSink(
-      stagedEvents([snapshotPath, precommitPath]),
-      snapshotController.signal,
-    );
+    const initialBackfill = await adapter.backfill(stageSnapshot, undefined, {
+      deferFinalize: true,
+      onLeaseReady: (lease) => {
+        backfillLease = lease;
+      },
+      onSourceSealed: sealPrecommit,
+    });
+    if (isBackfillLease(initialBackfill)) backfillLease ??= initialBackfill;
+    await sealPrecommit();
+    for await (const event of stagedEvents([precommitPath])) {
+      void ensureSnapshotStarted();
+      await snapshotHandoff.push(event);
+    }
+    const completedSnapshot = ensureSnapshotStarted();
+    snapshotHandoff.close();
+    await completedSnapshot;
+    await backfillLease?.commit();
+    backfillLease = undefined;
 
     await realtimeSequence;
     if (postcommitFailure) throw postcommitFailure;
@@ -1216,15 +1405,28 @@ export async function startOpenSeaMirror(
     releaseInitialCommit();
     return stop;
   } catch (error) {
+    snapshotHandoff.fail(error);
+    await snapshotRun?.catch(() => undefined);
+    let terminalError = error;
+    if (backfillLease) {
+      try {
+        await backfillLease.abort();
+      } catch (abortError) {
+        terminalError = new AggregateError(
+          [error, abortError],
+          "OpenSea snapshot failed and its backfill lease could not abort",
+        );
+      }
+      backfillLease = undefined;
+    }
     stop?.();
-    throw error;
+    throw terminalError;
   } finally {
     if (!snapshotController.signal.aborted) {
       snapshotController.abort(new Error("OpenSea snapshot lifecycle ended"));
     }
     await precommitBuffer?.close();
     await postcommitBuffer?.close();
-    await snapshotBuffer?.close();
     await rm(realtimeDirectory, { force: true, recursive: true });
   }
 }

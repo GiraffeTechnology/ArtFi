@@ -188,6 +188,7 @@ No audit, review, refactor, architecture exercise, or governance activity may in
 - No private keys, seed phrases, credentials, database dumps, or raw signed transactions in Web, API, MySQL, servers, GitHub, CI, or logs.
 - No mainnet, real assets, or real-money operation without separate written approval.
 - The current test chain is Hoodi `560048`; it does not determine the production chain.
+- **The test chain proves the technical path, not an economic or legal one.** Client ruling of 2026-09-19, recorded in `docs/PRD.md` §7.0. Hoodi holds no real asset and carries no legal liability, so **no CCHS or ArtCCH issued document is a precondition for a Hoodi run**. Requiring one would import the real batch's gate into a payload that §7.0 forbids to touch it. Real assets, real money and mainnet are unchanged and still require separate written approval.
 - Historical mint evidence must remain immutable.
 - Test assets must remain clearly isolated from production/real-asset records.
 - External partner identities in governing product material must use the neutral placeholder policy already stated in #110.
