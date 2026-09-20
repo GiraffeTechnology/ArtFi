@@ -483,6 +483,7 @@ test("durable runtime scans confirmed revoked PREPARED, persists terminal and ex
 
 test("durable hydration refuses revoked proof identity corruption before worker execution", async () => {
   for (const change of [
+    { transactionHash: "0x" + "00".repeat(32) },
     { nonce: "1" },
     { chainId: "1" },
     { canonical: false },
