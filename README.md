@@ -69,6 +69,11 @@ Partner and vendor identities appear in governing material only as neutral place
 - Mainnet and real-money operation: **not approved**
 - Runtime chain evidence: **none on any chain; not claimed as passed**
 - Requirement status, item by item: [`docs/STATUS.md`](docs/STATUS.md)
+- Current bounded stage: **S-XM external-marketplace mirror reliability** (Issue #110, PR #114)
+- PR #114 exact head: `fd562ccd65f80387bd1fa061a4867499237839c1` / tree `1e7c966d1b008b958f79946e6eac121ca446a901`
+- Merge readiness: **blocked** by three accepted fresh-review findings (`4056400240`, `4056400243`, `4056400246`); fixes are not yet published or revalidated
+- Exact-head CI `35496445805`: **infrastructure failure**, five jobs with zero executed steps; not code evidence
+- Managed TEST_ONLY database and live OpenSea reconnect evidence: **NOT RUN**
 
 ## Workspace
 
