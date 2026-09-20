@@ -18,8 +18,7 @@ const address = (value) =>
   !/^0x0{40}$/.test(value);
 const digest = (value) =>
   typeof value === "string" && /^0x[0-9a-f]{64}$/.test(value);
-const transactionHash = (value) =>
-  digest(value) && !/^0x0{64}$/.test(value);
+const transactionHash = (value) => digest(value) && !/^0x0{64}$/.test(value);
 const states = new Set([
   "PREPARED",
   "STARTED",

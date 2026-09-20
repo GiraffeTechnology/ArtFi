@@ -199,8 +199,7 @@ export function createAgentService({
     return row;
   }
   async function revocationProof(row, transactionHash) {
-    if (!validTransactionHash(transactionHash))
-      fail("REVOCATION_HASH_INVALID");
+    if (!validTransactionHash(transactionHash)) fail("REVOCATION_HASH_INVALID");
     const normalizedHash = transactionHash.toLowerCase();
     const proof = structuredClone(
       await inspectRevocation(structuredClone(row.request), normalizedHash),
