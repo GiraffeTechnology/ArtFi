@@ -319,11 +319,26 @@ testPayload.testAssetMarkers = [
   "NO LEGAL EFFECT",
 ];
 writeFileSync(manifestPath, JSON.stringify(testPayload));
-execFileSync(
+// Run the path step I actually runs: `--local-assets` reads and hashes the files rather than
+// trusting the manifest's declared digests. A schema-only pass here would not have shown whether
+// step I is runnable at all.
+const testPayloadOutput = execFileSync(
   process.execPath,
-  ["scripts/release/verify-charity-edition-package.mjs", manifestPath],
-  { stdio: "pipe" },
+  [
+    "scripts/release/verify-charity-edition-package.mjs",
+    manifestPath,
+    "--local-assets",
+  ],
+  { encoding: "utf8" },
 );
+const testPayloadResult = JSON.parse(testPayloadOutput);
+if (
+  testPayloadResult.masterArtworkSha256 !== sha256(master) ||
+  testPayloadResult.holderAssetSha256 !== sha256(watermarked) ||
+  testPayloadResult.holderAssetDistinctFromMaster !== true
+) {
+  throw new Error("test payload did not verify through the local-assets path");
+}
 
 process.stdout.write("Charity edition verifier regression tests passed.\n");
 
