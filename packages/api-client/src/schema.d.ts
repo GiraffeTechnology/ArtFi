@@ -150,23 +150,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/v1/indexer/market-snapshots": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** @description Atomically commits a complete NDJSON marketplace snapshot; any invalid or interrupted line rolls back the whole snapshot, while an empty body records a valid zero-event cutover. */
-    post: operations["ingestExternalMarketSnapshot"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/v1/market/activity": {
     parameters: {
       query?: never;
@@ -1033,35 +1016,6 @@ export interface operations {
         content?: never;
       };
       401: components["responses"]["Problem"];
-      422: components["responses"]["Problem"];
-    };
-  };
-  ingestExternalMarketSnapshot: {
-    parameters: {
-      query?: never;
-      header: {
-        "X-Indexer-Key": string;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/x-ndjson": string;
-      };
-    };
-    responses: {
-      /** @description Complete external marketplace snapshot committed atomically */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      400: components["responses"]["Problem"];
-      401: components["responses"]["Problem"];
-      413: components["responses"]["Problem"];
-      415: components["responses"]["Problem"];
       422: components["responses"]["Problem"];
     };
   };

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -324,103 +323,6 @@ func TestMySQLExternalMarketMirrorDedupeAndOrdering(t *testing.T) {
 	activity := requestWithHandler(t, handler, http.MethodGet, "/v1/market/activity?source=opensea&limit=10")
 	if activity.Code != http.StatusOK || !strings.Contains(activity.Body.String(), "external-deeplink-only") {
 		t.Fatalf("market activity boundary missing: status=%d body=%s", activity.Code, activity.Body.String())
-	}
-}
-
-func TestMySQLExternalMarketSnapshotIsAtomic(t *testing.T) {
-	dsn := os.Getenv("ARTFI_INTEGRATION_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("ARTFI_INTEGRATION_MYSQL_DSN is not set")
-	}
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	for _, statement := range []string{"DELETE FROM external_market_orders", "DELETE FROM external_market_events"} {
-		if _, err := db.Exec(statement); err != nil {
-			t.Fatal(err)
-		}
-	}
-	defer db.Exec("DELETE FROM external_market_orders")
-	defer db.Exec("DELETE FROM external_market_events")
-
-	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
-	service.db = db
-	service.indexerKeyHash = sha256.Sum256([]byte("external-market-indexer-key"))
-	service.indexerEnabled = true
-	handler := newHandler(service)
-	event := map[string]any{
-		"schemaVersion":   "1",
-		"source":          "opensea",
-		"eventType":       "item_listed",
-		"eventFamily":     "order",
-		"entityKey":       "0x" + strings.Repeat("1", 64),
-		"version":         1,
-		"chain":           "ethereum",
-		"collectionSlug":  "artfi-test",
-		"orderHash":       "0x" + strings.Repeat("1", 64),
-		"contractAddress": "0x1111111111111111111111111111111111111111",
-		"tokenId":         "42",
-		"eventTimestamp":  "2026-08-19T04:00:00Z",
-		"payload":         map[string]any{"snapshot": 1},
-	}
-	first, err := json.Marshal(event)
-	if err != nil {
-		t.Fatal(err)
-	}
-	event["entityKey"] = "0x" + strings.Repeat("2", 64)
-	event["orderHash"] = "0x" + strings.Repeat("2", 64)
-	event["eventTimestamp"] = "2026-08-19T04:00:01Z"
-	event["payload"] = map[string]any{"snapshot": 2}
-	second, err := json.Marshal(event)
-	if err != nil {
-		t.Fatal(err)
-	}
-	send := func(body string) *httptest.ResponseRecorder {
-		request := httptest.NewRequest(http.MethodPost, "/v1/indexer/market-snapshots", strings.NewReader(body))
-		request.Header.Set("Content-Type", "application/x-ndjson")
-		request.Header.Set("X-Indexer-Key", "external-market-indexer-key")
-		recorder := httptest.NewRecorder()
-		handler.ServeHTTP(recorder, request)
-		return recorder
-	}
-	empty := send("")
-	if empty.Code != http.StatusCreated {
-		t.Fatalf("empty atomic cutover: status=%d body=%s", empty.Code, empty.Body.String())
-	}
-	var emptyResponse struct {
-		Events  int `json:"events"`
-		Created int `json:"created"`
-	}
-	if err := json.Unmarshal(empty.Body.Bytes(), &emptyResponse); err != nil {
-		t.Fatal(err)
-	}
-	if emptyResponse.Events != 0 || emptyResponse.Created != 0 {
-		t.Fatalf("empty atomic cutover returned %+v", emptyResponse)
-	}
-
-	rejected := send(string(first) + "\n" + `{"unknown":true}` + "\n")
-	if rejected.Code != http.StatusBadRequest {
-		t.Fatalf("invalid snapshot: status=%d body=%s", rejected.Code, rejected.Body.String())
-	}
-	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM external_market_events").Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 0 {
-		t.Fatalf("invalid snapshot committed %d partial events", count)
-	}
-
-	committed := send(string(first) + "\n" + string(second) + "\n")
-	if committed.Code != http.StatusCreated {
-		t.Fatalf("atomic snapshot: status=%d body=%s", committed.Code, committed.Body.String())
-	}
-	if err := db.QueryRow("SELECT COUNT(*) FROM external_market_events").Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 2 {
-		t.Fatalf("atomic snapshot stored %d events, want 2", count)
 	}
 }
 
