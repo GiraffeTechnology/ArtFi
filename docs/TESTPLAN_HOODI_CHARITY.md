@@ -477,3 +477,54 @@ against the exact reviewed commit under `ACCEPTANCE.md` §3.
 This is the §10 distinction applied per row. A green run here establishes that the technical path
 works on Hoodi. It establishes nothing economic and nothing legal, and no CCHS or ArtCCH document is
 a precondition for any of it (`PRD.md` §7.0).
+
+---
+
+## 12. Where the charity module stands — close-out, 2026-09-25
+
+Written against the branch as it is, with each claim checked rather than recalled.
+
+### 12.1 Built, and green without a chain
+
+| Layer     | What exists                                                                                                                            |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Contract  | `ArtFiCharityEditions.sol` + `DeployCharityEditions.s.sol` (Hoodi-gated). `CharityEditions.t.sol`: **9 tests pass**                    |
+| Web       | `/charity`, `/charity/[tokenId]`, six components, four `/api/charity/*` routes, five `lib/charity-*` modules with their unit tests     |
+| Browser   | `charity-editions.spec.ts`, `charity-editions-populated.spec.ts`, `charity-test-asset-markers.spec.ts`                                 |
+| Packaging | `verify-charity-edition-package.mjs` and its regression suite; the 37 frozen packages verify unchanged, 3,700 units, 0 public previews |
+
+All four verifier gates pass: schema, verifier regression, frozen batch, and the Hoodi deployment
+record.
+
+### 12.2 §7.0's four marker places
+
+| Place                        | State                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| 1 · token metadata           | **Open.** It lives in the `VD.3` test payload, which is `NOT-IMPLEMENTED` |
+| 2 · contract or series level | Done — `release/hoodi-admin-safe-deployment.*`, enforced by its verifier  |
+| 3 · on screen                | Done — `CharityTestAssetMarkers` on both surfaces, desktop and mobile     |
+| 4 · batch manifest           | Done — required on a test payload, forbidden on the real batch            |
+
+Place 2 is recorded as **correctable** (`AGENTS.md` §5). §7.0 says "at contract or series level at
+deployment", which could also mean on-chain. The deployment record is the reading that needs no
+contract change and no redeploy; putting it on chain would cost both, and steps A–D would have to
+be run again. If that is wanted, it is an additive contract change, not a redesign.
+
+### 12.3 Runtime: incomplete, and nothing is promoted
+
+The Hoodi run of 2026-09-20 reached **A–D**. **E** failed on two findings; both are fixed — the
+on-screen markers were genuinely missing, and this document's own "no image element anywhere"
+assertion was stricter than `CH.7` and `CH.6` require. **F–I were never executed**, correctly, since
+§5 stops the run on an isolation failure.
+
+**All eleven `CH` rows remain `IMPLEMENTED-NOT-VERIFIED` and no status value has moved.** Three
+reasons, each sufficient on its own: the run did not finish; A–D ran against a commit older than the
+step E fix; and the receipts are held by the delivery side and have not been filed against a
+reviewed commit per `ACCEPTANCE.md` §3.
+
+### 12.4 What would close it
+
+One complete A–I run on the current commit, reported per §7, then a separate promotion decision.
+The `VD.3` payload is the only prerequisite still missing, and producing it is the delivery side's
+(`PRD.md` §7.0). Nothing else is waiting on anything: no client decision is open on this module, and
+the supervision side has no further code to write for it until a run says otherwise.
