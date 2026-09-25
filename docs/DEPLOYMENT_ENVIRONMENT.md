@@ -67,18 +67,23 @@ not an environment. It is not resolved in this file and must not be named elsewh
 
 ## Known deviation
 
-Deletability is **not yet true**. Real vendor names currently appear in seventeen files outside this
-one, including three code and contract values:
+Deletability is **not yet true**. The operations-dependency behavioural contract now uses the
+vendor-neutral host role `artfi-delivery-link`. The frozen r2 producer's legacy
+role is accepted only by the versioned compatibility boundary; its regression
+tests reject unknown producer roles and prevent the legacy value from becoming
+ArtFi's internal role.
+deployment-specific value. The Agent durable-store contract names the database by the
+`<CLOUD_PROVIDER_A>` role rather than a vendor.
 
-```
-scripts/agent/operations-dependency.mjs        hostRole comparison
-scripts/agent/operations-dependency.contract.json   hostRole value
-scripts/agent/operations-dependency.test.mjs   hostRole fixture
-```
+One executable compatibility exception remains explicit:
+`scripts/release/verify-ye-yongrun-mint-batch.mjs` reads the legacy
+`infrastructureAttestation.abcdyiSshRecovered` field from the already-recorded
+`release/mint-batches/ye-yongrun-unit-a01-a38.intent.json`. That field is historical evidence, not
+a permitted name for a new deployment contract. A future versioned evidence schema must replace it
+with a role-named field; silently renaming the existing evidence would destroy compatibility. Real
+vendor names also remain in historical and operational documents, including a file whose name is a
+vendor name (`docs/CTYUN_MYSQL_DEPLOYMENT_CONTRACT.md`).
 
-Those three are a behavioural contract: changing the value changes what the operations-dependency
-check accepts. The remaining fourteen are documentation, including a file whose name is a vendor
-name (`docs/CTYUN_MYSQL_DEPLOYMENT_CONTRACT.md`).
-
-Until those are consolidated here, deleting this file removes the binding table but **not** the
-vendor names elsewhere. Recorded as a known deviation rather than presented as satisfied.
+Until those documents and the versioned compatibility field are consolidated, deleting this file
+removes the binding table but **not** every vendor name elsewhere. Recorded as a known deviation
+rather than presented as satisfied.

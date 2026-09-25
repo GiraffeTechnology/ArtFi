@@ -444,6 +444,22 @@ evidence only. The local merge and documentation heads still need fresh CI and i
 evidence. **No count or status moves:** XM.3 remains `IMPLEMENTED-NOT-VERIFIED`, and no live
 provider connection is claimed.
 
+### 2026-09-19 — `codex/vendor-neutral-operations-20260919`: neutral operations host role
+
+Issue #110 §4 and the 2026-09-19 vendor-neutral operations ruling require deployable behaviour to
+name infrastructure by role rather than bind it to the current vendor. The operations-dependency
+contract uses `artfi-delivery-link` internally; the frozen r2 producer role is
+accepted only at an explicit schema-v2 compatibility boundary, while validation
+and regression tests reject unknown producer roles and any legacy internal role
+deployment-specific host role. The contract remains fail-closed and
+`PARTIAL_INPUT_READY_NOT_7X24`: no capability, readiness gate or production claim changes.
+
+Remaining consolidation is not documentation-only. The Agent durable-store source and schema now
+use the `<CLOUD_PROVIDER_A>` role, while the mint-batch verifier still consumes the historical
+`abcdyiSshRecovered` evidence field as an explicit immutable compatibility exception.
+`docs/DEPLOYMENT_ENVIRONMENT.md` records that executable schema debt and the remaining
+documentation debt. **No count or status moves.**
+
 ### 2026-09-19 — `claude/ci-all-pr-6dytk9`: fixture disclosure and holder authority
 
 Two surfaces of the same problem: what a reader is entitled to believe from a page.
