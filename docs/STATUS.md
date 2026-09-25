@@ -196,6 +196,20 @@ comes from. No rule is new and no status is promoted by the act of listing it.
 > the receipts have not been filed against a reviewed commit (`ACCEPTANCE.md` §3). Close-out in
 > `TESTPLAN_HOODI_CHARITY.md` §12.
 
+> **Charity runtime, 2026-09-25.** A delivery-side report summarises a Hoodi run on candidate
+> `c55852d`, contract `0x2395c8f4eb2847199a61b83ff7857718990ef85b`. **Its own conclusion is that
+> A–I did not all pass.** Steps A, C, D, F1, G1–G6 and H1–H4 ran: the holder gate refused an
+> unauthenticated request, a zero-balance wallet, a grant reused across tokens, a digest collision,
+> a swapped private object and an unset store, serving no bytes in any of them, and a verified
+> holder received the watermarked file rather than the master. B is
+> `EVIDENCE_COLLECTED_PENDING_RECONCILIATION`, E is observation only, F2 is blocked on the delivery
+> side's browser environment, and I passes only for a later fix batch. **No row above moves.** The
+> report carries SHA-256 of evidence files held off-repository but **no transaction hash for any
+> step**, which §7 of the plan asks for, so nothing on chain is checkable here; `CH.5` is the
+> benefit end to end and F2 is what would show it. H5's mismatch was a defect in the plan, not the
+> product — `_update` is deliberately not pausable so a pause never freezes a holder (`PRD.md`
+> §4.2) — and the plan is corrected. Detail in `TESTPLAN_HOODI_CHARITY.md` §13.
+
 **CH.5, CH.6 and CH.8 are the product.** The contract and release layers were always the strongest part of this module; the buyer-facing half now exists as a surface — catalog, edition
 page, rights disclosure, verification and gated delivery. What remains missing is not code but
 configuration and a deployment: no environment holds a descriptor store or an object store, so

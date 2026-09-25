@@ -338,7 +338,17 @@ can produce. Stop and report it immediately.**
 2. `recordSellout` — must now succeed. **Capture the receipt** (`CH.3`).
 3. `recordPhysicalDonation` — must now succeed. **Capture the receipt** (`CH.4`).
 4. `recordPhysicalDonation` again — must revert `PhysicalDonationAlreadyRecorded` (`CH.4`).
-5. `pause`, then attempt a series creation and a transfer; both must be blocked. `unpause`.
+5. `pause`. A series creation **must** be blocked. A holder transfer **must still succeed** — the
+   pause stops new issuance and must never freeze a token someone already holds. Then `unpause`.
+
+> **Corrected after the run. This step previously asserted the opposite, and it was wrong.** It
+> read "attempt a series creation and a transfer; both must be blocked". `_update` in
+> `ArtFiCharityEditions` is deliberately **not** `whenNotPaused`, and
+> `CharityEditions.t.sol::testPauseBlocksCreationAndRecordsButNeverFreezesAHolder` exists to hold
+> that line: `PRD.md` §4.2 forbids an administrative action from holding authority over a user's
+> asset, and `ACCEPTANCE.md` §4.1 leaves no one to unpause. **A product that satisfied the old
+> assertion would have been the defect.** The run's `FAIL_PLAN_EXPECTATION_MISMATCH_RECOVERED` was
+> the correct call, and so was refusing to record it as a product defect.
 
 ### I — A release package for the series you created
 
@@ -528,3 +538,71 @@ One complete A–I run on the current commit, reported per §7, then a separate 
 The `VD.3` payload is the only prerequisite still missing, and producing it is the delivery side's
 (`PRD.md` §7.0). Nothing else is waiting on anything: no client decision is open on this module, and
 the supervision side has no further code to write for it until a run says otherwise.
+
+---
+
+## 13. The run of 2026-09-25 — what it establishes
+
+Delivery-side report, contract `0x2395c8f4eb2847199a61b83ff7857718990ef85b` on Hoodi, candidate
+`c55852d`. **Its own conclusion is that A–I did not all pass**, and it states that it summarises
+existing execution records rather than being a new run. That reading is taken as given here.
+
+### 13.1 Steps
+
+| Step    | Outcome                                                                                                          |
+| ------- | ---------------------------------------------------------------------------------------------------------------- |
+| A, C, D | Executed. Series created at supply 100 and 0.01 ETH; four expected rejections recorded                           |
+| B       | `EVIDENCE_COLLECTED_PENDING_RECONCILIATION` — **not a pass**. A later PASS write was auto-rejected               |
+| E       | Observations recorded at 1440×1000 and 390×844. Recorded as observation, **not a pass**                          |
+| F1      | Transfer succeeded                                                                                               |
+| F2      | **BLOCKED.** No real wallet UI loop. Current stop is a browser preflight failure before any tab opens            |
+| G1–G6   | All six fail-closed paths behaved: 403 on zero balance, 401 cross-token, 409 on collision and on swap, 503 unset |
+| H1–H4   | Sellout and donation lifecycle recorded, duplicate donation rejected                                             |
+| H5      | Plan-expectation mismatch. **The plan was wrong, not the product** — corrected in step H above                   |
+| I       | Original batch failed; a later candidate passes 8/8 offline cases, scoped to that batch only                     |
+
+### 13.2 What it does not let us do
+
+**No `CH` row moves, and three reasons are each sufficient.**
+
+1. **No transaction hash appears anywhere in the report.** §7 asks for "transaction hashes and
+   receipts" per step; what is supplied is SHA-256 of evidence _files_ held on the delivery side's
+   own machine. Those are citations to artifacts this repository cannot see, so nothing on chain can
+   be checked here even in principle.
+2. **B is unreconciled and F2 is blocked.** `CH.5` is the holder benefit _end to end_, and
+   `PRD.md` §3.2.1 measures delivery by what a user can carry out from the UI. G3 proves the API
+   and the gate; it is explicitly not the wallet loop, and the report is right to keep them apart.
+3. **`ACCEPTANCE.md` §3.** Promotion is a decision against a reviewed commit, and evidence that
+   cannot be inspected is not evidence for it.
+
+### 13.3 What it does establish, and it is not small
+
+The fail-closed behaviour of the holder gate ran on a real chain for the first time: unauthenticated
+refused, a zero-balance wallet refused, a grant for one token refused on another, a digest collision
+refused, a swapped private object refused with no bytes served, an unset store refused. The file a
+verified holder received matched the watermarked copy and not the master. Supply was fixed at 100
+and both duplicate paths reverted; the sellout and donation lifecycle ran in order and rejected a
+replay.
+
+That is `CH.1`, `CH.3`, `CH.4`, `CH.6` and `CH.11` exercised at runtime, and the gate half of
+`CH.5`. It is recorded here so the next run starts from it rather than repeating it.
+
+### 13.4 What is still open, and whose it is
+
+| Item                            | Owner      | Note                                                                                      |
+| ------------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
+| Transaction hashes for A–H      | delivery   | §7 asks for them; without them nothing is checkable here                                  |
+| B reconciliation                | delivery   | A process step on their side; the raw observations were all successes                     |
+| F2 real wallet UI               | delivery   | Blocked on their browser environment                                                      |
+| A WalletConnect project ID      | **client** | Only if WalletConnect is the route. This is a **missing input**, not a technical question |
+| `VD.3` payload markers, place 1 | delivery   | §7.0's first place; still `NOT-IMPLEMENTED`                                               |
+
+**Nothing here is a product defect.** The one defect the run surfaced was in this document, and it
+is fixed in step H.
+
+> **On the wallet connector.** `wagmi.ts` configures `injected()` only, which is a legitimate
+> choice and not a defect; the run could not drive it because that environment has no injected
+> wallet. Adding a second connector is a scope item with an external dependency, so it is reported
+> rather than taken: a public WalletConnect project ID is something the client's side supplies, and
+> `AGENTS.md` §5 separates a missing input from a decision. Until one exists, F2 stays blocked and
+> that is not a reason to hold anything else.
