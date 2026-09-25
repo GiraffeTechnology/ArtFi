@@ -163,7 +163,6 @@ No audit, review, refactor, architecture exercise, or governance activity may in
 
 ---
 
-
 ### Current S-XM checkpoint (2026-09-20)
 
 This is an operational handoff record, not a new source of product scope or a delivery claim.
