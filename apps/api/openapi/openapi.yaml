@@ -208,6 +208,32 @@ paths:
         "200": { description: Idempotent replay accepted }
         "401": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /v1/indexer/market-snapshots:
+    post:
+      operationId: ingestExternalMarketSnapshot
+      description: Atomically commits a complete NDJSON marketplace snapshot; any invalid or interrupted line rolls back the whole snapshot, while an empty body records a valid zero-event cutover.
+      parameters:
+        - name: X-Indexer-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16 }
+      requestBody:
+        required: true
+        content:
+          application/x-ndjson:
+            schema:
+              type: string
+              description: One ExternalMarketEventRequest JSON object per line.
+      responses:
+        "201":
+          {
+            description: Complete external marketplace snapshot committed atomically,
+          }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "415": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /v1/market/activity:
     get:
       operationId: getExternalMarketActivity
