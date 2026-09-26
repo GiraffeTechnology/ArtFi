@@ -210,6 +210,22 @@ comes from. No rule is new and no status is promoted by the act of listing it.
 > product — `_update` is deliberately not pausable so a pause never freezes a holder (`PRD.md`
 > §4.2) — and the plan is corrected. Detail in `TESTPLAN_HOODI_CHARITY.md` §13.
 
+> **CI has not executed on this repository since 2026-09-19, and `8af87e8` was merged on local
+> evidence.** Every `quality` run from 276 to 307 failed, across every branch and every triggering
+> actor — the Codex branches, dependabot, and `main`'s own two README commits (runs 299 and 300).
+> The signature is identical each time: `runner_id: 0`, no runner name, no `steps`, two seconds, and
+> HTTP 404 for every job's log, so **no runner was ever assigned and nothing was ever executed.**
+> That rules out the workflow file: an unresolvable action reference would assign a runner and log
+> the failure. It is an account-level condition, outside this repository, and it blocks every pull
+> request including #114.
+>
+> Client decision of 2026-09-26: keep the merge and run the full workflow on `main` once CI is
+> restored, rather than revert. **Until that run exists, nothing here is CI-verified.** The local
+> evidence behind the merge is forge 135, vitest 125, playwright 118 with 2 skips on desktop and
+> mobile, `go vet` / `gofmt` / `go test -race`, and every format, lint, typecheck, build, secret,
+> chain-consistency and release-verifier gate; the MySQL migration job was not run, for want of a
+> container runtime. **No status value moved on any of it.**
+
 **CH.5, CH.6 and CH.8 are the product.** The contract and release layers were always the strongest part of this module; the buyer-facing half now exists as a surface — catalog, edition
 page, rights disclosure, verification and gated delivery. What remains missing is not code but
 configuration and a deployment: no environment holds a descriptor store or an object store, so
