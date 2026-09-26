@@ -226,6 +226,20 @@ comes from. No rule is new and no status is promoted by the act of listing it.
 > chain-consistency and release-verifier gate; the MySQL migration job was not run, for want of a
 > container runtime. **No status value moved on any of it.**
 
+> **#114 and #115 are back in, by client decision of 2026-09-26.** They were merged, then reverted
+> here because `AGENTS.md`'s S-XM checkpoint — which arrived as part of #114's own content — states
+> that #114 "is not ready to merge or hand over", on three accepted, unresolved review findings. The
+> client directed that they not be split out, so the reverts are reverted and both are included
+> again. **That checkpoint text is still in `AGENTS.md` and still says what it says**; it is recorded
+> here rather than edited, because the decision to proceed is the client's and the record of the
+> open findings is Codex's. The three findings are unchanged by this merge.
+>
+> Restoring them changed nothing in the operations surface — `operations/page.tsx`,
+> `operations-status.tsx`, `ops-checks.ts` and their spec are byte-identical across the restore. One
+> `operations-status` case failed once in a full-suite run and then passed 12 of 12 across three
+> repeats; it aborts routes, so it is a race in the test, not a regression. Not touched here:
+> changing someone else's passing test is not part of a restore.
+
 **CH.5, CH.6 and CH.8 are the product.** The contract and release layers were always the strongest part of this module; the buyer-facing half now exists as a surface — catalog, edition
 page, rights disclosure, verification and gated delivery. What remains missing is not code but
 configuration and a deployment: no environment holds a descriptor store or an object store, so
