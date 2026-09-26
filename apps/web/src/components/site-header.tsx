@@ -7,9 +7,11 @@ import { WalletButton } from "./wallet-button";
 const navigation = [
   ["Overview", "/"],
   ["Market mirror", "/market/rwa"],
+  ["Charity", "/charity"],
   ["Mint", "/create/rwa"],
   ["Wallet", "/portfolio"],
   ["DAO", "/dao"],
+  ["Operations", "/operations"],
 ] as const;
 
 export function SiteHeader() {

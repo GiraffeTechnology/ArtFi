@@ -29,19 +29,88 @@ const allowedBases = new Set([
 ]);
 const allowedMedia = new Set(["image/jpeg", "image/png", "image/webp"]);
 
+/**
+ * The formal set — `PRD.md` §8.4: `UNIT-A01` and `UNIT-A03`–`UNIT-A38`, 37 works.
+ *
+ * `UNIT-A02` is withdrawn. It is a test-chain-only fixture in its own namespace, and §8.4 requires
+ * the formal batch to hard-reject it; `ACCEPTANCE.md` §7.9 fails the audit if it reaches the formal
+ * set or any mainnet manifest. The previous `^UNIT-A\\d{2}$` pattern admitted it, along with
+ * `UNIT-A00`, `UNIT-A39` and every other two-digit id that names no work.
+ *
+ * `PRD.md` §4.7 CH.1's narrower 13-work first supply is deliberately **not** enforced here: it
+ * conflicts with the 37 already minted, that conflict is open item 6 and a client decision, and a
+ * verifier that picked a side would decide it.
+ */
+const formalSetArtworkIds = new Set(
+  Array.from({ length: 38 }, (_, index) => index + 1)
+    .filter((unit) => unit !== 2)
+    .map((unit) => `UNIT-A${String(unit).padStart(2, "0")}`),
+);
+
+/**
+ * Two payloads, two chains — `PRD.md` §7.0.
+ *
+ * The real batch lives on Sepolia and is frozen. The test payload lives on Hoodi, carries no
+ * real-world value and no legal effect, and must never borrow the real batch's namespace. This
+ * verifier accepted only the first, so a Hoodi package was rejected on its chain id and again on
+ * its artwork id — step I of the Hoodi plan could not pass at all. Both are chain-dependent, so
+ * they branch here rather than being loosened for everyone.
+ */
+const realBatchChainId = 11_155_111;
+const testPayloadChainId = 560_048;
+const isTestPayload = manifest.chainId === testPayloadChainId;
+
 if (
   manifest.schemaVersion !== 1 ||
-  manifest.chainId !== 11_155_111 ||
+  (manifest.chainId !== realBatchChainId && !isTestPayload) ||
   manifest.standard !== "ERC-1155" ||
   manifest.marketplaceMode !== "external-mirror" ||
   manifest.artfiExchangeEnabled !== false
 ) {
   throw new Error(
-    "charity editions must target Sepolia ERC-1155 in external-mirror mode",
+    "charity editions must target the Sepolia real batch or the Hoodi test payload, ERC-1155 in external-mirror mode",
   );
 }
+if (manifest.series?.artworkId === "UNIT-A02") {
+  throw new Error(
+    "UNIT-A02 is withdrawn from the formal set and must never enter a release manifest",
+  );
+}
+
+/**
+ * §7.0's fourth place for the test-asset markers: a top-level field in the batch manifest.
+ *
+ * Required on the test payload and **forbidden on the real batch** — a frozen record of real
+ * assets that declared itself of no real-world value would be false, and the 37 existing packages
+ * carry no such field. §5 rule 1 of the Hoodi plan is enforced here too: the test payload gets its
+ * own namespace and may not reuse the real batch's `UNIT-` ids.
+ */
+const testAssetMarkers = ["TESTNET", "NO REAL-WORLD VALUE", "NO LEGAL EFFECT"];
+if (isTestPayload) {
+  const declared = manifest.testAssetMarkers;
+  if (
+    !Array.isArray(declared) ||
+    testAssetMarkers.some((marker) => !declared.includes(marker))
+  ) {
+    throw new Error(
+      `a test payload must declare testAssetMarkers containing ${testAssetMarkers.join(", ")} (PRD.md §7.0)`,
+    );
+  }
+  if (String(manifest.series?.artworkId ?? "").startsWith("UNIT-")) {
+    throw new Error(
+      "a test payload must not reuse the real batch's UNIT- artwork namespace (PRD.md §7.0)",
+    );
+  }
+} else if (manifest.testAssetMarkers !== undefined) {
+  throw new Error(
+    "the real batch must not declare test-asset markers; it records real assets (PRD.md §7.0)",
+  );
+}
+
 if (
-  !/^UNIT-A\d{2}$/.test(manifest.series?.artworkId ?? "") ||
+  (!isTestPayload &&
+    !formalSetArtworkIds.has(manifest.series?.artworkId ?? "")) ||
+  !manifest.series?.artworkId ||
   manifest.series?.editions !== 100 ||
   manifest.series?.unitPriceWei !== "10000000000000000" ||
   manifest.series?.currency !== "ETH" ||
@@ -75,7 +144,15 @@ if (
   manifest.holderAsset?.generatedPerHolder !== true ||
   manifest.holderAsset?.publicUri !== null ||
   manifest.holderAsset?.unwatermarkedAvailable !== false ||
-  manifest.holderAsset?.preview !== false
+  manifest.holderAsset?.preview !== false ||
+  // The holder-file binding is optional — the 37 frozen packages predate it and stay valid
+  // (`AGENTS.md` §6: historical mint evidence is immutable) — but half of it never is.
+  (manifest.holderAsset?.file === undefined) !==
+    (manifest.holderAsset?.sha256 === undefined) ||
+  (manifest.holderAsset?.file !== undefined &&
+    typeof manifest.holderAsset.file !== "string") ||
+  (manifest.holderAsset?.sha256 !== undefined &&
+    !hashPattern.test(manifest.holderAsset.sha256))
 ) {
   throw new Error(
     "holder delivery must be per-holder, token-gated, watermarked, and unavailable publicly",
@@ -168,12 +245,25 @@ if (
     "CCHS must receive all proceeds and remain the sole receipt decision-maker using approved public donation-received-time ETH/CAD evidence",
   );
 }
+// The directory is the real batch's, whatever the filename under it. Matching on the longer
+// `…/UNIT-A` prefix would let a test payload sit in the frozen record's own folder just by being
+// named differently.
+const realBatchMetadataDirectory =
+  "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/";
+const realBatchMetadataPrefix = `${realBatchMetadataDirectory}UNIT-A`;
+const publicURI = manifest.metadata?.publicURI;
 if (
-  typeof manifest.metadata?.publicURI !== "string" ||
-  !manifest.metadata.publicURI.startsWith(
-    "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A",
-  ) ||
-  !manifest.metadata.publicURI.endsWith(".json") ||
+  typeof publicURI !== "string" ||
+  // The real batch publishes under its own fixed path. The test payload must not: reusing it
+  // would put a test asset where the frozen record lives (`PRD.md` §7.0). It still has to be
+  // HTTPS and still has to name its own work.
+  (isTestPayload
+    ? publicURI.startsWith(realBatchMetadataDirectory) ||
+      !publicURI.startsWith("https://")
+    : !publicURI.startsWith(realBatchMetadataPrefix)) ||
+  // Bound to this manifest's own artwork: the prefix and a bare `.json` suffix let a package
+  // declare one work and publish another work's metadata.
+  !publicURI.endsWith(`/${manifest.series.artworkId}.json`) ||
   typeof manifest.metadata?.description !== "string" ||
   !Array.isArray(manifest.metadata?.attributes)
 ) {
@@ -195,6 +285,23 @@ if (
 ) {
   throw new Error(
     "an immutable, full-text, SHA-256-bound ArtCCH:ArtFi NFT terms inscription is required",
+  );
+}
+
+/**
+ * CH.11 at packaging time: the watermarked holder file and the master must differ by hash.
+ *
+ * `charity-assets.ts` and `charity-object-store.ts` already enforce this at delivery time. This is
+ * the packaging half, and it is checked here — before `--schema-only` exits — because a declared
+ * digest that equals the master's is a fault in the manifest itself, not in the files beside it.
+ */
+if (
+  manifest.holderAsset?.sha256 !== undefined &&
+  manifest.holderAsset.sha256.toLowerCase() ===
+    (manifest.artwork?.masterSha256 ?? "").toLowerCase()
+) {
+  throw new Error(
+    "the watermarked holder file must not hash to the master: a package declaring both as one object is declaring the master as the holder benefit",
   );
 }
 
@@ -228,6 +335,21 @@ if (mode === "--local-assets") {
     throw new Error(
       "master artwork signature does not match its declared media type",
     );
+  }
+  if (manifest.holderAsset.file !== undefined) {
+    const holderFile = verifyFile(
+      manifestDirectory,
+      manifest.holderAsset.file,
+      manifest.holderAsset.sha256,
+      10 << 20,
+      "watermarked holder file",
+    );
+    // Proven against the bytes, not only against the two declared digests.
+    if (holderFile.sha256 === master.sha256) {
+      throw new Error(
+        "the watermarked holder file is byte-identical to the master",
+      );
+    }
   }
 }
 const inscriptionTerms = verifyFile(
@@ -326,6 +448,14 @@ process.stdout.write(
   `${JSON.stringify({
     artworkId: manifest.series.artworkId,
     masterArtworkSha256: manifest.artwork.masterSha256,
+    // `null` means the package carries no holder-file binding, so CH.11's packaging half could not
+    // be proven for it. A reviewer sees the absence rather than an unexplained pass.
+    holderAssetSha256: manifest.holderAsset.sha256 ?? null,
+    holderAssetDistinctFromMaster:
+      manifest.holderAsset.sha256 === undefined
+        ? null
+        : manifest.holderAsset.sha256.toLowerCase() !==
+          manifest.artwork.masterSha256.toLowerCase(),
     metadataSha256,
     canonicalMetadata,
   })}\n`,

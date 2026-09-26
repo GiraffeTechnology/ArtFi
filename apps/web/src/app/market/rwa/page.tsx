@@ -15,8 +15,10 @@ export default function RwaMarketPage() {
         <p className="approved-eyebrow">Market mirror</p>
         <h1>Live market signals.</h1>
         <p>
-          Read-only listings and sale context from approved external venues.
-          ArtFi does not provide an OpenSea redirect, transaction initiation,
+          Read-only listings and sale context from approved external venues,
+          each attributed to its source with the time it was observed, how fresh
+          that observation is, and the venue link the source reported. Execution
+          completes on the venue: ArtFi initiates no transaction and performs no
           wallet submission, matching, custody or settlement.
         </p>
       </header>

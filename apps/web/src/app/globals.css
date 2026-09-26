@@ -1267,7 +1267,8 @@ p {
   width: 16px;
   height: 16px;
 }
-.market-mirror-card {
+.market-mirror-card,
+.charity-edition-card {
   width: 100%;
   min-width: 0;
   overflow: hidden;
@@ -1297,7 +1298,8 @@ p {
   font-size: 11px;
   text-transform: uppercase;
 }
-.market-mirror-card__body {
+.market-mirror-card__body,
+.charity-edition-card {
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -1467,6 +1469,15 @@ p {
   font-size: 0.85rem;
 }
 
+/* The attributed venue link (#110 §2 XM.4). It leaves ArtFi, so it is marked as leaving. */
+.market-venue-link {
+  align-self: start;
+  font-size: 0.9rem;
+}
+.market-venue-link::after {
+  content: " ↗";
+}
+
 .market-intent-panel dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1522,20 +1533,21 @@ p {
   font-size: 13px;
   line-height: 1.4;
 }
+/* A wrapping grid rather than a single flex row: XM.4 puts source, order, order ID, observed time
+   and freshness on every record, and a row that cannot wrap clips the last of them off the card. */
 .market-mirror-card dl {
   margin: 0;
   padding-top: 14px;
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 14px 24px;
   border-top: 1px solid var(--line);
   font-family: "IBM Plex Mono", Consolas, monospace;
   font-size: 12px;
   text-transform: uppercase;
 }
-.market-mirror-card dl div:last-child {
-  color: var(--wall-red);
-  text-align: right;
+.market-mirror-card dd {
+  overflow-wrap: anywhere;
 }
 .market-mirror-card dd {
   margin: 5px 0 0;
@@ -1617,7 +1629,8 @@ p {
   margin: 0;
   font-size: 17px;
 }
-.market-mirror-grid {
+.market-mirror-grid,
+.charity-edition-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
@@ -2300,5 +2313,202 @@ p {
   .nft-standard-card,
   .wallet-dao-link {
     padding: 22px;
+  }
+}
+
+/* Charity editions (#110 §2 CH.5 to CH.9).
+   The visual language is the client's, being redone in Figma; delivery is verified on function.
+   So this holds only what has no equivalent above — the grids, cards and fact tiles join the
+   existing rules rather than restating them, and nothing here reserves space for an artwork image,
+   because a charity edition publishes no preview. */
+.charity-catalog,
+.charity-detail {
+  display: grid;
+  gap: 32px;
+}
+.charity-edition-grid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.charity-edition-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.charity-rights-notice {
+  padding: 22px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+.charity-holder-access {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  justify-items: start;
+}
+.charity-holder-access__message {
+  padding: 12px 14px;
+  border-left: 3px solid var(--ink);
+  background: var(--white);
+}
+.charity-digest {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  .charity-edition-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .charity-edition-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Operator status table (#110 §2 M6.3, read-only). Nothing here renders an endpoint or a host. */
+.ops-status {
+  display: grid;
+  gap: 24px;
+}
+.ops-status .market-runtime-state button {
+  justify-self: start;
+}
+.ops-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.ops-table caption {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+}
+.ops-table th,
+.ops-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.ops-table thead th {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ops-table td[data-state] {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  text-transform: uppercase;
+}
+.ops-table td[data-state="unavailable"],
+.market-runtime-state[data-state="unavailable"] strong {
+  color: var(--wall-red);
+}
+
+@media (max-width: 680px) {
+  .ops-table,
+  .ops-table tbody,
+  .ops-table tr,
+  .ops-table th,
+  .ops-table td {
+    display: block;
+  }
+  .ops-table thead {
+    display: none;
+  }
+  .ops-table tr {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .ops-table th,
+  .ops-table td {
+    padding: 4px 0;
+    border: 0;
+  }
+}
+
+/* Prototype-data disclosure and holder authority (AGENTS.md §5; PRD.md §1.0.5). */
+.prototype-notice {
+  margin: 0 0 32px;
+  padding: 16px 18px;
+  border-left: 3px solid var(--wall-red);
+  background: var(--paper);
+  font-size: 14px;
+}
+.prototype-notice strong {
+  display: block;
+  margin-bottom: 8px;
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--wall-red);
+}
+.prototype-notice ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  max-width: 82ch;
+}
+.holder-authority {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+.holder-authority h2 {
+  margin: 0 0 12px;
+  font-size: 26px;
+}
+.holder-authority > p {
+  max-width: 78ch;
+  margin: 0 0 20px;
+  font-size: 15px;
+}
+.holder-authority table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.holder-authority th,
+.holder-authority td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.holder-authority thead th {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@media (max-width: 680px) {
+  .holder-authority table,
+  .holder-authority tbody,
+  .holder-authority tr,
+  .holder-authority th,
+  .holder-authority td {
+    display: block;
+  }
+  .holder-authority thead {
+    display: none;
+  }
+  .holder-authority tr {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .holder-authority th,
+  .holder-authority td {
+    padding: 4px 0;
+    border: 0;
   }
 }
