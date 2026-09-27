@@ -358,6 +358,41 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 
 ## Change log
 
+### 2026-09-27 — `claude/ci-all-pr-6dytk9`: the three open mirror findings (stage `S-XM`)
+
+`AGENTS.md`'s S-XM checkpoint recorded PR #114 as not ready to hand over on three accepted review
+findings that were never fixed: ordered checkpoint/spool cleanup (`4056400240`), recovery overlap
+boundaries (`4056400243`), and aborting the initial REST crawl on fatal realtime failure
+(`4056400246`). All three are in `apps/market-mirror/src/opensea.ts`, and all three are now closed.
+
+**Finalization is ordered.** The checkpoint is the pointer and the spool is the payload, so the
+pointer goes first and the payload only once the pointer is gone. Removing them concurrently could
+leave a checkpoint naming a spool that no longer existed, and every later start then failed at the
+spool's existence check — the mirror could not run again until someone repaired the directory by
+hand. An orphaned pointer is now discarded and the snapshot re-derived, because the spool is staging
+and never an authority.
+
+**Recovery overlap stops at the newest committed page.** A collection is paged from its head
+downwards, so keeping one boundary per collection kept its oldest page and restart walked back over
+nearly the whole committed history before it recognised anything. Every retained boundary now counts.
+
+**The initial REST crawl is abortable.** Aborting the snapshot upload stops publication of what is
+staged and does nothing to a crawl still fetching pages while it holds the durable writer lock. The
+crawl has its own signal now, which the fatal stream path aborts.
+
+Evidence: four regressions in `opensea.test.ts` — `keeps the durable spool when the checkpoint
+cannot be removed`, `re-derives a snapshot when the checkpoint outlives its spool`, `stops recovery
+overlap at the newest committed page boundary`, `aborts the initial REST crawl when the stream
+becomes fatal` — each checked by mutation, so reverting the change it covers makes that test fail.
+Mirror 49/49, Web 125/125, Playwright 118 passed with 2 intentional skips, Forge 135/135,
+`gofmt`/`go vet`/`go test -race` and the Go API suite, format, lint, typecheck, build, and the
+security, agent, release and chain-consistency gates. `forge lint --severity high` is clean after a
+mock ERC20 transfer return value was checked in `FractionSaleIntent.t.sol`.
+
+**No count or status moves.** XM.3 keeps `IMPLEMENTED-NOT-VERIFIED`. The MySQL migration job needs a
+container runtime and was not run here; managed TEST_ONLY database execution and a live OpenSea
+stream/disconnect-reconnect run remain NOT RUN, and independent review of this head has not happened.
+
 ### 2026-09-19 — `claude/ci-all-pr-6dytk9`: the charity Hoodi test plan
 
 `TESTPLAN_HOODI_CHARITY.md` — the executable sequence for the one thing this side cannot do, since
