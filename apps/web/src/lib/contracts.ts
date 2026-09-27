@@ -420,6 +420,170 @@ export const wholeArtworkMarketAbi = [
   },
 ] as const;
 
+/**
+ * `ArtFiMarket` — signature settlement for fractions.
+ *
+ * The fixed-price path the client ruling of 2026-08-30 moved off escrow (`PRD.md` §4.2.2). The
+ * `SaleIntent` tuple's field order is part of the EIP-712 type hash: it must match
+ * `SALE_INTENT_TYPEHASH` in `ArtFiMarket.sol` and `fractionIntentTypes` in `fraction-intent.ts`,
+ * and all three are pinned by the same fixed digest in the Solidity and browser suites.
+ *
+ * Only the signature-settlement surface is declared here. Auctions keep escrow under the same
+ * ruling and have their own path in the contract; nothing on this screen reaches them.
+ */
+export const artFiFractionMarketAbi = [
+  {
+    type: "function",
+    name: "fillIntent",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "intent",
+        type: "tuple",
+        components: [
+          { name: "seller", type: "address" },
+          { name: "assetToken", type: "address" },
+          { name: "paymentToken", type: "address" },
+          { name: "maxAmount", type: "uint256" },
+          { name: "unitPrice", type: "uint256" },
+          { name: "buyer", type: "address" },
+          { name: "salt", type: "uint256" },
+          { name: "startsAt", type: "uint48" },
+          { name: "endsAt", type: "uint48" },
+          { name: "epoch", type: "uint256" },
+        ],
+      },
+      { name: "signature", type: "bytes" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "revokeIntent",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "intent",
+        type: "tuple",
+        components: [
+          { name: "seller", type: "address" },
+          { name: "assetToken", type: "address" },
+          { name: "paymentToken", type: "address" },
+          { name: "maxAmount", type: "uint256" },
+          { name: "unitPrice", type: "uint256" },
+          { name: "buyer", type: "address" },
+          { name: "salt", type: "uint256" },
+          { name: "startsAt", type: "uint48" },
+          { name: "endsAt", type: "uint48" },
+          { name: "epoch", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "incrementSellerEpoch",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "sellerEpoch",
+    stateMutability: "view",
+    inputs: [{ name: "seller", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "intentFilled",
+    stateMutability: "view",
+    inputs: [{ name: "intentHash", type: "bytes32" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "allowedAssetToken",
+    stateMutability: "view",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "allowedPaymentToken",
+    stateMutability: "view",
+    inputs: [{ name: "token", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    // The pilot spend limit a buyer is subject to. Read so the surface can say a fill would be
+    // refused before asking for a transaction that reverts with `PilotCapExceeded`.
+    type: "function",
+    name: "pilotPaymentCap",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "paymentToken", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "pilotPaymentUsed",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "paymentToken", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "paused",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+/**
+ * The ERC-20 reads and the one write the fraction settlement surface needs.
+ *
+ * Both legs of a fill are ERC-20 transfers, so the same shape serves the fraction token and the
+ * payment token.
+ */
+export const fractionTokenAbi = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "value", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
 /** The reads the listing surface needs from the artwork's ERC-721 contract. */
 export const wholeArtworkCollectionAbi = [
   {

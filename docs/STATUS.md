@@ -358,6 +358,53 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 
 ## Change log
 
+### 2026-09-27 — `claude/ci-all-pr-6dytk9`: the fraction settlement screen (stage `S-FR`)
+
+`PRD.md` §3.2 makes a stage deliverable when its function is operable from a screen, desktop and
+mobile. The signature-settled fixed-price path that the client ruling of 2026-08-30 requires
+(`PRD.md` §4.2.2) was on chain in `ArtFiMarket.sol` with **nothing reaching it** — the fraction page
+said so in as many words: "Fraction trading has no screen yet". Under §3.2 that is progress, not a
+handover. It has a screen now.
+
+**What it does.** A holder authorizes a sale of up to some number of fractions by signing EIP-712
+terms; a buyer settles part or all of it. The fractions never leave the holder's wallet in between,
+ArtFi is never counterparty, and nothing on the surface can move a holder's tokens without the
+signature they produced for that fill. Partial fills are the difference from the whole-artwork
+surface: one signature settles cumulatively up to its maximum, so both sides see what is left, and
+the holder can retire one authorization (`revokeIntent`) or all of them
+(`incrementSellerEpoch`) — neither blocked by an administrative pause.
+
+**What it refuses to hide**, each being a fill that would otherwise revert with no explanation: the
+token allowlist, the buyer's remaining pilot spend cap, the cumulative fill counter read from chain
+rather than taken from the pasted terms, and the seller's current epoch read the same way. Approval
+is its own step for an **exact** amount on each leg — the seller's allowance covers the authorized
+maximum, the buyer's covers this fill. Never an unlimited approval. With no deployed market or
+fraction token the panel names which prerequisite is missing and offers nothing.
+
+Two corrections to the whole-artwork surface, which is the same shape: its buyer path compared a
+pasted intent's epoch against itself, which can never detect the withdrawal the check exists for, so
+the epoch is now read from chain; and it had no configuration path at all — nothing passes a
+collection, so no deployment could have switched it on. Both surfaces now read deployment
+configuration as a fallback to their props.
+
+The browser and the contract are pinned to the same digest,
+`0x9de0ca5c018685d7054b96dbce27834375413de39e1ec02bdcbb5862acde3cbf`, asserted in
+`fraction-intent.test.ts` and `FractionSaleIntent.t.sol::testDigestMatchesTheBrowserSigner`. A field
+renamed, reordered or retyped on either side fails a test on both rather than producing a signature
+the market rejects at fill time.
+
+Evidence: `apps/web/src/lib/fraction-intent.ts` with 22 unit tests, `fraction-listing.tsx`, 7 browser
+tests in `e2e/fraction-listing.spec.ts` across desktop and mobile. Web 147/147, Playwright 132 passed
+with 2 intentional skips, Forge 136/136, mirror 49/49, `gofmt`/`go vet`/`go test -race`, format,
+lint, typecheck, build, and the security, agent, release and chain-consistency gates.
+
+**No count or status moves.** M2.4–M2.9 stay `NOT-IMPLEMENTED`: a signature that lives in one browser
+is not an order store, an order lifecycle service or a matching engine, and the panel says so on
+screen rather than implying a live book. M3.1 stays `NOT-IMPLEMENTED` — auctions keep escrow under
+the same ruling and no surface here reaches them. The fixture figures on the fraction page are
+unchanged and stay labelled; M3.7 is untouched. Nothing is promoted, and no live settlement has been
+observed on any chain.
+
 ### 2026-09-27 — `claude/ci-all-pr-6dytk9`: the three open mirror findings (stage `S-XM`)
 
 `AGENTS.md`'s S-XM checkpoint recorded PR #114 as not ready to hand over on three accepted review

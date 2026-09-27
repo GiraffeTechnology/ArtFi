@@ -82,10 +82,15 @@ const problemLabels: Record<string, string> = {
   "chain-mismatch": `Connect to ${supportedChain.name} to sign for this market.`,
 };
 
+function configuredAddress(value: string | undefined): Address | undefined {
+  const trimmed = value?.trim();
+  return trimmed && isAddress(trimmed) ? (trimmed as Address) : undefined;
+}
+
 function marketAddress(): Address | undefined {
-  const configured =
-    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS?.trim();
-  return configured && isAddress(configured) ? configured : undefined;
+  return configuredAddress(
+    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS,
+  );
 }
 
 /** Serializes an intent plus its signature for the holder to hand to a buyer. */
@@ -164,9 +169,20 @@ export function WholeArtworkListing({
   const [durationHours, setDurationHours] = useState("24");
 
   const market = marketAddress();
+  // The props win, and deployment configuration is the fallback. Without the fallback this surface
+  // could never be switched on at all: nothing passes a collection, so it would stay in its
+  // unconfigured branch however the market itself were deployed.
   const collectionAddress =
-    collection && isAddress(collection) ? (collection as Address) : undefined;
-  const artworkId = tokenId ? BigInt(tokenId) : undefined;
+    configuredAddress(collection) ??
+    configuredAddress(
+      process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS,
+    );
+  const configuredTokenId = (
+    tokenId ?? process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID
+  )?.trim();
+  const artworkId = /^[0-9]+$/.test(configuredTokenId ?? "")
+    ? BigInt(configuredTokenId!)
+    : undefined;
 
   const { data: holder } = useReadContract({
     abi: wholeArtworkCollectionAbi,
@@ -198,6 +214,26 @@ export function WholeArtworkListing({
   const isHolder = Boolean(
     address && holder && address.toLowerCase() === holder.toLowerCase(),
   );
+
+  /**
+   * The buyer's copy of the seller's current epoch, read from chain rather than taken from the text
+   * they were handed. A withdrawal happens after an authorization is written, so the terms can never
+   * report it.
+   */
+  const pastedSeller = useMemo(() => {
+    if (!pasted.trim()) return undefined;
+    const decoded = decodeAuthorization(pasted);
+    return "error" in decoded ? undefined : decoded.intent.seller;
+  }, [pasted]);
+
+  const { data: pastedSellerEpoch } = useReadContract({
+    abi: wholeArtworkMarketAbi,
+    address: market,
+    functionName: "sellerEpoch",
+    args: pastedSeller ? [pastedSeller] : undefined,
+    chainId: supportedChain.id,
+    query: { enabled: Boolean(market && pastedSeller) },
+  });
 
   /**
    * The terms, given the instant the sale opens.
@@ -359,16 +395,21 @@ export function WholeArtworkListing({
       setStage("error");
       return;
     }
+    // The seller's epoch is read from chain, not taken from the pasted terms. Comparing the terms
+    // against themselves would always agree, and the one thing this check exists to catch is a
+    // seller who has withdrawn every authorization since that text was written.
     const state = saleIntentFillable(
       intent,
       Math.floor(Date.now() / 1000),
-      intent.epoch,
+      pastedSellerEpoch ?? intent.epoch,
     );
     if (!state.fillable) {
       setDetail(
         state.reason === "expired"
           ? "This authorization has expired."
-          : "This authorization is not open for settlement.",
+          : state.reason === "superseded"
+            ? "The seller has withdrawn every authorization signed against this epoch."
+            : "This authorization is not open for settlement.",
       );
       setStage("error");
       return;
@@ -389,7 +430,7 @@ export function WholeArtworkListing({
       );
       setStage("error");
     }
-  }, [market, pasted, writeContractAsync]);
+  }, [market, pasted, pastedSellerEpoch, writeContractAsync]);
 
   if (!market || !collectionAddress || artworkId === undefined) {
     return (
