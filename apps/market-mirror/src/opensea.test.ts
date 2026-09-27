@@ -25,6 +25,7 @@ import type {
   MarketEventSink,
   MarketSnapshotSink,
   MarketplaceAdapter,
+  MarketplaceBackfillLease,
   MarketplaceStreamLifecycle,
   NormalizedMarketEvent,
 } from "./adapter.js";
@@ -385,6 +386,258 @@ describe("OpenSea normalization", () => {
         "cursor-page-2",
       ]);
       expect(published.map((event) => event.version)).toEqual([7, 10, 9, 8, 6]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  /**
+   * Recovery overlap must stop at the *newest* committed page, not the oldest.
+   *
+   * The crawl pages a collection from its head downwards, so a collection's
+   * first checkpoint holds its newest page and its last holds its oldest.
+   * Keeping one boundary per collection kept the oldest, and the overlap then
+   * walked back over nearly the whole committed history before it recognised
+   * anything — a spool that fits once but not twice hits ENOSPC on every retry.
+   *
+   * Two committed pages are the smallest case that tells the two readings
+   * apart: the head page here republishes the newest committed event, so a run
+   * that honours every boundary stops on its first overlap request, and one
+   * that honours only the oldest asks for a second page and appends the newest
+   * committed event a second time.
+   */
+  it("stops recovery overlap at the newest committed page boundary", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-newest-boundary-test-"),
+    );
+    const eventWithVersion = (version: number) => ({
+      ...listed,
+      version,
+      payload: {
+        ...listed.payload,
+        event_timestamp: new Date(
+          Date.parse("2026-08-19T04:00:00Z") + version * 1_000,
+        ).toISOString(),
+      },
+    });
+    try {
+      const firstAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          if (cursor === null) {
+            return new Response(
+              JSON.stringify({
+                asset_events: [eventWithVersion(7)],
+                next: "cursor-page-2",
+              }),
+              { status: 200 },
+            );
+          }
+          if (cursor === "cursor-page-2") {
+            return new Response(
+              JSON.stringify({
+                asset_events: [eventWithVersion(6)],
+                next: "cursor-page-3",
+              }),
+              { status: 200 },
+            );
+          }
+          throw new Error("provider interrupted after page two");
+        },
+      });
+      await expect(
+        firstAdapter.backfill(async () => undefined),
+      ).rejects.toThrow("provider interrupted");
+
+      const requestedCursors: Array<string | null> = [];
+      const published: NormalizedMarketEvent[] = [];
+      const resumedAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          requestedCursors.push(cursor);
+          if (cursor === null) {
+            return new Response(
+              JSON.stringify({
+                asset_events: [eventWithVersion(10), eventWithVersion(7)],
+                next: "overlap-page-2",
+              }),
+              { status: 200 },
+            );
+          }
+          if (cursor === "overlap-page-2") {
+            return new Response(
+              JSON.stringify({
+                asset_events: [eventWithVersion(6)],
+                next: "overlap-unused",
+              }),
+              { status: 200 },
+            );
+          }
+          expect(cursor).toBe("cursor-page-3");
+          return new Response(
+            JSON.stringify({ asset_events: [eventWithVersion(5)], next: null }),
+            { status: 200 },
+          );
+        },
+      });
+      await resumedAdapter.backfill(async (event) => {
+        published.push(event);
+      });
+
+      expect(requestedCursors).toEqual([null, "cursor-page-3"]);
+      expect(published.map((event) => event.version)).toEqual([7, 6, 10, 5]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  /**
+   * Finalization removes the checkpoint before the spool it names.
+   *
+   * `checkpoints.ndjson` is the pointer and `events.ndjson` is the payload, so
+   * a one-sided failure must be able to leave an orphaned payload — which the
+   * next start truncates and re-derives — and never a pointer to a payload that
+   * has gone. Removing the two concurrently could leave either.
+   *
+   * The injection is a directory in the checkpoint's place once the deferred
+   * lease is in hand and both handles are closed: `unlink` on a directory
+   * fails, so ordered cleanup stops before touching the payload.
+   */
+  it("keeps the durable spool when the checkpoint cannot be removed", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-ordered-cleanup-test-"),
+    );
+    try {
+      const adapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ asset_events: [listed], next: null }), {
+            status: 200,
+          }),
+      });
+      const lease = await adapter.backfill(async () => undefined, undefined, {
+        deferFinalize: true,
+      });
+      expect(lease).toBeDefined();
+      const snapshotDirectory = join(
+        spoolParentDirectory,
+        (await readdir(spoolParentDirectory))[0]!,
+      );
+      const checkpointPath = join(snapshotDirectory, "checkpoints.ndjson");
+      await rm(checkpointPath);
+      await mkdir(checkpointPath);
+      await writeFile(join(checkpointPath, "blocker"), "not a checkpoint");
+
+      await expect(
+        (lease as MarketplaceBackfillLease).commit(),
+      ).rejects.toThrow();
+      // The payload outlived the failure, so nothing points at a file that is
+      // gone. Both members of the pair are still here.
+      expect((await readdir(snapshotDirectory)).sort()).toEqual([
+        "checkpoints.ndjson",
+        "events.ndjson",
+      ]);
+
+      // And the writer lock was released, so a successor can still start.
+      await rm(checkpointPath, { force: true, recursive: true });
+      const republished: NormalizedMarketEvent[] = [];
+      const successor = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async () =>
+          new Response(JSON.stringify({ asset_events: [listed], next: null }), {
+            status: 200,
+          }),
+      });
+      await successor.backfill(async (event) => {
+        republished.push(event);
+      });
+      expect(republished.map((event) => event.version)).toEqual([7]);
+      await expectStableSnapshotDirectoryClean(spoolParentDirectory);
+    } finally {
+      await rm(spoolParentDirectory, { force: true, recursive: true });
+    }
+  });
+
+  /**
+   * An orphaned checkpoint is recoverable, not terminal.
+   *
+   * If cleanup is interrupted — or its first unlink fails — after the payload
+   * has gone but before the pointer has, every later start used to fail at the
+   * spool's existence check and the mirror could not run again until someone
+   * repaired the directory by hand. The spool is staging and never an
+   * authority, so one repeated crawl is the right answer.
+   */
+  it("re-derives a snapshot when the checkpoint outlives its spool", async () => {
+    const spoolParentDirectory = await mkdtemp(
+      join(tmpdir(), "artfi-opensea-orphan-checkpoint-test-"),
+    );
+    try {
+      const firstAdapter = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          if (cursor === null) {
+            return new Response(
+              JSON.stringify({ asset_events: [listed], next: "cursor-page-2" }),
+              { status: 200 },
+            );
+          }
+          throw new Error("provider interrupted after page one");
+        },
+      });
+      await expect(
+        firstAdapter.backfill(async () => undefined),
+      ).rejects.toThrow("provider interrupted");
+
+      const snapshotDirectory = join(
+        spoolParentDirectory,
+        (await readdir(spoolParentDirectory))[0]!,
+      );
+      await rm(join(snapshotDirectory, "events.ndjson"));
+      expect(await readdir(snapshotDirectory)).toContain("checkpoints.ndjson");
+
+      const requestedCursors: Array<string | null> = [];
+      const republished: NormalizedMarketEvent[] = [];
+      const successor = new OpenSeaAdapter({
+        apiKey: "test-only",
+        collectionSlugs: ["artfi-test"],
+        retryAttempts: 1,
+        spoolParentDirectory,
+        fetchImpl: async (input) => {
+          const cursor = new URL(String(input)).searchParams.get("next");
+          requestedCursors.push(cursor);
+          return new Response(
+            JSON.stringify({ asset_events: [listed], next: null }),
+            { status: 200 },
+          );
+        },
+      });
+      await successor.backfill(async (event) => {
+        republished.push(event);
+      });
+      // The saved cursor went with the payload it described, so the crawl
+      // starts over from the head rather than resuming into a gap.
+      expect(requestedCursors).toEqual([null]);
+      expect(republished.map((event) => event.version)).toEqual([7]);
       await expectStableSnapshotDirectoryClean(spoolParentDirectory);
     } finally {
       await rm(spoolParentDirectory, { force: true, recursive: true });
@@ -1731,6 +1984,85 @@ describe("OpenSea normalization", () => {
         }),
       ),
     ).rejects.toThrow("snapshot failed");
+    expect(stopped).toBe(true);
+    expect(published).toEqual([]);
+  });
+
+  /**
+   * A fatal stream condition must be able to end the initial REST crawl.
+   *
+   * Aborting the snapshot upload stops the publication of what has been staged;
+   * it does nothing to a crawl that is still fetching pages, and that crawl
+   * holds the durable writer lock while it runs. Without a signal of its own, a
+   * reconnect acknowledgement that timed out could not end a long traversal, so
+   * recovery waited for every remaining page of a history it was about to throw
+   * away.
+   */
+  it("aborts the initial REST crawl when the stream becomes fatal", async () => {
+    let stopped = false;
+    let crawlAborted = false;
+    let crawlSignal: AbortSignal | undefined;
+    let announceFatal: ((error: unknown) => void) | undefined;
+    let reportCrawlStarted!: () => void;
+    const crawlStarted = new Promise<void>((resolve) => {
+      reportCrawlStarted = resolve;
+    });
+    const published: NormalizedMarketEvent[] = [];
+    const adapter: MarketplaceAdapter = {
+      source: "opensea",
+      capabilities: {
+        realtime: true,
+        restBackfill: true,
+        createsOrders: false,
+        fulfillsOrders: false,
+        custody: false,
+      },
+      async start(_sink, lifecycle) {
+        announceFatal = lifecycle?.onFatal;
+        return () => {
+          stopped = true;
+        };
+      },
+      async backfill(_sink, signal) {
+        crawlSignal = signal;
+        reportCrawlStarted();
+        if (!signal) {
+          throw new Error("the initial crawl was given no abort signal");
+        }
+        // A long traversal. The timer stands in for the pages it would still
+        // fetch if nothing ended it, so a run that cannot abort the crawl
+        // finishes it instead of hanging the test.
+        await new Promise<void>((resolve, reject) => {
+          const remainingPages = setTimeout(resolve, 1_000);
+          signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(remainingPages);
+              crawlAborted = true;
+              reject(signal.reason);
+            },
+            { once: true },
+          );
+        });
+      },
+    };
+    const mirror = startOpenSeaMirror(
+      adapter,
+      async (event) => {
+        published.push(event);
+      },
+      atomicSnapshotSink(async (event) => {
+        published.push(event);
+      }),
+    );
+    void mirror.catch(() => undefined);
+    await crawlStarted;
+    expect(crawlSignal).toBeDefined();
+    expect(crawlSignal!.aborted).toBe(false);
+    expect(announceFatal).toBeDefined();
+    announceFatal!(new Error("stream acknowledgement timed out"));
+    await expect(mirror).rejects.toThrow("stream acknowledgement timed out");
+    expect(crawlAborted).toBe(true);
     expect(stopped).toBe(true);
     expect(published).toEqual([]);
   });

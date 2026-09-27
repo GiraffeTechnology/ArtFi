@@ -432,13 +432,17 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
             // Delete only the known snapshot payload while the writer lock is
             // still held. A successor cannot enter until release, and the
             // final rmdir is non-recursive so it cannot delete successor data.
-            await Promise.all(
-              [spoolPath, checkpointPath].map((path) =>
-                unlink(path).catch((error: unknown) => {
-                  if (!isMissingFile(error)) throw error;
-                }),
-              ),
-            );
+            //
+            // **Ordered, not concurrent.** `checkpoints.ndjson` is the pointer
+            // and `events.ndjson` is the payload it names, so the pointer goes
+            // first and the payload only once the pointer is gone. A crash
+            // between the two, or a failure of the first unlink, can then leave
+            // an orphaned payload — which the next start truncates and
+            // re-derives — but never a pointer to a payload that no longer
+            // exists. Removing them concurrently could leave either, and the
+            // start path has no way to re-derive a payload it is told exists.
+            await unlinkIfPresent(checkpointPath);
+            await unlinkIfPresent(spoolPath);
           } catch (error) {
             cleanupFailure = error;
           }
@@ -464,14 +468,26 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     };
     try {
       lock = await acquireBackfillLock(lockPath);
-      const checkpointState = await readBackfillCheckpoints(
+      let checkpointState = await readBackfillCheckpoints(
         checkpointPath,
         collectionsHash,
         this.#config.collectionSlugs.length,
       );
+      if (
+        checkpointState.checkpoints.length > 0 &&
+        !(await fileIsPresent(spoolPath))
+      ) {
+        // An orphaned pointer: cleanup was interrupted, or its first unlink
+        // failed, after the payload went but before the checkpoint did. The
+        // spool is staging and never an authority, so the answer is to discard
+        // the checkpoint and re-derive the snapshot. Failing here instead left
+        // the mirror unable to start until someone repaired the directory by
+        // hand, which is a worse outcome than one repeated crawl. Zero valid
+        // bytes truncates the stale checkpoint below, with the spool.
+        checkpointState = { checkpoints: [], validBytes: 0 };
+      }
       const checkpoints = checkpointState.checkpoints;
       const latest = checkpoints.at(-1);
-      if (latest) await access(spoolPath);
       for (const path of [spoolPath, checkpointPath]) {
         const created = await open(path, "a", 0o600);
         await created.close();
@@ -495,16 +511,35 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       // retaining the transient realtime spool across process lifetimes.
       let resumedCollectionExhausted = false;
       if (latest) {
+        // Every retained page counts, not just the last one written. The crawl
+        // pages a collection from its head downwards, so the *first* checkpoint
+        // for a collection is its newest page and the last is its oldest.
+        // Keeping only one of them kept the oldest, and the traversal below then
+        // re-appended nearly the whole committed history before it recognised
+        // anything — a spool that fit once but not twice hit ENOSPC on every
+        // retry. Every fingerprint here lies inside the committed region: the
+        // spool was just truncated to the newest checkpoint's `spoolBytes`,
+        // which is at or past every earlier checkpoint's. Stopping at the first
+        // match is therefore safe as well as cheapest: the crawl is contiguous
+        // newest-first, so everything older than a committed event is either
+        // already in the spool or still behind the saved cursor.
         const boundaryByCollection = new Map<number, Set<string>>();
         for (const checkpoint of checkpoints) {
           if (
-            checkpoint.pageCollectionIndex !== undefined &&
-            checkpoint.pageFingerprints
+            checkpoint.pageCollectionIndex === undefined ||
+            !checkpoint.pageFingerprints
           ) {
-            boundaryByCollection.set(
-              checkpoint.pageCollectionIndex,
-              new Set(checkpoint.pageFingerprints),
-            );
+            continue;
+          }
+          let boundary = boundaryByCollection.get(
+            checkpoint.pageCollectionIndex,
+          );
+          if (!boundary) {
+            boundary = new Set<string>();
+            boundaryByCollection.set(checkpoint.pageCollectionIndex, boundary);
+          }
+          for (const fingerprint of checkpoint.pageFingerprints) {
+            boundary.add(fingerprint);
           }
         }
         const checkpointedCollectionCount = latest.nextCursor
@@ -876,6 +911,24 @@ function isMissingFile(error: unknown): boolean {
   return record(error).code === "ENOENT";
 }
 
+async function unlinkIfPresent(path: string): Promise<void> {
+  try {
+    await unlink(path);
+  } catch (error) {
+    if (!isMissingFile(error)) throw error;
+  }
+}
+
+async function fileIsPresent(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch (error) {
+    if (isMissingFile(error)) return false;
+    throw error;
+  }
+}
+
 async function acquireBackfillLock(lockPath: string): Promise<BackfillLock> {
   const owner: BackfillLockOwner = {
     schemaVersion: "1",
@@ -1202,6 +1255,14 @@ export async function startOpenSeaMirror(
   let precommitFailure: unknown;
   let postcommitFailure: unknown;
   const snapshotController = new AbortController();
+  // The REST crawl needs its own abort signal. Aborting the snapshot upload
+  // stops the *publication* of what has been staged; it does nothing to a crawl
+  // that is still fetching pages, and the crawl holds the durable writer lock
+  // while it does. Without this, a fatal stream condition — a reconnect
+  // acknowledgement that times out — could not end a long traversal, so
+  // recovery waited for every remaining page of a history it was about to throw
+  // away.
+  const crawlController = new AbortController();
   const failRealtime = (
     error: unknown,
     phase: "precommit" | "postcommit" | "draining" | "ready",
@@ -1229,7 +1290,7 @@ export async function startOpenSeaMirror(
     const next = reconnectSequence.then(async () => {
       await initialCommit;
       if (backfillFailure) throw backfillFailure;
-      const result = await adapter.backfill(sink);
+      const result = await adapter.backfill(sink, crawlController.signal);
       if (isBackfillLease(result)) await result.commit();
     });
     reconnectSequence = next.catch((error: unknown) => {
@@ -1364,17 +1425,22 @@ export async function startOpenSeaMirror(
       onReconnectReady: scheduleBackfill,
       onFatal: (error) => {
         failRealtime(error, realtimePhase);
+        if (!crawlController.signal.aborted) crawlController.abort(error);
         stop?.();
         onFatal(error);
       },
     });
-    const initialBackfill = await adapter.backfill(stageSnapshot, undefined, {
-      deferFinalize: true,
-      onLeaseReady: (lease) => {
-        backfillLease = lease;
+    const initialBackfill = await adapter.backfill(
+      stageSnapshot,
+      crawlController.signal,
+      {
+        deferFinalize: true,
+        onLeaseReady: (lease) => {
+          backfillLease = lease;
+        },
+        onSourceSealed: sealPrecommit,
       },
-      onSourceSealed: sealPrecommit,
-    });
+    );
     if (isBackfillLease(initialBackfill)) backfillLease ??= initialBackfill;
     await sealPrecommit();
     for await (const event of stagedEvents([precommitPath])) {

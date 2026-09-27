@@ -361,7 +361,7 @@ contract FractionSaleIntentTest {
         require(!_fill(BUYER, intent, signature, 1), "a fill settled while paused");
 
         VM.prank(seller);
-        asset.transfer(OTHER_BUYER, 500);
+        require(asset.transfer(OTHER_BUYER, 500), "the holder transfer was rejected");
         require(asset.balanceOf(OTHER_BUYER) == 500, "the pause froze the holder");
 
         market.unpause();
