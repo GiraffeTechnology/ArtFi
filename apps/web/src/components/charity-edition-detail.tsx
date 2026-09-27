@@ -10,6 +10,7 @@ import { supportedChain } from "@/lib/wagmi";
 
 import { CharityEditionRightsNotice } from "./charity-edition-rights-notice";
 import { CharityHolderAccess } from "./charity-holder-access";
+import { CharityVenueLink } from "./charity-venue-link";
 
 /**
  * One charity edition — #110 §2 CH.1 to CH.9.
@@ -207,9 +208,18 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
             edition. Primary proceeds are designated for CCHS.
           </p>
 
+          <CharityVenueLink tokenId={edition.tokenId} />
+
           <CharityHolderAccess tokenId={edition.tokenId} />
         </>
       )}
+
+      {/*
+        The way to the venue does not depend on the series loading. XM.4 asks that a user be able to
+        reach OpenSea for this line, and charity opens there first, so the record for a token id is
+        shown whether or not the contract read for that series succeeded.
+      */}
+      {!edition && <CharityVenueLink tokenId={tokenId} />}
 
       <p>
         <Link className="text-link" href="/charity">
