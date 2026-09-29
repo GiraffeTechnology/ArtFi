@@ -7,6 +7,7 @@ import { WalletButton } from "./wallet-button";
 const navigation = [
   ["Overview", "/"],
   ["Market mirror", "/market/rwa"],
+  ["Activity", "/market/activity"],
   ["Charity", "/charity"],
   ["Mint", "/create/rwa"],
   ["Wallet", "/portfolio"],

@@ -248,6 +248,13 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          description: >-
+            Opaque position from a previous response's nextCursor. Keyset, not an offset: a feed
+            that grows at its head would make offset paging skip and repeat rows. A cursor this
+            endpoint did not issue is refused rather than rounded to the start.
+          schema: { type: string, maxLength: 256 }
       responses:
         "200":
           description: Attributed external marketplace activity
@@ -265,6 +272,12 @@ paths:
                   source: { type: string }
                   execution: { type: string, const: external-deeplink-only }
                   custody: { type: boolean, const: false }
+                  nextCursor:
+                    type: string
+                    description: >-
+                      Position to pass as cursor for the next page. Absent once the history has
+                      ended, so its absence is the end rather than something to infer from a short
+                      page.
         "400": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
   /v1/market/assets:

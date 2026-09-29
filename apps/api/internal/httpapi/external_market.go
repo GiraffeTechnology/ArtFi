@@ -133,6 +133,9 @@ type marketActivityResponse struct {
 	Source        string           `json:"source"`
 	Execution     string           `json:"execution"`
 	Custody       bool             `json:"custody"`
+	// Omitted when the walk has reached the end of the history, so its absence is the end rather
+	// than something the client has to infer from a short page.
+	NextCursor string `json:"nextCursor,omitempty"`
 }
 
 type preparedMarketEvent struct {
@@ -506,6 +509,19 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid contract", "Contract must be a 20-byte Ethereum address.")
 		return
 	}
+	// A cursor that does not parse is refused, never rounded to the head: silently restarting would
+	// serve the newest page to a reader who asked for an older one, with nothing to tell them.
+	var cursor marketActivityCursor
+	hasCursor := false
+	if raw := strings.TrimSpace(request.URL.Query().Get("cursor")); raw != "" {
+		parsed, err := decodeMarketActivityCursor(raw)
+		if err != nil {
+			writeProblem(writer, request, http.StatusBadRequest, "Invalid cursor", "The cursor is not one this endpoint issued.")
+			return
+		}
+		cursor = parsed
+		hasCursor = true
+	}
 	response := marketActivityResponse{
 		Data: []marketActivity{}, SchemaVersion: "1", Source: source,
 		Execution: "external-deeplink-only", Custody: false,
@@ -521,15 +537,24 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		       COALESCE(transaction_hash, ''), COALESCE(contract_address, ''), COALESCE(token_id, ''),
 		       COALESCE(maker_address, ''), COALESCE(price, ''), COALESCE(payment_token_address, ''),
 		       COALESCE(payment_symbol, ''), COALESCE(marketplace_url, ''),
-		       DATE_FORMAT(event_timestamp, '%Y-%m-%dT%H:%i:%s.%fZ'), payload
+		       DATE_FORMAT(event_timestamp, '%Y-%m-%dT%H:%i:%s.%fZ'),
+		       DATE_FORMAT(received_at, '%Y-%m-%dT%H:%i:%s.%fZ'), payload
 		FROM external_market_events WHERE source = ?`
 	args := []any{source}
 	if contract != "" {
 		query += " AND contract_address = ?"
 		args = append(args, contract)
 	}
-	query += " ORDER BY event_timestamp DESC, received_at DESC LIMIT ?"
-	args = append(args, limit)
+	if hasCursor {
+		clause, keysetArgs := marketActivityKeysetPredicate(cursor)
+		query += clause
+		args = append(args, keysetArgs...)
+	}
+	// event_id breaks ties so the order is strict and a cursor names exactly one position. One row
+	// beyond the page is read to learn whether another page exists; it is not served, so the client
+	// is never told there is more when there is not.
+	query += " ORDER BY event_timestamp DESC, received_at DESC, event_id DESC LIMIT ?"
+	args = append(args, limit+1)
 	rows, err := service.db.QueryContext(request.Context(), query, args...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity could not be queried.")
@@ -537,14 +562,16 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 	}
 	defer rows.Close()
 	items := make([]marketActivity, 0)
+	receivedAt := make([]string, 0)
 	for rows.Next() {
 		var item marketActivity
 		var payload []byte
+		var rowReceivedAt string
 		if err := rows.Scan(&item.EventID, &item.SchemaVersion, &item.Source, &item.EventType,
 			&item.EventFamily, &item.EntityKey, &item.Version, &item.Chain, &item.CollectionSlug,
 			&item.OrderHash, &item.TransactionHash, &item.ContractAddress, &item.TokenID,
 			&item.MakerAddress, &item.Price, &item.PaymentTokenAddress, &item.PaymentSymbol,
-			&item.MarketplaceURL, &item.EventTimestamp, &payload); err != nil {
+			&item.MarketplaceURL, &item.EventTimestamp, &rowReceivedAt, &payload); err != nil {
 			writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity could not be decoded.")
 			return
 		}
@@ -553,10 +580,22 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 			return
 		}
 		items = append(items, item)
+		receivedAt = append(receivedAt, rowReceivedAt)
 	}
 	if err := rows.Err(); err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity query was interrupted.")
 		return
+	}
+	if len(items) > limit {
+		items = items[:limit]
+		receivedAt = receivedAt[:limit]
+		last := items[limit-1]
+		next, err := marketActivityCursorFromRow(last.EventTimestamp, receivedAt[limit-1], last.EventID)
+		if err != nil {
+			writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "A position in the mirrored activity could not be recorded.")
+			return
+		}
+		response.NextCursor = next
 	}
 	response.Data = items
 	service.storeCachedJSON(request.Context(), cacheToken, response)

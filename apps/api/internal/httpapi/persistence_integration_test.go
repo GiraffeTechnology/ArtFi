@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -324,6 +325,71 @@ func TestMySQLExternalMarketMirrorDedupeAndOrdering(t *testing.T) {
 	activity := requestWithHandler(t, handler, http.MethodGet, "/v1/market/activity?source=opensea&limit=10")
 	if activity.Code != http.StatusOK || !strings.Contains(activity.Body.String(), "external-deeplink-only") {
 		t.Fatalf("market activity boundary missing: status=%d body=%s", activity.Code, activity.Body.String())
+	}
+
+	// The history is walkable, not a hundred-row window. Paging one event at a time must visit every
+	// event exactly once and stop of its own accord, and the cursor must be the only thing carrying
+	// position between requests.
+	type activityPage struct {
+		Data []struct {
+			EventID string `json:"eventId"`
+		} `json:"data"`
+		NextCursor string `json:"nextCursor"`
+	}
+	seen := make(map[string]int)
+	order := make([]string, 0)
+	cursor := ""
+	for page := 0; page < 20; page++ {
+		path := "/v1/market/activity?source=opensea&limit=1"
+		if cursor != "" {
+			path += "&cursor=" + url.QueryEscape(cursor)
+		}
+		recorder := requestWithHandler(t, handler, http.MethodGet, path)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("activity page %d: status=%d body=%s", page, recorder.Code, recorder.Body.String())
+		}
+		var decoded activityPage
+		if err := json.Unmarshal(recorder.Body.Bytes(), &decoded); err != nil {
+			t.Fatalf("activity page %d did not decode: %v", page, err)
+		}
+		for _, item := range decoded.Data {
+			seen[item.EventID]++
+			order = append(order, item.EventID)
+		}
+		if decoded.NextCursor == "" {
+			break
+		}
+		if decoded.NextCursor == cursor {
+			t.Fatalf("the cursor did not advance on page %d", page)
+		}
+		cursor = decoded.NextCursor
+	}
+	if len(order) < 3 {
+		t.Fatalf("the walk visited %d events, expected every mirrored event", len(order))
+	}
+	for eventID, count := range seen {
+		if count != 1 {
+			t.Fatalf("event %s was served %d times; a keyset walk must serve each exactly once", eventID, count)
+		}
+	}
+	// The last page carries no cursor, so a client learns the history has ended rather than having
+	// to infer it from a short page.
+	total := requestWithHandler(t, handler, http.MethodGet, "/v1/market/activity?source=opensea&limit=100")
+	var whole activityPage
+	if err := json.Unmarshal(total.Body.Bytes(), &whole); err != nil {
+		t.Fatal(err)
+	}
+	if whole.NextCursor != "" {
+		t.Error("a page holding the whole history still offered a next cursor")
+	}
+	if len(whole.Data) != len(order) {
+		t.Errorf("the walk saw %d events and one page saw %d", len(order), len(whole.Data))
+	}
+
+	// A cursor this endpoint did not issue is refused, not rounded to the head.
+	forged := requestWithHandler(t, handler, http.MethodGet, "/v1/market/activity?source=opensea&cursor=not-a-cursor")
+	if forged.Code != http.StatusBadRequest {
+		t.Fatalf("a forged cursor was not refused: status=%d body=%s", forged.Code, forged.Body.String())
 	}
 }
 

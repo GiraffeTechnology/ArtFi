@@ -1071,6 +1071,8 @@ export interface operations {
         source?: string;
         contract?: string;
         limit?: number;
+        /** @description Opaque position from a previous response's nextCursor. Keyset, not an offset: a feed that grows at its head would make offset paging skip and repeat rows. A cursor this endpoint did not issue is refused rather than rounded to the start. */
+        cursor?: string;
       };
       header?: never;
       path?: never;
@@ -1093,6 +1095,8 @@ export interface operations {
             execution: "external-deeplink-only";
             /** @constant */
             custody: false;
+            /** @description Position to pass as cursor for the next page. Absent once the history has ended, so its absence is the end rather than something to infer from a short page. */
+            nextCursor?: string;
           };
         };
       };

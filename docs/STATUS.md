@@ -358,6 +358,51 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 
 ## Change log
 
+### 2026-09-29 — `claude/ci-all-pr-6dytk9`: the activity history becomes walkable (stage `S-XM`)
+
+`AGENTS.md`'s S-XM checkpoint names this as the slice after PR #114's findings: complete
+cursor-paginated activity history in API, OpenAPI, client and UI. Two things were wrong with
+`/v1/market/activity`. It served a `limit` alone, capped at 100, so the most any reader could ever
+see was the hundred most recent events while the rest of the history sat in the mirror unreachable.
+And **no screen reached it at all**, which `PRD.md` §3.2 counts as progress rather than a handover.
+
+**Keyset, not offset.** Rows arrive continuously, and offset paging over a feed that grows at its
+head skips and repeats rows as it walks — a reader would be told a complete history while silently
+missing events. The cursor is the ordering tuple of the last row served,
+`(event_timestamp, received_at, event_id)` descending; the primary key breaks the tie so the order is
+strict and a cursor names exactly one position. The existing `idx_external_market_activity` covers
+the seek. One row beyond the page is read to decide whether another page exists and is not served, so
+a client is never told there is more when there is not.
+
+**The end is stated, never inferred.** `nextCursor` is absent once the history has ended. A short
+page is not the end — the server may return fewer rows and still have more — so a client that
+guessed from page length would report a history that stopped when it had not.
+
+**A cursor is a position, not an authority.** It is opaque by encoding rather than by secrecy, and
+every field is re-validated on the way in. One this endpoint did not issue is refused with 400 rather
+than rounded to the head: silently restarting would serve the newest page to a reader who asked for
+an older one, with nothing to tell them.
+
+`/market/activity` is the screen, reachable from navigation on desktop and mobile. Each row carries
+source, event type, chain, collection, token, order, price, observed time, freshness and the venue
+link the source reported — re-validated by `venueLink`, never constructed (XM.5). An unreachable
+mirror says so and does **not** render the empty state: "the mirror has observed no activity" would
+be a claim about the market made from a failed request, and the two are opposite statements to a
+reader deciding whether a market is quiet or broken.
+
+Evidence: `market_activity_cursor.go` with 6 Go tests covering the round trip, microsecond
+precision, eleven malformed-cursor refusals including SQL in the event id, and the predicate's
+placeholder/argument binding; `market-activity.ts` with 10 web tests covering order, the stated end,
+no event shown twice, and a non-advancing cursor ending the walk; `market-activity.spec.ts` with 6
+browser tests across desktop and mobile. `TestMySQLPersistenceSurvivesServiceRestart` now walks the
+whole history one event at a time and asserts each is served exactly once — it needs MySQL and did
+not run here. Web 186/186, Playwright 156 passed with 2 intentional skips, Forge 136/136, Go with
+`-race`, OpenAPI regeneration with no drift beyond the documented change, and the format, lint,
+typecheck, build, security, agent, chain-consistency and charity verifier gates.
+
+**No count or status moves.** XM.2 and XM.3 keep `IMPLEMENTED-NOT-VERIFIED`: no live mirror has
+served a page here and no runtime evidence exists.
+
 ### 2026-09-29 — `claude/ci-all-pr-6dytk9`: four review findings on the settlement surfaces
 
 Review on PR #127 found four defects in the two entries below. All four are real and all four are
