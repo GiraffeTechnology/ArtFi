@@ -358,6 +358,44 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 
 ## Change log
 
+### 2026-09-29 — `claude/ci-all-pr-6dytk9`: four review findings on the settlement surfaces
+
+Review on PR #127 found four defects in the two entries below. All four are real and all four are
+fixed at `1857c5e`; two of the descriptions in those entries were accordingly too generous when
+written, and this entry corrects them rather than editing them.
+
+**A deployment belonged to every page at once.** `AssetDetail` is shared by all six slugs in
+`lib/catalog.ts`, and both settlement surfaces read their contract from the environment with no
+identifier from the artwork. Once configured, every detail page would have offered the same real
+holding and signing surface under a different artwork's title — a fixture dressed as live data
+(`AGENTS.md` §5, `ACCEPTANCE.md` §3), and a signature over terms the signer did not mean. The
+environment fallback that made this reachable was added by the 2026-09-27 entry below. A deployment
+now names the one slug it belongs to (`lib/asset-binding.ts`), an unnamed one binds nowhere, and
+"deployed, but belongs to another page" is stated on screen as its own case.
+
+**The zero address passed as a party and as a token.** A blank payment-token field became
+`0x00…0`, which `isAddress` accepts and the market refuses, so the form could produce a signed
+authorization that could never settle. Both validators now reject it for the seller, the asset or
+collection and the payment token, and keep it for the buyer field, where it means "anyone may fill".
+
+**An approval could be spent on an unfillable token.** The fraction fill path sent the buyer's ERC-20
+approval without reading `allowedPaymentToken`, so an unallowlisted token — or one whose permission
+was withdrawn after signing — cost the buyer a transaction and left a live allowance behind. It is
+read and blocked on before the approval, and an unread standing does not pass.
+
+**A charity edition past the first page lost its venue link.** The venue lookup read only page one of
+`/v1/market/assets`, whose page size caps at 100. `findCharityVenueRecord` now walks until the
+edition is found, a page is empty, or `total` is exhausted — "not found yet" is not "not observed".
+
+Evidence: four regressions, each verified by mutation. `asset-binding.test.ts` (7 cases),
+`charity-venue.test.ts` (+6), `fraction-intent.test.ts` and `whole-artwork-intent.test.ts` (zero
+address rejected as party or token, still accepted as an open buyer), and
+`fractionPaymentApprovable` covering the unread standing. Web 176/176, Playwright 142 passed with 2
+intentional skips, Forge 136/136, Go with `-race`, and the format, lint, typecheck, build, security,
+agent, chain-consistency, release, charity, Hoodi and contracts-lint gates.
+
+**No count or status moves.** The corrected surfaces keep the statuses the entries below record.
+
 ### 2026-09-27 — `claude/ci-all-pr-6dytk9`: the fraction settlement screen (stage `S-FR`)
 
 `PRD.md` §3.2 makes a stage deliverable when its function is operable from a screen, desktop and
