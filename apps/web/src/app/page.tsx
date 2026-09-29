@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { MarketMirrorCard } from "@/components/market-mirror-card";
+import { PrototypeDataNotice } from "@/components/prototype-data-notice";
 import { WalletButton } from "@/components/wallet-button";
 import { artworks } from "@/lib/catalog";
 
@@ -38,6 +39,7 @@ const modules = [
 export default function Home() {
   return (
     <main className="approved-overview page-shell">
+      <PrototypeDataNotice />
       <section className="overview-hero">
         <div className="overview-hero__copy">
           <p className="approved-eyebrow">ArtCCH / ArtFi</p>

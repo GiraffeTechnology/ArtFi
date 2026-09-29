@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { ArtworkCard } from "@/components/artwork-card";
+import { PrototypeDataNotice } from "@/components/prototype-data-notice";
 import { artworks } from "@/lib/catalog";
 
 export const metadata: Metadata = { title: "Fractional Market" };
@@ -8,6 +9,7 @@ export const metadata: Metadata = { title: "Fractional Market" };
 export default function FractionalMarketPage() {
   return (
     <main className="page-shell page-main">
+      <PrototypeDataNotice />
       <header className="market-header">
         <div>
           <p className="eyebrow">Fractional market preview</p>
