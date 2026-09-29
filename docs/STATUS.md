@@ -255,6 +255,18 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 
 ## Change log
 
+2026-09-30 — PR #80 review repair candidate: the bounded local-database policy
+scanner now normalizes POSIX shell continuations and applies the same full-line
+comment filtering to every startup scan. Added focused cases for LF/CRLF,
+continued command names, allowed Redis startup, and commented examples followed
+by real startup. Control executed the pinned text-only overlay with Node24.18.0:
+23/23 passed, exit0, unchanged inputs; report SHA256
+4154837BFE830F739335BB1613C36D21C27CB0C474B2F11D4FB0DBB1B523D09A,
+TAP SHA256 189C63CDD44F9E43A6A3F554AAE3C2EA72D05B8842F4B0F3B52015D370115827.
+This is not full-head CI or database validation. No database readiness,
+requirement status/count or delivery acceptance is promoted; the required
+executor and main-branch conflict remain unresolved.
+
 2026-09-07 — CTYun-only CI policy candidate: remove GitHub-local MySQL startup
 from migration acceptance; retain an explicit failing migration gate until the
 approved dedicated-CTYun executor is integrated. Non-DB jobs remain unchanged

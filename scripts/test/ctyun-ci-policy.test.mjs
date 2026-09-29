@@ -15,12 +15,18 @@ const compose = fs
   .readFileSync(new URL("../../docker-compose.yml", import.meta.url), "utf8")
   .replaceAll("\r\n", "\n");
 
-function verifyExplicitNonDatabaseCompose(source) {
-  const active = source
+function activeWorkflowCommands(source) {
+  // Bounded textual guard, not a YAML or shell interpreter. All startup scans
+  // share comment filtering and POSIX shell continuation normalization.
+  return source
     .split(/\r?\n/)
     .filter((line) => !line.trimStart().startsWith("#"))
-    .join("\n");
-  for (const call of source.matchAll(
+    .join("\n")
+    .replace(/\\\n/g, "");
+}
+
+function verifyExplicitNonDatabaseCompose(active) {
+  for (const call of active.matchAll(
     /\b(?:docker\s+compose|docker-compose|podman\s+compose)\s+([^\r\n]*)/g,
   )) {
     const tokens = call[1].trim().split(/\s+/).filter(Boolean);
@@ -97,7 +103,8 @@ function verifyExplicitNonDatabaseCompose(source) {
 }
 
 function verifyBoundary(source) {
-  verifyExplicitNonDatabaseCompose(source);
+  const active = activeWorkflowCommands(source);
+  verifyExplicitNonDatabaseCompose(active);
   const lines = source.replaceAll("\r\n", "\n").split("\n");
   const starts = lines.flatMap((line, index) =>
     line === "  migration:" ? [index] : [],
@@ -121,7 +128,7 @@ function verifyBoundary(source) {
     /^\s*image:\s*["']?(?:docker\.io\/library\/)?(?:mysql|mariadb)(?::|\s|["']|$)/im,
     /scripts\/test\/mysql-integration\.sh\b/i,
   ]) {
-    assert.doesNotMatch(source, pattern, "known local MySQL startup surface");
+    assert.doesNotMatch(active, pattern, "known local MySQL startup surface");
   }
 }
 
@@ -314,5 +321,61 @@ test("commented overrides are not active configuration", () => {
   verifyBoundary(
     workflow +
       "\n# COMPOSE_FILE: other.yml\n  other:\n    steps:\n      - run: docker compose up redis\n",
+  );
+});
+
+test("continued commands cannot hide local database startup", () => {
+  for (const command of [
+    "docker compose \\\n          up -d mysql",
+    "docker compose -p artfi \\\n          up -d",
+    "docker-compose \\\n          run --rm mysql",
+    "podman compose \\\n          start mariadb",
+    "docker \\\n          run --rm mysql:8.4",
+    "docker com\\\npose up mysql",
+  ]) {
+    for (const newline of ["\n", "\r\n"]) {
+      assert.throws(
+        () =>
+          verifyBoundary(
+            (
+              workflow +
+              "\n  other:\n    steps:\n      - run: |\n          " +
+              command +
+              "\n"
+            ).replaceAll("\n", newline),
+          ),
+        command,
+      );
+    }
+  }
+});
+
+test("continued explicitly reviewed redis startup remains permitted", () => {
+  verifyBoundary(
+    workflow +
+      "\n  other:\n    steps:\n      - run: |\n          docker compose \\\n            up --wait redis\n",
+  );
+});
+
+test("full-line database examples are ignored by every startup scan", () => {
+  for (const example of [
+    "# docker compose up mysql",
+    "  # docker compose -p artfi run mysql",
+    "  # docker-compose start",
+    "  # podman compose up mariadb",
+    "  # docker run mysql:8.4",
+    "  # image: mariadb:11",
+    "  # scripts/test/mysql-integration.sh",
+  ]) {
+    verifyBoundary(workflow + "\n" + example + "\n");
+  }
+});
+
+test("a commented example cannot mask a following active database command", () => {
+  assert.throws(() =>
+    verifyBoundary(
+      workflow +
+        "\n  other:\n    steps:\n      # docker compose up redis\n      - run: docker compose up mysql\n",
+    ),
   );
 });
