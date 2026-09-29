@@ -7,6 +7,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
+    "agent:test": "node --test scripts/agent/*.test.mjs",
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
     "format": "prettier --write .",
@@ -36,6 +37,6 @@
   },
   "devDependencies": {
     "prettier": "3.9.6",
-    "turbo": "2.10.11"
+    "turbo": "2.10.12"
   }
 }

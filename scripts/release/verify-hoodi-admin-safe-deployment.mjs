@@ -51,6 +51,7 @@ requireExactKeys(
     "stages",
     "treasuryAuthority",
     "nftTreasuryCustodyClaimed",
+    "testAssetMarkers",
   ],
   "manifest",
 );
@@ -60,6 +61,30 @@ if (
   manifest.chainId !== 560048
 ) {
   throw new Error("manifest must use the Hoodi admin-safe deployment schema");
+}
+
+/**
+ * `PRD.md` §7.0's second place for the test-asset markers: contract or series level at deployment.
+ *
+ * This record is the deployment. Everything it describes lives on Hoodi -- the schema and chain id
+ * above admit nothing else -- so it is a test deployment and says so in the words §7.0 fixes. The
+ * markers were carried in token metadata, on screen and in the batch manifest but not here, which
+ * left three of four filled; §7.0 requires all four.
+ */
+const requiredTestAssetMarkers = [
+  "TESTNET",
+  "NO REAL-WORLD VALUE",
+  "NO LEGAL EFFECT",
+];
+if (
+  !Array.isArray(manifest.testAssetMarkers) ||
+  requiredTestAssetMarkers.some(
+    (marker) => !manifest.testAssetMarkers.includes(marker),
+  )
+) {
+  throw new Error(
+    `testAssetMarkers must contain ${requiredTestAssetMarkers.join(", ")} (PRD.md §7.0)`,
+  );
 }
 const safe = manifest.adminSafe;
 requireExactKeys(

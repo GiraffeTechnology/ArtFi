@@ -14,7 +14,12 @@ const directorDeclaration =
 const inscriptionTerms = readFileSync(
   "release/terms/ArtCCH_ArtFi_NFT_Inscription_Terms_EN_v1.txt",
 );
+const watermarked = Buffer.concat([
+  Buffer.from("89504e470d0a1a0a", "hex"),
+  Buffer.from("watermarked-holder-copy"),
+]);
 writeFileSync(join(directory, "master.png"), master);
+writeFileSync(join(directory, "watermarked.png"), watermarked);
 writeFileSync(join(directory, "nft-terms.txt"), inscriptionTerms);
 
 const packageBase = {
@@ -50,6 +55,8 @@ const packageBase = {
     publicUri: null,
     unwatermarkedAvailable: false,
     preview: false,
+    file: "watermarked.png",
+    sha256: sha256(watermarked),
   },
   rights: {
     basis: "assignment",
@@ -154,7 +161,11 @@ if (
   ) ||
   !result.canonicalMetadata.includes(
     "Artist's sellout-contingent donation undertaking",
-  )
+  ) ||
+  // CH.11's packaging half, proven rather than assumed: the holder file was read and hashed, and
+  // its digest is not the master's.
+  result.holderAssetSha256 !== sha256(watermarked) ||
+  result.holderAssetDistinctFromMaster !== true
 ) {
   throw new Error(
     "charity edition verifier did not reproduce private, no-preview metadata",
@@ -203,6 +214,78 @@ for (const mutate of [
   (value) => (value.inscription.translationsHaveLegalEffect = true),
   (value) => (value.inscription.termsSha256 = "0".repeat(64)),
   (value) => (value.rights.listingActionConfirmed = true),
+  // The formal set (PRD §8.4). A02 is withdrawn and must be hard-rejected; the other three name
+  // no work at all. `^UNIT-A\d{2}$` accepted every one of them.
+  (value) => {
+    value.series.artworkId = "UNIT-A02";
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A02.json";
+  },
+  (value) => {
+    value.series.artworkId = "UNIT-A00";
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A00.json";
+  },
+  (value) => {
+    value.series.artworkId = "UNIT-A39";
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A39.json";
+  },
+  (value) => {
+    value.series.artworkId = "UNIT-A99";
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A99.json";
+  },
+  // CH.11's packaging half: the holder file must not be the master.
+  (value) => (value.holderAsset.sha256 = value.artwork.masterSha256),
+  (value) => delete value.holderAsset.sha256,
+  (value) => delete value.holderAsset.file,
+  (value) => (value.holderAsset.sha256 = "not-a-digest"),
+  // A package that declares one work and publishes another work's metadata.
+  (value) =>
+    (value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/UNIT-A07.json"),
+  // PRD.md §7.0 — the real batch records real assets and must never claim otherwise.
+  (value) =>
+    (value.testAssetMarkers = [
+      "TESTNET",
+      "NO REAL-WORLD VALUE",
+      "NO LEGAL EFFECT",
+    ]),
+  // A test payload with no markers at all: §7.0's fourth place left empty.
+  (value) => {
+    value.chainId = 560_048;
+    value.series.artworkId = "TEST-A01";
+  },
+  // A test payload carrying only some of the three markers.
+  (value) => {
+    value.chainId = 560_048;
+    value.series.artworkId = "TEST-A01";
+    value.testAssetMarkers = ["TESTNET"];
+  },
+  // A test payload borrowing the real batch's namespace — §5 rule 1 of the Hoodi plan.
+  (value) => {
+    value.chainId = 560_048;
+    value.testAssetMarkers = [
+      "TESTNET",
+      "NO REAL-WORLD VALUE",
+      "NO LEGAL EFFECT",
+    ];
+  },
+  // Neither chain.
+  (value) => (value.chainId = 1),
+  // A test payload publishing under the real batch's metadata path.
+  (value) => {
+    value.chainId = 560_048;
+    value.series.artworkId = "TEST-A01";
+    value.testAssetMarkers = [
+      "TESTNET",
+      "NO REAL-WORLD VALUE",
+      "NO LEGAL EFFECT",
+    ];
+    value.metadata.publicURI =
+      "https://io.artcch.com/nft/metadata/sepolia/ye-yongrun/TEST-A01.json";
+  },
 ]) {
   const invalid = structuredClone(packageBase);
   mutate(invalid);
@@ -219,6 +302,42 @@ for (const mutate of [
   }
   if (!rejected)
     throw new Error("invalid charity edition package was accepted");
+}
+
+// The positive case for the other payload: a Hoodi test package in its own namespace, declaring
+// §7.0's markers, must be accepted. Without this the branch above could reject everything and the
+// rejection tests would still pass.
+const testPayload = structuredClone(packageBase);
+testPayload.chainId = 560_048;
+testPayload.series.artworkId = "TEST-A01";
+// The metadata URI must end in the package's own artwork id, so it moves with it.
+testPayload.metadata.publicURI =
+  "https://io.artcch.com/nft/metadata/hoodi/test-payload/TEST-A01.json";
+testPayload.testAssetMarkers = [
+  "TESTNET",
+  "NO REAL-WORLD VALUE",
+  "NO LEGAL EFFECT",
+];
+writeFileSync(manifestPath, JSON.stringify(testPayload));
+// Run the path step I actually runs: `--local-assets` reads and hashes the files rather than
+// trusting the manifest's declared digests. A schema-only pass here would not have shown whether
+// step I is runnable at all.
+const testPayloadOutput = execFileSync(
+  process.execPath,
+  [
+    "scripts/release/verify-charity-edition-package.mjs",
+    manifestPath,
+    "--local-assets",
+  ],
+  { encoding: "utf8" },
+);
+const testPayloadResult = JSON.parse(testPayloadOutput);
+if (
+  testPayloadResult.masterArtworkSha256 !== sha256(master) ||
+  testPayloadResult.holderAssetSha256 !== sha256(watermarked) ||
+  testPayloadResult.holderAssetDistinctFromMaster !== true
+) {
+  throw new Error("test payload did not verify through the local-assets path");
 }
 
 process.stdout.write("Charity edition verifier regression tests passed.\n");

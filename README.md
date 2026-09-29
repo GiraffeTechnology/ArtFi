@@ -1,117 +1,320 @@
-# ArtFi
+# ArtCCH:ArtFi
 
-ArtFi is GiraffeTechnology's RWA and digital art platform for minting real-world assets as NFTs, placing them into vaults, fractionalizing ownership, and governing assets through DAOs.
+ArtCCH:ArtFi is a commercial digital art and Real-World Asset (RWA) application platform.
 
-This repository is the single source of truth for the rebuilt ArtFi platform.
+This repository is the source of truth for the ArtFi application. It is not a demo and it is not an ERC-8415 implementation repository.
 
-## Current status
+## Product Blueprint
 
-- Delivery phase: **Stage 2–7 integrated implementation**
-- Allowed chain: **Sepolia only**
-- Mainnet and real-money operation: **not approved**
-- Live Sepolia/OpenSea evidence run: **pending after pre-chain gates; not claimed as passed**
-- PRD: converted into staged, testable requirements
+ArtFi is the application layer in the ERC-8415 ecosystem:
 
-## Workspace
+```
+ERC-8415
+(Standard)
+      |
+      v
+ERC8415-Kit
+(Infrastructure)
+      |
+      v
+Oracle
+(Verification / Integration Layer)
+      |
+      v
+ArtCCH:ArtFi
+(Application Layer)
+```
 
-```text
+ArtFi consumes infrastructure capabilities through Oracle. It does not directly implement ERC-8415 protocol logic.
+
+---
+
+# Product Lines
+
+The PRD defines three product lines.
+
+## 1. ERC-8415 Based Artwork Asset Products
+
+Purpose:
+
+Represent physical artwork identity, custody records, registry synchronization and market workflows.
+
+Blueprint:
+
+```
+Artwork
+   |
+Custody
+   |
+Registry
+   |
+ERC-8415 asset representation
+   |
+Market workflow
+```
+
+The system preserves the distinction between:
+
+- blockchain tradeable position;
+- registry-confirmed asset state.
+
+ArtFi must not merge these concepts.
+
+```
+ERC-721 ownerOf
+        !=
+Confirmed registry holder
+```
+
+---
+
+## 2. Artwork Investment Products
+
+ArtFi supports artwork-specific investment structures.
+
+Blueprint:
+
+```
+Artwork
+   |
+Single-asset investment product
+   |
+Fund participation
+   |
+DAO governance
+```
+
+Governance rights depend on the asset model.
+
+Token possession alone does not automatically define governance authority.
+
+---
+
+## 3. Charity NFT Editions
+
+Charity NFT editions are an independent cultural and philanthropic product line.
+
+They are not required to follow the ERC-8415 asset model and have independent requirements.
+
+---
+
+# Functional Blueprint
+
+## M1 — Smart Contracts
+
+PRD scope:
+
+- artwork asset contracts;
+- auction and market contracts;
+- fractional asset components;
+- revenue distribution;
+- governance contracts;
+- multi-signature administration;
+- deployment tooling;
+- contract testing.
+
+## M2 — Backend Core Trading
+
+Business model:
+
+ArtFi is a trading intermediary, not a custodian or exchange.
+
+Required architecture:
+
+```
+User Wallet
+      |
+Signed Intent
+      |
+ArtFi Backend
+      |
+On-chain Settlement
+```
+
+Rules:
+
+- ArtFi does not hold user assets;
+- ArtFi does not control user funds;
+- administration cannot move user property;
+- chain state remains ownership authority.
+
+Backend scope:
+
+- authentication;
+- wallet binding;
+- order workflow;
+- signed intents;
+- trade history;
+- API services;
+- audit records.
+
+## M3 — Frontend UX
+
+PRD scope:
+
+- artwork discovery;
+- market interface;
+- personal centre;
+- holdings display;
+- governance interface;
+- charity interface;
+- responsive and multilingual UI.
+
+Prototype screens define UX direction, not final delivery alone.
+
+## M4 — DAO Governance
+
+Governance blueprint:
+
+- voting power model;
+- proposal lifecycle;
+- timelock execution;
+- administrative controls.
+
+Governance follows asset structure.
+
+## M5 — Security
+
+Required:
+
+- security review;
+- penetration testing;
+- remediation verification;
+- secret/key protection.
+
+## M6 — Operations
+
+Required:
+
+- deployment;
+- monitoring;
+- CI/CD;
+- production operation evidence.
+
+---
+
+# Current Implementation Status (2026-09-20)
+
+The repository contains substantial implementation across the PRD scope, but production acceptance is not complete.
+
+Implemented areas include:
+
+## Contracts
+
+- artwork market foundations;
+- fractional asset foundations;
+- revenue distribution components;
+- governance contracts;
+- charity NFT related contracts.
+
+## Backend
+
+- API service framework;
+- asset workflows;
+- external market integration framework;
+- OpenAPI definitions;
+- runtime validation boundaries.
+
+## Frontend
+
+- Next.js application;
+- responsive UI framework;
+- multilingual framework;
+- wallet/application interaction layer.
+
+## Testing
+
+Implemented:
+
+- contract tests;
+- fuzz/invariant tests;
+- API tests;
+- frontend contract tests;
+- browser contract tests.
+
+Current limitations:
+
+- production chain deployment is not approved;
+- real-money operation is not approved;
+- runtime evidence remains required for acceptance.
+
+---
+
+# Delivery Rule
+
+ArtFi follows evidence-based delivery:
+
+```
+Code
+  |
+Tests
+  |
+Deployment Environment
+  |
+User Visible Workflow
+  |
+Acceptance Evidence
+```
+
+Code completion alone does not equal delivery.
+
+---
+
+# Repository Structure
+
+```
 apps/
-  web/          Next.js user application
-  api/          Go API
-  wallet-extension/  Non-custodial Manifest V3 Alpha
+  web/                 Next.js application
+  api/                 API service
+  wallet-extension/    Wallet extension alpha
+
 packages/
-  contracts/    Solidity contracts and deployment tooling
-  api-client/   OpenAPI-generated types and fetch client
-docs/           Product, architecture, security, and operations
+  contracts/           Solidity contracts
+  api-client/          Generated API client
+
+docs/                  Product, architecture and delivery documents
 ```
 
-## Quick start
+---
 
-Prerequisites:
+# Primary Documents
 
-- Node.js 24 LTS
-- pnpm 11.22.0
-- Go 1.26.x
-- Docker with Compose
-- Foundry 1.5.x for contract work
+| Document           | Purpose                                       |
+| ------------------ | --------------------------------------------- |
+| docs/PRD.md        | Product blueprint and functional requirements |
+| docs/ACCEPTANCE.md | Delivery evidence and promotion rules         |
+| docs/STATUS.md     | Requirement status                            |
+| AGENTS.md          | Engineering execution rules                   |
 
-```bash
-cp .env.example .env
-docker compose up -d mysql redis
-pnpm install
-pnpm api:generate
-pnpm dev
-```
+Historical documents provide traceability but are not acceptance targets unless referenced by current baseline documents.
 
-The web app runs at `http://localhost:3000`. Start the read-only API in a second terminal:
+---
 
-```bash
-cd apps/api
-go run ./cmd/server
-```
+# Scope Boundary
 
-The health endpoint is `http://localhost:8080/healthz`; the OpenAPI contract is at `apps/api/openapi/openapi.yaml`.
+ArtFi is:
 
-## Quality gates
+- commercial application layer;
+- artwork marketplace and user experience platform;
+- consumer of Oracle and ERC-8415 ecosystem infrastructure.
 
-```bash
-pnpm peers check
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm test:e2e
-pnpm contracts:format:check
-pnpm contracts:lint
-pnpm contracts:build
-pnpm contracts:test
-(cd apps/api && go vet ./... && go test -race ./...)
-docker compose config
-```
+ArtFi is not:
 
-## Delivery plan
+- ERC-8415 protocol implementation;
+- ERC8415-Kit infrastructure;
+- Oracle infrastructure;
+- legal title adjudication system;
+- custody replacement system.
 
-**The current baseline is three documents.** Read them before anything else, and see
-[`AGENTS.md`](AGENTS.md) for how they bind:
+---
 
-- [**PRD**](docs/PRD.md) — what must exist and how it must behave
-- [**Acceptance standard**](docs/ACCEPTANCE.md) — what proves it exists, and the G1–G4 promotion gates
-- [**Status**](docs/STATUS.md) — where every requirement stands right now, item by item
+# Patent Disclosure Boundary
 
-Client directives override them where they conflict, newest first:
-[2026-08-30 delivery](docs/DIRECTIVE_2026-08-30_DELIVERY.md) (measurement, G3 split, Hoodi test
-payload) and [2026-08-24 Hoodi](docs/DIRECTIVE_2026-08-24_HOODI.md) (test chain).
+Publicly disclosed applications:
 
-### Superseded, retained as history
+| Application                                | Number           | Scope                           |
+| ------------------------------------------ | ---------------- | ------------------------------- |
+| 一种链外数据源事实的无人值守出具系统及方法 | `202611389399.6` | Oracle                          |
+| 一种基于链下登记簿的数据凭证映射方法及系统 | `202611389374.6` | ERC registry credential mapping |
 
-The documents below predate the baseline above. They record how the project got here; they are not
-the acceptance target.
-
-[the staged roadmap](docs/ROADMAP.md), [PRD traceability](docs/PRD_TRACEABILITY.md),
-[Claude Code acceptance PRD](docs/PRD_CLAUDE_CODE_ACCEPTANCE.md),
-[Stage 1 acceptance evidence](docs/STAGE_1_ACCEPTANCE.md),
-[Stage 2 acceptance evidence](docs/STAGE_2_ACCEPTANCE.md),
-[Stage 3 acceptance evidence](docs/STAGE_3_ACCEPTANCE.md),
-[Stage 4 acceptance evidence](docs/STAGE_4_ACCEPTANCE.md),
-[Stage 5 acceptance evidence](docs/STAGE_5_ACCEPTANCE.md),
-[Stage 6 acceptance evidence](docs/STAGE_6_ACCEPTANCE.md),
-[Stage 7 acceptance evidence](docs/STAGE_7_ACCEPTANCE.md),
-[pre-chain deployment evidence](docs/PRECHAIN_DEPLOYMENT_EVIDENCE.md),
-[UI deployment contract](docs/UI_DEPLOYMENT_CONTRACT.md),
-[Sepolia mint package gate](docs/MINT_PACKAGE.md),
-[Sepolia/OpenSea validation status](docs/TESTNET_MARKETPLACE_VALIDATION.md), and
-[architecture](docs/ARCHITECTURE.md).
-
-## 专利申请状态与披露边界
-
-以下申请状态由项目负责人确认；负责人明确允许公开以下专利申请号：
-
-| 申请名称                                   | 申请号           | 关联范围               |
-| ------------------------------------------ | ---------------- | ---------------------- |
-| 一种链外数据源事实的无人值守出具系统及方法 | `202611389399.6` | Oracle                 |
-| 一种基于链下登记簿的数据凭证映射方法及系统 | `202611389374.6` | ERC 登记簿凭证映射标准 |
-
-两项申请均已提交并取得受理通知。申请受理不等于专利授权，也不表示技术交付或生产验收完成。
-
-本次仅披露上述申请名称、申请号及申请状态，不上传受理通知书 PDF、申请材料、个人信息、客户私域数据或其他商业信息。不得要求负责人向 AI 提供保密协议、商业尽调材料或与技术无关的信息，作为更新上述状态或推进无关技术开发、脱敏测试的前提。技术验收仍依据代码、可复核测试及授权范围内的运行证据，不代替任何人的法律或商业签署。
+Patent filing does not mean grant, production acceptance or commercial deployment.

@@ -97,6 +97,31 @@ export const charityEditionsAbi = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
+    // The public view of one edition. `masterArtworkHash` is a commitment, never a locator: it
+    // names no object and resolves to nothing a browser can fetch (CH.6, CH.7).
+    type: "function",
+    name: "series",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "artworkId", type: "bytes32" },
+          { name: "masterArtworkHash", type: "bytes32" },
+          { name: "metadataHash", type: "bytes32" },
+          { name: "distributionWallet", type: "address" },
+          { name: "createdAt", type: "uint64" },
+          { name: "soldOutAt", type: "uint64" },
+          { name: "physicalDonationRecordedAt", type: "uint64" },
+          { name: "selloutEvidenceHash", type: "bytes32" },
+          { name: "physicalDonationEvidenceHash", type: "bytes32" },
+          { name: "metadataURI", type: "string" },
+        ],
+      },
+    ],
+  },
+  {
     type: "function",
     name: "createSeries",
     stateMutability: "nonpayable",
@@ -315,5 +340,113 @@ export const artFiAdminSafeAbi = [
         ],
       },
     ],
+  },
+] as const;
+
+/**
+ * `WholeArtworkMarket` — signature settlement for a whole artwork.
+ *
+ * The `SaleIntent` tuple's field order is part of the EIP-712 type hash. It must match
+ * `SALE_INTENT_TYPEHASH` in the contract and `saleIntentTypes` in `whole-artwork-intent.ts`;
+ * both suites assert the same fixed digest so a reorder fails a test rather than a fill.
+ */
+export const wholeArtworkMarketAbi = [
+  {
+    type: "function",
+    name: "fillIntent",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "intent",
+        type: "tuple",
+        components: [
+          { name: "seller", type: "address" },
+          { name: "collection", type: "address" },
+          { name: "tokenId", type: "uint256" },
+          { name: "paymentToken", type: "address" },
+          { name: "price", type: "uint256" },
+          { name: "buyer", type: "address" },
+          { name: "salt", type: "uint256" },
+          { name: "startsAt", type: "uint48" },
+          { name: "endsAt", type: "uint48" },
+          { name: "epoch", type: "uint256" },
+        ],
+      },
+      { name: "signature", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "sellerEpoch",
+    stateMutability: "view",
+    inputs: [{ name: "seller", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "intentUsed",
+    stateMutability: "view",
+    inputs: [{ name: "intentHash", type: "bytes32" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "incrementEpoch",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "allowedCollection",
+    stateMutability: "view",
+    inputs: [{ name: "collection", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "allowedPaymentToken",
+    stateMutability: "view",
+    inputs: [{ name: "paymentToken", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "paused",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
+/** The reads the listing surface needs from the artwork's ERC-721 contract. */
+export const wholeArtworkCollectionAbi = [
+  {
+    type: "function",
+    name: "ownerOf",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
+    name: "isApprovedForAll",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "operator", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "setApprovalForAll",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "operator", type: "address" },
+      { name: "approved", type: "bool" },
+    ],
+    outputs: [],
   },
 ] as const;
