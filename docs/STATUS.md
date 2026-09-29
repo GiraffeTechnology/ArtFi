@@ -328,6 +328,21 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 
 ## Change log
 
+### 2026-09-30 — PR #80: dedicated database CI boundary
+
+Align the existing CTYun-only draft with main `8af87e8` without importing its
+historical status matrix. The migration job refuses execution until the approved
+dedicated database executor is configured; it does not start a local substitute.
+The other jobs and all main product code are preserved, with one additional
+text-policy regression command. See `CTYUN_DATABASE_CI_GATE.md`.
+
+The bounded policy scanner includes continuation and comment regression repairs
+reviewed on PR #80. Control's earlier pinned text-only overlay passed 23/23 on
+Node24.18.0 (report SHA256
+4154837BFE830F739335BB1613C36D21C27CB0C474B2F11D4FB0DBB1B523D09A).
+That result does not certify this newly aligned workflow or full-head CI. No
+requirement status/count, database readiness or delivery acceptance is promoted.
+
 ### 2026-09-19 — `claude/ci-all-pr-6dytk9`: the charity Hoodi test plan
 
 `TESTPLAN_HOODI_CHARITY.md` — the executable sequence for the one thing this side cannot do, since
