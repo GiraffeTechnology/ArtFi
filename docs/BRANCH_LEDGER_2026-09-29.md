@@ -67,3 +67,53 @@ reverted from `main` on 2026-09-25 and re-applied on `claude/ci-all-pr-6dytk9`, 
 | `codex/market-persistence-503-63fcf8c4`                       | `74d7df142bcf125bc85bf22bc66789a71360a307` | 2026-09-12 — Merge remote-tracking branch 'origin/main' into codex-65-placeholders    | 11                      | 7                           |
 | `codex/s-xm-backfill-resilience-20260919`                     | `05fc32e4be2a86fe02b9da129497b6f12233527f` | 2026-09-19 — fix(mirror): make REST gap fill fail closed                              | 1                       | 3                           |
 | `codex/stage2-agent-reset-20260912`                           | `60e6b7252f09aebf2d6447d1c1f7c5f292cfcb09` | 2026-09-13 — fix(agent): make revocation recording recoverable                        | 8                       | 26                          |
+
+## Running the prune
+
+The 32 refs above are still on the remote. **This session cannot delete them**: both
+`git push origin --delete` and `DELETE /repos/:owner/:repo/git/refs/heads/:branch` are refused with
+`403 Write access to this GitHub API path is not permitted through this proxy`. Pushing and opening a
+pull request are allowed; removing a ref is not. So the prune is one command for anyone with ordinary
+push access to the repository:
+
+```sh
+git push origin --delete \
+  agent/base-sepolia-batch-release \
+  agent/cchsc-language-parity \
+  agent/prechain-ui-public \
+  agent/remove-redundant-mirror-badge \
+  agent/stage-0-foundation \
+  agent/stage-1-readonly-dapp \
+  agent/stages-2-7-completion \
+  agent/ui-brand-language \
+  agent/ui-brand-readonly-mirror \
+  agent/wallet-local-test-signer \
+  claude/55a-admin-safe-contract \
+  claude/55b-1-safe-proposal-path \
+  claude/charity-holder-runtime \
+  claude/erc-standard-feasibility-audit-90ypms \
+  claude/g0-gray-deployment \
+  claude/land-65-market-503 \
+  claude/land-m1-5-revenue \
+  claude/m19-asset-correspondence \
+  claude/open-items-9-12 \
+  claude/p0-unlock-market-deploy \
+  claude/pause-never-freezes-holdings \
+  claude/stamp-78fa689 \
+  claude/stamp-fdb90ff \
+  cleanup/fix-main-format-blocker \
+  cleanup/remove-agent-authored-gates \
+  cleanup/remove-agent-authored-stall-rule \
+  codex/m1-admin-safe-main-20260901T023000Z \
+  codex/m1-auction-post-pr46-20260831T010902Z \
+  codex/m1-revenue-distribution-stacked-pr48-20260831T043500Z \
+  codex/market-persistence-503-63fcf8c4 \
+  codex/s-xm-backfill-resilience-20260919 \
+  codex/stage2-agent-reset-20260912
+```
+
+Restoring any one of them afterwards takes its tip from the table above:
+
+```sh
+git push origin <tip>:refs/heads/<branch>
+```
