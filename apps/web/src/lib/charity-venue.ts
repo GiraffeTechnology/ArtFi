@@ -76,6 +76,46 @@ export function selectCharityVenueRecord(
     .at(0);
 }
 
+/** One page of `/v1/market/assets`, as the mirror returns it. */
+export type CharityVenuePage = {
+  data: CharityVenueRecord[];
+  total: number;
+};
+
+/**
+ * The edition's record, looked for across every page the mirror has.
+ *
+ * `/v1/market/assets` is paginated and its page size caps at 100. Reading only the first page meant
+ * that once a collection carried more than 100 mirrored token ids, an edition on a later page came
+ * back as "no marketplace activity observed" while a durable record existed all along — the page
+ * then said there was no venue link when there was one. **"Not found yet" is not "not observed",**
+ * and only exhausting the pages tells the two apart.
+ *
+ * Three ways the walk ends, so a mirror that disagrees with itself cannot spin it: the record is
+ * found, a page comes back empty, or everything `total` promised has been seen. `pageLimit` is a
+ * last backstop for a `total` that never arrives.
+ */
+export async function findCharityVenueRecord(
+  fetchPage: (page: number, pageSize: number) => Promise<CharityVenuePage>,
+  contractAddress: string,
+  tokenId: string,
+  options: { pageSize?: number; pageLimit?: number } = {},
+): Promise<CharityVenueRecord | undefined> {
+  const pageSize = options.pageSize ?? 100;
+  const pageLimit = options.pageLimit ?? 100;
+
+  let collected = 0;
+  for (let page = 1; page <= pageLimit; page += 1) {
+    const body = await fetchPage(page, pageSize);
+    const found = selectCharityVenueRecord(body.data, contractAddress, tokenId);
+    if (found) return found;
+    if (body.data.length === 0) return undefined;
+    collected += body.data.length;
+    if (collected >= body.total) return undefined;
+  }
+  return undefined;
+}
+
 /** What the page may say, given the record the mirror has for this edition. */
 export function charityVenueState(
   record: CharityVenueRecord | undefined,

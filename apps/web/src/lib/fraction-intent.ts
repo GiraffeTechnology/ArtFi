@@ -91,11 +91,22 @@ export type FractionIntentProblem =
 
 const uint48Max = 281_474_976_710_655;
 
+/**
+ * A party or a token address, which the zero address is neither of.
+ *
+ * `isAddress` alone accepts `0x00…0`, and the market rejects it: `setTokenPermission` refuses to
+ * allowlist it and `fillIntent` refuses a token that is not allowlisted. Accepting it here produced a
+ * signature that validated in the browser and could never settle on chain. Reported as the same
+ * "missing" problem the empty field reports, because to the market it is the same thing — the buyer
+ * field keeps its own check, where the zero address means "anyone".
+ */
 function addressProblem(
   value: string,
   missing: FractionIntentProblem,
 ): FractionIntentProblem | null {
-  return isAddress(value) ? null : missing;
+  return isAddress(value) && value.toLowerCase() !== anyFractionBuyer
+    ? null
+    : missing;
 }
 
 /**
@@ -243,6 +254,27 @@ export function fractionIntentFillable(
   if (amount <= 0n) return refuse("amount-not-positive");
   if (amount > remaining) return refuse("amount-exceeds-remaining");
   return { fillable: true, reason: "open", remaining };
+}
+
+/**
+ * Whether the payment leg may be approved yet — the allowlist half of a fill, checked **before** the
+ * buyer is asked to sign an ERC-20 approval.
+ *
+ * `fillIntent` refuses a payment token the market does not allow, including one whose permission was
+ * withdrawn after the seller signed. Approving first and discovering that second costs the buyer a
+ * transaction and leaves a live allowance behind for a fill that can never happen.
+ *
+ * **`undefined` is not a pass.** An allowlist standing that has not been read is not one that has
+ * been confirmed; waiting costs a retry, guessing costs a stranded allowance.
+ */
+export function fractionPaymentApprovable(
+  paymentAllowed: boolean | undefined,
+): { approvable: boolean; reason: "allowed" | "not-allowlisted" | "unknown" } {
+  if (paymentAllowed === true) return { approvable: true, reason: "allowed" };
+  if (paymentAllowed === false) {
+    return { approvable: false, reason: "not-allowlisted" };
+  }
+  return { approvable: false, reason: "unknown" };
 }
 
 /** What the buyer pays for `amount` fractions. The contract computes the same product. */

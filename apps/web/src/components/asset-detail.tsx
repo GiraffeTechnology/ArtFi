@@ -107,7 +107,11 @@ export function AssetDetail({
           </dl>
         </aside>
       </section>
-      {fractional ? <FractionListing /> : <WholeArtworkListing />}
+      {fractional ? (
+        <FractionListing slug={artwork.slug} />
+      ) : (
+        <WholeArtworkListing slug={artwork.slug} />
+      )}
       {!fractional && <AssetHolderAuthority />}
     </main>
   );

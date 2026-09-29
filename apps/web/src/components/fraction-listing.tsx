@@ -9,12 +9,14 @@ import {
   useWriteContract,
 } from "wagmi";
 
+import { assetDeploymentBinding } from "@/lib/asset-binding";
 import { artFiFractionMarketAbi, fractionTokenAbi } from "@/lib/contracts";
 import {
   anyFractionBuyer,
   fractionFillPayment,
   fractionIntentFillable,
   fractionIntentHash,
+  fractionPaymentApprovable,
   fractionIntentRemaining,
   fractionIntentTypedData,
   validateFractionIntent,
@@ -177,8 +179,9 @@ function parseAmount(value: string): bigint | undefined {
 }
 
 export function FractionListing({
+  slug,
   assetToken,
-}: Readonly<{ assetToken?: string }>) {
+}: Readonly<{ slug?: string; assetToken?: string }>) {
   const { address, chainId, isConnected } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
   const { writeContractAsync } = useWriteContract();
@@ -200,9 +203,30 @@ export function FractionListing({
   const market = configuredAddress(
     process.env.NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS,
   );
+
+  /**
+   * **The deployment token belongs to one asset, not to every page that renders this.**
+   *
+   * `AssetDetail` is shared by every slug in `lib/catalog.ts`, six invented artworks that map to no
+   * deployed token. A fraction token read from the environment alone would therefore appear beneath
+   * all six titles at once, and a holder could sign away a real balance from a page describing a
+   * different work. `ACCEPTANCE.md` §3 and `AGENTS.md` §5 both refuse that: a fixture may not be
+   * dressed as the live asset.
+   *
+   * So an address passed in wins, and the environment's address applies only to the one slug the
+   * environment names. Every other route stays inert and says why.
+   */
+  const configuredToken = process.env.NEXT_PUBLIC_ARTFI_FRACTION_TOKEN_ADDRESS;
+  const binding = assetDeploymentBinding(
+    slug,
+    process.env.NEXT_PUBLIC_ARTFI_FRACTION_SLUG,
+    configuredToken,
+  );
   const token =
     configuredAddress(assetToken) ??
-    configuredAddress(process.env.NEXT_PUBLIC_ARTFI_FRACTION_TOKEN_ADDRESS);
+    (binding.bound ? configuredAddress(configuredToken) : undefined);
+  // Told apart from "nothing is deployed at all", so the page can say which of the two it is.
+  const boundElsewhere = !token && binding.boundElsewhere;
 
   const { data: epoch } = useReadContract({
     abi: artFiFractionMarketAbi,
@@ -295,6 +319,24 @@ export function FractionListing({
     query: { enabled: Boolean(market && pastedAuthorization) },
   });
 
+  /**
+   * The payment leg's allowlist standing, read before any approval is requested.
+   *
+   * `fillIntent` refuses a payment token the market does not allow — including one whose permission
+   * was withdrawn after the seller signed. Without this the buyer pays gas for an ERC-20 approval,
+   * leaves a live allowance behind, and only then watches the fill revert.
+   */
+  const { data: paymentAllowed } = useReadContract({
+    abi: artFiFractionMarketAbi,
+    address: market,
+    functionName: "allowedPaymentToken",
+    args: pastedAuthorization
+      ? [pastedAuthorization.intent.paymentToken]
+      : undefined,
+    chainId: supportedChain.id,
+    query: { enabled: Boolean(market && pastedAuthorization) },
+  });
+
   const { data: pilotCap } = useReadContract({
     abi: artFiFractionMarketAbi,
     address: market,
@@ -364,7 +406,10 @@ export function FractionListing({
       return {
         seller: address,
         assetToken: token,
-        paymentToken: (paymentToken.trim() || anyFractionBuyer) as Address,
+        // A blank field stays blank. Defaulting it to the zero address produced a signature
+        // that validated here and could never settle, because the market allowlists no such
+        // token; an invalid address instead surfaces `payment-token-missing` before signing.
+        paymentToken: paymentToken.trim() as Address,
         maxAmount: authorized,
         unitPrice: price,
         buyer: (namedBuyer.trim() || anyFractionBuyer) as Address,
@@ -551,6 +596,19 @@ export function FractionListing({
       setStage("error");
       return;
     }
+    // Fail closed, and before the approval rather than after it. `undefined` is not a pass: an
+    // allowlist standing that has not been read is not one that has been confirmed, and the cost of
+    // waiting is a retry while the cost of guessing is a stranded allowance.
+    const approvable = fractionPaymentApprovable(paymentAllowed);
+    if (!approvable.approvable) {
+      setDetail(
+        approvable.reason === "not-allowlisted"
+          ? "This authorization's payment token is not on the market's allowlist, so the fill would be refused on chain. No approval was requested."
+          : "The payment token's allowlist standing could not be read, so no approval was requested.",
+      );
+      setStage("error");
+      return;
+    }
     const payment = fractionFillPayment(intent, amount);
     if (pilotHeadroom !== undefined && payment > pilotHeadroom) {
       setDetail(
@@ -589,6 +647,7 @@ export function FractionListing({
     fillAmount,
     market,
     pasted,
+    paymentAllowed,
     pastedSellerEpoch,
     pilotHeadroom,
     writeContractAsync,
@@ -609,6 +668,9 @@ export function FractionListing({
           fraction token&apos;s own contract address.{" "}
           {market ? "" : "No market address is configured. "}
           {token ? "" : "No fraction token is configured. "}
+          {boundElsewhere
+            ? "The deployed fraction token belongs to a different page, so it is not offered here. "
+            : ""}
           Until both are present this surface offers nothing, rather than
           showing a sale it could not settle.
         </p>

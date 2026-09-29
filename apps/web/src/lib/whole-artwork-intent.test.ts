@@ -144,6 +144,43 @@ describe("validateSaleIntent", () => {
     ).toContain("payment-token-missing");
   });
 
+  /**
+   * The zero address is a valid address and not a valid party or token. A signature over it could
+   * never settle, so the wallet is not asked to produce one.
+   */
+  it("rejects the zero address as a party or a token", () => {
+    const cases: Array<[Partial<SaleIntent>, string]> = [
+      [
+        { seller: "0x0000000000000000000000000000000000000000" },
+        "seller-missing",
+      ],
+      [
+        { collection: "0x0000000000000000000000000000000000000000" },
+        "collection-missing",
+      ],
+      [
+        { paymentToken: "0x0000000000000000000000000000000000000000" },
+        "payment-token-missing",
+      ],
+    ];
+    for (const [change, problem] of cases) {
+      expect(
+        validateSaleIntent({ ...intent, ...change }, domain, chainId),
+      ).toContain(problem);
+    }
+  });
+
+  // The one field where it is meaningful: the contract reads a zero buyer as "anyone may fill".
+  it("still accepts the zero address as an open buyer", () => {
+    expect(
+      validateSaleIntent(
+        { ...intent, buyer: "0x0000000000000000000000000000000000000000" },
+        domain,
+        chainId,
+      ),
+    ).toEqual([]);
+  });
+
   it("rejects an unconfigured market address", () => {
     expect(
       validateSaleIntent(

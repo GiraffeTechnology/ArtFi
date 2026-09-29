@@ -5,6 +5,7 @@ import {
   fractionFillPayment,
   fractionIntentFillable,
   fractionIntentHash,
+  fractionPaymentApprovable,
   fractionIntentRemaining,
   fractionIntentTypedData,
   fractionIntentTypes,
@@ -135,6 +136,44 @@ describe("validateFractionIntent", () => {
       "asset-token-missing",
       "payment-token-missing",
     ]);
+  });
+
+  /**
+   * The zero address is a valid address and not a valid party or token. `setTokenPermission` refuses
+   * to allowlist it and `fillIntent` refuses a token that is not allowlisted, so accepting it here
+   * produced a signature that validated in the browser and could never settle anywhere.
+   */
+  it("rejects the zero address as a party or a token", () => {
+    const cases: Array<[Partial<FractionSaleIntent>, string]> = [
+      [
+        { seller: "0x0000000000000000000000000000000000000000" },
+        "seller-missing",
+      ],
+      [
+        { assetToken: "0x0000000000000000000000000000000000000000" },
+        "asset-token-missing",
+      ],
+      [
+        { paymentToken: "0x0000000000000000000000000000000000000000" },
+        "payment-token-missing",
+      ],
+    ];
+    for (const [change, problem] of cases) {
+      expect(
+        validateFractionIntent({ ...intent, ...change }, domain, chainId),
+      ).toContain(problem);
+    }
+  });
+
+  // The one field where it is meaningful: the contract reads a zero buyer as "anyone may fill".
+  it("still accepts the zero address as an open buyer", () => {
+    expect(
+      validateFractionIntent(
+        { ...intent, buyer: "0x0000000000000000000000000000000000000000" },
+        domain,
+        chainId,
+      ),
+    ).toEqual([]);
   });
 
   it("rejects a window that does not open", () => {
@@ -273,5 +312,33 @@ describe("fractionFillPayment", () => {
       maxAmount: 10n ** 9n,
     };
     expect(fractionFillPayment(large, 10n ** 9n)).toBe(10n ** 27n);
+  });
+});
+
+describe("fractionPaymentApprovable", () => {
+  it("lets an allowlisted payment token through", () => {
+    expect(fractionPaymentApprovable(true)).toEqual({
+      approvable: true,
+      reason: "allowed",
+    });
+  });
+
+  it("blocks a payment token the market does not allow", () => {
+    expect(fractionPaymentApprovable(false)).toEqual({
+      approvable: false,
+      reason: "not-allowlisted",
+    });
+  });
+
+  /**
+   * The subtle half, and the one a later edit is most likely to undo: a standing that has not been
+   * read is not a standing that has been confirmed. Treating `undefined` as permission is how a
+   * buyer pays for an approval whose fill can never settle.
+   */
+  it("blocks a standing it has not read, and says which case that is", () => {
+    expect(fractionPaymentApprovable(undefined)).toEqual({
+      approvable: false,
+      reason: "unknown",
+    });
   });
 });

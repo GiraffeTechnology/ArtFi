@@ -9,6 +9,7 @@ import {
   useWriteContract,
 } from "wagmi";
 
+import { assetDeploymentBinding } from "@/lib/asset-binding";
 import {
   wholeArtworkCollectionAbi,
   wholeArtworkMarketAbi,
@@ -150,9 +151,10 @@ function decodeAuthorization(
 }
 
 export function WholeArtworkListing({
+  slug,
   collection,
   tokenId,
-}: Readonly<{ collection?: string; tokenId?: string }>) {
+}: Readonly<{ slug?: string; collection?: string; tokenId?: string }>) {
   const { address, chainId, isConnected } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
   const { writeContractAsync } = useWriteContract();
@@ -169,17 +171,37 @@ export function WholeArtworkListing({
   const [durationHours, setDurationHours] = useState("24");
 
   const market = marketAddress();
-  // The props win, and deployment configuration is the fallback. Without the fallback this surface
-  // could never be switched on at all: nothing passes a collection, so it would stay in its
-  // unconfigured branch however the market itself were deployed.
+
+  /**
+   * **The deployment artwork belongs to one route, not to every page that renders this.**
+   *
+   * `AssetDetail` is shared by every slug in `lib/catalog.ts`, six invented artworks that map to no
+   * deployed token. A collection and token id read from the environment alone would appear beneath
+   * all six titles at once, and a holder could authorize a sale of a real artwork from a page
+   * describing a different one. `ACCEPTANCE.md` §3 and `AGENTS.md` §5 both refuse that.
+   *
+   * So the props win, and the environment's artwork applies only to the one slug the environment
+   * names. Every other route stays inert and says why. Without a fallback of some kind the surface
+   * could never be switched on at all — nothing passes a collection — so the fallback stays, bound.
+   */
+  const configuredCollection =
+    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS;
+  const binding = assetDeploymentBinding(
+    slug,
+    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG,
+    configuredCollection,
+  );
   const collectionAddress =
     configuredAddress(collection) ??
-    configuredAddress(
-      process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS,
-    );
+    (binding.bound ? configuredAddress(configuredCollection) : undefined);
   const configuredTokenId = (
-    tokenId ?? process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID
+    tokenId ??
+    (binding.bound
+      ? process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID
+      : undefined)
   )?.trim();
+  // Told apart from "nothing is deployed at all", so the page can say which of the two it is.
+  const boundElsewhere = !collectionAddress && binding.boundElsewhere;
   const artworkId = /^[0-9]+$/.test(configuredTokenId ?? "")
     ? BigInt(configuredTokenId!)
     : undefined;
@@ -257,7 +279,9 @@ export function WholeArtworkListing({
         seller: address,
         collection: collectionAddress,
         tokenId: artworkId,
-        paymentToken: (paymentToken.trim() || anyBuyer) as Address,
+        // A blank field stays blank rather than becoming the zero address, which would sign
+        // terms no market can settle. See the same note in `fraction-listing.tsx`.
+        paymentToken: paymentToken.trim() as Address,
         price: priceValue,
         buyer: (namedBuyer.trim() || anyBuyer) as Address,
         // Distinguishes otherwise identical terms, so a holder can authorize the same artwork
@@ -447,6 +471,9 @@ export function WholeArtworkListing({
           artwork&apos;s own contract address.{" "}
           {market ? "" : "No market address is configured. "}
           {collectionAddress ? "" : "No artwork contract is configured. "}
+          {boundElsewhere
+            ? "The deployed artwork belongs to a different page, so it is not offered here. "
+            : ""}
           Until both are present this surface offers nothing, rather than
           showing a sale it could not settle.
         </p>

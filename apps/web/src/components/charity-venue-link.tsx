@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   charityVenueState,
-  selectCharityVenueRecord,
+  findCharityVenueRecord,
   type CharityVenueRecord,
   type CharityVenueState,
 } from "@/lib/charity-venue";
@@ -54,24 +54,36 @@ export function CharityVenueLink({ tokenId }: Readonly<{ tokenId: string }>) {
   const load = useCallback(async () => {
     if (!contract) return;
     try {
-      const response = await fetch(
-        `${apiURL}/v1/market/assets?source=opensea&contract=${contract}&page=1&pageSize=100`,
-        { cache: "no-store" },
+      /**
+       * Paged through to the end, not read off the first page.
+       *
+       * `/v1/market/assets` is paginated and its page size caps at 100. Reading page one alone meant
+       * that once a collection carried more than 100 mirrored token ids, an edition on any later page
+       * reported as having no observed activity and silently lost its venue link — a durable record
+       * existing all the while. "Not found yet" is not "not observed", and only exhausting the
+       * pages tells the two apart.
+       */
+      const found = await findCharityVenueRecord(
+        async (page, pageSize) => {
+          const response = await fetch(
+            `${apiURL}/v1/market/assets?source=opensea&contract=${contract}&page=${page}&pageSize=${pageSize}`,
+            { cache: "no-store" },
+          );
+          if (!response.ok) {
+            throw new Error(
+              `The external-market mirror answered HTTP ${response.status}.`,
+            );
+          }
+          const body = (await response.json()) as MarketCatalogResponse;
+          if (body.runtime !== true || !Array.isArray(body.data)) {
+            throw new Error("The market catalog response is not runtime data.");
+          }
+          return { data: body.data, total: body.total };
+        },
+        contract,
+        tokenId,
       );
-      if (!response.ok) {
-        throw new Error(
-          `The external-market mirror answered HTTP ${response.status}.`,
-        );
-      }
-      const body = (await response.json()) as MarketCatalogResponse;
-      if (body.runtime !== true || !Array.isArray(body.data)) {
-        throw new Error("The market catalog response is not runtime data.");
-      }
-      setState(
-        charityVenueState(
-          selectCharityVenueRecord(body.data, contract, tokenId),
-        ),
-      );
+      setState(charityVenueState(found));
       setError(undefined);
     } catch (caught) {
       // Fail closed: no state at all rather than a stale or invented one.
