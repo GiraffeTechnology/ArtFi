@@ -4,6 +4,7 @@ import {
   encodeFunctionResult,
   multicall3Abi,
   zeroHash,
+  toFunctionSelector,
   type Hex,
 } from "viem";
 import { charityEditionsAbi } from "../src/lib/contracts";
@@ -11,6 +12,13 @@ import { charityEditionsAbi } from "../src/lib/contracts";
 // Contract read fixtures make the real edition surface reachable. They are not
 // live collection observations and do not bypass the component's configured reads.
 function editionCall(data: Hex): Hex {
+  // RainbowKit reads the connected account's native balance through Multicall3.
+  if (data.startsWith(toFunctionSelector("getEthBalance(address)")))
+    return encodeFunctionResult({
+      abi: multicall3Abi,
+      functionName: "getEthBalance",
+      result: 0n,
+    });
   if (data.startsWith("0x82ad56cb")) {
     const call = decodeFunctionData({ abi: multicall3Abi, data });
     if (call.functionName !== "aggregate3")
