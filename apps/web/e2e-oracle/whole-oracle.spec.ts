@@ -61,16 +61,19 @@ test("shows attributed public facts with no holder inference or mobile overflow"
 test("retries failed reads, suppresses stale facts during refresh, and recovers", async ({
   page,
 }) => {
-  let attempt = 0;
+  // StrictMode may abort and restart the initial read. A user-visible source
+  // state changes only when the test performs the next user action.
+  let phase: "unavailable" | "available" | "gone" = "unavailable";
+  let requests = 0;
   let release: (() => void) | undefined;
   await page.route(endpoint, async (route) => {
-    attempt += 1;
-    if (attempt === 1)
+    requests += 1;
+    if (phase === "unavailable")
       return route.fulfill({
         status: 503,
         json: { ok: false, code: "ORACLE_UNAVAILABLE" },
       });
-    if (attempt === 3) {
+    if (phase === "gone") {
       await new Promise<void>((resolve) => {
         release = resolve;
       });
@@ -85,35 +88,39 @@ test("retries failed reads, suppresses stale facts during refresh, and recovers"
   await expect(page.getByTestId("oracle-unavailable")).toContainText(
     "could not be reached",
   );
+  phase = "available";
   await page.getByRole("button", { name: "Retry Oracle read" }).click();
   await expect(page.getByTestId("oracle-facts")).toBeVisible();
+  phase = "gone";
+  const beforeRefresh = requests;
   await page.getByRole("button", { name: "Refresh Oracle status" }).click();
   await expect(
     page.getByRole("button", { name: "Reading Oracle…" }),
   ).toBeDisabled();
   await expect(page.getByTestId("oracle-facts")).toHaveCount(0);
   await expect.poll(() => Boolean(release)).toBe(true);
+  expect(requests).toBe(beforeRefresh + 1);
   release!();
   await expect(page.getByTestId("oracle-unavailable")).toContainText(
     "returned 410",
   );
+  phase = "available";
   await page.getByRole("button", { name: "Retry Oracle read" }).click();
   await expect(page.getByTestId("oracle-facts")).toBeVisible();
-  expect(attempt).toBe(4);
+  expect(requests).toBe(beforeRefresh + 2);
 });
 
 test("labels 404 and mismatched bindings, and never fills missing facts", async ({
   page,
 }) => {
-  let attempt = 0;
+  let phase: "missing" | "mismatched" | "available" = "missing";
   await page.route(endpoint, async (route) => {
-    attempt++;
-    if (attempt === 1)
+    if (phase === "missing")
       return route.fulfill({
         status: 404,
         json: { ok: false, code: "TOKEN_NOT_FOUND" },
       });
-    if (attempt === 2)
+    if (phase === "mismatched")
       return route.fulfill({
         status: 502,
         json: { ok: false, code: "BINDING_MISMATCH" },
@@ -131,11 +138,13 @@ test("labels 404 and mismatched bindings, and never fills missing facts", async 
   await expect(page.getByTestId("oracle-unavailable")).toContainText(
     "does not establish a registry rejection",
   );
+  phase = "mismatched";
   await page.getByRole("button", { name: "Retry Oracle read" }).click();
   await expect(page.getByTestId("oracle-unavailable")).toContainText(
     "does not match this page",
   );
   await expect(page.getByTestId("oracle-facts")).toHaveCount(0);
+  phase = "available";
   await page.getByRole("button", { name: "Retry Oracle read" }).click();
   await expect(page.getByTestId("oracle-facts")).toContainText(
     "No current certificate",
@@ -209,6 +218,7 @@ test("offline refresh hides cached facts and resumes with a fresh response", asy
   });
   await page.goto(path);
   await expect(page.getByTestId("oracle-facts")).toBeVisible();
+  const completedInitialRequests = requests;
   await context.setOffline(true);
   try {
     await page.getByRole("button", { name: "Refresh Oracle status" }).click();
@@ -221,11 +231,11 @@ test("offline refresh hides cached facts and resumes with a fresh response", asy
     ).toBeEnabled();
     await page.getByRole("button", { name: "Retry Oracle read" }).click();
     await expect(page.getByTestId("oracle-facts")).toHaveCount(0);
-    expect(requests).toBe(1);
+    expect(requests).toBe(completedInitialRequests);
   } finally {
     await context.setOffline(false);
   }
   await expect(page.getByTestId("oracle-facts")).toBeVisible();
   await expect(page.getByTestId("oracle-offline")).toHaveCount(0);
-  expect(requests).toBeGreaterThan(1);
+  expect(requests).toBe(completedInitialRequests + 1);
 });

@@ -185,7 +185,7 @@ async function loadOracle(
   }
 }
 
-/** #110 authority separation and the 2026-10-02 whole-receipt delivery. Read-only. */
+/** Public source observations for the whole-receipt page, without inferred rights. */
 export function AssetHolderAuthority({
   slug,
   className,
