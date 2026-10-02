@@ -52,8 +52,10 @@ test("a whole artwork states who the holder authority is", async ({ page }) => {
   await expect(authority).toBeVisible();
   await expect(authority).toContainText("Registry of record");
   await expect(authority).toContainText("Authority for holdership");
-  // The row that keeps the page honest: no registry is connected, so no holder is claimed from one.
-  await expect(authority).toContainText("Not connected in this build");
+  // The public Oracle read API has no holder address; references and statuses create no holder claim.
+  await expect(authority).toContainText(
+    "Holder unavailable through the public Oracle read API",
+  );
   await expect(authority).toContainText("Authoritative for nothing");
   await expect(authority).toContainText("never resolves one by asserting");
 });
