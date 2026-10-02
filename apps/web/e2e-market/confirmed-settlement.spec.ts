@@ -221,10 +221,19 @@ async function fixture(page: Page) {
 
 async function connect(page: Page) {
   await page.getByRole("button", { name: "Connect wallet" }).first().click();
-  await page
-    .getByRole("button", { name: /Browser Wallet|MetaMask|Injected/ })
-    .first()
-    .click();
+  try {
+    await page
+      .getByRole("button", { name: /Browser Wallet|MetaMask|Injected/ })
+      .first()
+      .click({ timeout: 15_000 });
+  } catch (error) {
+    // Synthetic fixture diagnostics only: reveal the actual chooser/connection state.
+    console.error(
+      "Wallet chooser page state:",
+      await page.locator("body").innerText(),
+    );
+    throw error;
+  }
   await expect(page.getByLabel("Seller's authorization")).toBeVisible();
 }
 
