@@ -33,6 +33,21 @@ async function fixture(page: Page) {
     ({ buyer, hashes }) => {
       const listeners: Record<string, ((...args: unknown[]) => void)[]> = {};
       let submitted = 0;
+      // A fresh wallet has not authorized this origin yet. Persist only an explicit
+      // connect request so reload tests exercise normal reconnect rather than auto-login.
+      let authorized =
+        window.sessionStorage.getItem("artfi-test-wallet-authorized") ===
+        "true";
+      const permit = () => {
+        authorized = true;
+        window.sessionStorage.setItem("artfi-test-wallet-authorized", "true");
+        return [
+          {
+            parentCapability: "eth_accounts",
+            caveats: [{ type: "restrictReturnedAccounts", value: [buyer] }],
+          },
+        ];
+      };
       Object.defineProperty(window, "ethereum", {
         value: {
           isMetaMask: true,
@@ -47,12 +62,21 @@ async function fixture(page: Page) {
             method: string;
             params?: unknown[];
           }) {
-            if (method === "eth_accounts" || method === "eth_requestAccounts")
+            if (method === "eth_accounts") return authorized ? [buyer] : [];
+            if (method === "eth_requestAccounts") {
+              permit();
               return [buyer];
+            }
+            if (method === "wallet_getPermissions")
+              return authorized ? permit() : [];
+            if (method === "wallet_revokePermissions") {
+              authorized = false;
+              window.sessionStorage.removeItem("artfi-test-wallet-authorized");
+              return null;
+            }
             if (method === "eth_chainId") return "0x88bb0";
             if (method === "wallet_getCapabilities") return {};
-            if (method === "wallet_requestPermissions")
-              return [{ parentCapability: "eth_accounts" }];
+            if (method === "wallet_requestPermissions") return permit();
             if (method === "eth_sendTransaction") {
               await fetch("/test-wallet-submit", {
                 method: "POST",
