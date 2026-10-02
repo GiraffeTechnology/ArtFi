@@ -279,12 +279,12 @@ docs/                  Product, architecture and delivery documents
 
 # Primary Documents
 
-| Document | Purpose |
-|---|---|
-| docs/PRD.md | Product blueprint and functional requirements |
-| docs/ACCEPTANCE.md | Delivery evidence and promotion rules |
-| docs/STATUS.md | Requirement status |
-| AGENTS.md | Engineering execution rules |
+| Document           | Purpose                                       |
+| ------------------ | --------------------------------------------- |
+| docs/PRD.md        | Product blueprint and functional requirements |
+| docs/ACCEPTANCE.md | Delivery evidence and promotion rules         |
+| docs/STATUS.md     | Requirement status                            |
+| AGENTS.md          | Engineering execution rules                   |
 
 Historical documents provide traceability but are not acceptance targets unless referenced by current baseline documents.
 
@@ -312,9 +312,10 @@ ArtFi is not:
 
 Publicly disclosed applications:
 
-| Application | Number | Scope |
-|---|---|---|
-| 一种链外数据源事实的无人值守出具系统及方法 | `202611389399.6` | Oracle |
-| 一种基于链下登记簿的数据凭证映射方法及系统 | `202611389374.6` | ERC registry credential mapping |
+| Application                                                              | Number           | Scope                           |
+| ------------------------------------------------------------------------ | ---------------- | ------------------------------- |
+| Unattended system and method for issuing off-chain data-source facts     | `202611389399.6` | Oracle                          |
+| Data credential mapping method and system based on an off-chain registry | `202611389374.6` | ERC registry credential mapping |
 
 Patent filing does not mean grant, production acceptance or commercial deployment.
+
