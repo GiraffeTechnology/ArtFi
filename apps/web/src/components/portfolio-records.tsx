@@ -3,75 +3,15 @@
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+import {
+  loadPortfolioRecords,
+  type PortfolioState,
+} from "@/lib/portfolio-records-state";
 
-type Portfolio = {
-  address: string;
-  chainId: number;
-  network: string;
-  positions: Array<{
-    assetToken: string;
-    symbol: string;
-    balance: string;
-    updatedAt: string;
-  }>;
-  transactions: Array<{
-    transactionHash: string;
-    eventName: string;
-    blockNumber: number;
-    status: string;
-    observedAt: string;
-  }>;
-  offers: unknown[];
-  notifications: unknown[];
-};
+const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
 export function PortfolioRecords() {
   const { address, isConnected } = useAccount();
-  const [portfolio, setPortfolio] = useState<Portfolio>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>();
-
-  useEffect(() => {
-    if (!address || !isConnected) {
-      return;
-    }
-    const controller = new AbortController();
-    const load = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch(
-          `${apiURL}/v1/portfolio/${encodeURIComponent(address)}`,
-          { cache: "no-store", signal: controller.signal },
-        );
-        if (!response.ok)
-          throw new Error(`Portfolio API returned ${response.status}.`);
-        const value = (await response.json()) as Portfolio;
-        if (
-          value.address.toLowerCase() !== address.toLowerCase() ||
-          value.chainId !== 560048
-        ) {
-          throw new Error(
-            "Portfolio response did not match the connected Hoodi address.",
-          );
-        }
-        setPortfolio(value);
-        setError(undefined);
-      } catch (reason) {
-        if (controller.signal.aborted) return;
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : "Portfolio records are unavailable.",
-        );
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    };
-    void load();
-    return () => controller.abort();
-  }, [address, isConnected]);
-
   if (!isConnected) {
     return (
       <section className="portfolio-records" aria-live="polite">
@@ -83,6 +23,28 @@ export function PortfolioRecords() {
     );
   }
 
+  if (!address) return null;
+  return (
+    <ConnectedPortfolioRecords key={address.toLowerCase()} address={address} />
+  );
+}
+
+function ConnectedPortfolioRecords({ address }: { address: string }) {
+  const [{ portfolio, loading, error }, setState] = useState<PortfolioState>({
+    loading: true,
+  });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadPortfolioRecords({
+      address,
+      apiURL,
+      signal: controller.signal,
+      update: setState,
+    });
+    return () => controller.abort();
+  }, [address, attempt]);
+
   return (
     <section className="portfolio-records" aria-live="polite">
       <div className="section-heading">
@@ -91,7 +53,15 @@ export function PortfolioRecords() {
       </div>
       {loading ? <p>Loading indexed records…</p> : null}
       {error ? (
-        <p role="alert">{error} No fixture is shown as wallet data.</p>
+        <div>
+          <p role="alert">{error} No fixture is shown as wallet data.</p>
+          <button
+            type="button"
+            onClick={() => setAttempt((value) => value + 1)}
+          >
+            Retry indexed records
+          </button>
+        </div>
       ) : null}
       {!loading && !error && portfolio ? (
         <div className="portfolio-records__grid">
