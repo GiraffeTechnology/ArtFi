@@ -24,9 +24,11 @@ export async function confirmMarketReceipt(
     receipt = await client.waitForTransactionReceipt({
       hash,
       onReplaced(replacement) {
-        onHash?.(replacement.transactionReceipt.transactionHash);
-        // Only repricing preserves the operation the user originally approved.
-        if (replacement.reason !== "repriced") changedTransaction = true;
+        // Do not journal a cancelled or different operation as this fill. If the page
+        // closes during replacement handling, reconciliation must not accept that hash.
+        if (replacement.reason === "repriced")
+          onHash?.(replacement.transactionReceipt.transactionHash);
+        else changedTransaction = true;
       },
     });
   } catch {

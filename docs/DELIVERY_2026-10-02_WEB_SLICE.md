@@ -28,12 +28,13 @@ The sample catalogue remains explicitly labelled fixture data. Product entry pag
 
 ## Build and configuration handoff
 
-Use the existing authorized ArtFi deployment task and existing hosting path. This PR creates no new hosting account, credential, production network or deployment system.
+Use the existing authorized ArtFi deployment task and existing hosting path. This PR creates no new hosting account, credential, production network or deployment system. The client has identified an older `artcch.com` build to reuse; the removable environment binding and exact user-supplied server labels are recorded in `docs/DEPLOYMENT_ENVIRONMENT.md`. First establish whether that old build serves ArtFi or a separate site, reuse compatible dependencies/configuration, and preserve any independent site. No server files or running processes have yet been inspected from this implementation environment.
 
 - Node: repository requirement 24 or later. CI is pinned to Node 24.18.0 and pnpm 11.22.0.
 - Install: `pnpm install --frozen-lockfile`.
 - Web build: `pnpm --filter @giraffetechnology/artfi-web build`.
 - Existing image definition: `apps/web/Dockerfile`; runtime port 3000; health `/api/health`.
+- Current client-specified placement: the UI and public-chain execution stay in the existing SIN zone; backend, data and non-chain services stay on the existing backend/database hosts. Reuse the existing bridge and 24/7 operations, with removable named bindings only in `docs/DEPLOYMENT_ENVIRONMENT.md`.
 - Build the exact reviewed Git commit. Pass `--build-arg ARTFI_BUILD_SHA=<full-40-character-commit>`; the runtime health response and image revision label must match that commit.
 - `NEXT_PUBLIC_*` values below must be supplied at **build time**. Setting them only on an already-built running container does not change the browser bundle.
 
@@ -49,7 +50,7 @@ Public build inputs, already supported by the existing implementation:
 
 Use verified Hoodi deployment addresses and the route representing that same asset. Do not assign one real token to unrelated fixture artwork pages. Blank settings remain explicitly unavailable; no address is fabricated. The current write-test chain remains Hoodi `560048`. Ethereum remains the existing read-only mirror source; no mainnet operation is authorized by this slice.
 
-Server-only API authentication, holder-access storage settings and session secrets remain server-side and outside the public build inputs. Do not copy secret values into the PR, build arguments, evidence or health endpoint. Retain the existing API/reverse-proxy mapping: a same-origin browser API base needs the existing `/v1/*` proxy to the API service.
+Server-only API authentication, holder-access storage settings and session secrets remain server-side and outside the public build inputs. Do not copy secret values into the PR, build arguments, evidence or health endpoint. Retain the existing API/reverse-proxy mapping: the SIN UI's same-origin `/v1/*` route reaches the backend through the existing bridge. Do not assume the backend is localhost or port 8080 on the UI host. The original `artfi` deployment task must resolve the actual upstream from its existing configuration.
 
 After the existing authorized deployment task publishes the reviewed candidate, verify:
 

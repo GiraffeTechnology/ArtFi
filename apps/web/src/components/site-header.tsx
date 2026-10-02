@@ -18,6 +18,17 @@ export function SiteHeader() {
       href={href}
       key={href}
       onClick={(event) => {
+        // A current-page selection only dismisses the menu. Starting another asynchronous
+        // Next navigation here can race Back/Forward and discard the forward history entry.
+        if (
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          !event.altKey &&
+          event.currentTarget.href === window.location.href
+        )
+          event.preventDefault();
         const menu = event.currentTarget.closest("details");
         if (menu) menu.open = false;
       }}

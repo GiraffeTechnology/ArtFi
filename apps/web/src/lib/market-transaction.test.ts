@@ -122,12 +122,15 @@ describe("confirmed market transactions", () => {
         onReplaced({ reason, transactionReceipt: receipt(replacementHash) });
         return receipt(replacementHash);
       });
+      const onHash = vi.fn();
       await expect(
         confirmMarketWrite(
           receiptClient(wait),
           vi.fn().mockResolvedValue(fillHash),
+          onHash,
         ),
       ).rejects.toThrow("cancelled or replaced");
+      expect(onHash.mock.calls).toEqual([[fillHash]]);
     },
   );
 

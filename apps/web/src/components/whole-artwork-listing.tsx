@@ -693,12 +693,13 @@ export function WholeArtworkListing({
     >
       <p className="eyebrow">Sale by signature</p>
       <h2 id="whole-artwork-listing">
-        The artwork stays in your wallet until it sells.
+        The receipt token stays in your wallet until it sells.
       </h2>
       <p>
-        A sale is authorized by signature, not by handing the artwork over. It
-        moves once, in the transaction that pays you, and only against the terms
-        you signed. You can withdraw the authorization at any time before then.
+        A token sale is authorized by signature. The receipt token moves in the
+        transaction that pays you, only against the terms you signed. Physical
+        pickup and registry-confirmed rights remain separate from this chain
+        settlement. You can withdraw the authorization before settlement.
       </p>
 
       <dl className="contract-facts">
@@ -707,7 +708,7 @@ export function WholeArtworkListing({
           <dd>{stageLabels[stage]}</dd>
         </div>
         <div>
-          <dt>Holder</dt>
+          <dt>Chain token holder</dt>
           <dd>{holder ?? "Reading from chain"}</dd>
         </div>
         <div>
@@ -903,7 +904,8 @@ export function WholeArtworkListing({
 
       {stage === "filled" && (
         <p className="dao-alert">
-          Settled. The artwork and the payment moved in the same transaction.
+          Settled. The receipt token and payment moved in the same chain
+          transaction. Physical pickup and registry rights remain separate.
         </p>
       )}
 
