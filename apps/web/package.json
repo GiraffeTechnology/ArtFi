@@ -10,7 +10,8 @@
     "test": "vitest run src",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "test:e2e:market": "playwright test --config=playwright.market.config.ts"
+    "test:e2e:market": "playwright test --config=playwright.market.config.ts",
+    "test:e2e:oracle": "playwright test --config=playwright.oracle.config.ts"
   },
   "dependencies": {
     "@giraffetechnology/artfi-api-client": "workspace:*",

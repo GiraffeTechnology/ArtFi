@@ -112,7 +112,7 @@ export function AssetDetail({
       ) : (
         <WholeArtworkListing slug={artwork.slug} />
       )}
-      {!fractional && <AssetHolderAuthority />}
+      {!fractional && <AssetHolderAuthority slug={artwork.slug} />}
     </main>
   );
 }

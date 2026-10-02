@@ -151,3 +151,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
       - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:market
+
+  oracle-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:oracle
