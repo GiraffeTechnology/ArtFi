@@ -443,11 +443,18 @@ func TestMySQLExternalMarketSnapshotIsAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	send := func(body string) *httptest.ResponseRecorder {
+	// The snapshot route installs a read/write idle deadline through http.NewResponseController and
+	// fails closed when it cannot — the accepted resolution of review finding r4055248066, since a
+	// connection whose deadlines cannot be bounded is exactly what that finding said to refuse. A
+	// bare httptest.NewRecorder() implements neither Set*Deadline, so the controller returns
+	// ErrNotSupported and every request here answered 503 rather than exercising the endpoint. The
+	// deadline-capable recorder the non-database tests already use is what makes the request
+	// reachable, so the production guard stays as it is.
+	send := func(body string) *snapshotDeadlineRecorder {
 		request := httptest.NewRequest(http.MethodPost, "/v1/indexer/market-snapshots", strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/x-ndjson")
 		request.Header.Set("X-Indexer-Key", "external-market-indexer-key")
-		recorder := httptest.NewRecorder()
+		recorder := &snapshotDeadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
 		handler.ServeHTTP(recorder, request)
 		return recorder
 	}
