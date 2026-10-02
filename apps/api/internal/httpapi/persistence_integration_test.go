@@ -122,6 +122,27 @@ func TestMySQLChainEventDedupeConflictAndReorg(t *testing.T) {
 	service.indexerKeyHash = sha256.Sum256([]byte("stage4-indexer-test-key"))
 	service.indexerEnabled = true
 	handler := newHandler(service)
+	// A connected, genuinely empty read model is different from absent persistence.
+	emptyNFTs := requestWithHandler(t, handler, http.MethodGet, "/v1/nfts")
+	var emptyCatalog struct {
+		Data    []mintedNFT `json:"data"`
+		Total   int         `json:"total"`
+		Runtime bool        `json:"runtime"`
+	}
+	decode(t, emptyNFTs, &emptyCatalog)
+	if emptyNFTs.Code != http.StatusOK || !emptyCatalog.Runtime || emptyCatalog.Total != 0 || len(emptyCatalog.Data) != 0 {
+		t.Fatalf("connected empty NFT catalog was not a successful empty read: %d %s", emptyNFTs.Code, emptyNFTs.Body.String())
+	}
+	emptyOwner := "0x9999999999999999999999999999999999999999"
+	if _, err := db.Exec("DELETE FROM portfolio_deltas WHERE owner_address=?", emptyOwner); err != nil {
+		t.Fatal(err)
+	}
+	emptyPortfolio := requestWithHandler(t, handler, http.MethodGet, "/v1/portfolio/"+emptyOwner)
+	var emptyPositions portfolioResponse
+	decode(t, emptyPortfolio, &emptyPositions)
+	if emptyPortfolio.Code != http.StatusOK || emptyPositions.Address != emptyOwner || len(emptyPositions.Positions) != 0 || len(emptyPositions.Transactions) != 0 {
+		t.Fatalf("connected empty portfolio was not a successful empty read: %d %s", emptyPortfolio.Code, emptyPortfolio.Body.String())
+	}
 	body := map[string]any{
 		"chainId":         hoodiChainID,
 		"transactionHash": "0x" + strings.Repeat("a", 64),

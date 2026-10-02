@@ -1,8 +1,14 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useCallback, useState } from "react";
-import { useAccount, useSignMessage } from "wagmi";
+import { useEffect, useRef, useState } from "react";
+import { useAccount, useChainId, useSignMessage } from "wagmi";
+
+import {
+  verifyHolderAccess,
+  type HolderState,
+  type HolderStep,
+} from "@/lib/charity-holder-state";
 
 /**
  * The holder benefit, end to end — #110 §2 CH.5.
@@ -23,21 +29,7 @@ import { useAccount, useSignMessage } from "wagmi";
  * step is ever skipped client-side: the button is a request, not the decision.
  */
 
-type Step =
-  | "idle"
-  | "requesting-challenge"
-  | "awaiting-signature"
-  | "verifying"
-  | "verified"
-  | "error";
-
-type HolderDescriptor = {
-  contentType: string;
-  byteLength: number;
-  sha256: string;
-};
-
-const stepLabels: Record<Step, string> = {
+const stepLabels: Record<HolderStep, string> = {
   idle: "Ownership not yet verified",
   "requesting-challenge": "Preparing the ownership challenge",
   "awaiting-signature": "Waiting for the wallet signature",
@@ -46,99 +38,61 @@ const stepLabels: Record<Step, string> = {
   error: "Verification needs attention",
 };
 
-async function readDetail(response: Response, fallback: string) {
-  try {
-    const body = (await response.json()) as { detail?: string };
-    return body.detail ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 export function CharityHolderAccess({ tokenId }: { tokenId: string }) {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  // Remount on every authority/edition change, including disconnect and returning to a wallet.
+  return (
+    <HolderAccessSession
+      key={`${tokenId}:${address?.toLowerCase()}:${isConnected}:${chainId}`}
+      tokenId={tokenId}
+    />
+  );
+}
+
+function HolderAccessSession({ tokenId }: { tokenId: string }) {
+  const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
-  const [step, setStep] = useState<Step>("idle");
-  const [message, setMessage] = useState<string>();
-  const [descriptor, setDescriptor] = useState<HolderDescriptor>();
-  const [expiresAt, setExpiresAt] = useState<string>();
+  const [{ step, message, descriptor, expiresAt }, setState] =
+    useState<HolderState>({ step: "idle" });
+  const active = useRef(false);
+  const inFlight = useRef(false);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (step !== "verified" || !expiresAt) return;
+    const expire = () =>
+      setState({
+        step: "error",
+        message: "Holder access expired. Verify ownership again.",
+      });
+    const timer = window.setTimeout(
+      expire,
+      Math.max(0, Date.parse(expiresAt) - Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [step, expiresAt]);
 
-  const verify = useCallback(async () => {
-    if (!address) return;
-    setDescriptor(undefined);
-    setMessage(undefined);
+  async function verify() {
+    if (!address || !isConnected || inFlight.current) return;
+    inFlight.current = true;
     try {
-      setStep("requesting-challenge");
-      const challengeResponse = await fetch("/api/charity/holder/challenge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, tokenId }),
+      await verifyHolderAccess({
+        address,
+        tokenId,
+        signMessage: (message) =>
+          signMessageAsync({ message, account: address }),
+        isCurrent: () => active.current,
+        update: setState,
       });
-      if (!challengeResponse.ok) {
-        setMessage(
-          await readDetail(
-            challengeResponse,
-            "The ownership challenge could not be created.",
-          ),
-        );
-        setStep("error");
-        return;
-      }
-      const challenge = (await challengeResponse.json()) as { message: string };
-
-      setStep("awaiting-signature");
-      let signature: string;
-      try {
-        signature = await signMessageAsync({ message: challenge.message });
-      } catch {
-        // A declined signature is a choice, not a fault. It is reported without alarm.
-        setMessage("The signature request was declined in the wallet.");
-        setStep("error");
-        return;
-      }
-
-      setStep("verifying");
-      const verifyResponse = await fetch("/api/charity/holder/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, signature }),
-      });
-      if (!verifyResponse.ok) {
-        setMessage(
-          await readDetail(
-            verifyResponse,
-            "Ownership of this edition could not be verified.",
-          ),
-        );
-        setStep("error");
-        return;
-      }
-      const verified = (await verifyResponse.json()) as { expiresAt: string };
-      setExpiresAt(verified.expiresAt);
-
-      // The descriptor is what the holder is about to receive. It is fetched separately from the
-      // bytes so the page can state the file's type, size and digest before anything downloads.
-      const descriptorResponse = await fetch(
-        `/api/charity/editions/${tokenId}/holder-asset`,
-        { cache: "no-store" },
-      );
-      if (descriptorResponse.ok) {
-        setDescriptor((await descriptorResponse.json()) as HolderDescriptor);
-        setMessage(undefined);
-      } else {
-        setMessage(
-          await readDetail(
-            descriptorResponse,
-            "The watermarked file is not available for this edition.",
-          ),
-        );
-      }
-      setStep("verified");
-    } catch {
-      setMessage("Charity holder verification is unavailable.");
-      setStep("error");
+    } finally {
+      inFlight.current = false;
     }
-  }, [address, signMessageAsync, tokenId]);
+  }
 
   const busy =
     step === "requesting-challenge" ||
@@ -168,7 +122,7 @@ export function CharityHolderAccess({ tokenId }: { tokenId: string }) {
             {({ mounted, openConnectModal }) => (
               <button
                 className="primary"
-                disabled={!mounted}
+                disabled={!mounted || !openConnectModal}
                 onClick={openConnectModal}
                 type="button"
               >
@@ -224,6 +178,15 @@ export function CharityHolderAccess({ tokenId }: { tokenId: string }) {
             className="primary"
             download
             href={`/api/charity/editions/${tokenId}/holder-asset/file`}
+            onClick={(event) => {
+              if (!expiresAt || Date.parse(expiresAt) <= Date.now()) {
+                event.preventDefault();
+                setState({
+                  step: "error",
+                  message: "Holder access expired. Verify ownership again.",
+                });
+              }
+            }}
           >
             Download the watermarked copy
           </a>

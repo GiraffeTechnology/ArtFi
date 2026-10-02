@@ -916,6 +916,7 @@ export interface operations {
           };
         };
       };
+      503: components["responses"]["Problem"];
     };
   };
   listProjects: {
@@ -968,6 +969,7 @@ export interface operations {
         };
       };
       400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
     };
   };
   ingestChainEvent: {

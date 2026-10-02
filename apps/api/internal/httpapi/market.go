@@ -207,7 +207,7 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		Offers: []map[string]any{}, Notifications: []map[string]any{},
 	}
 	if service.db == nil {
-		writeJSON(writer, http.StatusOK, response)
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The indexed portfolio is not connected to persistence.")
 		return
 	}
 	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "portfolio:"+address, "", &response)
