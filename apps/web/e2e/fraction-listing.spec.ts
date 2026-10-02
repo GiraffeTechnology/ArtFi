@@ -85,7 +85,7 @@ test("the whole-artwork surface does not appear on a fraction page", async ({
 }) => {
   await page.goto(fractionPath);
   await expect(
-    page.getByText("The artwork stays in your wallet until it sells."),
+    page.getByText("The receipt token stays in your wallet until it sells."),
   ).toHaveCount(0);
 });
 

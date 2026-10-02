@@ -11,7 +11,7 @@ import { expect, test } from "@playwright/test";
  */
 
 const fixtureSurfaces = [
-  "/",
+  "/rwa",
   "/projects",
   "/projects/material-memory",
   "/market/rwa/blue-hour-archive",
@@ -65,4 +65,24 @@ test("a fraction page makes no whole-artwork holder claim", async ({
   // belongs to the receipt asset and must not be copied onto them.
   await page.goto("/market/fractionals/blue-hour-archive");
   await expect(page.getByTestId("asset-holder-authority")).toHaveCount(0);
+});
+
+test("the product overview makes no fixture or live catalogue claim", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("prototype-data-notice")).toHaveCount(0);
+  await expect(page.locator(".market-mirror-card")).toHaveCount(0);
+  await expect(page.getByLabel("Runtime availability")).toContainText(
+    "A visible workflow is not a claim that its contracts or services are configured",
+  );
+});
+
+test("NFT editions do not silently fall back to a fixture catalogue", async ({
+  page,
+}) => {
+  await page.goto("/nft");
+  await expect(page.getByTestId("prototype-data-notice")).toHaveCount(0);
+  await expect(page.locator(".charity-catalog")).toBeVisible();
+  await expect(page.locator(".charity-catalog img")).toHaveCount(0);
 });

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { isAddress, type Address, type Hex } from "viem";
 import {
   useAccount,
+  usePublicClient,
   useReadContract,
   useSignTypedData,
   useWriteContract,
@@ -11,10 +12,12 @@ import {
 
 import { assetDeploymentBinding } from "@/lib/asset-binding";
 import {
+  fractionTokenAbi,
   wholeArtworkCollectionAbi,
   wholeArtworkMarketAbi,
 } from "@/lib/contracts";
 import { supportedChain } from "@/lib/wagmi";
+import { useMarketTransactions } from "@/lib/use-market-transactions";
 import {
   anyBuyer,
   saleIntentFillable,
@@ -54,6 +57,7 @@ type Stage =
   | "approving"
   | "filling"
   | "filled"
+  | "revoking"
   | "error";
 
 const stageLabels: Record<Stage, string> = {
@@ -63,6 +67,7 @@ const stageLabels: Record<Stage, string> = {
   approving: "Waiting for the approval transaction",
   filling: "Waiting for the settlement transaction",
   filled: "Settled on chain",
+  revoking: "Waiting for the withdrawal receipt",
   error: "This step needs attention",
 };
 
@@ -158,8 +163,19 @@ export function WholeArtworkListing({
   const { address, chainId, isConnected } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient({ chainId: supportedChain.id });
+  const actionPending = useRef(false);
+  const [transactionHash, setTransactionHash] = useState<Hex>();
 
   const [stage, setStage] = useState<Stage>("idle");
+  const busy = [
+    "awaiting-signature",
+    "approving",
+    "filling",
+    "revoking",
+  ].includes(stage);
+  const canTransact =
+    isConnected && chainId === supportedChain.id && Boolean(publicClient);
   const [detail, setDetail] = useState<string>();
   const [authorization, setAuthorization] = useState<string>();
   const [digest, setDigest] = useState<Hex>();
@@ -206,7 +222,7 @@ export function WholeArtworkListing({
     ? BigInt(configuredTokenId!)
     : undefined;
 
-  const { data: holder } = useReadContract({
+  const { data: holder, refetch: refetchHolder } = useReadContract({
     abi: wholeArtworkCollectionAbi,
     address: collectionAddress,
     functionName: "ownerOf",
@@ -215,7 +231,24 @@ export function WholeArtworkListing({
     query: { enabled: Boolean(collectionAddress && artworkId !== undefined) },
   });
 
-  const { data: epoch } = useReadContract({
+  const { pending, begin, reconcile } = useMarketTransactions(
+    publicClient,
+    `${chainId}:${market}:${collectionAddress}:${artworkId}:${address}`,
+    setTransactionHash,
+  );
+  const visibleAuthorization = authorization
+    ? decodeAuthorization(authorization)
+    : undefined;
+  const ownsAuthorization =
+    visibleAuthorization &&
+    !("error" in visibleAuthorization) &&
+    visibleAuthorization.intent.seller.toLowerCase() ===
+      address?.toLowerCase() &&
+    visibleAuthorization.intent.collection.toLowerCase() ===
+      collectionAddress?.toLowerCase() &&
+    visibleAuthorization.intent.tokenId === artworkId;
+
+  const { data: epoch, refetch: refetchEpoch } = useReadContract({
     abi: wholeArtworkMarketAbi,
     address: market,
     functionName: "sellerEpoch",
@@ -242,19 +275,45 @@ export function WholeArtworkListing({
    * they were handed. A withdrawal happens after an authorization is written, so the terms can never
    * report it.
    */
-  const pastedSeller = useMemo(() => {
+  const pastedAuthorization = useMemo(() => {
     if (!pasted.trim()) return undefined;
     const decoded = decodeAuthorization(pasted);
-    return "error" in decoded ? undefined : decoded.intent.seller;
+    return "error" in decoded ? undefined : decoded;
   }, [pasted]);
 
   const { data: pastedSellerEpoch } = useReadContract({
     abi: wholeArtworkMarketAbi,
     address: market,
     functionName: "sellerEpoch",
-    args: pastedSeller ? [pastedSeller] : undefined,
+    args: pastedAuthorization ? [pastedAuthorization.intent.seller] : undefined,
     chainId: supportedChain.id,
-    query: { enabled: Boolean(market && pastedSeller) },
+    query: { enabled: Boolean(market && pastedAuthorization) },
+  });
+
+  const { data: paymentAllowed } = useReadContract({
+    abi: wholeArtworkMarketAbi,
+    address: market,
+    functionName: "allowedPaymentToken",
+    args: pastedAuthorization
+      ? [pastedAuthorization.intent.paymentToken]
+      : undefined,
+    chainId: supportedChain.id,
+    query: { enabled: Boolean(market && pastedAuthorization) },
+  });
+  const { data: collectionAllowed } = useReadContract({
+    abi: wholeArtworkMarketAbi,
+    address: market,
+    functionName: "allowedCollection",
+    args: collectionAddress ? [collectionAddress] : undefined,
+    chainId: supportedChain.id,
+    query: { enabled: Boolean(market && collectionAddress) },
+  });
+  const { data: marketPaused } = useReadContract({
+    abi: wholeArtworkMarketAbi,
+    address: market,
+    functionName: "paused",
+    chainId: supportedChain.id,
+    query: { enabled: Boolean(market) },
   });
 
   /**
@@ -265,7 +324,12 @@ export function WholeArtworkListing({
    */
   const buildIntent = useCallback(
     (startsAt: number): SaleIntent | undefined => {
-      if (!address || !collectionAddress || artworkId === undefined) {
+      if (
+        !address ||
+        !collectionAddress ||
+        artworkId === undefined ||
+        epoch === undefined
+      ) {
         return undefined;
       }
       const hours = Number(durationHours);
@@ -290,7 +354,7 @@ export function WholeArtworkListing({
         startsAt,
         endsAt:
           startsAt + (Number.isFinite(hours) ? Math.round(hours * 3600) : 0),
-        epoch: epoch ?? 0n,
+        epoch,
       };
     },
     [
@@ -324,16 +388,26 @@ export function WholeArtworkListing({
   const authorize = useCallback(async () => {
     const draft = buildIntent(Math.floor(Date.now() / 1000));
     if (!draft || !market) return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
     setDetail(undefined);
     setAuthorization(undefined);
+    actionPending.current = true;
     try {
       setStage("awaiting-signature");
       const domain = { chainId: supportedChain.id, verifyingContract: market };
       // Throws on terms that would be refused, so the wallet is never asked to sign them.
       const hash = saleIntentHash(draft, domain, supportedChain.id);
-      const signature = await signTypedDataAsync(
-        saleIntentTypedData(draft, domain),
-      );
+      const signature = await signTypedDataAsync({
+        ...saleIntentTypedData(draft, domain),
+        account: address,
+      });
       setDigest(hash);
       setAuthorization(encodeAuthorization(draft, signature));
       setStage("signed");
@@ -344,21 +418,43 @@ export function WholeArtworkListing({
           : "The signature was not produced.",
       );
       setStage("error");
+    } finally {
+      actionPending.current = false;
     }
-  }, [buildIntent, market, signTypedDataAsync]);
+  }, [
+    pending,
+    address,
+    buildIntent,
+    canTransact,
+    market,
+    publicClient,
+    signTypedDataAsync,
+  ]);
 
   const grantApproval = useCallback(async () => {
     if (!collectionAddress || !market) return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
     setDetail(undefined);
+    actionPending.current = true;
     try {
       setStage("approving");
-      await writeContractAsync({
-        abi: wholeArtworkCollectionAbi,
-        address: collectionAddress,
-        functionName: "setApprovalForAll",
-        args: [market, true],
-        chainId: supportedChain.id,
-      });
+      await begin().write("approval", () =>
+        writeContractAsync({
+          abi: wholeArtworkCollectionAbi,
+          address: collectionAddress,
+          functionName: "setApprovalForAll",
+          args: [market, true],
+          chainId: supportedChain.id,
+          account: address,
+        }),
+      );
       await refetchApproval();
       setStage(authorization ? "signed" : "idle");
     } catch (error) {
@@ -366,9 +462,16 @@ export function WholeArtworkListing({
         error instanceof Error ? error.message : "The approval was not sent.",
       );
       setStage("error");
+    } finally {
+      actionPending.current = false;
     }
   }, [
+    pending,
+    begin,
+    address,
     authorization,
+    canTransact,
+    publicClient,
     collectionAddress,
     market,
     refetchApproval,
@@ -377,15 +480,28 @@ export function WholeArtworkListing({
 
   const revokeAll = useCallback(async () => {
     if (!market) return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
     setDetail(undefined);
+    actionPending.current = true;
     try {
-      setStage("filling");
-      await writeContractAsync({
-        abi: wholeArtworkMarketAbi,
-        address: market,
-        functionName: "incrementEpoch",
-        chainId: supportedChain.id,
-      });
+      setStage("revoking");
+      await begin().write("withdrawal", () =>
+        writeContractAsync({
+          abi: wholeArtworkMarketAbi,
+          address: market,
+          functionName: "incrementEpoch",
+          chainId: supportedChain.id,
+          account: address,
+        }),
+      );
+      await refetchEpoch();
       setAuthorization(undefined);
       setDigest(undefined);
       setStage("idle");
@@ -394,11 +510,30 @@ export function WholeArtworkListing({
         error instanceof Error ? error.message : "The revocation was not sent.",
       );
       setStage("error");
+    } finally {
+      actionPending.current = false;
     }
-  }, [market, writeContractAsync]);
+  }, [
+    pending,
+    begin,
+    address,
+    canTransact,
+    market,
+    publicClient,
+    refetchEpoch,
+    writeContractAsync,
+  ]);
 
   const fill = useCallback(async () => {
     if (!market) return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
     setDetail(undefined);
     const decoded = decodeAuthorization(pasted);
     if ("error" in decoded) {
@@ -419,13 +554,45 @@ export function WholeArtworkListing({
       setStage("error");
       return;
     }
+    if (
+      !collectionAddress ||
+      intent.collection.toLowerCase() !== collectionAddress.toLowerCase() ||
+      intent.tokenId !== artworkId
+    ) {
+      setDetail(
+        "These terms refer to a different artwork. No payment approval was requested.",
+      );
+      setStage("error");
+      return;
+    }
+    if (
+      intent.seller.toLowerCase() === address.toLowerCase() ||
+      (intent.buyer !== anyBuyer &&
+        intent.buyer.toLowerCase() !== address.toLowerCase())
+    ) {
+      setDetail("These terms are not fillable by the connected buyer.");
+      setStage("error");
+      return;
+    }
+    if (
+      paymentAllowed !== true ||
+      collectionAllowed !== true ||
+      marketPaused !== false ||
+      pastedSellerEpoch === undefined
+    ) {
+      setDetail(
+        "Confirm the market is active, both tokens are allowed, and the seller epoch is readable before approving payment.",
+      );
+      setStage("error");
+      return;
+    }
     // The seller's epoch is read from chain, not taken from the pasted terms. Comparing the terms
     // against themselves would always agree, and the one thing this check exists to catch is a
     // seller who has withdrawn every authorization since that text was written.
     const state = saleIntentFillable(
       intent,
       Math.floor(Date.now() / 1000),
-      pastedSellerEpoch ?? intent.epoch,
+      pastedSellerEpoch,
     );
     if (!state.fillable) {
       setDetail(
@@ -438,23 +605,56 @@ export function WholeArtworkListing({
       setStage("error");
       return;
     }
+    actionPending.current = true;
     try {
-      setStage("filling");
-      await writeContractAsync({
-        abi: wholeArtworkMarketAbi,
-        address: market,
-        functionName: "fillIntent",
-        args: [intent, signature],
-        chainId: supportedChain.id,
+      await begin().settle({
+        onStage: setStage,
+        approvePayment: () =>
+          writeContractAsync({
+            abi: fractionTokenAbi,
+            address: intent.paymentToken,
+            functionName: "approve",
+            args: [market, intent.price],
+            chainId: supportedChain.id,
+            account: address,
+          }),
+        settle: () =>
+          writeContractAsync({
+            abi: wholeArtworkMarketAbi,
+            address: market,
+            functionName: "fillIntent",
+            args: [intent, signature],
+            chainId: supportedChain.id,
+            account: address,
+          }),
       });
+      await refetchHolder();
       setStage("filled");
     } catch (error) {
       setDetail(
         error instanceof Error ? error.message : "The settlement was not sent.",
       );
       setStage("error");
+    } finally {
+      actionPending.current = false;
     }
-  }, [market, pasted, pastedSellerEpoch, writeContractAsync]);
+  }, [
+    pending,
+    begin,
+    address,
+    artworkId,
+    canTransact,
+    collectionAddress,
+    collectionAllowed,
+    market,
+    marketPaused,
+    pasted,
+    pastedSellerEpoch,
+    paymentAllowed,
+    publicClient,
+    refetchHolder,
+    writeContractAsync,
+  ]);
 
   if (!market || !collectionAddress || artworkId === undefined) {
     return (
@@ -493,12 +693,13 @@ export function WholeArtworkListing({
     >
       <p className="eyebrow">Sale by signature</p>
       <h2 id="whole-artwork-listing">
-        The artwork stays in your wallet until it sells.
+        The receipt token stays in your wallet until it sells.
       </h2>
       <p>
-        A sale is authorized by signature, not by handing the artwork over. It
-        moves once, in the transaction that pays you, and only against the terms
-        you signed. You can withdraw the authorization at any time before then.
+        A token sale is authorized by signature. The receipt token moves in the
+        transaction that pays you, only against the terms you signed. Physical
+        pickup and registry-confirmed rights remain separate from this chain
+        settlement. You can withdraw the authorization before settlement.
       </p>
 
       <dl className="contract-facts">
@@ -507,7 +708,7 @@ export function WholeArtworkListing({
           <dd>{stageLabels[stage]}</dd>
         </div>
         <div>
-          <dt>Holder</dt>
+          <dt>Chain token holder</dt>
           <dd>{holder ?? "Reading from chain"}</dd>
         </div>
         <div>
@@ -589,7 +790,7 @@ export function WholeArtworkListing({
                 type="button"
                 className="secondary"
                 onClick={grantApproval}
-                disabled={stage === "approving"}
+                disabled={!canTransact || busy || Boolean(pending)}
               >
                 Approve the market
               </button>
@@ -598,16 +799,27 @@ export function WholeArtworkListing({
               type="button"
               className="primary"
               onClick={authorize}
-              disabled={problems.length > 0 || stage === "awaiting-signature"}
+              disabled={
+                !canTransact ||
+                busy ||
+                Boolean(pending) ||
+                epoch === undefined ||
+                problems.length > 0
+              }
             >
               Sign the sale terms
             </button>
-            <button type="button" className="secondary" onClick={revokeAll}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={revokeAll}
+              disabled={!canTransact || busy || Boolean(pending)}
+            >
               Withdraw every authorization
             </button>
           </div>
 
-          {authorization && (
+          {authorization && ownsAuthorization && (
             <div className="transaction-panel">
               <p>
                 <strong>Signed, and published nowhere.</strong> ArtFi has no
@@ -632,7 +844,9 @@ export function WholeArtworkListing({
           <p className="dao-note">
             Paste a seller&apos;s authorization to settle it. Payment leaves
             your wallet and the artwork arrives in the same transaction, or
-            neither moves.
+            neither moves. You will first approve exactly the signed price in
+            the named payment token, then confirm settlement after that approval
+            succeeds on chain. Each wallet request is a separate transaction.
           </p>
           <div className="field-grid">
             <label className="field-span">
@@ -640,17 +854,47 @@ export function WholeArtworkListing({
               <textarea
                 rows={10}
                 value={pasted}
-                onChange={(event) => setPasted(event.target.value)}
+                disabled={busy}
+                onChange={(event) => {
+                  setPasted(event.target.value);
+                  setStage("idle");
+                  setDetail(undefined);
+                  setTransactionHash(undefined);
+                }}
                 placeholder="Paste the signed terms here"
               />
             </label>
           </div>
+          {pastedAuthorization && (
+            <dl className="contract-facts">
+              <div>
+                <dt>Payment token</dt>
+                <dd>{pastedAuthorization.intent.paymentToken}</dd>
+              </div>
+              <div>
+                <dt>Exact payment, in smallest units</dt>
+                <dd>{String(pastedAuthorization.intent.price)}</dd>
+              </div>
+              <div>
+                <dt>Payment token allowed</dt>
+                <dd>
+                  {paymentAllowed === undefined
+                    ? "Reading from chain"
+                    : paymentAllowed
+                      ? "Yes"
+                      : "No"}
+                </dd>
+              </div>
+            </dl>
+          )}
           <div className="actions">
             <button
               type="button"
               className="primary"
               onClick={fill}
-              disabled={!pasted.trim() || stage === "filling"}
+              disabled={
+                !canTransact || busy || Boolean(pending) || !pastedAuthorization
+              }
             >
               Settle this sale
             </button>
@@ -660,7 +904,59 @@ export function WholeArtworkListing({
 
       {stage === "filled" && (
         <p className="dao-alert">
-          Settled. The artwork and the payment moved in the same transaction.
+          Settled. The receipt token and payment moved in the same chain
+          transaction. Physical pickup and registry rights remain separate.
+        </p>
+      )}
+
+      {pending && (
+        <div className="dao-alert dao-alert--warning">
+          <p>
+            A {pending.kind} transaction is awaiting confirmation. No new
+            transaction can be submitted until it is checked.
+          </p>
+          <p className="charity-digest">{pending.hash}</p>
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy || !canTransact}
+            onClick={async () => {
+              if (actionPending.current) return;
+              actionPending.current = true;
+              setStage("filling");
+              setDetail(undefined);
+              try {
+                const kind = await reconcile();
+                await Promise.all([
+                  refetchEpoch(),
+                  refetchHolder(),
+                  refetchApproval(),
+                ]);
+                if (kind === "withdrawal") {
+                  setAuthorization(undefined);
+                  setDigest(undefined);
+                }
+                setStage(kind === "fill" ? "filled" : "idle");
+              } catch (error) {
+                setDetail(
+                  error instanceof Error
+                    ? error.message
+                    : "The transaction is not confirmed.",
+                );
+                setStage("error");
+              } finally {
+                actionPending.current = false;
+              }
+            }}
+          >
+            Check transaction
+          </button>
+        </div>
+      )}
+
+      {transactionHash && (
+        <p className="charity-digest">
+          <span>Latest transaction</span> {transactionHash}
         </p>
       )}
 

@@ -19,8 +19,8 @@ export function AssetDetail({
   return (
     <main className="page-shell page-main">
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <Link href={fractional ? "/market/fractionals" : "/market/rwa"}>
-          {fractional ? "Fractionals" : "RWA market"}
+        <Link href={fractional ? "/market/fractionals" : "/rwa"}>
+          {fractional ? "Fractions & DAO" : "Whole-artwork RWA"}
         </Link>
         <span aria-hidden="true">/</span>
         <span>{artwork.title}</span>

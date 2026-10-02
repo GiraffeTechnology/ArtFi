@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { CharityEditionCatalog } from "@/components/charity-edition-catalog";
 import { CharityTestAssetMarkers } from "@/components/charity-test-asset-markers";
@@ -8,6 +9,11 @@ export const metadata: Metadata = { title: "Charity editions" };
 export default function CharityEditionsPage() {
   return (
     <main className="approved-page page-shell">
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link href="/nft">NFT</Link>
+        <span aria-hidden="true">/</span>
+        <span>Charity editions</span>
+      </nav>
       <CharityTestAssetMarkers />
       <div className="module-banner">
         <span>Charity NFT editions</span>

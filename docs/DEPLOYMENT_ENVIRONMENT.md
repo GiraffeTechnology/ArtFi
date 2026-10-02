@@ -32,12 +32,14 @@ behaviour risk, not a single `git rm`.
 
 | Placeholder          | Deployment environment                                   | Holds                                          |
 | -------------------- | -------------------------------------------------------- | ---------------------------------------------- |
-| `<CLOUD_PROVIDER_A>` | CTYun                                                    | Delivery and the MySQL database, domestic      |
-| `<CLOUD_PROVIDER_B>` | Alibaba Cloud, Singapore region — the SIN execution zone | Public-chain operation only                    |
+| `<CLOUD_PROVIDER_A>` | CTYun, existing abcdyi and mysql servers                 | Backend, database and non-chain services       |
+| `<CLOUD_PROVIDER_B>` | Alibaba Cloud, Singapore region — the SIN execution zone | UI and public-chain execution                  |
 | `<LLM_PROVIDER_A>`   | Qwen API                                                 | Operations-agent and proofreading model access |
 
-This keeps the deployment topology ruling of 2026-09-05 (#74): off-chain data stays domestic, and
-only public-chain operation runs in the SIN execution zone.
+The client clarified the current split on 2026-10-02: backend, data and non-chain
+services run on the existing CTYun abcdyi and mysql servers; public-chain execution
+and the UI run on the existing SIN server. Reuse the existing bridge and 24/7
+operations. This latest clarification controls the affected deployment placement.
 
 ### The model vendor is swappable
 
@@ -87,3 +89,27 @@ vendor name (`docs/CTYUN_MYSQL_DEPLOYMENT_CONTRACT.md`).
 Until those documents and the versioned compatibility field are consolidated, deleting this file
 removes the binding table but **not** every vendor name elsewhere. Recorded as a known deviation
 rather than presented as satisfied.
+
+## Client-supplied reuse instruction — 2026-10-02
+
+The client identified an existing `artcch.com` build on the established servers and
+asked to reuse it as much as possible, specifically because of the existing bridge
+and 24/7 operations. The subsequent explicit placement clarification is reflected
+in the binding table above. The ArtFi delivery destination
+remains `https://io.artcch.com`. These are client-supplied location labels, not a verified
+inventory of hosts, virtual hosts, running processes or files.
+
+The existing task named `artfi` owns the previously authorized upload/deployment workflow.
+Before changing a running service, that task should inspect the old build and its existing
+source revision, image/process, API mapping and public build settings; establish how the
+`artcch.com` site relates to the ArtFi application; and reuse compatible artifacts, dependencies
+and configuration. The SIN UI must reach the backend through the existing bridge;
+do not assume that port 8080 on the UI host is the backend. Resolve the actual
+upstream from the original task's existing configuration. Preserve the existing
+separate site if it is not the ArtFi target. Do not
+replace or repoint `artcch.com` merely because the requested destination is its `io` subdomain.
+
+No server filesystem, process, reverse-proxy rule or deployment credential was inspected during
+the current cloud implementation slice: no usable server executor/task connection was available.
+The implementation handoff is `docs/DELIVERY_2026-10-02_WEB_SLICE.md`; it does not authorize a new
+hosting environment, a mainnet transaction or an unrelated site migration.

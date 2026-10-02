@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     template: "%s | ArtCCH:ArtFi",
   },
   description:
-    "A Hoodi-first, auditable platform for real-world art assets and shared ownership.",
+    "NFT collectibles, whole-artwork receipt assets, and fractional trading with DAO governance. Hoodi testnet workflows with explicit runtime availability.",
 };
 
 export default function RootLayout({

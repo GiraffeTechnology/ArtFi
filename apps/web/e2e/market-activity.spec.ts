@@ -41,7 +41,11 @@ test("the history is reachable from navigation on this viewport", async ({
   const navName = (await menuToggle.isVisible())
     ? "Mobile navigation"
     : "Primary navigation";
-  if (navName === "Mobile navigation") await menuToggle.click();
+  if (navName === "Mobile navigation") {
+    await menuToggle.click();
+  } else {
+    await page.locator("details.tools-menu > summary").click();
+  }
 
   const link = page
     .getByRole("navigation", { name: navName })
