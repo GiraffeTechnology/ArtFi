@@ -1,4 +1,73 @@
 import { expect, test, type Page } from "@playwright/test";
+import {
+  decodeFunctionData,
+  encodeFunctionResult,
+  multicall3Abi,
+  zeroHash,
+  type Hex,
+} from "viem";
+import { charityEditionsAbi } from "../src/lib/contracts";
+
+// Contract read fixtures make the real edition surface reachable. They are not
+// live collection observations and do not bypass the component's configured reads.
+function editionCall(data: Hex): Hex {
+  if (data.startsWith("0x82ad56cb")) {
+    const call = decodeFunctionData({ abi: multicall3Abi, data });
+    if (call.functionName !== "aggregate3")
+      throw new Error("Unexpected multicall fixture method");
+    return encodeFunctionResult({
+      abi: multicall3Abi,
+      functionName: "aggregate3",
+      result: call.args[0].map((call) => ({
+        success: true,
+        returnData: editionCall(call.callData),
+      })),
+    });
+  }
+  const { functionName } = decodeFunctionData({
+    abi: charityEditionsAbi,
+    data,
+  });
+  switch (functionName) {
+    case "series":
+      return encodeFunctionResult({
+        abi: charityEditionsAbi,
+        functionName,
+        result: {
+          artworkId: zeroHash,
+          masterArtworkHash: zeroHash,
+          metadataHash: zeroHash,
+          distributionWallet: "0x1000000000000000000000000000000000000030",
+          createdAt: 1760000000n,
+          soldOutAt: 0n,
+          physicalDonationRecordedAt: 0n,
+          selloutEvidenceHash: zeroHash,
+          physicalDonationEvidenceHash: zeroHash,
+          metadataURI: "ipfs://TEST_ONLY-edition-1",
+        },
+      });
+    case "totalSupply":
+      return encodeFunctionResult({
+        abi: charityEditionsAbi,
+        functionName,
+        result: 100n,
+      });
+    case "balanceOf":
+      return encodeFunctionResult({
+        abi: charityEditionsAbi,
+        functionName,
+        result: 63n,
+      });
+    case "PRIMARY_PRICE_WEI":
+      return encodeFunctionResult({
+        abi: charityEditionsAbi,
+        functionName,
+        result: 10000000000000000n,
+      });
+    default:
+      throw new Error(`Unexpected charity fixture read: ${functionName}`);
+  }
+}
 
 const walletA = "0x1000000000000000000000000000000000000010";
 const walletB = "0x1000000000000000000000000000000000000020";
@@ -70,7 +139,11 @@ async function walletFixture(page: Page) {
     { walletA },
   );
   await page.route("**/test-hoodi-rpc", async (route) => {
-    const answer = (request: { id: number; method: string }) => ({
+    const answer = (request: {
+      id: number;
+      method: string;
+      params?: unknown[];
+    }) => ({
       id: request.id,
       jsonrpc: "2.0",
       result:
@@ -78,7 +151,9 @@ async function walletFixture(page: Page) {
           ? "0x88bb0"
           : request.method === "eth_blockNumber"
             ? "0x64"
-            : "0x0",
+            : request.method === "eth_call"
+              ? editionCall((request.params?.[0] as { data: Hex }).data)
+              : "0x0",
     });
     const body = route.request().postDataJSON();
     await route.fulfill({
@@ -95,9 +170,7 @@ async function connect(page: Page) {
     .getByRole("button", { name: /Browser Wallet|MetaMask|Injected/ })
     .first()
     .click();
-  await expect(
-    page.getByRole("button", { name: "Verify ownership", exact: true }),
-  ).toBeEnabled();
+  await expect(page.locator(".wallet-button--connected").first()).toBeVisible();
 }
 
 async function switchWallet(page: Page, address?: string) {
