@@ -222,7 +222,7 @@ async function fixture(page: Page) {
 async function connect(page: Page) {
   await page.getByRole("button", { name: "Connect wallet" }).first().click();
   await page
-    .getByRole("button", { name: /MetaMask|Injected/ })
+    .getByRole("button", { name: /Browser Wallet|MetaMask|Injected/ })
     .first()
     .click();
   await expect(page.getByLabel("Seller's authorization")).toBeVisible();

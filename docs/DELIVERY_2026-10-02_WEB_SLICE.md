@@ -35,6 +35,7 @@ Use the existing authorized ArtFi deployment task and existing hosting path. Thi
 - Web build: `pnpm --filter @giraffetechnology/artfi-web build`.
 - Existing image definition: `apps/web/Dockerfile`; runtime port 3000; health `/api/health`.
 - Current client-specified placement: the UI and public-chain execution stay in the existing SIN zone; backend, data and non-chain services stay on the existing backend/database hosts. Reuse the existing bridge and 24/7 operations, with removable named bindings only in `docs/DEPLOYMENT_ENVIRONMENT.md`.
+- Use the existing operations model integration and reuse server-side environment/secret references where they are already configured. No credential was configured or tested in this slice. Do not introduce another operations stack or new persistent credentials. The existing `<LLM_PROVIDER_A>` binding remains removable; model output is advisory and never transaction authority.
 - Build the exact reviewed Git commit. Pass `--build-arg ARTFI_BUILD_SHA=<full-40-character-commit>`; the runtime health response and image revision label must match that commit.
 - `NEXT_PUBLIC_*` values below must be supplied at **build time**. Setting them only on an already-built running container does not change the browser bundle.
 
