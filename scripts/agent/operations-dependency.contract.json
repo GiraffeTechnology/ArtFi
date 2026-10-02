@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "dependencyRole": "OPERATIONS_HEALTH_INPUT",
   "satisfiesOperationsAgent": false,
   "artifact": {
@@ -12,7 +12,8 @@
   },
   "healthContract": {
     "snapshotSchemaVersion": 2,
-    "hostRole": "ctyun-abcdyi",
+    "producerHostRole": "ctyun-abcdyi",
+    "hostRole": "artfi-delivery-link",
     "freshnessSeconds": 180,
     "requiredChecks": [
       "tunnel-service",

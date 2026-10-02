@@ -6,6 +6,7 @@ const journeys = [
   ["/projects", "Context assembled before assets move."],
   ["/projects/material-memory", "Material Memory"],
   ["/market/rwa", "Live market signals."],
+  ["/market/activity", "The mirrored history."],
   ["/market/rwa/blue-hour-archive", "Blue Hour Archive"],
   ["/market/fractionals", "Understand the position before the transaction."],
   ["/market/fractionals/blue-hour-archive", "Blue Hour Archive"],

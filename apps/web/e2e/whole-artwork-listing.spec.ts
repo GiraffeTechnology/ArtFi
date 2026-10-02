@@ -52,15 +52,16 @@ test("the surface names what is missing", async ({ page }) => {
   ).toBeVisible();
 });
 
-// Fractions keep their own path. The whole-artwork panel must not appear there.
-test("the fractional page does not show the whole-artwork settlement surface", async ({
+// Fractions keep their own path. The whole-artwork panel must not appear there, and the fraction
+// panel must — the two settle through different contracts and neither stands in for the other.
+test("the fractional page carries the fraction surface, not the whole-artwork one", async ({
   page,
 }) => {
   await page.goto("/market/fractionals/blue-hour-archive");
-  await expect(page.getByText("Sale by signature")).toHaveCount(0);
   await expect(
-    page.getByText("Fraction trading has no screen yet"),
-  ).toBeVisible();
+    page.getByText("Sale by signature", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText("Fractions, sold by signature")).toBeVisible();
 });
 
 // The retired stage ladder in docs/ROADMAP.md is not a gate. No surface may cite it as one.

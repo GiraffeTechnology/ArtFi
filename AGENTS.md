@@ -163,6 +163,19 @@ No audit, review, refactor, architecture exercise, or governance activity may in
 
 ---
 
+### Current S-XM checkpoint (2026-09-20)
+
+This is an operational handoff record, not a new source of product scope or a delivery claim.
+
+- Active bounded stage: external-marketplace mirror reliability under Issue #110, PR #114.
+- Reviewed code head before this docs-only checkpoint: `fd562ccd65f80387bd1fa061a4867499237839c1` (tree `1e7c966d1b008b958f79946e6eac121ca446a901`); tested code commit: `5040ba96f4d3253e6cc42aca9e2a2e8deea4c713` (tree `e02a3f477bfaf2a40b48fdca5b71bbc0f9e056f4`).
+- The prior clean-base matrix recorded mirror 45/45, Web 125/125, Playwright 118 passed with 2 intentional skips, Forge 135/135, and applicable Go/OpenAPI/release/security gates. Evidence root: `c4f1d9cd1899f8982967435172cacda3c78d4ba2eca649445cee8ccbeeaf5187`. These results do not clear later review findings and must not be migrated to a changed head.
+- Code-head CI run `35496445805` and the first docs-only run `35509986941` are infrastructure-failed: each ended with all five jobs reporting zero executed steps. Neither is candidate test evidence.
+- Fresh review `5259899341` is complete on `fd562ccd65` and left three accepted findings: ordered checkpoint/spool cleanup (`4056400240`), recovery overlap boundaries (`4056400243`), and aborting the initial REST crawl on fatal realtime failure (`4056400246`).
+- All three are addressed on `claude/ci-all-pr-6dytk9` at `1cb630a`, in `apps/market-mirror/src/opensea.ts`, with one regression each in `apps/market-mirror/src/opensea.test.ts`: `keeps the durable spool when the checkpoint cannot be removed`, `re-derives a snapshot when the checkpoint outlives its spool`, `stops recovery overlap at the newest committed page boundary`, and `aborts the initial REST crawl when the stream becomes fatal`. Each was checked by mutation: reverting the change it covers makes that test fail. Local gates on that tree: mirror 49/49, Web 125/125, Playwright 118 passed with 2 intentional skips, Forge 135/135, `gofmt`/`go vet`/`go test -race`, format, lint, typecheck, build, and the security, agent, release and chain-consistency gates. The MySQL migration job needs a container runtime and was not run. Independent review of that head has not happened.
+- Managed TEST_ONLY database execution and a live OpenSea stream/disconnect-reconnect run remain NOT RUN. No local database substitute, production verification, or final delivery is claimed.
+- After PR #114 is fixed and independently reviewed, the next S-XM slice is complete cursor-paginated activity history in API/OpenAPI/client/UI. It must remain separate from the reliability PR.
+
 ## 5. Standing engineering rules
 
 **Evidence.** Self-assessment is not delivery evidence. Every delivery claim cites a file path, test name, CI run, or transaction hash with receipt as applicable.

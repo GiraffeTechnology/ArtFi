@@ -80,11 +80,16 @@ export type SaleIntentProblem =
 
 const uint48Max = 281_474_976_710_655;
 
+/**
+ * A party or a token address, which the zero address is neither of. `isAddress` alone accepts
+ * `0x00…0` and the market cannot settle against it, so a signature over it would be unfillable. The
+ * buyer field keeps its own check, where the zero address means "anyone".
+ */
 function addressProblem(
   value: string,
   missing: SaleIntentProblem,
 ): SaleIntentProblem | null {
-  return isAddress(value) ? null : missing;
+  return isAddress(value) && value.toLowerCase() !== anyBuyer ? null : missing;
 }
 
 /**

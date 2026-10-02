@@ -9,6 +9,7 @@ import {
   useWriteContract,
 } from "wagmi";
 
+import { assetDeploymentBinding } from "@/lib/asset-binding";
 import {
   wholeArtworkCollectionAbi,
   wholeArtworkMarketAbi,
@@ -82,10 +83,15 @@ const problemLabels: Record<string, string> = {
   "chain-mismatch": `Connect to ${supportedChain.name} to sign for this market.`,
 };
 
+function configuredAddress(value: string | undefined): Address | undefined {
+  const trimmed = value?.trim();
+  return trimmed && isAddress(trimmed) ? (trimmed as Address) : undefined;
+}
+
 function marketAddress(): Address | undefined {
-  const configured =
-    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS?.trim();
-  return configured && isAddress(configured) ? configured : undefined;
+  return configuredAddress(
+    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS,
+  );
 }
 
 /** Serializes an intent plus its signature for the holder to hand to a buyer. */
@@ -145,9 +151,10 @@ function decodeAuthorization(
 }
 
 export function WholeArtworkListing({
+  slug,
   collection,
   tokenId,
-}: Readonly<{ collection?: string; tokenId?: string }>) {
+}: Readonly<{ slug?: string; collection?: string; tokenId?: string }>) {
   const { address, chainId, isConnected } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
   const { writeContractAsync } = useWriteContract();
@@ -164,9 +171,40 @@ export function WholeArtworkListing({
   const [durationHours, setDurationHours] = useState("24");
 
   const market = marketAddress();
+
+  /**
+   * **The deployment artwork belongs to one route, not to every page that renders this.**
+   *
+   * `AssetDetail` is shared by every slug in `lib/catalog.ts`, six invented artworks that map to no
+   * deployed token. A collection and token id read from the environment alone would appear beneath
+   * all six titles at once, and a holder could authorize a sale of a real artwork from a page
+   * describing a different one. `ACCEPTANCE.md` §3 and `AGENTS.md` §5 both refuse that.
+   *
+   * So the props win, and the environment's artwork applies only to the one slug the environment
+   * names. Every other route stays inert and says why. Without a fallback of some kind the surface
+   * could never be switched on at all — nothing passes a collection — so the fallback stays, bound.
+   */
+  const configuredCollection =
+    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS;
+  const binding = assetDeploymentBinding(
+    slug,
+    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG,
+    configuredCollection,
+  );
   const collectionAddress =
-    collection && isAddress(collection) ? (collection as Address) : undefined;
-  const artworkId = tokenId ? BigInt(tokenId) : undefined;
+    configuredAddress(collection) ??
+    (binding.bound ? configuredAddress(configuredCollection) : undefined);
+  const configuredTokenId = (
+    tokenId ??
+    (binding.bound
+      ? process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID
+      : undefined)
+  )?.trim();
+  // Told apart from "nothing is deployed at all", so the page can say which of the two it is.
+  const boundElsewhere = !collectionAddress && binding.boundElsewhere;
+  const artworkId = /^[0-9]+$/.test(configuredTokenId ?? "")
+    ? BigInt(configuredTokenId!)
+    : undefined;
 
   const { data: holder } = useReadContract({
     abi: wholeArtworkCollectionAbi,
@@ -200,6 +238,26 @@ export function WholeArtworkListing({
   );
 
   /**
+   * The buyer's copy of the seller's current epoch, read from chain rather than taken from the text
+   * they were handed. A withdrawal happens after an authorization is written, so the terms can never
+   * report it.
+   */
+  const pastedSeller = useMemo(() => {
+    if (!pasted.trim()) return undefined;
+    const decoded = decodeAuthorization(pasted);
+    return "error" in decoded ? undefined : decoded.intent.seller;
+  }, [pasted]);
+
+  const { data: pastedSellerEpoch } = useReadContract({
+    abi: wholeArtworkMarketAbi,
+    address: market,
+    functionName: "sellerEpoch",
+    args: pastedSeller ? [pastedSeller] : undefined,
+    chainId: supportedChain.id,
+    query: { enabled: Boolean(market && pastedSeller) },
+  });
+
+  /**
    * The terms, given the instant the sale opens.
    *
    * The clock is deliberately a parameter rather than something read here: `startsAt` and the
@@ -221,7 +279,9 @@ export function WholeArtworkListing({
         seller: address,
         collection: collectionAddress,
         tokenId: artworkId,
-        paymentToken: (paymentToken.trim() || anyBuyer) as Address,
+        // A blank field stays blank rather than becoming the zero address, which would sign
+        // terms no market can settle. See the same note in `fraction-listing.tsx`.
+        paymentToken: paymentToken.trim() as Address,
         price: priceValue,
         buyer: (namedBuyer.trim() || anyBuyer) as Address,
         // Distinguishes otherwise identical terms, so a holder can authorize the same artwork
@@ -359,16 +419,21 @@ export function WholeArtworkListing({
       setStage("error");
       return;
     }
+    // The seller's epoch is read from chain, not taken from the pasted terms. Comparing the terms
+    // against themselves would always agree, and the one thing this check exists to catch is a
+    // seller who has withdrawn every authorization since that text was written.
     const state = saleIntentFillable(
       intent,
       Math.floor(Date.now() / 1000),
-      intent.epoch,
+      pastedSellerEpoch ?? intent.epoch,
     );
     if (!state.fillable) {
       setDetail(
         state.reason === "expired"
           ? "This authorization has expired."
-          : "This authorization is not open for settlement.",
+          : state.reason === "superseded"
+            ? "The seller has withdrawn every authorization signed against this epoch."
+            : "This authorization is not open for settlement.",
       );
       setStage("error");
       return;
@@ -389,7 +454,7 @@ export function WholeArtworkListing({
       );
       setStage("error");
     }
-  }, [market, pasted, writeContractAsync]);
+  }, [market, pasted, pastedSellerEpoch, writeContractAsync]);
 
   if (!market || !collectionAddress || artworkId === undefined) {
     return (
@@ -406,6 +471,9 @@ export function WholeArtworkListing({
           artwork&apos;s own contract address.{" "}
           {market ? "" : "No market address is configured. "}
           {collectionAddress ? "" : "No artwork contract is configured. "}
+          {boundElsewhere
+            ? "The deployed artwork belongs to a different page, so it is not offered here. "
+            : ""}
           Until both are present this surface offers nothing, rather than
           showing a sale it could not settle.
         </p>

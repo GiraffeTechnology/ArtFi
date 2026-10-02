@@ -210,6 +210,36 @@ comes from. No rule is new and no status is promoted by the act of listing it.
 > product — `_update` is deliberately not pausable so a pause never freezes a holder (`PRD.md`
 > §4.2) — and the plan is corrected. Detail in `TESTPLAN_HOODI_CHARITY.md` §13.
 
+> **CI has not executed on this repository since 2026-09-19, and `8af87e8` was merged on local
+> evidence.** Every `quality` run from 276 to 307 failed, across every branch and every triggering
+> actor — the Codex branches, dependabot, and `main`'s own two README commits (runs 299 and 300).
+> The signature is identical each time: `runner_id: 0`, no runner name, no `steps`, two seconds, and
+> HTTP 404 for every job's log, so **no runner was ever assigned and nothing was ever executed.**
+> That rules out the workflow file: an unresolvable action reference would assign a runner and log
+> the failure. It is an account-level condition, outside this repository, and it blocks every pull
+> request including #114.
+>
+> Client decision of 2026-09-26: keep the merge and run the full workflow on `main` once CI is
+> restored, rather than revert. **Until that run exists, nothing here is CI-verified.** The local
+> evidence behind the merge is forge 135, vitest 125, playwright 118 with 2 skips on desktop and
+> mobile, `go vet` / `gofmt` / `go test -race`, and every format, lint, typecheck, build, secret,
+> chain-consistency and release-verifier gate; the MySQL migration job was not run, for want of a
+> container runtime. **No status value moved on any of it.**
+
+> **#114 and #115 are back in, by client decision of 2026-09-26.** They were merged, then reverted
+> here because `AGENTS.md`'s S-XM checkpoint — which arrived as part of #114's own content — states
+> that #114 "is not ready to merge or hand over", on three accepted, unresolved review findings. The
+> client directed that they not be split out, so the reverts are reverted and both are included
+> again. **That checkpoint text is still in `AGENTS.md` and still says what it says**; it is recorded
+> here rather than edited, because the decision to proceed is the client's and the record of the
+> open findings is Codex's. The three findings are unchanged by this merge.
+>
+> Restoring them changed nothing in the operations surface — `operations/page.tsx`,
+> `operations-status.tsx`, `ops-checks.ts` and their spec are byte-identical across the restore. One
+> `operations-status` case failed once in a full-suite run and then passed 12 of 12 across three
+> repeats; it aborts routes, so it is a race in the test, not a regression. Not touched here:
+> changing someone else's passing test is not part of a restore.
+
 **CH.5, CH.6 and CH.8 are the product.** The contract and release layers were always the strongest part of this module; the buyer-facing half now exists as a surface — catalog, edition
 page, rights disclosure, verification and gated delivery. What remains missing is not code but
 configuration and a deployment: no environment holds a descriptor store or an object store, so
@@ -227,14 +257,14 @@ Added 2026-09-18. Charity editions and approved-external-marketplace mirroring a
 paired requirement; the mirroring side was implemented in `apps/api` but itemized nowhere. These rows
 carry the original `MARKET-001`–`MARKET-006` forward. No rule is new.
 
-| #    | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---- | -------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| XM.1 | ArtFi-operated order, match, custody and settlement stays shut | `IMPLEMENTED-NOT-VERIFIED` | No order book, counterparty, custody or settlement path exists; no frontend route reaches `ArtFiMarket.sol`. **Tension recorded**: the original marks any deployable implementation `P0 / FAIL`, and `fdb90ff` made deployment possible behind the default-off `ARTFI_DEPLOY_MARKET`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| XM.2 | Versioned approved-marketplace adapter with a source allowlist | `IMPLEMENTED-NOT-VERIFIED` | `external_market.go` carries `schemaVersion`, persists the raw payload and source version, and rejects anything but `"1"`; sources come from the `ARTFI_MARKETPLACE_SOURCES` allowlist. No live adapter run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| XM.3 | Realtime stream plus REST gap-fill converging to one state     | `IMPLEMENTED-NOT-VERIFIED` | `apps/market-mirror/src/opensea.ts` runs an `OpenSeaStreamClient` over `ws` and a cursor-paged `backfill()`, declaring `realtime: true, restBackfill: true`; `opensea.test.ts` runs in CI. `persistence_integration_test.go` proves cancel-then-stale-version convergence against real MySQL — a v6 event arriving after a v8 cancel stays auditable without overwriting the canonical order. No live stream run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| XM.4 | Mirror API, transaction orchestration, external deep links     | `IMPLEMENTED-NOT-VERIFIED` | **The mirror now reaches a screen.** `/market/rwa` renders each record's source, order status, short order ID, observed time, freshness and the venue link the source reported; `market-links.ts` re-validates that link and refuses a non-HTTPS scheme, embedded credentials or any host but `opensea.io`, so an unverifiable URL produces no link rather than a hopeful one. **ArtFi never constructs a link** — an absent `marketplaceUrl` is stated as absent. 13 unit tests in `market-links.test.ts`; 4 browser tests in `market-attribution.spec.ts` on desktop and mobile cover the attributed link, its `noopener noreferrer` and `target`, an absent link and a lookalike host. Server side unchanged: `/v1/market/activity`, `/v1/market/intents`, and `market_orchestration.go` (628 lines) prepares an idempotent intent for an approved venue, gated off by default. **Unverified:** no deployed environment, and no observed venue record has yet been rendered from live data                                                                           |
-| XM.5 | Data claims accurate: fixtures labelled, freshness real        | `IMPLEMENTED-NOT-VERIFIED` | Missing persistence answers HTTP 503 rather than an empty success (#65); freshness and observation time are persisted, and `/market/rwa` now states freshness as an age rather than leaving a reader to infer it from a timestamp — a future source clock is reported as such instead of rounded to "just now". The mainnet-versus-testnet separation the requirement names is asserted nowhere yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| XM.6 | Result state machine and reconciliation                        | `IMPLEMENTED-NOT-VERIFIED` | All nine states are declared in `000007_external_trade_orchestration.up.sql`, `openapi.yaml` and the generated client. **`accepted` is now reachable**: `planIntentTransitions` enters it when a venue transfer carries the intent's own submitted transaction hash — the narrowest reading the existing data supports, taken from the state order in `PRD.md` §4.8 XM.6, and recorded as correctable. **A mis-attribution defect is fixed in the same place**: a sale on the order used to mark _every_ intent `confirmed`, so a user whose transaction lost the race was told their purchase succeeded. Only the intent whose transaction the venue reported is confirmed now; the rest fail with `external-order-filled-by-another-transaction`, and a sale carrying no transaction hash confirms nobody. Another party's hash is never written into this user's row. 9 tests in `market_reconciliation_test.go`. **Gap: no screen reaches any of these states**, the orchestration path stays gated off by default, and no runtime reconciliation has been observed |
+| #    | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---- | -------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| XM.1 | ArtFi-operated order, match, custody and settlement stays shut | `IMPLEMENTED-NOT-VERIFIED` | No order book, counterparty, custody or settlement path exists; no frontend route reaches `ArtFiMarket.sol`. **Tension recorded**: the original marks any deployable implementation `P0 / FAIL`, and `fdb90ff` made deployment possible behind the default-off `ARTFI_DEPLOY_MARKET`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| XM.2 | Versioned approved-marketplace adapter with a source allowlist | `IMPLEMENTED-NOT-VERIFIED` | `external_market.go` carries `schemaVersion`, persists the raw payload and source version, and rejects anything but `"1"`; sources come from the `ARTFI_MARKETPLACE_SOURCES` allowlist. No live adapter run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| XM.3 | Realtime stream plus REST gap-fill converging to one state     | `IMPLEMENTED-NOT-VERIFIED` | `apps/market-mirror/src/opensea.ts` runs an `OpenSeaStreamClient` over `ws` and a cursor-paged `backfill()`, declaring `realtime: true, restBackfill: true`. Startup waits for a successful Phoenix `phx_reply` join acknowledgement for every configured collection before taking the REST snapshot, spools live events outside the process heap, and establishes an explicit cutover: the completed REST snapshot plus every live event before that cutover are sent as one NDJSON batch to `/v1/indexer/market-snapshots`. The API validates and persists the complete stream inside one database transaction; after indexer authentication and NDJSON media-type validation, it replaces the ordinary whole-request timeout with a 15-second read/write idle deadline refreshed by successful body reads, every scanned record (including buffered and empty records), after persistence, before commit, and after commit before the success response; deadline-setter failure fails closed before or during the transaction, and a post-commit failure suppresses a misleading success response. An invalid/interrupted line or a pre-cutover realtime-buffer failure rolls back the batch instead of exposing a partial snapshot. Events after the cutover use a second bounded spool and drain only after the transaction commits. Reconnect gap-fills remain gated behind that initial commit and drain, then serialize after every later WebSocket generation re-acknowledges all configured collections; a failed recovery disconnects the stream and exits unsuccessfully so startup head-overlap recovery runs again. The snapshot endpoint streams complete histories without an unrecoverable aggregate event cap while retaining a per-event size limit. The pending pre-snapshot queue and total retained realtime spool both have hard byte/event limits; after commit, an individual sink rejection does not disable later realtime delivery. The unbounded cursor traversal fully writes and fsyncs events before its cursor journal under the required `OPENSEA_BACKFILL_STATE_DIRECTORY`; each checkpoint records the committed spool byte offset and last-page event fingerprints. Restart truncates incomplete spool/journal tails to the last complete record, traverses each checkpointed collection from the current head until its committed boundary (not merely one page), then resumes the saved cursor. Cleanup removes known payloads while exclusion remains held and preserves the stable snapshot directory across writer handoff. Stale locks are recovered through a marker bound to the live reclaimer, and abandoned marker ownership is recovered without weakening single-writer exclusion. Repeated cursors are rejected; bounded numeric `Retry-After` applies only to transient responses; the request timeout remains active through response-body parsing. `opensea.test.ts` covers the atomic realtime cutover, reconnect commit gating, initial and reconnect join readiness, serialized reconnect gap-fill and fail-closed recovery, live reclaimer exclusion, tail recovery, multi-page recovery overlap, bounded pending and retained realtime spools, post-commit sink recovery, cleanup, failure shutdown, short writes, abandoned reclamation markers and histories longer than the former 20-page cap; `persistence_integration_test.go` proves both cancel-then-stale-version convergence and whole-snapshot rollback against real MySQL. **No live stream or disconnect/reconnect runtime has been observed.** |
+| XM.4 | Mirror API, transaction orchestration, external deep links     | `IMPLEMENTED-NOT-VERIFIED` | **The mirror now reaches a screen.** `/market/rwa` renders each record's source, order status, short order ID, observed time, freshness and the venue link the source reported; `market-links.ts` re-validates that link and refuses a non-HTTPS scheme, embedded credentials or any host but `opensea.io`, so an unverifiable URL produces no link rather than a hopeful one. **ArtFi never constructs a link** — an absent `marketplaceUrl` is stated as absent. 13 unit tests in `market-links.test.ts`; 4 browser tests in `market-attribution.spec.ts` on desktop and mobile cover the attributed link, its `noopener noreferrer` and `target`, an absent link and a lookalike host. Server side unchanged: `/v1/market/activity`, `/v1/market/intents`, and `market_orchestration.go` (628 lines) prepares an idempotent intent for an approved venue, gated off by default. **Unverified:** no deployed environment, and no observed venue record has yet been rendered from live data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| XM.5 | Data claims accurate: fixtures labelled, freshness real        | `IMPLEMENTED-NOT-VERIFIED` | Missing persistence answers HTTP 503 rather than an empty success (#65); freshness and observation time are persisted, and `/market/rwa` now states freshness as an age rather than leaving a reader to infer it from a timestamp — a future source clock is reported as such instead of rounded to "just now". The mainnet-versus-testnet separation the requirement names is asserted nowhere yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| XM.6 | Result state machine and reconciliation                        | `IMPLEMENTED-NOT-VERIFIED` | All nine states are declared in `000007_external_trade_orchestration.up.sql`, `openapi.yaml` and the generated client. **`accepted` is now reachable**: `planIntentTransitions` enters it when a venue transfer carries the intent's own submitted transaction hash — the narrowest reading the existing data supports, taken from the state order in `PRD.md` §4.8 XM.6, and recorded as correctable. **A mis-attribution defect is fixed in the same place**: a sale on the order used to mark _every_ intent `confirmed`, so a user whose transaction lost the race was told their purchase succeeded. Only the intent whose transaction the venue reported is confirmed now; the rest fail with `external-order-filled-by-another-transaction`, and a sale carrying no transaction hash confirms nobody. Another party's hash is never written into this user's row. 9 tests in `market_reconciliation_test.go`. **Gap: no screen reaches any of these states**, the orchestration path stays gated off by default, and no runtime reconciliation has been observed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ---
 
@@ -328,6 +358,171 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 
 ## Change log
 
+### 2026-09-29 — `claude/ci-all-pr-6dytk9`: the activity history becomes walkable (stage `S-XM`)
+
+`AGENTS.md`'s S-XM checkpoint names this as the slice after PR #114's findings: complete
+cursor-paginated activity history in API, OpenAPI, client and UI. Two things were wrong with
+`/v1/market/activity`. It served a `limit` alone, capped at 100, so the most any reader could ever
+see was the hundred most recent events while the rest of the history sat in the mirror unreachable.
+And **no screen reached it at all**, which `PRD.md` §3.2 counts as progress rather than a handover.
+
+**Keyset, not offset.** Rows arrive continuously, and offset paging over a feed that grows at its
+head skips and repeats rows as it walks — a reader would be told a complete history while silently
+missing events. The cursor is the ordering tuple of the last row served,
+`(event_timestamp, received_at, event_id)` descending; the primary key breaks the tie so the order is
+strict and a cursor names exactly one position. The existing `idx_external_market_activity` covers
+the seek. One row beyond the page is read to decide whether another page exists and is not served, so
+a client is never told there is more when there is not.
+
+**The end is stated, never inferred.** `nextCursor` is absent once the history has ended. A short
+page is not the end — the server may return fewer rows and still have more — so a client that
+guessed from page length would report a history that stopped when it had not.
+
+**A cursor is a position, not an authority.** It is opaque by encoding rather than by secrecy, and
+every field is re-validated on the way in. One this endpoint did not issue is refused with 400 rather
+than rounded to the head: silently restarting would serve the newest page to a reader who asked for
+an older one, with nothing to tell them.
+
+`/market/activity` is the screen, reachable from navigation on desktop and mobile. Each row carries
+source, event type, chain, collection, token, order, price, observed time, freshness and the venue
+link the source reported — re-validated by `venueLink`, never constructed (XM.5). An unreachable
+mirror says so and does **not** render the empty state: "the mirror has observed no activity" would
+be a claim about the market made from a failed request, and the two are opposite statements to a
+reader deciding whether a market is quiet or broken.
+
+Evidence: `market_activity_cursor.go` with 6 Go tests covering the round trip, microsecond
+precision, eleven malformed-cursor refusals including SQL in the event id, and the predicate's
+placeholder/argument binding; `market-activity.ts` with 10 web tests covering order, the stated end,
+no event shown twice, and a non-advancing cursor ending the walk; `market-activity.spec.ts` with 6
+browser tests across desktop and mobile. `TestMySQLPersistenceSurvivesServiceRestart` now walks the
+whole history one event at a time and asserts each is served exactly once — it needs MySQL and did
+not run here. Web 186/186, Playwright 156 passed with 2 intentional skips, Forge 136/136, Go with
+`-race`, OpenAPI regeneration with no drift beyond the documented change, and the format, lint,
+typecheck, build, security, agent, chain-consistency and charity verifier gates.
+
+**No count or status moves.** XM.2 and XM.3 keep `IMPLEMENTED-NOT-VERIFIED`: no live mirror has
+served a page here and no runtime evidence exists.
+
+### 2026-09-29 — `claude/ci-all-pr-6dytk9`: four review findings on the settlement surfaces
+
+Review on PR #127 found four defects in the two entries below. All four are real and all four are
+fixed at `1857c5e`; two of the descriptions in those entries were accordingly too generous when
+written, and this entry corrects them rather than editing them.
+
+**A deployment belonged to every page at once.** `AssetDetail` is shared by all six slugs in
+`lib/catalog.ts`, and both settlement surfaces read their contract from the environment with no
+identifier from the artwork. Once configured, every detail page would have offered the same real
+holding and signing surface under a different artwork's title — a fixture dressed as live data
+(`AGENTS.md` §5, `ACCEPTANCE.md` §3), and a signature over terms the signer did not mean. The
+environment fallback that made this reachable was added by the 2026-09-27 entry below. A deployment
+now names the one slug it belongs to (`lib/asset-binding.ts`), an unnamed one binds nowhere, and
+"deployed, but belongs to another page" is stated on screen as its own case.
+
+**The zero address passed as a party and as a token.** A blank payment-token field became
+`0x00…0`, which `isAddress` accepts and the market refuses, so the form could produce a signed
+authorization that could never settle. Both validators now reject it for the seller, the asset or
+collection and the payment token, and keep it for the buyer field, where it means "anyone may fill".
+
+**An approval could be spent on an unfillable token.** The fraction fill path sent the buyer's ERC-20
+approval without reading `allowedPaymentToken`, so an unallowlisted token — or one whose permission
+was withdrawn after signing — cost the buyer a transaction and left a live allowance behind. It is
+read and blocked on before the approval, and an unread standing does not pass.
+
+**A charity edition past the first page lost its venue link.** The venue lookup read only page one of
+`/v1/market/assets`, whose page size caps at 100. `findCharityVenueRecord` now walks until the
+edition is found, a page is empty, or `total` is exhausted — "not found yet" is not "not observed".
+
+Evidence: four regressions, each verified by mutation. `asset-binding.test.ts` (7 cases),
+`charity-venue.test.ts` (+6), `fraction-intent.test.ts` and `whole-artwork-intent.test.ts` (zero
+address rejected as party or token, still accepted as an open buyer), and
+`fractionPaymentApprovable` covering the unread standing. Web 176/176, Playwright 142 passed with 2
+intentional skips, Forge 136/136, Go with `-race`, and the format, lint, typecheck, build, security,
+agent, chain-consistency, release, charity, Hoodi and contracts-lint gates.
+
+**No count or status moves.** The corrected surfaces keep the statuses the entries below record.
+
+### 2026-09-27 — `claude/ci-all-pr-6dytk9`: the fraction settlement screen (stage `S-FR`)
+
+`PRD.md` §3.2 makes a stage deliverable when its function is operable from a screen, desktop and
+mobile. The signature-settled fixed-price path that the client ruling of 2026-08-30 requires
+(`PRD.md` §4.2.2) was on chain in `ArtFiMarket.sol` with **nothing reaching it** — the fraction page
+said so in as many words: "Fraction trading has no screen yet". Under §3.2 that is progress, not a
+handover. It has a screen now.
+
+**What it does.** A holder authorizes a sale of up to some number of fractions by signing EIP-712
+terms; a buyer settles part or all of it. The fractions never leave the holder's wallet in between,
+ArtFi is never counterparty, and nothing on the surface can move a holder's tokens without the
+signature they produced for that fill. Partial fills are the difference from the whole-artwork
+surface: one signature settles cumulatively up to its maximum, so both sides see what is left, and
+the holder can retire one authorization (`revokeIntent`) or all of them
+(`incrementSellerEpoch`) — neither blocked by an administrative pause.
+
+**What it refuses to hide**, each being a fill that would otherwise revert with no explanation: the
+token allowlist, the buyer's remaining pilot spend cap, the cumulative fill counter read from chain
+rather than taken from the pasted terms, and the seller's current epoch read the same way. Approval
+is its own step for an **exact** amount on each leg — the seller's allowance covers the authorized
+maximum, the buyer's covers this fill. Never an unlimited approval. With no deployed market or
+fraction token the panel names which prerequisite is missing and offers nothing.
+
+Two corrections to the whole-artwork surface, which is the same shape: its buyer path compared a
+pasted intent's epoch against itself, which can never detect the withdrawal the check exists for, so
+the epoch is now read from chain; and it had no configuration path at all — nothing passes a
+collection, so no deployment could have switched it on. Both surfaces now read deployment
+configuration as a fallback to their props.
+
+The browser and the contract are pinned to the same digest,
+`0x9de0ca5c018685d7054b96dbce27834375413de39e1ec02bdcbb5862acde3cbf`, asserted in
+`fraction-intent.test.ts` and `FractionSaleIntent.t.sol::testDigestMatchesTheBrowserSigner`. A field
+renamed, reordered or retyped on either side fails a test on both rather than producing a signature
+the market rejects at fill time.
+
+Evidence: `apps/web/src/lib/fraction-intent.ts` with 22 unit tests, `fraction-listing.tsx`, 7 browser
+tests in `e2e/fraction-listing.spec.ts` across desktop and mobile. Web 147/147, Playwright 132 passed
+with 2 intentional skips, Forge 136/136, mirror 49/49, `gofmt`/`go vet`/`go test -race`, format,
+lint, typecheck, build, and the security, agent, release and chain-consistency gates.
+
+**No count or status moves.** M2.4–M2.9 stay `NOT-IMPLEMENTED`: a signature that lives in one browser
+is not an order store, an order lifecycle service or a matching engine, and the panel says so on
+screen rather than implying a live book. M3.1 stays `NOT-IMPLEMENTED` — auctions keep escrow under
+the same ruling and no surface here reaches them. The fixture figures on the fraction page are
+unchanged and stay labelled; M3.7 is untouched. Nothing is promoted, and no live settlement has been
+observed on any chain.
+
+### 2026-09-27 — `claude/ci-all-pr-6dytk9`: the three open mirror findings (stage `S-XM`)
+
+`AGENTS.md`'s S-XM checkpoint recorded PR #114 as not ready to hand over on three accepted review
+findings that were never fixed: ordered checkpoint/spool cleanup (`4056400240`), recovery overlap
+boundaries (`4056400243`), and aborting the initial REST crawl on fatal realtime failure
+(`4056400246`). All three are in `apps/market-mirror/src/opensea.ts`, and all three are now closed.
+
+**Finalization is ordered.** The checkpoint is the pointer and the spool is the payload, so the
+pointer goes first and the payload only once the pointer is gone. Removing them concurrently could
+leave a checkpoint naming a spool that no longer existed, and every later start then failed at the
+spool's existence check — the mirror could not run again until someone repaired the directory by
+hand. An orphaned pointer is now discarded and the snapshot re-derived, because the spool is staging
+and never an authority.
+
+**Recovery overlap stops at the newest committed page.** A collection is paged from its head
+downwards, so keeping one boundary per collection kept its oldest page and restart walked back over
+nearly the whole committed history before it recognised anything. Every retained boundary now counts.
+
+**The initial REST crawl is abortable.** Aborting the snapshot upload stops publication of what is
+staged and does nothing to a crawl still fetching pages while it holds the durable writer lock. The
+crawl has its own signal now, which the fatal stream path aborts.
+
+Evidence: four regressions in `opensea.test.ts` — `keeps the durable spool when the checkpoint
+cannot be removed`, `re-derives a snapshot when the checkpoint outlives its spool`, `stops recovery
+overlap at the newest committed page boundary`, `aborts the initial REST crawl when the stream
+becomes fatal` — each checked by mutation, so reverting the change it covers makes that test fail.
+Mirror 49/49, Web 125/125, Playwright 118 passed with 2 intentional skips, Forge 135/135,
+`gofmt`/`go vet`/`go test -race` and the Go API suite, format, lint, typecheck, build, and the
+security, agent, release and chain-consistency gates. `forge lint --severity high` is clean after a
+mock ERC20 transfer return value was checked in `FractionSaleIntent.t.sol`.
+
+**No count or status moves.** XM.3 keeps `IMPLEMENTED-NOT-VERIFIED`. The MySQL migration job needs a
+container runtime and was not run here; managed TEST_ONLY database execution and a live OpenSea
+stream/disconnect-reconnect run remain NOT RUN, and independent review of this head has not happened.
+
 ### 2026-09-19 — `claude/ci-all-pr-6dytk9`: the charity Hoodi test plan
 
 `TESTPLAN_HOODI_CHARITY.md` — the executable sequence for the one thing this side cannot do, since
@@ -400,6 +595,65 @@ and the handoff record now separates decisions from inputs so the two are not li
 
 **No count moves and no status value changes.** Nothing here is evidence; three questions stopped
 being open, and one audit item that could not be satisfied stopped existing.
+
+### 2026-09-19 — `codex/s-xm-backfill-resilience-20260919`: complete REST gap-fill
+
+Issue #110's external-marketplace mirroring baseline, detailed by `PRD.md` §4.8 XM.2–XM.3,
+requires an explicit REST backfill lifecycle that converges with the realtime stream rather than
+silently accepting gaps. The OpenSea adapter now stages events until the provider reports
+completion, follows the provider cursor without a deployment page cap, rejects a cursor that does
+not advance, applies bounded numeric `Retry-After` guidance to transient retries, and keeps every
+REST request timeout active through response-body parsing. Production requires a durable
+`OPENSEA_BACKFILL_STATE_DIRECTORY`; every page fsyncs events before an append-only cursor
+checkpoint, so a restart resumes rather than recrawling from page one. Staged events remain
+invisible until all configured collections reach cursor exhaustion. The stream path parses the
+Phoenix join reply and waits for every remote collection subscription acknowledgement before the
+first REST page is requested.
+
+Evidence on local code merge `5040ba96f4d3253e6cc42aca9e2a2e8deea4c713`, tree
+`e02a3f477bfaf2a40b48fdca5b71bbc0f9e056f4`, integrated with base
+`c55852d42e08f8ba76d6ee63216f9b466a908566`: the market-mirror suite passes 45/45,
+including initial and reconnect subscription readiness, serialized reconnect gap-fill with
+fail-closed recovery, atomic snapshot/realtime cutover, reconnect commit gating, live reclaimer
+exclusion, bounded disk-spooled realtime publication, retained-spool capacity, multi-page recovery
+overlap, commit-window queue overflow rejection, durable cursor resume, short-write handling,
+abandoned-reclaim recovery, process-instance identity against PID reuse, single-writer enforcement,
+post-commit sink recovery and shutdown without publication when snapshotting fails. Full format,
+lint, typecheck, Node unit, production build, browser, secret, chain, release and charity gates pass.
+The snapshot API retains its complete-history, zero-event cutover and bounded idle-deadline contract.
+Fixed Go 1.26.5 validation passed `gofmt -l`, `go vet ./...`, unit and race tests for both tested
+packages; the server package has no test files. Managed database execution was not run and remains
+an independent gate.
+
+The P2 follow-up removes the second full `snapshot.ndjson` copy. The persistent OpenSea spool is
+replayed directly to snapshot upload through a capacity-one asynchronous handoff. A deferred,
+idempotent `commit`/`abort` lease keeps the source spool, checkpoints and lock authoritative until
+the sink commits. Slow-consumer coverage proves bounded one-in/one-out backpressure. Upload-failure
+coverage proves abort preserves source payload and checkpoints, releases the lock, and lets retry
+succeed and clean up. Zero-history and all-zero cutovers, precommit/postcommit order, stale-lock and
+successor safety, and default/reconnect auto-finalization remain covered. The integrated matrix also
+passed Web 125/125, Playwright 118 passed with two intentional skips, Forge 135/135 and Agent 34/34.
+
+Prior-head GitHub run `35481378549` had five jobs with zero executed steps and is infrastructure
+evidence only. The local merge and documentation heads still need fresh CI and independent runtime
+evidence. **No count or status moves:** XM.3 remains `IMPLEMENTED-NOT-VERIFIED`, and no live
+provider connection is claimed.
+
+### 2026-09-19 — `codex/vendor-neutral-operations-20260919`: neutral operations host role
+
+Issue #110 §4 and the 2026-09-19 vendor-neutral operations ruling require deployable behaviour to
+name infrastructure by role rather than bind it to the current vendor. The operations-dependency
+contract uses `artfi-delivery-link` internally; the frozen r2 producer role is
+accepted only at an explicit schema-v2 compatibility boundary, while validation
+and regression tests reject unknown producer roles and any legacy internal role
+deployment-specific host role. The contract remains fail-closed and
+`PARTIAL_INPUT_READY_NOT_7X24`: no capability, readiness gate or production claim changes.
+
+Remaining consolidation is not documentation-only. The Agent durable-store source and schema now
+use the `<CLOUD_PROVIDER_A>` role, while the mint-batch verifier still consumes the historical
+`abcdyiSshRecovered` evidence field as an explicit immutable compatibility exception.
+`docs/DEPLOYMENT_ENVIRONMENT.md` records that executable schema debt and the remaining
+documentation debt. **No count or status moves.**
 
 ### 2026-09-19 — `claude/ci-all-pr-6dytk9`: fixture disclosure and holder authority
 

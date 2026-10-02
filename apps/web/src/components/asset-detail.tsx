@@ -4,6 +4,7 @@ import { formatUsd, type Artwork } from "@/lib/catalog";
 
 import { ArtworkVisual } from "./artwork-visual";
 import { AssetHolderAuthority } from "./asset-holder-authority";
+import { FractionListing } from "./fraction-listing";
 import { PrototypeDataNotice } from "./prototype-data-notice";
 import { WholeArtworkListing } from "./whole-artwork-listing";
 
@@ -59,10 +60,11 @@ export function AssetDetail({
           </dl>
           {fractional && (
             <div className="disabled-action" role="note">
-              <strong>Fraction trading has no screen yet</strong>
+              <strong>These figures are fixture data</strong>
               <span>
-                The fraction market exists on chain, but no surface here reaches
-                it, so this page requests no transaction or signature.
+                The available percentage, the reference price and the fraction
+                count come from `lib/catalog.ts` and describe no deployed token.
+                Settlement below reads its state from chain.
               </span>
             </div>
           )}
@@ -105,7 +107,11 @@ export function AssetDetail({
           </dl>
         </aside>
       </section>
-      {!fractional && <WholeArtworkListing />}
+      {fractional ? (
+        <FractionListing slug={artwork.slug} />
+      ) : (
+        <WholeArtworkListing slug={artwork.slug} />
+      )}
       {!fractional && <AssetHolderAuthority />}
     </main>
   );

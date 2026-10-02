@@ -361,7 +361,7 @@ contract FractionSaleIntentTest {
         require(!_fill(BUYER, intent, signature, 1), "a fill settled while paused");
 
         VM.prank(seller);
-        asset.transfer(OTHER_BUYER, 500);
+        require(asset.transfer(OTHER_BUYER, 500), "the holder transfer was rejected");
         require(asset.balanceOf(OTHER_BUYER) == 500, "the pause froze the holder");
 
         market.unpause();
@@ -402,5 +402,44 @@ contract FractionSaleIntentTest {
         require(payment.balanceOf(address(market)) == 0, "market retained payment");
         require(asset.balanceOf(address(market)) == 0, "market retained fractions");
         require(market.credits(seller, address(payment)) == 0, "a resting credit was created");
+    }
+
+    /// The browser signs what this contract verifies, or a fill fails for a reason no message
+    /// explains. The same fixed intent, domain and digest are asserted in
+    /// `apps/web/src/lib/fraction-intent.test.ts`, so a field renamed, reordered or retyped on
+    /// either side breaks this constant on both sides rather than at fill time.
+    function testDigestMatchesTheBrowserSigner() public view {
+        bytes32 domainTypeHash = keccak256(
+            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+        );
+        bytes32 fixedDomainSeparator = keccak256(
+            abi.encode(
+                domainTypeHash,
+                keccak256(bytes("ArtFi Fractions Market")),
+                keccak256(bytes("1")),
+                uint256(560_048),
+                address(0x00000000000000000000000000000000000000A1)
+            )
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(
+                market.SALE_INTENT_TYPEHASH(),
+                address(0x000000000000000000000000000000000000bEEF),
+                address(0x00000000000000000000000000000000000000C0),
+                address(0x00000000000000000000000000000000000000d0),
+                uint256(1000),
+                uint256(1_234_567_890),
+                address(0),
+                uint256(42),
+                uint48(1000),
+                uint48(2000),
+                uint256(3)
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked(hex"1901", fixedDomainSeparator, structHash));
+        require(
+            digest == 0x9de0ca5c018685d7054b96dbce27834375413de39e1ec02bdcbb5862acde3cbf,
+            "digest drifted from the browser signer"
+        );
     }
 }

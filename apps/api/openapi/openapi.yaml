@@ -208,6 +208,32 @@ paths:
         "200": { description: Idempotent replay accepted }
         "401": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /v1/indexer/market-snapshots:
+    post:
+      operationId: ingestExternalMarketSnapshot
+      description: Atomically commits a complete NDJSON marketplace snapshot; any invalid or interrupted line rolls back the whole snapshot, while an empty body records a valid zero-event cutover.
+      parameters:
+        - name: X-Indexer-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16 }
+      requestBody:
+        required: true
+        content:
+          application/x-ndjson:
+            schema:
+              type: string
+              description: One ExternalMarketEventRequest JSON object per line.
+      responses:
+        "201":
+          {
+            description: Complete external marketplace snapshot committed atomically,
+          }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "413": { $ref: "#/components/responses/Problem" }
+        "415": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /v1/market/activity:
     get:
       operationId: getExternalMarketActivity
@@ -222,6 +248,13 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          description: >-
+            Opaque position from a previous response's nextCursor. Keyset, not an offset: a feed
+            that grows at its head would make offset paging skip and repeat rows. A cursor this
+            endpoint did not issue is refused rather than rounded to the start.
+          schema: { type: string, maxLength: 256 }
       responses:
         "200":
           description: Attributed external marketplace activity
@@ -239,6 +272,12 @@ paths:
                   source: { type: string }
                   execution: { type: string, const: external-deeplink-only }
                   custody: { type: boolean, const: false }
+                  nextCursor:
+                    type: string
+                    description: >-
+                      Position to pass as cursor for the next page. Absent once the history has
+                      ended, so its absence is the end rather than something to infer from a short
+                      page.
         "400": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
   /v1/market/assets:
