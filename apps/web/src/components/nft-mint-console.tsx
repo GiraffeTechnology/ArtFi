@@ -24,8 +24,12 @@ const standards = [
   },
 ] as const;
 
-export function NFTMintConsole() {
-  const [standard, setStandard] = useState<Standard>("erc721");
+export function NFTMintConsole({
+  initialStandard = "erc721",
+}: {
+  initialStandard?: Standard;
+}) {
+  const [standard, setStandard] = useState<Standard>(initialStandard);
 
   return (
     <section

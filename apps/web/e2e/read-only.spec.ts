@@ -2,13 +2,15 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 const journeys = [
-  ["/", "Art, provenance, and transparent ownership."],
+  ["/", "Three ways to participate in art."],
+  ["/nft", "Digital art, independently collected."],
+  ["/rwa", "One artwork. Its receipt. Its record."],
   ["/projects", "Context assembled before assets move."],
   ["/projects/material-memory", "Material Memory"],
   ["/market/rwa", "Live market signals."],
   ["/market/activity", "The mirrored history."],
   ["/market/rwa/blue-hour-archive", "Blue Hour Archive"],
-  ["/market/fractionals", "Understand the position before the transaction."],
+  ["/market/fractionals", "Fractional trading & DAO."],
   ["/market/fractionals/blue-hour-archive", "Blue Hour Archive"],
   ["/portfolio", "Your public portfolio."],
   ["/dao", "The holders govern the corresponding physical asset."],
@@ -27,7 +29,9 @@ for (const [path, heading] of journeys) {
       page.getByRole("heading", { level: 1, name: heading }),
     ).toBeVisible();
     await expect(
-      page.getByText("External market information mirror only"),
+      page.getByText(
+        "No real assets or real money · Wallet-confirmed writes where configured",
+      ),
     ).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
     expect(
@@ -275,6 +279,9 @@ test("production health endpoint reports the enforced operating mode", async ({
   expect(response.ok()).toBe(true);
   await expect(response.json()).resolves.toEqual({
     chainId: 560048,
+    buildRevision: /^[a-f0-9]{40}$/.test(process.env.ARTFI_BUILD_SHA ?? "")
+      ? process.env.ARTFI_BUILD_SHA
+      : null,
     marketplaceMode: "external-mirror",
     service: "artfi-web",
     status: "ok",

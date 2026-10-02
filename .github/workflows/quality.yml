@@ -135,3 +135,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
       - run: pnpm test:e2e
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:market

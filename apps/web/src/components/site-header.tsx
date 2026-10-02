@@ -1,21 +1,31 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+import { productNavigation, toolNavigation } from "@/lib/product-lines";
 
 import { LanguageSwitcher } from "./language-switcher";
 import { WalletButton } from "./wallet-button";
 
-const navigation = [
-  ["Overview", "/"],
-  ["Market mirror", "/market/rwa"],
-  ["Activity", "/market/activity"],
-  ["Charity", "/charity"],
-  ["Mint", "/create/rwa"],
-  ["Wallet", "/portfolio"],
-  ["DAO", "/dao"],
-  ["Operations", "/operations"],
-] as const;
-
 export function SiteHeader() {
+  const pathname = usePathname();
+
+  const navigationLink = ([label, href]: readonly [string, string]) => (
+    <Link
+      aria-current={pathname === href ? "page" : undefined}
+      href={href}
+      key={href}
+      onClick={(event) => {
+        const menu = event.currentTarget.closest("details");
+        if (menu) menu.open = false;
+      }}
+    >
+      {label}
+    </Link>
+  );
+
   return (
     <header className="site-header">
       <div className="header-inner">
@@ -41,33 +51,31 @@ export function SiteHeader() {
           </span>
         </Link>
         <nav className="primary-nav" aria-label="Primary navigation">
-          {navigation.map(([label, href]) => (
-            <Link href={href} key={href}>
-              {label}
-            </Link>
-          ))}
+          {productNavigation.map(navigationLink)}
+          <details className="tools-menu" key={`tools-${pathname}`}>
+            <summary>Tools</summary>
+            <nav aria-label="Workflow navigation">
+              {toolNavigation.map(navigationLink)}
+            </nav>
+          </details>
         </nav>
         <div className="header-actions">
           <LanguageSwitcher />
           <div className="desktop-wallet">
             <WalletButton />
           </div>
-          <details className="mobile-menu">
+          <details className="mobile-menu" key={`mobile-${pathname}`}>
             <summary>Menu</summary>
             <nav aria-label="Mobile navigation">
-              {navigation.map(([label, href]) => (
-                <Link href={href} key={href}>
-                  {label}
-                </Link>
-              ))}
+              {productNavigation.map(navigationLink)}
+              {toolNavigation.map(navigationLink)}
             </nav>
           </details>
         </div>
       </div>
       <div className="testnet-banner">
-        <span>Testnet / read-only</span>
-        No custody · External market information mirror only · Attributed
-        runtime data
+        <span>Hoodi testnet</span>
+        No real assets or real money · Wallet-confirmed writes where configured
       </div>
     </header>
   );

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { isAddress, type Address, type Hex } from "viem";
 import {
   useAccount,
+  usePublicClient,
   useReadContract,
   useSignTypedData,
   useWriteContract,
@@ -23,6 +24,7 @@ import {
   type FractionSaleIntent,
 } from "@/lib/fraction-intent";
 import { supportedChain } from "@/lib/wagmi";
+import { useMarketTransactions } from "@/lib/use-market-transactions";
 
 /**
  * Fraction listing and fill — `PRD.md` §4.2.2, `AGENTS.md` §1.1 invariant 6.
@@ -185,8 +187,19 @@ export function FractionListing({
   const { address, chainId, isConnected } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient({ chainId: supportedChain.id });
+  const actionPending = useRef(false);
+  const [transactionHash, setTransactionHash] = useState<Hex>();
 
   const [stage, setStage] = useState<Stage>("idle");
+  const busy = [
+    "awaiting-signature",
+    "approving",
+    "filling",
+    "revoking",
+  ].includes(stage);
+  const canTransact =
+    isConnected && chainId === supportedChain.id && Boolean(publicClient);
   const [detail, setDetail] = useState<string>();
   const [authorization, setAuthorization] = useState<string>();
   const [signed, setSigned] = useState<FractionSaleIntent>();
@@ -228,7 +241,19 @@ export function FractionListing({
   // Told apart from "nothing is deployed at all", so the page can say which of the two it is.
   const boundElsewhere = !token && binding.boundElsewhere;
 
-  const { data: epoch } = useReadContract({
+  const { pending, begin, reconcile } = useMarketTransactions(
+    publicClient,
+    `${chainId}:${market}:${token}:${address}`,
+    setTransactionHash,
+  );
+  const ownsAuthorization = Boolean(
+    signed &&
+    address &&
+    signed.seller.toLowerCase() === address.toLowerCase() &&
+    signed.assetToken.toLowerCase() === token?.toLowerCase(),
+  );
+
+  const { data: epoch, refetch: refetchEpoch } = useReadContract({
     abi: artFiFractionMarketAbi,
     address: market,
     functionName: "sellerEpoch",
@@ -254,7 +279,7 @@ export function FractionListing({
     query: { enabled: Boolean(market && token) },
   });
 
-  const { data: holding } = useReadContract({
+  const { data: holding, refetch: refetchHolding } = useReadContract({
     abi: fractionTokenAbi,
     address: token,
     functionName: "balanceOf",
@@ -301,7 +326,7 @@ export function FractionListing({
     }
   }, [market, pastedAuthorization]);
 
-  const { data: alreadyFilled } = useReadContract({
+  const { data: alreadyFilled, refetch: refetchFilled } = useReadContract({
     abi: artFiFractionMarketAbi,
     address: market,
     functionName: "intentFilled",
@@ -349,7 +374,7 @@ export function FractionListing({
     query: { enabled: Boolean(market && address && pastedAuthorization) },
   });
 
-  const { data: pilotUsed } = useReadContract({
+  const { data: pilotUsed, refetch: refetchPilotUsed } = useReadContract({
     abi: artFiFractionMarketAbi,
     address: market,
     functionName: "pilotPaymentUsed",
@@ -398,7 +423,7 @@ export function FractionListing({
    */
   const buildIntent = useCallback(
     (startsAt: number): FractionSaleIntent | undefined => {
-      if (!address || !token) return undefined;
+      if (!address || !token || epoch === undefined) return undefined;
       const authorized = parseAmount(maxAmount);
       const price = parseAmount(unitPrice);
       if (authorized === undefined || price === undefined) return undefined;
@@ -420,7 +445,7 @@ export function FractionListing({
         startsAt,
         endsAt:
           startsAt + (Number.isFinite(hours) ? Math.round(hours * 3600) : 0),
-        epoch: epoch ?? 0n,
+        epoch,
       };
     },
     [
@@ -454,16 +479,26 @@ export function FractionListing({
   const authorize = useCallback(async () => {
     const draft = buildIntent(Math.floor(Date.now() / 1000));
     if (!draft || !market) return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
     setDetail(undefined);
     setAuthorization(undefined);
+    actionPending.current = true;
     try {
       setStage("awaiting-signature");
       const domain = { chainId: supportedChain.id, verifyingContract: market };
       // Throws on terms that would be refused, so the wallet is never asked to sign them.
       const hash = fractionIntentHash(draft, domain, supportedChain.id);
-      const signature = await signTypedDataAsync(
-        fractionIntentTypedData(draft, domain),
-      );
+      const signature = await signTypedDataAsync({
+        ...fractionIntentTypedData(draft, domain),
+        account: address,
+      });
       setDigest(hash);
       setSigned(draft);
       setAuthorization(encodeAuthorization(draft, signature));
@@ -475,23 +510,45 @@ export function FractionListing({
           : "The signature was not produced.",
       );
       setStage("error");
+    } finally {
+      actionPending.current = false;
     }
-  }, [buildIntent, market, signTypedDataAsync]);
+  }, [
+    pending,
+    address,
+    buildIntent,
+    canTransact,
+    market,
+    publicClient,
+    signTypedDataAsync,
+  ]);
 
   /** Approves exactly the authorized maximum. Never unlimited. */
   const approveFractions = useCallback(async () => {
     const authorized = parseAmount(maxAmount);
     if (!token || !market || authorized === undefined) return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
     setDetail(undefined);
+    actionPending.current = true;
     try {
       setStage("approving");
-      await writeContractAsync({
-        abi: fractionTokenAbi,
-        address: token,
-        functionName: "approve",
-        args: [market, authorized],
-        chainId: supportedChain.id,
-      });
+      await begin().write("approval", () =>
+        writeContractAsync({
+          abi: fractionTokenAbi,
+          address: token,
+          functionName: "approve",
+          args: [market, authorized],
+          chainId: supportedChain.id,
+          account: address,
+        }),
+      );
       await refetchAllowance();
       setStage(authorization ? "signed" : "idle");
     } catch (error) {
@@ -499,9 +556,16 @@ export function FractionListing({
         error instanceof Error ? error.message : "The approval was not sent.",
       );
       setStage("error");
+    } finally {
+      actionPending.current = false;
     }
   }, [
+    pending,
+    begin,
+    address,
     authorization,
+    canTransact,
+    publicClient,
     market,
     maxAmount,
     refetchAllowance,
@@ -510,17 +574,29 @@ export function FractionListing({
   ]);
 
   const revokeOne = useCallback(async () => {
-    if (!market || !signed) return;
+    if (!market || !signed || !ownsAuthorization) return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
     setDetail(undefined);
+    actionPending.current = true;
     try {
       setStage("revoking");
-      await writeContractAsync({
-        abi: artFiFractionMarketAbi,
-        address: market,
-        functionName: "revokeIntent",
-        args: [signed],
-        chainId: supportedChain.id,
-      });
+      await begin().write("withdrawal", () =>
+        writeContractAsync({
+          abi: artFiFractionMarketAbi,
+          address: market,
+          functionName: "revokeIntent",
+          args: [signed],
+          chainId: supportedChain.id,
+          account: address,
+        }),
+      );
       setAuthorization(undefined);
       setSigned(undefined);
       setDigest(undefined);
@@ -530,20 +606,45 @@ export function FractionListing({
         error instanceof Error ? error.message : "The withdrawal was not sent.",
       );
       setStage("error");
+    } finally {
+      actionPending.current = false;
     }
-  }, [market, signed, writeContractAsync]);
+  }, [
+    ownsAuthorization,
+    pending,
+    begin,
+    address,
+    canTransact,
+    market,
+    publicClient,
+    signed,
+    writeContractAsync,
+  ]);
 
   const revokeAll = useCallback(async () => {
     if (!market) return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
     setDetail(undefined);
+    actionPending.current = true;
     try {
       setStage("revoking");
-      await writeContractAsync({
-        abi: artFiFractionMarketAbi,
-        address: market,
-        functionName: "incrementSellerEpoch",
-        chainId: supportedChain.id,
-      });
+      await begin().write("withdrawal", () =>
+        writeContractAsync({
+          abi: artFiFractionMarketAbi,
+          address: market,
+          functionName: "incrementSellerEpoch",
+          chainId: supportedChain.id,
+          account: address,
+        }),
+      );
+      await refetchEpoch();
       setAuthorization(undefined);
       setSigned(undefined);
       setDigest(undefined);
@@ -553,11 +654,30 @@ export function FractionListing({
         error instanceof Error ? error.message : "The withdrawal was not sent.",
       );
       setStage("error");
+    } finally {
+      actionPending.current = false;
     }
-  }, [market, writeContractAsync]);
+  }, [
+    pending,
+    begin,
+    address,
+    canTransact,
+    market,
+    publicClient,
+    refetchEpoch,
+    writeContractAsync,
+  ]);
 
   const fill = useCallback(async () => {
     if (!market) return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
     setDetail(undefined);
     const decoded = decodeAuthorization(pasted);
     if ("error" in decoded) {
@@ -581,14 +701,43 @@ export function FractionListing({
       setStage("error");
       return;
     }
+    if (!token || intent.assetToken.toLowerCase() !== token.toLowerCase()) {
+      setDetail(
+        "These terms refer to a different fraction token. No payment approval was requested.",
+      );
+      setStage("error");
+      return;
+    }
+    if (
+      intent.seller.toLowerCase() === address.toLowerCase() ||
+      (intent.buyer !== anyFractionBuyer &&
+        intent.buyer.toLowerCase() !== address.toLowerCase())
+    ) {
+      setDetail("These terms are not fillable by the connected buyer.");
+      setStage("error");
+      return;
+    }
+    if (
+      pastedSellerEpoch === undefined ||
+      alreadyFilled === undefined ||
+      pilotHeadroom === undefined ||
+      marketPaused !== false ||
+      assetAllowed !== true
+    ) {
+      setDetail(
+        "The market, seller epoch, remaining amount, asset permission or pilot cap could not be confirmed. No approval was requested.",
+      );
+      setStage("error");
+      return;
+    }
     // Checked against the chain's own counters and the instant of the click, not against what the
     // pasted text claims: another buyer may have taken part of this authorization, and the seller
     // may have withdrawn it, since it was written.
     const state = fractionIntentFillable(
       intent,
       Math.floor(Date.now() / 1000),
-      pastedSellerEpoch ?? intent.epoch,
-      alreadyFilled ?? 0n,
+      pastedSellerEpoch,
+      alreadyFilled,
       amount,
     );
     if (!state.fillable) {
@@ -617,33 +766,58 @@ export function FractionListing({
       setStage("error");
       return;
     }
+    actionPending.current = true;
     try {
-      setStage("approving");
-      // Exactly this fill's payment, never an unlimited allowance.
-      await writeContractAsync({
-        abi: fractionTokenAbi,
-        address: intent.paymentToken,
-        functionName: "approve",
-        args: [market, payment],
-        chainId: supportedChain.id,
+      await begin().settle({
+        onStage: setStage,
+        approvePayment: () =>
+          writeContractAsync({
+            abi: fractionTokenAbi,
+            address: intent.paymentToken,
+            functionName: "approve",
+            args: [market, payment],
+            chainId: supportedChain.id,
+            account: address,
+          }),
+        settle: () =>
+          writeContractAsync({
+            abi: artFiFractionMarketAbi,
+            address: market,
+            functionName: "fillIntent",
+            args: [intent, signature, amount],
+            chainId: supportedChain.id,
+            account: address,
+          }),
       });
-      setStage("filling");
-      await writeContractAsync({
-        abi: artFiFractionMarketAbi,
-        address: market,
-        functionName: "fillIntent",
-        args: [intent, signature, amount],
-        chainId: supportedChain.id,
-      });
+      await Promise.all([
+        refetchFilled(),
+        refetchHolding(),
+        refetchAllowance(),
+        refetchPilotUsed(),
+      ]);
       setStage("filled");
     } catch (error) {
       setDetail(
         error instanceof Error ? error.message : "The settlement was not sent.",
       );
       setStage("error");
+    } finally {
+      actionPending.current = false;
     }
   }, [
+    pending,
+    begin,
+    address,
     alreadyFilled,
+    assetAllowed,
+    canTransact,
+    marketPaused,
+    publicClient,
+    refetchFilled,
+    refetchHolding,
+    refetchAllowance,
+    refetchPilotUsed,
+    token,
     fillAmount,
     market,
     pasted,
@@ -819,7 +993,12 @@ export function FractionListing({
               type="button"
               className="secondary"
               onClick={approveFractions}
-              disabled={stage === "approving" || !parseAmount(maxAmount)}
+              disabled={
+                !canTransact ||
+                busy ||
+                Boolean(pending) ||
+                !parseAmount(maxAmount)
+              }
             >
               Approve exactly this many
             </button>
@@ -827,7 +1006,13 @@ export function FractionListing({
               type="button"
               className="primary"
               onClick={authorize}
-              disabled={problems.length > 0 || stage === "awaiting-signature"}
+              disabled={
+                !canTransact ||
+                busy ||
+                Boolean(pending) ||
+                epoch === undefined ||
+                problems.length > 0
+              }
             >
               Sign the sale terms
             </button>
@@ -835,7 +1020,13 @@ export function FractionListing({
               type="button"
               className="secondary"
               onClick={revokeOne}
-              disabled={!signed || stage === "revoking"}
+              disabled={
+                !canTransact ||
+                busy ||
+                Boolean(pending) ||
+                !signed ||
+                !ownsAuthorization
+              }
             >
               Withdraw this authorization
             </button>
@@ -843,13 +1034,13 @@ export function FractionListing({
               type="button"
               className="secondary"
               onClick={revokeAll}
-              disabled={stage === "revoking"}
+              disabled={!canTransact || busy || Boolean(pending)}
             >
               Withdraw every authorization
             </button>
           </div>
 
-          {authorization && (
+          {authorization && ownsAuthorization && (
             <div className="transaction-panel">
               <p>
                 <strong>Signed, and published nowhere.</strong> ArtFi has no
@@ -888,7 +1079,13 @@ export function FractionListing({
               <textarea
                 rows={10}
                 value={pasted}
-                onChange={(event) => setPasted(event.target.value)}
+                disabled={busy}
+                onChange={(event) => {
+                  setPasted(event.target.value);
+                  setStage("idle");
+                  setDetail(undefined);
+                  setTransactionHash(undefined);
+                }}
                 placeholder="Paste the signed terms here"
               />
             </label>
@@ -896,7 +1093,11 @@ export function FractionListing({
               Fractions to settle
               <input
                 value={fillAmount}
-                onChange={(event) => setFillAmount(event.target.value)}
+                disabled={busy}
+                onChange={(event) => {
+                  setFillAmount(event.target.value);
+                  setStage("idle");
+                }}
                 inputMode="numeric"
                 placeholder="10"
               />
@@ -964,6 +1165,9 @@ export function FractionListing({
               className="primary"
               onClick={fill}
               disabled={
+                !canTransact ||
+                busy ||
+                Boolean(pending) ||
                 !pastedAuthorization ||
                 !fillAmount.trim() ||
                 stage === "filling" ||
@@ -979,6 +1183,60 @@ export function FractionListing({
       {stage === "filled" && (
         <p className="dao-alert">
           Settled. The fractions and the payment moved in the same transaction.
+        </p>
+      )}
+
+      {pending && (
+        <div className="dao-alert dao-alert--warning">
+          <p>
+            A {pending.kind} transaction is awaiting confirmation. No new
+            transaction can be submitted until it is checked.
+          </p>
+          <p className="charity-digest">{pending.hash}</p>
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy || !canTransact}
+            onClick={async () => {
+              if (actionPending.current) return;
+              actionPending.current = true;
+              setStage("filling");
+              setDetail(undefined);
+              try {
+                const kind = await reconcile();
+                await Promise.all([
+                  refetchEpoch(),
+                  refetchFilled(),
+                  refetchHolding(),
+                  refetchAllowance(),
+                  refetchPilotUsed(),
+                ]);
+                if (kind === "withdrawal") {
+                  setAuthorization(undefined);
+                  setDigest(undefined);
+                  setSigned(undefined);
+                }
+                setStage(kind === "fill" ? "filled" : "idle");
+              } catch (error) {
+                setDetail(
+                  error instanceof Error
+                    ? error.message
+                    : "The transaction is not confirmed.",
+                );
+                setStage("error");
+              } finally {
+                actionPending.current = false;
+              }
+            }}
+          >
+            Check transaction
+          </button>
+        </div>
+      )}
+
+      {transactionHash && (
+        <p className="charity-digest">
+          <span>Latest transaction</span> {transactionHash}
         </p>
       )}
 
