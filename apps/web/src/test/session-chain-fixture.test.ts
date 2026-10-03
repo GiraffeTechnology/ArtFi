@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  createPublicClient,
+  custom,
   decodeFunctionResult,
   encodeFunctionData,
   multicall3Abi,
   zeroAddress,
 } from "viem";
+import { mainnet } from "viem/chains";
 import { fractionTokenAbi, wholeArtworkCollectionAbi } from "../lib/contracts";
 import { sessionContractRead, sessionRPCResult } from "./session-chain-fixture";
 
@@ -65,6 +68,23 @@ describe("TEST_ONLY session read-only chain fixture", () => {
         data: results[2].returnData,
       }).toLowerCase(),
     ).toBe(seller);
+  });
+
+  it("answers the installed ENS lookup used by RainbowKit with no synthetic name", async () => {
+    const client = createPublicClient({
+      chain: mainnet,
+      transport: custom(
+        {
+          async request(request) {
+            return sessionRPCResult({ id: 1, ...request }, seller);
+          },
+        },
+        { retryCount: 0 },
+      ),
+    });
+    await expect(
+      client.getEnsName({ address: seller, strict: true }),
+    ).resolves.toBeNull();
   });
 
   it("refuses unknown selectors even when Multicall3 allows failures", () => {

@@ -77,10 +77,23 @@ export async function POST(request: Request) {
         { detail: "Publication is unavailable." },
         { status: 503 },
       );
-    const origin = new URL(configured).origin;
+    const authority = new URL(configured);
+    const origin = authority.origin;
+    const host = request.headers.get("host");
+    const effectivePort =
+      authority.port || (authority.protocol === "https:" ? "443" : "80");
+    // NextRequest normalizes loopback URLs, and a reverse proxy may use an internal URL.
+    // The proxy must preserve the public Host. Forwarded headers are not trusted here.
+    const publicHostMatches =
+      host === null
+        ? new URL(request.url).origin === origin
+        : [authority.host, `${authority.hostname}:${effectivePort}`].includes(
+            host.toLowerCase(),
+          );
     if (
-      new URL(request.url).origin !== origin ||
-      request.headers.get("origin") !== origin
+      !publicHostMatches ||
+      request.headers.get("origin") !== origin ||
+      request.headers.get("sec-fetch-site") === "cross-site"
     )
       return Response.json(
         { detail: "Publication requires the application's own origin." },

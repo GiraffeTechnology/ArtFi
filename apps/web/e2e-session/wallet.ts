@@ -106,6 +106,7 @@ export async function installSessionWallet(page: Page) {
     publicationPosts: 0,
     unexpectedWalletMethods: 0,
     unsupportedRPC: 0,
+    unsupportedRPCIdentifiers: new Set<string>(),
     blockedExternalRequests: 0,
   };
   page.on("request", (request) => {
@@ -283,6 +284,17 @@ export async function installSessionWallet(page: Page) {
         };
       } catch {
         state.unsupportedRPC++;
+        // Keep only method and selector, never calldata, wallet data, cookies or keys.
+        const method = /^[a-zA-Z0-9_]{1,80}$/.test(request.method)
+          ? request.method
+          : "invalid-method";
+        const data = (request.params?.[0] as { data?: unknown } | undefined)
+          ?.data;
+        const selector =
+          typeof data === "string" && /^0x[0-9a-f]{8}/i.test(data)
+            ? data.slice(0, 10)
+            : "no-selector";
+        state.unsupportedRPCIdentifiers.add(`${method}:${selector}`);
         return {
           jsonrpc: "2.0",
           id: request.id,
@@ -343,5 +355,8 @@ export function assertReadOnlyWallet(
 ) {
   expect(state.transactionAttempts).toBe(0);
   expect(state.unexpectedWalletMethods).toBe(0);
-  expect(state.unsupportedRPC).toBe(0);
+  expect(
+    state.unsupportedRPC,
+    `Unsupported TEST_ONLY RPC identifiers: ${[...state.unsupportedRPCIdentifiers].join(", ")}`,
+  ).toBe(0);
 }

@@ -66,7 +66,11 @@ describe("public native order reads", () => {
     });
     const url = new URL(String(fetcher.mock.calls[0][0]));
     expect(url.pathname).toBe("/v1/orders");
-    expect(Object.fromEntries(url.searchParams)).toEqual({
+    const query: Record<string, string> = {};
+    url.searchParams.forEach((value, key) => {
+      query[key] = value;
+    });
+    expect(query).toEqual({
       kind: "whole",
       chainId: "560048",
       marketAddress: "0x1111111111111111111111111111111111111111",

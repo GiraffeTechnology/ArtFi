@@ -405,7 +405,9 @@ async function connect(page: Page) {
     );
     throw error;
   }
-  await expect(page.getByText("Signed in", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Signed in", { exact: true }).filter({ visible: true }),
+  ).toBeVisible();
 }
 
 function authorization(kind: "whole" | "fraction", salt = "1") {

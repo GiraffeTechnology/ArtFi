@@ -14,7 +14,7 @@ Wallet and session controls remain reachable on mobile. A failed logout offers a
 
 ## Verification and reconstruction
 
-Base: merged main `687894a9d19d9e2ca3ac531368af4102af479991`. This is a newly reconstructed candidate after an execution-workspace reset, not a byte-identical restoration of the earlier unpublished tree. Ten helper files were recovered from their exact GitHub blob hashes; the remaining implementation was rebuilt within the same approved workflow. Prior candidate test totals are not reused.
+Base: merged main `bc834d1c0138440540ea33d0d949fbdf78fc9b5c`, preserving the CTYun SSH port reservation from PR #134. This is a newly reconstructed candidate after an execution-workspace reset, not a byte-identical restoration of the earlier unpublished tree. Ten helper files were initially recovered from their exact GitHub blob hashes; the remaining implementation was rebuilt within the same approved workflow. Subsequent regression fixes are recorded in the pull request. Prior candidate test totals are not reused.
 
 Fresh local tests, lint, types, default Next/Turbopack build, Go race/vet, generated schema and secret checks are recorded with the final candidate in its pull request. Independent review reproduced a stale receipt-feedback defect; the live-context correction passed both whole/fraction handler reproductions with current, departed-success and departed-error results. The unchanged base PNG is retained through the remote base tree; its connector could not supply local binary bytes.
 
@@ -23,5 +23,7 @@ CI must execute the actual MySQL migration and integration cases, including dura
 ## Existing deployment contract
 
 Coding and tests precede handoff to artfi control. SIN hosts UI and chain execution; CTYun hosts backend/MySQL through the existing bridge and operations setup. Both order and auth adapters retain configured bridge path prefixes. Next uses `ARTFI_WEB_URL` and `ARTFI_USER_AUTH_API_URL` (falling back to `ARTFI_API_URL`); Go uses `ARTFI_WEB_ORIGIN`. `ARTFI_USER_AUTH_BRIDGE_TOKEN` and `ARTFI_USER_SESSION_SECRET` are empty server-side deployment placeholders, to be handled through the existing secret workflow. No production credential was created or configured here.
+
+The UI proxy must preserve the configured public Host and effective port. Publication checks that Host and the exact browser Origin independently; forwarded headers do not establish authority. This supports framework-normalized internal request URLs without weakening the public-origin boundary. CTYun TCP port 443 remains reserved for SSH; web and bridge ports must come from the existing confirmed operations allocation. This CTYun restriction does not apply to SIN.
 
 No deployment, real asset, mainnet transaction or financial operation was performed. The existing freeze archive remains preserved. This order/session slice does not claim that all three product sections or later mint/vault recovery work are complete.

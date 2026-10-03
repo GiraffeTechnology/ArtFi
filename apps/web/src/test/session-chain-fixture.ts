@@ -12,6 +12,7 @@ import {
 
 const selectors = Object.fromEntries(
   [
+    "reverseWithGateways(bytes,uint256,string[])",
     "ownerOf(uint256)",
     "sellerEpoch(address)",
     "paused()",
@@ -53,6 +54,13 @@ export function sessionContractRead(data: Hex, seller: Address): Hex {
   }
   const signature = selectors[data.slice(0, 10)];
   switch (signature) {
+    case "reverseWithGateways(bytes,uint256,string[])":
+      // RainbowKit queries the configured Ethereum transport for the wallet's ENS name.
+      // This synthetic account has no name; implement the installed viem resolver ABI.
+      return encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }, { type: "address" }],
+        ["", zeroAddress, zeroAddress],
+      );
     case "ownerOf(uint256)":
       return encodeAbiParameters([{ type: "address" }], [seller]);
     case "paused()":

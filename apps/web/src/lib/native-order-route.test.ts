@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "../app/api/orders/route";
 import { GET as detailGET } from "../app/api/orders/[intentHash]/route";
@@ -92,6 +93,73 @@ describe("native order HTTP boundary", () => {
     const responseText = await response.text();
     expect(responseText).not.toContain("test-only-existing-indexer-key");
     expect(responseText).not.toContain("test-only-user-access-token");
+  });
+  it("accepts the preserved public Host when NextRequest normalizes a loopback URL", async () => {
+    vi.stubEnv("ARTFI_WEB_URL", "http://127.0.0.1:3003");
+    const incoming = new NextRequest("http://127.0.0.1:3003/api/orders", {
+      method: "POST",
+      headers: {
+        origin: "http://127.0.0.1:3003",
+        host: "127.0.0.1:3003",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ order }),
+    });
+    expect(new URL(incoming.url).origin).toBe("http://localhost:3003");
+    expect((await POST(incoming)).status).toBe(201);
+    expect(session).toHaveBeenCalledWith(String(order.intent.seller));
+    expect(verification).toHaveBeenCalledWith(order);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+  it.each(["io.artcch.com", "io.artcch.com:443", "IO.ARTCCH.COM"])(
+    "accepts the exact configured public Host and effective port (%s)",
+    async (host) => {
+      const incoming = request();
+      incoming.headers.set("host", host);
+      // The deployment proxy must preserve Host; forwarded Host is not authority.
+      incoming.headers.set("x-forwarded-host", "untrusted.example");
+      expect((await POST(incoming)).status).toBe(201);
+    },
+  );
+  it.each([
+    { origin: undefined },
+    { origin: "null" },
+    { origin: "https://foreign.example" },
+    { origin: "http://io.artcch.com" },
+    { origin: "https://io.artcch.com:444" },
+    { origin: "https://io.artcch.com.evil.example" },
+    { host: "foreign.example" },
+    { host: "io.artcch.com:444" },
+    { host: "io.artcch.com.evil.example" },
+    { host: "io.artcch.com@evil.example" },
+    { host: "io.artcch.com, evil.example" },
+    { host: "io.artcch.com/path" },
+    { host: "" },
+    { site: "cross-site" },
+  ])("rejects an untrusted publication origin or Host (%j)", async (input) => {
+    const incoming = request();
+    incoming.headers.set("host", "io.artcch.com");
+    incoming.headers.set("x-forwarded-host", "io.artcch.com");
+    if ("origin" in input) {
+      if (input.origin === undefined) incoming.headers.delete("origin");
+      else incoming.headers.set("origin", input.origin);
+    }
+    if ("host" in input) incoming.headers.set("host", input.host!);
+    if ("site" in input) incoming.headers.set("sec-fetch-site", input.site!);
+    expect((await POST(incoming)).status).toBe(403);
+    expect(session).not.toHaveBeenCalled();
+    expect(verification).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("requires an exact request URL origin when no public Host is provided", async () => {
+    const incoming = new Request("https://foreign.example/api/orders", {
+      method: "POST",
+      headers: { origin: "https://io.artcch.com" },
+      body: JSON.stringify({ order }),
+    });
+    expect((await POST(incoming)).status).toBe(403);
+    expect(session).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
   });
   it.each([401, 403])(
     "refuses a missing or different-seller session (%i) before verification or persistence",
