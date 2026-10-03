@@ -614,6 +614,12 @@ for (const kind of ["whole", "fraction"] as const) {
     );
     // Normal hit testing must reach the wallet control below populated order cards.
     // Trial checks actionability without opening a wallet or submitting a transaction.
+    if (kind === "fraction") {
+      await expect(
+        page.getByRole("button", { name: "Settle this amount" }),
+      ).toBeDisabled();
+      await page.getByLabel("Fractions to settle", { exact: true }).fill("3");
+    }
     await page
       .getByRole("button", {
         name: kind === "whole" ? "Settle this sale" : "Settle this amount",
