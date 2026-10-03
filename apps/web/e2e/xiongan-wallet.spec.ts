@@ -1,7 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-const walletURL = "https://xiongan.8415wallet.com/web/index.html";
+const walletURL = "https://wallet-a.example:18443/wallet/index.html";
+const secondWalletURL = "https://wallet-b.example:29444/tenant/xiongan/";
 const linkName = "Open Xiongan Wallet (new tab)";
 const walletCalls = new WeakMap<Page, string[]>();
 
@@ -12,8 +13,11 @@ test.beforeEach(async ({ context, page }) => {
   await page.exposeFunction("__recordWalletCall", (method: string) => {
     calls.push(method);
   });
+  await page.route("**/api/wallet-config", (route) =>
+    route.fulfill({ json: { ok: true, url: walletURL } }),
+  );
   // Navigation fixture only; deployed Xiongan availability is checked separately.
-  await context.route(walletURL, (route) =>
+  await context.route(/^https:\/\/wallet-[ab]\.example:/, (route) =>
     route.fulfill({
       contentType: "text/html",
       body: "<h1>Xiongan destination fixture</h1>",
@@ -149,4 +153,159 @@ test("portfolio and repeated wallet-modal links never claim a connection", async
       ["serious", "critical"].includes(v.impact ?? ""),
     ),
   ).toEqual([]);
+});
+
+test("deployment URL changes after reload across every entry without a rebuilt client", async ({
+  page,
+  isMobile,
+}) => {
+  let destination = walletURL;
+  await page.route("**/api/wallet-config", (route) =>
+    route.fulfill({ json: { ok: true, url: destination } }),
+  );
+  for (const url of [walletURL, secondWalletURL]) {
+    destination = url;
+    await page.goto("/");
+    const tools = page.getByRole("navigation", {
+      name: "ArtFi tools",
+      exact: true,
+    });
+    await expect(tools.getByRole("link", { name: linkName })).toHaveAttribute(
+      "href",
+      url,
+    );
+    const menu = page.locator(isMobile ? ".mobile-menu" : ".tools-menu");
+    await menu.locator("summary").click();
+    await expect(menu.getByRole("link", { name: linkName })).toHaveAttribute(
+      "href",
+      url,
+    );
+    await page.goto("/portfolio");
+    await expect(
+      page
+        .getByRole("region", { name: "Xiongan Wallet DApp" })
+        .getByRole("link", { name: linkName }),
+    ).toHaveAttribute("href", url);
+    await page
+      .getByRole("button", { name: "Connect wallet", exact: true })
+      .filter({ visible: true })
+      .first()
+      .click();
+    const dialog = page.getByRole("dialog");
+    const link = dialog.getByRole("link", { name: linkName });
+    await expect(link).toHaveAttribute("href", url);
+    const popupPromise = page.waitForEvent("popup");
+    await link.click();
+    const popup = await popupPromise;
+    await expect(popup).toHaveURL(url);
+    await popup.close();
+    await page.keyboard.press("Escape");
+  }
+});
+
+for (const scenario of [
+  "missing",
+  "invalid",
+  "unsafe",
+  "credentials",
+  "outage",
+] as const) {
+  test(`${scenario} configuration is visibly unavailable and retry recovers without stale links`, async ({
+    page,
+    isMobile,
+  }) => {
+    let recovered = false;
+    await page.route("**/api/wallet-config", (route) =>
+      route.fulfill({
+        status: scenario === "outage" && !recovered ? 503 : 200,
+        json: recovered
+          ? { ok: true, url: secondWalletURL }
+          : scenario === "missing"
+            ? { ok: false, code: "NOT_CONFIGURED" }
+            : scenario === "invalid"
+              ? { ok: false, code: "INVALID_CONFIG" }
+              : {
+                  ok: true,
+                  url:
+                    scenario === "unsafe"
+                      ? "javascript:alert(1)"
+                      : "https://user:password@example.test/wallet",
+                },
+      }),
+    );
+    await page.goto("/");
+    const tools = page.getByRole("navigation", {
+      name: "ArtFi tools",
+      exact: true,
+    });
+    await expect(tools).toContainText(/Xiongan Wallet.*unavailable/);
+    await expect(page.getByRole("link", { name: linkName })).toHaveCount(0);
+    const menu = page.locator(isMobile ? ".mobile-menu" : ".tools-menu");
+    await menu.locator("summary").click();
+    await expect(menu).toContainText(/Xiongan Wallet.*unavailable/);
+    await page.goto("/portfolio");
+    const entry = page.getByRole("region", { name: "Xiongan Wallet DApp" });
+    await expect(entry).toContainText(/Xiongan Wallet.*unavailable/);
+    await page
+      .getByRole("button", { name: "Connect wallet", exact: true })
+      .filter({ visible: true })
+      .first()
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText(/Xiongan Wallet.*unavailable/);
+    await expect(
+      dialog.getByRole("button", { name: "Browser Wallet" }),
+    ).toBeVisible();
+    await expect(dialog.getByRole("link", { name: linkName })).toHaveCount(0);
+    recovered = true;
+    await dialog
+      .getByRole("button", { name: "Retry wallet configuration" })
+      .click();
+    await expect(dialog.getByRole("link", { name: linkName })).toHaveAttribute(
+      "href",
+      secondWalletURL,
+    );
+    await expect(entry.getByRole("link", { name: linkName })).toHaveAttribute(
+      "href",
+      secondWalletURL,
+    );
+    await page.keyboard.press("Escape");
+    await page.reload();
+    await expect(entry.getByRole("link", { name: linkName })).toHaveAttribute(
+      "href",
+      secondWalletURL,
+    );
+  });
+}
+
+test("focus refresh removes a previously usable destination during an API outage", async ({
+  page,
+}) => {
+  let available = true;
+  await page.route("**/api/wallet-config", (route) =>
+    route.fulfill({
+      status: available ? 200 : 503,
+      json: available ? { ok: true, url: secondWalletURL } : { ok: false },
+    }),
+  );
+  await page.goto("/portfolio");
+  const entry = page.getByRole("region", { name: "Xiongan Wallet DApp" });
+  await expect(entry.getByRole("link", { name: linkName })).toHaveAttribute(
+    "href",
+    secondWalletURL,
+  );
+  available = false;
+  await page.evaluate(() =>
+    document.dispatchEvent(new Event("visibilitychange")),
+  );
+  await expect(entry).toContainText("configuration is unavailable");
+  await expect(page.getByRole("link", { name: linkName })).toHaveCount(0);
+  available = true;
+  await entry
+    .getByRole("button", { name: "Retry wallet configuration" })
+    .click();
+  await expect(entry.getByRole("link", { name: linkName })).toHaveAttribute(
+    "href",
+    secondWalletURL,
+  );
 });

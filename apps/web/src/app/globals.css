@@ -34,6 +34,23 @@ a {
 .xiongan-wallet-link {
   text-decoration: underline;
 }
+.xiongan-wallet-unavailable {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.xiongan-wallet-unavailable button {
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  padding: 5px 8px;
+}
+
 button,
 input,
 textarea {
