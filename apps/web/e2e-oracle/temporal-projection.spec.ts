@@ -108,7 +108,11 @@ test("uncovered history keeps false finality without inventing a holder, and rej
   const before = requests;
   await input.fill("18446744073709551616");
   await page.getByRole("button", { name: "Read this instant" }).click();
-  await expect(page.getByRole("alert")).toContainText("uint64");
+  await expect(
+    page
+      .getByRole("region", { name: "ERC-8415 register projection" })
+      .getByRole("alert"),
+  ).toContainText("uint64");
   expect(requests).toBe(before);
 });
 test("refresh and offline recovery hide previous facts, and source failure never becomes finality", async ({
