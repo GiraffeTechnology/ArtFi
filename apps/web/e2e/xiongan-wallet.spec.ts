@@ -102,7 +102,10 @@ test("portfolio and repeated wallet-modal links never claim a connection", async
     page.getByRole("heading", { name: "Your public portfolio." }),
   ).toBeVisible();
 
-  const connect = page.locator(".wallet-button:visible").first();
+  const connect = page
+    .getByRole("button", { name: "Connect wallet", exact: true })
+    .filter({ visible: true })
+    .first();
   for (const dismiss of ["Escape", "Close"] as const) {
     await connect.click();
     const dialog = page.getByRole("dialog");
