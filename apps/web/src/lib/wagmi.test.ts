@@ -20,5 +20,10 @@ describe("wallet network policy", () => {
         (connector) => connector.id === "walletConnect",
       ),
     ).toBe(false);
+    expect(
+      wagmiConfig.connectors.some((connector) =>
+        /xiongan/i.test(`${connector.id} ${connector.name}`),
+      ),
+    ).toBe(false);
   });
 });

@@ -10,6 +10,7 @@ import { wagmiConfig } from "@/lib/wallet-config";
 import { UserSessionProvider } from "./user-session-provider";
 
 import { LanguageProvider } from "./language-provider";
+import { XionganWalletDisclaimer } from "./xiongan-wallet-disclaimer";
 
 export function Providers({
   children,
@@ -19,7 +20,10 @@ export function Providers({
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider modalSize="compact">
+        <RainbowKitProvider
+          modalSize="compact"
+          appInfo={{ appName: "ArtFi", disclaimer: XionganWalletDisclaimer }}
+        >
           <UserSessionProvider>
             <LanguageProvider>{children}</LanguageProvider>
           </UserSessionProvider>
