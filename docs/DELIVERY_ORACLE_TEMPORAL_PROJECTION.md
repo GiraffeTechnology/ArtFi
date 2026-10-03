@@ -10,6 +10,14 @@ projection API. This increment consumes its separately repaired forward port;
 it does not put an ERC-8415 or Kit adapter, projection contract, wallet provider,
 mint authority, or settlement mechanism into ArtFi.
 
+The dependency is merged Oracle PR #45, main
+`014cf716b6ef9125e1fe8245065665900bec8ab2`, from reviewed head
+`eef85a4cfe125b574057d52fb5c5396cb7a18c7c`. Oracle's existing
+`OracleRegisterProjection` supplies a compatible ERC-721/ERC-8415 collection;
+source-authorized issuance and Oracle binding remain distinct from ArtFi's own
+legacy `ArtFiRWA` ERC-721 mint. The whole-RWA entry and mint selector now label
+that distinction explicitly. No contract, registrar authority or mint gate changes.
+
 The existing whole-artwork detail page now reads a requested Unix instant and
 shows the recorded holder, temporal finality, ERC-721 tradeable position, entry
 version, effective interval, commitments and registry reference separately.

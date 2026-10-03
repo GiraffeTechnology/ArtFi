@@ -27,7 +27,7 @@ export default function WholeRwaPage() {
       </header>
       <nav className="product-actions" aria-label="Whole-artwork actions">
         <Link className="primary" href="/create/rwa">
-          Create an RWA record on Hoodi
+          Open existing ERC-721 mint
         </Link>
         <Link className="secondary" href="/market/rwa">
           Open live market mirror
@@ -36,6 +36,14 @@ export default function WholeRwaPage() {
           View wallet records
         </Link>
       </nav>
+      <p className="product-note" data-testid="whole-rwa-issuance-paths">
+        The existing mint console issues standard ERC-721 records for the
+        original asset and Vault workflows; it does not issue ERC-8415 receipt
+        tokens. Whole-artwork ERC-8415 receipts use a compatible collection
+        issued by its source authority and linked to the artwork through Oracle.
+        The configured collection, token and market identify that separate
+        receipt path.
+      </p>
       <p className="product-note">
         Open a sample artwork below to inspect the receipt model, holder
         authority and existing whole-artwork transaction controls. Configured
