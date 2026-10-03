@@ -41,6 +41,44 @@ are unchanged. [Validation, isolated tests and deployment contract](XIONGAN_WALL
 record the bounded change. Exact-head CI and actual deployed endpoint checks remain
 separate evidence; no server, bridge, port binding or transaction was changed.
 
+## 2026-10-03 Wallet page provider increment
+
+Evidence only. No status value, count, gate or row changes.
+
+The client reported that ArtFi and the wallet could not connect in production. The web deployment
+was reachable when this was investigated: at 2026-10-03T19:44Z `https://io.artcch.com` served the
+application and `/api/health` reported `status: ok` on chain `560048` at build `033dba4`. (That
+origin stopped serving ArtFi within the following day; see the 2026-10-04 entry.) The connection
+cause was a missing protocol, not the deployment. ArtFi's web app registers exactly one connector,
+RainbowKit's `injectedWallet`
+(`apps/web/src/lib/wallet-config.ts`, with no WalletConnect connector and an empty `projectId`),
+which requires an EIP-6963 announcement inside ArtFi's own origin. No wallet in the ecosystem made
+one: the Xiongan DApp is a separate web origin that exposes no cross-origin provider
+([XIONGAN_WALLET_ENTRY.md](XIONGAN_WALLET_ENTRY.md)), and this repository's own extension declared
+only `background` and `action` — no content script, no dynamic injection, no page-facing surface at
+all — so `permissions.ts` and `transactions.ts` were unreachable from any page.
+
+On client instruction of 2026-10-03, the extension now announces an EIP-6963 provider per enabled
+origin: `provider.ts` in the page world, `bridge.ts` in the isolated world, and a router in
+`rpc.ts` reached through the service worker. The requesting origin is taken from the browser's
+`sender.origin`, never from the page. `eth_chainId`, `eth_accounts` and `eth_requestAccounts` are
+answered; **every signing method is refused by name**, because the vault holds account descriptors
+and no key material and no `ExternalSigner` is configured. Connection is delivered; signing is not,
+and is not implied. `window.ethereum` is left untouched.
+
+Host access stays per-origin and opt-in, as the extension's design already required: the page
+scripts are registered at run time for one origin after the person enables it in the popup, a page
+cannot enable itself, and the service worker refuses `site.*` messages that do not originate from an
+extension page.
+
+Local checks on this tree: wallet-extension 24 tests (previously 6) across 5 files, extension
+typecheck and build, repository `format:check`, `lint`, `typecheck`, `security:secrets` across 550
+files, and `agent:test`. The built `provider.js` and `bridge.js` were confirmed to contain no module
+syntax, which a script registered through `chrome.scripting` requires. Browser-loaded extension
+execution against a live page was **not run** here and remains required evidence, together with
+current-head CI. A stale `Sepolia` claim in the manifest description, popup and README was corrected
+to Hoodi `560048`, which `transactions.ts` already enforced.
+
 ## 2026-10-03 Xiongan navigation increment
 
 The client-requested ArtFi-to-Xiongan DApp entry is implemented as an explicit

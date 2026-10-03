@@ -34,15 +34,50 @@
       code {
         overflow-wrap: anywhere;
       }
+      h2 {
+        margin: 20px 0 4px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #b9b2a5;
+      }
+      ul {
+        margin: 0;
+        padding-left: 18px;
+        color: #b9b2a5;
+        overflow-wrap: anywhere;
+      }
+      ul:empty::after {
+        content: "No site is enabled.";
+        color: #b9b2a5;
+      }
+      #site {
+        overflow-wrap: anywhere;
+      }
+      button + button {
+        margin-top: 8px;
+      }
+      button[hidden] {
+        display: none;
+      }
     </style>
   </head>
   <body>
     <h1>ArtFi Wallet Alpha</h1>
     <p>
-      Sepolia only. Signing remains in an approved hardware wallet or
+      Hoodi only. Signing remains in an approved hardware wallet or
       WalletConnect session.
     </p>
     <p id="status">Checking encrypted vault…</p>
+
+    <h2>This site</h2>
+    <p id="site">Reading the active tab…</p>
+    <button id="toggle-site" type="button" hidden>Enable for this site</button>
+
+    <h2>Enabled sites</h2>
+    <ul id="grants"></ul>
+
+    <h2>Coordinator</h2>
     <button id="lock" type="button">Lock coordinator</button>
     <script type="module" src="popup.js"></script>
   </body>
