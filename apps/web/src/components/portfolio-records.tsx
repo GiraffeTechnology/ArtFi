@@ -67,6 +67,10 @@ function ConnectedPortfolioRecords({ address }: { address: string }) {
         <div className="portfolio-records__grid">
           <article>
             <h3>Token positions</h3>
+            <p>
+              Balances are raw indexed transfer values. Token decimals have not
+              been applied.
+            </p>
             {portfolio.positions.length === 0 ? (
               <p>No indexed token position is associated with this address.</p>
             ) : (
@@ -74,7 +78,7 @@ function ConnectedPortfolioRecords({ address }: { address: string }) {
                 {portfolio.positions.map((position) => (
                   <li key={position.assetToken}>
                     <strong>{position.symbol}</strong>
-                    <span>{position.balance} units</span>
+                    <span>{position.balance} base units (unscaled)</span>
                     <small>{shortAddress(position.assetToken)}</small>
                   </li>
                 ))}
