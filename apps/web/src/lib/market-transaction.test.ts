@@ -230,3 +230,118 @@ it("shares the wallet-prompt lock across unmount and remount before a hash exist
   firstScreen.unlockWalletRequest();
   expect(() => returnedScreen.assertReady()).not.toThrow();
 });
+
+it("notifies remounted screens and preserves the original order hash during reconciliation", () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value);
+    },
+    removeItem: (key: string) => {
+      values.delete(key);
+    },
+  };
+  const original = marketWriteJournal(storage, "shared-order");
+  const mounted = marketWriteJournal(storage, "shared-order");
+  const changed = vi.fn();
+  const unsubscribe = mounted.subscribe(changed);
+  original.record({ hash: fillHash, kind: "fill", intentHash: approvalHash });
+  expect(changed).toHaveBeenCalledOnce();
+  expect(mounted.pending()?.intentHash).toBe(approvalHash);
+  original.record({
+    hash: replacementHash,
+    kind: "fill",
+    intentHash: approvalHash,
+  });
+  expect(mounted.pending()).toEqual({
+    hash: replacementHash,
+    kind: "fill",
+    intentHash: approvalHash,
+  });
+  original.clear({ hash: fillHash, kind: "fill", intentHash: approvalHash });
+  expect(mounted.pending()?.hash).toBe(replacementHash);
+  original.clear({
+    hash: replacementHash,
+    kind: "fill",
+    intentHash: approvalHash,
+  });
+  expect(mounted.pending()).toBeUndefined();
+  expect(changed).toHaveBeenCalledTimes(3);
+  unsubscribe();
+});
+
+describe("reconciliation replacement ownership", () => {
+  function journals() {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        values.set(key, value);
+      },
+      removeItem: (key: string) => {
+        values.delete(key);
+      },
+    };
+    return {
+      oldScreen: marketWriteJournal(storage, "replacement-owner"),
+      newScreen: marketWriteJournal(storage, "replacement-owner"),
+    };
+  }
+
+  it("keeps a new transaction when an older reconciliation reports repricing", () => {
+    const { oldScreen, newScreen } = journals();
+    const original = {
+      hash: fillHash,
+      kind: "fill" as const,
+      intentHash: approvalHash,
+    };
+    oldScreen.record(original);
+    // Both screens observed the original; the newer one finishes checking first.
+    const olderSnapshot = oldScreen.pending()!;
+    newScreen.clear(original);
+    const next = {
+      hash: approvalHash,
+      kind: "approval" as const,
+      intentHash: replacementHash,
+    };
+    newScreen.record(next);
+    const notify = vi.fn();
+    newScreen.subscribe(notify);
+    expect(
+      oldScreen.compareAndReplace(olderSnapshot, {
+        ...olderSnapshot,
+        hash: replacementHash,
+      }),
+    ).toBe(false);
+    oldScreen.clear(olderSnapshot);
+    expect(newScreen.pending()).toEqual(next);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("updates an owned original record and preserves its intent attribution", () => {
+    const { oldScreen, newScreen } = journals();
+    const original = {
+      hash: fillHash,
+      kind: "fill" as const,
+      intentHash: approvalHash,
+    };
+    oldScreen.record(original);
+    const notify = vi.fn();
+    newScreen.subscribe(notify);
+    const repriced = { ...original, hash: replacementHash };
+    expect(oldScreen.compareAndReplace(original, repriced)).toBe(true);
+    expect(newScreen.pending()).toEqual(repriced);
+    expect(notify).toHaveBeenCalledOnce();
+    // The same hash without the original kind and intent is not ownership.
+    expect(
+      oldScreen.compareAndReplace(
+        { ...repriced, intentHash: fillHash },
+        original,
+      ),
+    ).toBe(false);
+    newScreen.clear(repriced);
+    expect(oldScreen.compareAndReplace(repriced, original)).toBe(false);
+    expect(newScreen.pending()).toBeUndefined();
+  });
+});

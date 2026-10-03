@@ -588,6 +588,13 @@ export const fractionTokenAbi = [
 export const wholeArtworkCollectionAbi = [
   {
     type: "function",
+    name: "getApproved",
+    stateMutability: "view",
+    inputs: [{ name: "tokenId", type: "uint256" }],
+    outputs: [{ name: "operator", type: "address" }],
+  },
+  {
+    type: "function",
     name: "ownerOf",
     stateMutability: "view",
     inputs: [{ name: "tokenId", type: "uint256" }],
