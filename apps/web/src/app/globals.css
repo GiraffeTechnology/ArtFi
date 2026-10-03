@@ -1424,6 +1424,12 @@ p {
   color: var(--muted);
 }
 
+/* Inline order cards and signed terms must not cover later wallet controls. */
+.market-intent-panel .transaction-panel {
+  position: static;
+  min-height: 0;
+}
+
 .market-placeholder {
   min-height: 11rem;
   align-content: center;

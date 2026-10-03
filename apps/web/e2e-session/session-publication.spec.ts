@@ -421,7 +421,7 @@ for (const kind of ["whole", "fraction"] as const) {
     if (kind === "fraction") {
       const restored = JSON.parse(
         await page
-          .getByLabel("Seller's authorization", { exact: true })
+          .getByRole("textbox", { name: "Seller's authorization", exact: true })
           .inputValue(),
       );
       expect(restored.intent).toEqual(saved.intent);

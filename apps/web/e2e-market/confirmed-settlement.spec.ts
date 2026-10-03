@@ -581,6 +581,8 @@ for (const kind of ["whole", "fraction"] as const) {
   test(`${kind}: restores exact public order links on reload and Back/Forward`, async ({
     page,
   }) => {
+    if (kind === "fraction")
+      await page.setViewportSize({ width: 390, height: 844 });
     const state = await fixture(page);
     state.orders = [nativeOrder(kind), nativeOrder(kind, "2")];
     await page.goto(
@@ -610,6 +612,13 @@ for (const kind of ["whole", "fraction"] as const) {
     await expect(page.getByLabel("Seller's authorization")).toHaveValue(
       authorization(kind, "2"),
     );
+    // Normal hit testing must reach the wallet control below populated order cards.
+    // Trial checks actionability without opening a wallet or submitting a transaction.
+    await page
+      .getByRole("button", {
+        name: kind === "whole" ? "Settle this sale" : "Settle this amount",
+      })
+      .click({ trial: true });
     expect(state.requests).toHaveLength(0);
   });
 }
