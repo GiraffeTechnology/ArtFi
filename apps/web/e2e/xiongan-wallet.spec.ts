@@ -295,9 +295,17 @@ test("focus refresh removes a previously usable destination during an API outage
     secondWalletURL,
   );
   available = false;
-  await page.evaluate(() =>
-    document.dispatchEvent(new Event("visibilitychange")),
+  const refresh = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/wallet-config" &&
+      response.status() === 503,
   );
+  // TanStack listens on window; a synthetic event on document does not bubble
+  // unless explicitly configured. Match the actual listener and await its read.
+  await page.evaluate(() =>
+    window.dispatchEvent(new Event("visibilitychange")),
+  );
+  await refresh;
   await expect(entry).toContainText("configuration is unavailable");
   await expect(page.getByRole("link", { name: linkName })).toHaveCount(0);
   available = true;
