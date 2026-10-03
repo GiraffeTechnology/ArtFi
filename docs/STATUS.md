@@ -34,6 +34,26 @@
 
 ## Headline
 
+### Portfolio read-model corrections (2026-10-03)
+
+Under the client's approved bounded three-section delivery and existing portfolio workflow,
+indexed balances now say `base units (unscaled)` and explain that token decimals
+have not been applied. The UI preserves raw transfer values without assuming a decimal
+precision or introducing token metadata or RPC dependencies.
+
+Chain-event replay now updates the persisted `confirmed` flag from the retained maximum
+confirmation count, using the existing `confirmations > 0` rule. Removed events still take
+priority in transaction history. `TestMySQLPortfolioConfirmationReplaySurvivesRestart`
+checks 0-to-1 confirmation, lower-count replay, removal/restoration, unchanged raw balances,
+cache invalidation, and fresh service/database connections against real MySQL.
+
+Local checks on this change pass: Go vet, the full Go race suite, web typecheck, web lint,
+all 449 web unit tests, changed-component formatting, and the repository secret scan.
+The real MySQL regression compiled but was skipped because `ARTFI_INTEGRATION_MYSQL_DSN`
+is unset and this executor has no MySQL or Docker binary; the existing migration CI job
+runs it with MySQL. Browser checks, build, current-head CI, deployment, and live chain
+behavior were not verified here. No status or requirement count is promoted.
+
 ### Stage 2 integration work (2026-09-09)
 
 `scripts/agent/README.md` records the first deterministic Agent integration slice
