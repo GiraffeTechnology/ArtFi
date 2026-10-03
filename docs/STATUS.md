@@ -1,5 +1,16 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-03 Xiongan navigation increment
+
+The client-requested ArtFi-to-Xiongan DApp entry is implemented as an explicit
+external link in the overview, desktop/mobile navigation, portfolio and wallet
+chooser. The existing portfolio and Browser Wallet provider remain. Opening the
+DApp is explicitly not a wallet connection. [Scope, reviewed source revisions,
+local checks, browser/toolchain limits and deployment handoff](XIONGAN_WALLET_ENTRY.md)
+are recorded separately. Current-head CI and deployed navigation verification
+remain required evidence; this increment claims no login, signature, transaction
+or complete-product acceptance.
+
 | Field       | Value                                                                 |
 | ----------- | --------------------------------------------------------------------- |
 | Reviewed    | `9afce78` on `main` (PR #65)                                          |

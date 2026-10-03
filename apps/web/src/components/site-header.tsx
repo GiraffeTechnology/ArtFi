@@ -9,9 +9,18 @@ import { productNavigation, toolNavigation } from "@/lib/product-lines";
 import { LanguageSwitcher } from "./language-switcher";
 import { UserSessionControls } from "./user-session-controls";
 import { WalletButton } from "./wallet-button";
+import { XionganWalletLink } from "./xiongan-wallet-link";
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const xionganLink = (
+    <XionganWalletLink
+      onClick={(event) => {
+        const menu = event.currentTarget.closest("details");
+        if (menu) menu.open = false;
+      }}
+    />
+  );
 
   const navigationLink = ([label, href]: readonly [string, string]) => (
     <Link
@@ -68,6 +77,7 @@ export function SiteHeader() {
             <summary>Tools</summary>
             <nav aria-label="Workflow navigation">
               {toolNavigation.map(navigationLink)}
+              {xionganLink}
             </nav>
           </details>
         </nav>
@@ -82,6 +92,7 @@ export function SiteHeader() {
             <nav aria-label="Mobile navigation">
               {productNavigation.map(navigationLink)}
               {toolNavigation.map(navigationLink)}
+              {xionganLink}
             </nav>
           </details>
         </div>

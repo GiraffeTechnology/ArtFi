@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { WalletButton } from "@/components/wallet-button";
+import { XionganWalletLink } from "@/components/xiongan-wallet-link";
 import { productLines, toolNavigation } from "@/lib/product-lines";
 
 export default function Home() {
@@ -64,6 +65,7 @@ export default function Home() {
               {label}
             </Link>
           ))}
+          <XionganWalletLink className="secondary" />
         </nav>
       </section>
     </main>
