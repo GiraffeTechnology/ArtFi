@@ -93,6 +93,16 @@ test("whole RWA reaches the existing receipt and transaction surface", async ({
     "pickup voucher or warehouse receipt",
   );
   await expect(page.getByRole("main")).toContainText("ERC-8415");
+  await expect(page.getByTestId("whole-rwa-issuance-paths")).toContainText(
+    "does not issue ERC-8415 receipt tokens",
+  );
+  await page.getByRole("link", { name: "Open existing ERC-721 mint" }).click();
+  await expect(page).toHaveURL(/\/create\/rwa$/);
+  await expect(page.getByRole("tab", { name: /ERC-721/ })).toContainText(
+    "does not implement ERC-8415 register projection",
+  );
+  await page.goBack();
+  await expect(page).toHaveURL(/\/rwa$/);
   await page
     .getByRole("link", { name: "View Blue Hour Archive", exact: true })
     .click();

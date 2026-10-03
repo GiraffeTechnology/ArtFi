@@ -51,6 +51,30 @@
   border-left: 3px solid var(--wall-red);
   padding-left: 12px;
 }
+.projectionForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+.projectionForm input {
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+}
+.projectionForm button {
+  padding: 10px 14px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
 @media (max-width: 680px) {
   .panel {
     padding: 16px;

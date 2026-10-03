@@ -10,10 +10,10 @@ type Standard = "erc721" | "erc1155";
 const standards = [
   {
     id: "erc721" as const,
-    kicker: "Unique RWA record",
+    kicker: "Existing unique asset record",
     title: "ERC-721",
     detail:
-      "One unique token per approved asset record. Eligible ERC-721 assets can later enter the reviewed Vault and corresponding DAO flow.",
+      "One unique token per approved asset record. This existing mint contract does not implement ERC-8415 register projection. Eligible ERC-721 assets can later enter the reviewed Vault and corresponding DAO flow.",
   },
   {
     id: "erc1155" as const,

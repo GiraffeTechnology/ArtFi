@@ -22,7 +22,18 @@ test("reports unconfigured, and another page never queries the bound token", asy
   await expect(
     page.getByRole("button", { name: "Retry Oracle read" }),
   ).toBeEnabled();
+  // Wait for this page's real asset-bound read, including dev-server route
+  // compilation. The assertion must not race the previous page's request.
+  const wrongPageRead = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+      "/api/assets/weather-system-i/oracle",
+  );
   await page.goto("/market/rwa/weather-system-i");
+  expect(await (await wrongPageRead).json()).toEqual({
+    ok: false,
+    code: "BINDING_ELSEWHERE",
+  });
   await expect(page.getByTestId("oracle-unavailable")).toContainText(
     "belongs to another page",
   );
@@ -41,7 +52,7 @@ test("shows attributed public facts with no holder inference or mobile overflow"
   await expect(facts).toContainText("2026-10-01T09:30:00Z");
   await expect(facts).toContainText("Certificate version");
   await expect(authority).toContainText(
-    "Holder unavailable through the public Oracle read API",
+    "The separate register-projection read below reports the recorded holder",
   );
   await expect(authority).toContainText("do not establish physical title");
   await expect(authority).toContainText("not a registry holder claim");

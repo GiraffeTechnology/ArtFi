@@ -12,6 +12,7 @@ import {
 import { oracleReadView } from "@/lib/oracle-read-state";
 
 import styles from "./asset-holder-authority.module.css";
+import { OracleProjectionPanel } from "./oracle-projection-panel";
 
 type Certificate = OracleProjection["asset"]["currentCertificate"];
 
@@ -229,8 +230,9 @@ export function AssetHolderAuthority({
             <th scope="row">Registry of record</th>
             <td>Authority for holdership within its scope</td>
             <td>
-              Holder unavailable through the public Oracle read API. No holder
-              is inferred from a reference, status, or certificate.
+              The separate register-projection read below reports the recorded
+              holder when Oracle provides it. No holder is inferred from a
+              reference, status, or certificate.
             </td>
           </tr>
           <tr>
@@ -292,6 +294,7 @@ export function AssetHolderAuthority({
           </p>
         )}
       </section>
+      <OracleProjectionPanel key={slug} slug={slug} />
       <p className="market-gate">
         Where the registry and the chain disagree, ArtFi reports the divergence.
         It never resolves one by asserting its own projection.
