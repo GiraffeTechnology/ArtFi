@@ -10,6 +10,7 @@ import { wagmiConfig } from "@/lib/wallet-config";
 import { UserSessionProvider } from "./user-session-provider";
 
 import { LanguageProvider } from "./language-provider";
+import { XionganWalletProvider } from "./xiongan-wallet-provider";
 import { XionganWalletDisclaimer } from "./xiongan-wallet-disclaimer";
 
 export function Providers({
@@ -20,14 +21,16 @@ export function Providers({
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider
-          modalSize="compact"
-          appInfo={{ appName: "ArtFi", disclaimer: XionganWalletDisclaimer }}
-        >
-          <UserSessionProvider>
-            <LanguageProvider>{children}</LanguageProvider>
-          </UserSessionProvider>
-        </RainbowKitProvider>
+        <XionganWalletProvider>
+          <RainbowKitProvider
+            modalSize="compact"
+            appInfo={{ appName: "ArtFi", disclaimer: XionganWalletDisclaimer }}
+          >
+            <UserSessionProvider>
+              <LanguageProvider>{children}</LanguageProvider>
+            </UserSessionProvider>
+          </RainbowKitProvider>
+        </XionganWalletProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

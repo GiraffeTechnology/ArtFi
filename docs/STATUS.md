@@ -1,5 +1,16 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-03 Xiongan runtime destination correction
+
+The client's explicit correction removes the hardcoded wallet URL and all implicit
+application defaults. The Web server reads the complete public destination from
+`ARTFI_XIONGAN_WALLET_URL` at request time through a no-store configuration route.
+All wallet entry points share it; missing, invalid or failed configuration shows
+an unavailable state without an old URL fallback. Browser Wallet and authentication
+are unchanged. [Validation, isolated tests and deployment contract](XIONGAN_WALLET_ENTRY.md)
+record the bounded change. Exact-head CI and actual deployed endpoint checks remain
+separate evidence; no server, bridge, port binding or transaction was changed.
+
 ## 2026-10-03 Xiongan navigation increment
 
 The client-requested ArtFi-to-Xiongan DApp entry is implemented as an explicit
