@@ -335,7 +335,9 @@ async function connect(page: Page) {
     .getByRole("button", { name: /Browser Wallet|MetaMask|Injected/ })
     .first()
     .click();
-  await expect(page.locator(".wallet-button--connected").first()).toBeVisible();
+  await expect(
+    page.locator(".wallet-button--connected").filter({ visible: true }),
+  ).toBeVisible();
 }
 async function switchWallet(page: Page, state: Fixture, address: Address) {
   state.account = address;
@@ -733,6 +735,8 @@ test("vault no-event replay and failed logging retain the same vault across Back
   ).toBeEnabled();
   await page.goto("/");
   await page.goBack();
+  await expect(page).toHaveURL(/\/dao(?:\?|$)/);
+  await expect(approveButton(page)).toBeEnabled();
   await page.reload();
   await expect(approveButton(page)).toBeEnabled();
   await expect(vaultButton(page)).toBeDisabled();
@@ -807,7 +811,9 @@ test("a reverted exact-token approval leaves deposit unavailable and permits del
   await openVault(page);
   await vaultButton(page).click();
   await approveButton(page).click();
-  await expect(page.getByRole("alert")).toContainText("reverted on chain");
+  await expect(page.locator(".dao-create").getByRole("alert")).toContainText(
+    "reverted on chain",
+  );
   await expect(approveButton(page)).toBeEnabled();
   await expect(depositButton(page)).toHaveCount(0);
   expect(state.walletRequests).toHaveLength(2);
@@ -834,7 +840,7 @@ for (const field of [
         : addresses.otherWallet;
     await openVault(page);
     await vaultButton(page).click();
-    await expect(page.getByRole("alert")).toContainText(
+    await expect(page.locator(".dao-create").getByRole("alert")).toContainText(
       "does not match every reviewed",
     );
     expect(state.walletRequests).toHaveLength(0);
@@ -863,7 +869,9 @@ test("owned NFT selection uses current ownership rather than historical mint rec
     page.getByLabel("Currently owned NFT", { exact: true }),
   ).toHaveCount(0);
   await vaultButton(page).click();
-  await expect(page.getByRole("alert")).toContainText("must own this NFT");
+  await expect(page.locator(".dao-create").getByRole("alert")).toContainText(
+    "must own this NFT",
+  );
   expect(state.walletRequests).toHaveLength(0);
 });
 
@@ -894,9 +902,9 @@ for (const authorized of [true, false]) {
       .getByRole("button", { name: "Review and continue Vault", exact: true })
       .click();
     if (!authorized) {
-      await expect(page.getByRole("alert")).toContainText(
-        "FRACTIONALIZER_ROLE",
-      );
+      await expect(
+        page.locator(".dao-create").getByRole("alert"),
+      ).toContainText("FRACTIONALIZER_ROLE");
       await expect(issueButton(page)).toHaveCount(0);
       expect(state.walletRequests).toHaveLength(3);
       return;
@@ -971,9 +979,20 @@ test("completed wallet can explicitly prepare another NFT while old chain identi
   expect(second.args?.[3]).toBe(2n);
   expect(state.vaultIntents).toHaveLength(2);
   expect(state.vaultIntents[0].key).not.toBe(state.vaultIntents[1].key);
-  await expect(
-    page.getByRole("link", { name: "View saved issued token", exact: true }),
-  ).toBeVisible();
+  const savedVaults = page.getByRole("region", {
+    name: "Saved confirmed Vaults",
+  });
+  await expect(savedVaults).toContainText("TEST_ONLY Recovery DAO");
+  await expect(savedVaults).toContainText("#1");
+  const savedToken = savedVaults.getByRole("link", {
+    name: "View saved issued token ↗",
+    exact: true,
+  });
+  await expect(savedToken).toBeVisible();
+  await expect(savedToken).toHaveAttribute(
+    "href",
+    `https://hoodi.etherscan.io/token/${addresses.fraction}?a=${addresses.wallet}`,
+  );
   await expect(
     page.getByRole("button", {
       name: "Retry saved Vault submission",

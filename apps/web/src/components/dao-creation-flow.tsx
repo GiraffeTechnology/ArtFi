@@ -984,7 +984,9 @@ function ConnectedDaoCreation({
     <section className="dao-create" aria-labelledby="dao-create-title">
       <div className="section-heading">
         <p className="approved-eyebrow">Existing NFT → custody → fractions</p>
-        <h2 id="dao-create-title">Create a Vault for an owned NFT.</h2>
+        <h2 id="dao-create-title">
+          Create the asset DAO in four controlled steps.
+        </h2>
       </div>
       <p>
         Each step requires its own wallet confirmation. No collection-wide
