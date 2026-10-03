@@ -41,7 +41,7 @@ test("shows attributed public facts with no holder inference or mobile overflow"
   await expect(facts).toContainText("2026-10-01T09:30:00Z");
   await expect(facts).toContainText("Certificate version");
   await expect(authority).toContainText(
-    "Holder unavailable through the public Oracle read API",
+    "The separate register-projection read below reports the recorded holder",
   );
   await expect(authority).toContainText("do not establish physical title");
   await expect(authority).toContainText("not a registry holder claim");
