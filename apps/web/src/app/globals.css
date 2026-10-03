@@ -2623,3 +2623,35 @@ p {
     overflow-y: auto;
   }
 }
+
+/* Preserve reachable wallet and ordinary sign-in controls at mobile widths. */
+.desktop-wallet,
+.user-session-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.user-session-controls {
+  flex-wrap: wrap;
+}
+.user-session-controls p {
+  margin: 0;
+  max-width: 240px;
+  font-size: 0.75rem;
+}
+.mobile-wallet-controls {
+  display: none;
+}
+@media (max-width: 1140px) {
+  .desktop-wallet {
+    display: none;
+  }
+  .mobile-wallet-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 24px;
+    border-top: 1px solid var(--line);
+  }
+}

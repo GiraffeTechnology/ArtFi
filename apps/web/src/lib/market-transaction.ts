@@ -2,7 +2,11 @@ import type { Hash, PublicClient } from "viem";
 
 type ReceiptClient = Pick<PublicClient, "waitForTransactionReceipt">;
 export type MarketWriteKind = "approval" | "fill" | "withdrawal";
-export type PendingMarketWrite = { hash: Hash; kind: MarketWriteKind };
+export type PendingMarketWrite = {
+  hash: Hash;
+  kind: MarketWriteKind;
+  intentHash?: Hash;
+};
 
 export class MarketReceiptPendingError extends Error {
   constructor() {
@@ -89,20 +93,30 @@ export async function settleConfirmedSale({
 }
 
 const activeWalletRequests = new Set<string>();
+const storageListeners = new WeakMap<object, Map<string, Set<() => void>>>();
 
 /** Browser-session journal: unresolved broadcasts survive route changes and refreshes. No signatures or keys. */
 export function marketWriteJournal(
   storage: Pick<Storage, "getItem" | "setItem" | "removeItem">,
   key: string,
 ) {
-  const listeners = new Set<() => void>();
+  let registry = storageListeners.get(storage);
+  if (!registry) {
+    registry = new Map();
+    storageListeners.set(storage, registry);
+  }
+  let listeners = registry.get(key);
+  if (!listeners) {
+    listeners = new Set();
+    registry.set(key, listeners);
+  }
   const getSnapshot = () => storage.getItem(key);
   return {
     getSnapshot,
     subscribe(listener: () => void) {
-      listeners.add(listener);
+      listeners!.add(listener);
       return () => {
-        listeners.delete(listener);
+        listeners!.delete(listener);
       };
     },
     pending(): PendingMarketWrite | undefined {
@@ -112,7 +126,9 @@ export function marketWriteJournal(
         const parsed = JSON.parse(saved) as PendingMarketWrite;
         if (
           /^0x[a-fA-F0-9]{64}$/.test(parsed.hash) &&
-          ["approval", "fill", "withdrawal"].includes(parsed.kind)
+          ["approval", "fill", "withdrawal"].includes(parsed.kind) &&
+          (parsed.intentHash === undefined ||
+            /^0x[a-fA-F0-9]{64}$/.test(parsed.intentHash))
         )
           return parsed;
       } catch {
@@ -138,11 +154,33 @@ export function marketWriteJournal(
     },
     record(pending: PendingMarketWrite) {
       storage.setItem(key, JSON.stringify(pending));
-      listeners.forEach((listener) => listener());
+      listeners!.forEach((listener) => listener());
     },
-    clear() {
+    compareAndReplace(expected: PendingMarketWrite, next: PendingMarketWrite) {
+      const current = this.pending();
+      if (
+        !current ||
+        current.hash !== expected.hash ||
+        current.kind !== expected.kind ||
+        current.intentHash !== expected.intentHash
+      )
+        return false;
+      this.record(next);
+      return true;
+    },
+    clear(expected?: PendingMarketWrite) {
+      if (expected) {
+        const current = this.pending();
+        if (
+          !current ||
+          current.hash !== expected.hash ||
+          current.kind !== expected.kind ||
+          current.intentHash !== expected.intentHash
+        )
+          return;
+      }
       storage.removeItem(key);
-      listeners.forEach((listener) => listener());
+      listeners!.forEach((listener) => listener());
     },
   };
 }

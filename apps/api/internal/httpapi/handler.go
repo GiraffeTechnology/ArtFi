@@ -82,6 +82,10 @@ func NewHandler() http.Handler {
 
 func newHandler(rwa *rwaService) http.Handler {
 	mux := http.NewServeMux()
+	userAuth := registerUserAuthRoutes(mux, rwa)
+	mux.HandleFunc("GET /v1/orders", rwa.getSignedOrders)
+	mux.HandleFunc("GET /v1/orders/{intentHash}", rwa.getSignedOrder)
+	mux.HandleFunc("POST /v1/indexer/signed-orders", func(w http.ResponseWriter, r *http.Request) { rwa.ingestSignedOrder(w, r, userAuth) })
 	mux.HandleFunc("GET /healthz", status("ok"))
 	mux.HandleFunc("GET /readyz", status("ready"))
 	mux.HandleFunc("GET /v1/config", func(writer http.ResponseWriter, _ *http.Request) {

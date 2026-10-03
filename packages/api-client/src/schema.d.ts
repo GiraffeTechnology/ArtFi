@@ -4,6 +4,141 @@
  */
 
 export interface paths {
+  "/v1/user/auth/challenge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserChallenge"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/auth/verify": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserVerify"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/auth/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserSession"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/auth/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserRefresh"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/auth/logout": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserLogout"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/orders": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Public immutable sale authorizations in original publication order. Chain state remains authoritative for fillability. Missing persistence is not an empty account. */
+    get: operations["listNativeSignedOrders"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/orders/{intentHash}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getNativeSignedOrder"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/indexer/signed-orders": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ingress from the sale-signature verifier. Both X-Indexer-Key and a valid wallet JWT matching the seller are required. The verifier validates existing EIP-712/EIP-1271 sale authority; publication uses the explicit seller session, not another signing protocol. A 32 KiB body and exact canonical fields are enforced. Exact retries retain original publication time; conflicting terms are rejected. */
+    post: operations["publishVerifiedSignedOrder"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/healthz": {
     parameters: {
       query?: never;
@@ -433,6 +568,107 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    WalletUserSession: {
+      id: string;
+      address: string;
+      /** @constant */
+      chainId: 560048;
+      /** @description Unix time in milliseconds */
+      expiresAt: number;
+      /** @description Unix time in milliseconds */
+      accessExpiresAt: number;
+    };
+    WalletUserChallenge: {
+      id: string;
+      address: string;
+      /** @constant */
+      chainId: 560048;
+      /** Format: uri */
+      origin: string;
+      message: string;
+      /** @description Unix time in milliseconds */
+      issuedAt: number;
+      /** @description Unix time in milliseconds */
+      expiresAt: number;
+    };
+    /** @description Server-to-server reply only. Next stores tokens in HttpOnly cookies and returns only the public session object to the browser. */
+    WalletUserTokens: {
+      session: components["schemas"]["WalletUserSession"];
+      accessToken: string;
+      refreshToken: string;
+    };
+    NativeSignedOrderEnvelope: {
+      /** @enum {string} */
+      kind: "whole" | "fraction";
+      /** @constant */
+      chainId: 560048;
+      marketAddress: string;
+      intentHash: string;
+      intent:
+        | {
+            seller: string;
+            paymentToken: string;
+            buyer: string;
+            salt: string;
+            startsAt: number;
+            endsAt: number;
+            epoch: string;
+            collection: string;
+            tokenId: string;
+            price: string;
+          }
+        | {
+            seller: string;
+            paymentToken: string;
+            buyer: string;
+            salt: string;
+            startsAt: number;
+            endsAt: number;
+            epoch: string;
+            assetToken: string;
+            maxAmount: string;
+            unitPrice: string;
+          };
+      /** @description Original sale signature bytes, at most 8192 bytes. Empty bytes are accepted only for a contract wallet verified by the upstream verifier. */
+      signature: string;
+    };
+    NativeSignedOrder: {
+      /** @enum {string} */
+      kind: "whole" | "fraction";
+      /** @constant */
+      chainId: 560048;
+      marketAddress: string;
+      intentHash: string;
+      intent:
+        | {
+            seller: string;
+            paymentToken: string;
+            buyer: string;
+            salt: string;
+            startsAt: number;
+            endsAt: number;
+            epoch: string;
+            collection: string;
+            tokenId: string;
+            price: string;
+          }
+        | {
+            seller: string;
+            paymentToken: string;
+            buyer: string;
+            salt: string;
+            startsAt: number;
+            endsAt: number;
+            epoch: string;
+            assetToken: string;
+            maxAmount: string;
+            unitPrice: string;
+          };
+      /** @description Original sale signature bytes, at most 8192 bytes. Empty bytes are accepted only for a contract wallet verified by the upstream verifier. */
+      signature: string;
+      /** Format: date-time */
+      readonly createdAt: string;
+    };
     Status: {
       service: string;
       status: string;
@@ -793,6 +1029,271 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  walletUserChallenge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          address: string;
+          /** @constant */
+          chainId: 560048;
+          /** Format: uri */
+          origin: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Bounded server response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WalletUserChallenge"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  walletUserVerify: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          challengeId: string;
+          address: string;
+          /** @constant */
+          chainId: 560048;
+          /** Format: uri */
+          origin: string;
+          message: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Bounded server response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WalletUserTokens"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  walletUserSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          accessToken: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Bounded server response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            session: components["schemas"]["WalletUserSession"];
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  walletUserRefresh: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          refreshToken: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Bounded server response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WalletUserTokens"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  walletUserLogout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          accessToken?: string;
+          refreshToken?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Durable revocation confirmed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  listNativeSignedOrders: {
+    parameters: {
+      query?: {
+        kind?: "whole" | "fraction";
+        chainId?: 560048;
+        marketAddress?: string;
+        assetAddress?: string;
+        tokenId?: string;
+        sellerAddress?: string;
+        page?: number;
+        pageSize?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Published terms, ascending by publication time with stable identity tie breakers */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            data: components["schemas"]["NativeSignedOrder"][];
+            total: number;
+            page: number;
+            pageSize: number;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getNativeSignedOrder: {
+    parameters: {
+      query: {
+        chainId: 560048;
+        marketAddress: string;
+      };
+      header?: never;
+      path: {
+        intentHash: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Exact immutable order envelope */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NativeSignedOrder"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  publishVerifiedSignedOrder: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Indexer-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NativeSignedOrderEnvelope"];
+      };
+    };
+    responses: {
+      /** @description Identical prior publication; original time retained */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NativeSignedOrder"];
+        };
+      };
+      /** @description Stored durably */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NativeSignedOrder"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
   getHealth: {
     parameters: {
       query?: never;

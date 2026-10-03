@@ -7,6 +7,8 @@ import { WagmiProvider } from "wagmi";
 
 import { wagmiConfig } from "@/lib/wallet-config";
 
+import { UserSessionProvider } from "./user-session-provider";
+
 import { LanguageProvider } from "./language-provider";
 
 export function Providers({
@@ -18,7 +20,9 @@ export function Providers({
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider modalSize="compact">
-          <LanguageProvider>{children}</LanguageProvider>
+          <UserSessionProvider>
+            <LanguageProvider>{children}</LanguageProvider>
+          </UserSessionProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

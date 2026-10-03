@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { productNavigation, toolNavigation } from "@/lib/product-lines";
 
 import { LanguageSwitcher } from "./language-switcher";
+import { UserSessionControls } from "./user-session-controls";
 import { WalletButton } from "./wallet-button";
 
 export function SiteHeader() {
@@ -73,6 +74,7 @@ export function SiteHeader() {
         <div className="header-actions">
           <LanguageSwitcher />
           <div className="desktop-wallet">
+            <UserSessionControls />
             <WalletButton />
           </div>
           <details className="mobile-menu" key={`mobile-${pathname}`}>
@@ -83,6 +85,10 @@ export function SiteHeader() {
             </nav>
           </details>
         </div>
+      </div>
+      <div className="mobile-wallet-controls" aria-label="Wallet controls">
+        <WalletButton />
+        <UserSessionControls />
       </div>
       <div className="testnet-banner">
         <span>Hoodi testnet</span>

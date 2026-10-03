@@ -1,5 +1,7 @@
 "use client";
 
+import { reconcileCurrentView } from "@/lib/current-operation";
+
 import { useCallback, useMemo, useRef, useState } from "react";
 import { isAddress, type Address, type Hex } from "viem";
 import {
@@ -10,14 +12,23 @@ import {
   useWriteContract,
 } from "wagmi";
 
+import { NativeOrderPanel } from "./native-order-panel";
+import { useUserSession } from "./user-session-provider";
+import {
+  assertTradingSession,
+  userSessionController,
+} from "@/lib/user-session-client";
+import {
+  decodeNativeOrder,
+  nativeOrderFromAuthorization,
+} from "@/lib/native-order";
+import { verifyFractionSale } from "@/lib/signed-market-preflight";
 import { assetDeploymentBinding } from "@/lib/asset-binding";
 import { artFiFractionMarketAbi, fractionTokenAbi } from "@/lib/contracts";
 import {
   anyFractionBuyer,
   fractionFillPayment,
-  fractionIntentFillable,
   fractionIntentHash,
-  fractionPaymentApprovable,
   fractionIntentRemaining,
   fractionIntentTypedData,
   validateFractionIntent,
@@ -26,42 +37,7 @@ import {
 import { supportedChain } from "@/lib/wagmi";
 import { useMarketTransactions } from "@/lib/use-market-transactions";
 
-/**
- * Fraction listing and fill — `PRD.md` §4.2.2, `AGENTS.md` §1.1 invariant 6.
- *
- * The screen for the signature-settled fixed-price path in `ArtFiMarket.sol`. Until this existed the
- * path was on chain with nothing reaching it, which `PRD.md` §3.2 counts as progress rather than a
- * handover: the screen is the deliverable.
- *
- * A holder authorizes a sale of up to some number of fractions by signing terms; a buyer settles
- * part or all of it. The fractions stay in the holder's own wallet in between. ArtFi is never
- * counterparty, holds no resting balance, and has no path that moves a holder's tokens without the
- * signature they produced for that fill.
- *
- * **Partial fills are why this differs from the whole-artwork surface.** One signature can settle
- * several times up to the maximum it names, so both sides need to see what is left, and the seller
- * needs a way to withdraw the remainder. Both are here: `revokeIntent` retires one authorization and
- * `incrementSellerEpoch` retires every authorization at once. Neither is blocked by an
- * administrative pause, because a pause must not keep an authorization alive that its author has
- * withdrawn.
- *
- * Four things this surface refuses to hide, because each one is a fill that would revert:
- *
- *   1. **Unconfigured means unavailable.** With no deployed market or fraction token it reports what
- *      is missing and offers nothing, rather than a settle button that cannot settle.
- *   2. **The allowlist.** `fillIntent` refuses a token pair the market does not allow, so the pair's
- *      standing is shown rather than discovered in a reverted transaction.
- *   3. **The pilot spend cap.** A buyer's payment is checked against `pilotPaymentCap` on chain. The
- *      remaining headroom is read and shown for the same reason.
- *   4. **Approval is its own step, for an exact amount.** A signature alone does not let the market
- *      move anything; each side grants an ERC-20 allowance for exactly what their leg needs. Never
- *      an unlimited approval — the seller's allowance covers the authorized maximum and the buyer's
- *      covers this fill.
- *
- * A signed authorization is not published anywhere. There is no order store yet (`STATUS.md` M2.4,
- * M2.5), so the signature stays in this browser and the holder passes it on themselves. The panel
- * says so rather than implying a live book.
- */
+/** Existing signed sale settlement, explicit publication and recoverable chain receipts. */
 
 type Stage =
   | "idle"
@@ -138,39 +114,22 @@ function encodeAuthorization(intent: FractionSaleIntent, signature: Hex) {
 
 function decodeAuthorization(
   raw: string,
+  market?: Address,
 ): { intent: FractionSaleIntent; signature: Hex } | { error: string } {
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { error: "That is not the authorization text a seller produces." };
-  }
-  const body = parsed as {
-    intent?: Record<string, unknown>;
-    signature?: unknown;
-  };
-  if (!body?.intent || typeof body.signature !== "string") {
+    if (!market) throw new Error("The market is unavailable.");
+    const decoded = decodeNativeOrder(
+      nativeOrderFromAuthorization("fraction", raw, market),
+    );
+    if (decoded.kind !== "fraction") throw new Error("Wrong sale kind.");
+    return { intent: decoded.intent, signature: decoded.order.signature };
+  } catch (error) {
     return {
-      error: "The authorization is missing its terms or its signature.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "The authorization could not be read.",
     };
-  }
-  const source = body.intent;
-  try {
-    const intent: FractionSaleIntent = {
-      seller: String(source.seller) as Address,
-      assetToken: String(source.assetToken) as Address,
-      paymentToken: String(source.paymentToken) as Address,
-      maxAmount: BigInt(String(source.maxAmount)),
-      unitPrice: BigInt(String(source.unitPrice)),
-      buyer: String(source.buyer) as Address,
-      salt: BigInt(String(source.salt)),
-      startsAt: Number(source.startsAt),
-      endsAt: Number(source.endsAt),
-      epoch: BigInt(String(source.epoch)),
-    };
-    return { intent, signature: body.signature as Hex };
-  } catch {
-    return { error: "The authorization's terms could not be read." };
   }
 }
 
@@ -180,11 +139,25 @@ function parseAmount(value: string): bigint | undefined {
   return BigInt(trimmed);
 }
 
-export function FractionListing({
+export function FractionListing(
+  props: Readonly<{ slug?: string; assetToken?: string }>,
+) {
+  const { address, chainId } = useAccount();
+  const { revision, authenticated } = useUserSession();
+  return (
+    <FractionListingScreen
+      key={`${address?.toLowerCase()}:${chainId}:${revision}:${authenticated}:${JSON.stringify(props)}`}
+      {...props}
+    />
+  );
+}
+
+function FractionListingScreen({
   slug,
   assetToken,
 }: Readonly<{ slug?: string; assetToken?: string }>) {
   const { address, chainId, isConnected } = useAccount();
+  const { authenticated, revision } = useUserSession();
   const { signTypedDataAsync } = useSignTypedData();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient({ chainId: supportedChain.id });
@@ -199,7 +172,10 @@ export function FractionListing({
     "revoking",
   ].includes(stage);
   const canTransact =
-    isConnected && chainId === supportedChain.id && Boolean(publicClient);
+    authenticated &&
+    isConnected &&
+    chainId === supportedChain.id &&
+    Boolean(publicClient);
   const [detail, setDetail] = useState<string>();
   const [authorization, setAuthorization] = useState<string>();
   const [signed, setSigned] = useState<FractionSaleIntent>();
@@ -241,11 +217,33 @@ export function FractionListing({
   // Told apart from "nothing is deployed at all", so the page can say which of the two it is.
   const boundElsewhere = !token && binding.boundElsewhere;
 
-  const { pending, begin, reconcile } = useMarketTransactions(
-    publicClient,
-    `${chainId}:${market}:${token}:${address}`,
-    setTransactionHash,
-  );
+  const beforeWrite = useCallback(async () => {
+    if (!address || chainId !== supportedChain.id)
+      throw new Error("Connect the supported wallet and chain.");
+    await assertTradingSession(address, chainId);
+    if (userSessionController.getSnapshot().revision !== revision)
+      throw new Error(
+        "The session changed. Start again from the current screen.",
+      );
+  }, [address, chainId, revision]);
+  const { pending, begin, reconcile, captureReadContext } =
+    useMarketTransactions(
+      publicClient,
+      `${supportedChain.id}:${market?.toLowerCase()}:${token?.toLowerCase()}:${address?.toLowerCase()}`,
+      setTransactionHash,
+      {
+        operationContext: JSON.stringify([
+          pasted,
+          fillAmount,
+          maxAmount,
+          unitPrice,
+          paymentToken,
+          namedBuyer,
+          durationHours,
+        ]),
+        beforeWrite,
+      },
+    );
   const ownsAuthorization = Boolean(
     signed &&
     address &&
@@ -309,9 +307,9 @@ export function FractionListing({
    */
   const pastedAuthorization = useMemo(() => {
     if (!pasted.trim()) return undefined;
-    const decoded = decodeAuthorization(pasted);
+    const decoded = decodeAuthorization(pasted, market);
     return "error" in decoded ? undefined : decoded;
-  }, [pasted]);
+  }, [pasted, market]);
 
   const pastedDigest = useMemo(() => {
     if (!pastedAuthorization || !market) return undefined;
@@ -351,17 +349,6 @@ export function FractionListing({
    * was withdrawn after the seller signed. Without this the buyer pays gas for an ERC-20 approval,
    * leaves a live allowance behind, and only then watches the fill revert.
    */
-  const { data: paymentAllowed } = useReadContract({
-    abi: artFiFractionMarketAbi,
-    address: market,
-    functionName: "allowedPaymentToken",
-    args: pastedAuthorization
-      ? [pastedAuthorization.intent.paymentToken]
-      : undefined,
-    chainId: supportedChain.id,
-    query: { enabled: Boolean(market && pastedAuthorization) },
-  });
-
   const { data: pilotCap } = useReadContract({
     abi: artFiFractionMarketAbi,
     address: market,
@@ -477,8 +464,7 @@ export function FractionListing({
   }, [buildIntent, market]);
 
   const authorize = useCallback(async () => {
-    const draft = buildIntent(Math.floor(Date.now() / 1000));
-    if (!draft || !market) return;
+    if (!market) return;
     if (
       !canTransact ||
       !address ||
@@ -490,20 +476,44 @@ export function FractionListing({
     setDetail(undefined);
     setAuthorization(undefined);
     actionPending.current = true;
+    let operation: ReturnType<typeof begin> | undefined;
     try {
+      operation = begin();
       setStage("awaiting-signature");
+      if ((await publicClient.getChainId()) !== supportedChain.id)
+        throw new Error("The market reader is on a different chain.");
+      const block = await publicClient.getBlock({ blockTag: "latest" });
+      if (
+        block.number === null ||
+        block.timestamp > BigInt(Number.MAX_SAFE_INTEGER)
+      )
+        throw new Error("The current chain time is unavailable.");
+      const draft = buildIntent(Number(block.timestamp));
+      if (!draft) throw new Error("Enter valid sale terms.");
+      draft.epoch = await publicClient.readContract({
+        abi: artFiFractionMarketAbi,
+        address: market,
+        functionName: "sellerEpoch",
+        args: [address],
+        blockNumber: block.number,
+      });
+      operation.assertCurrent();
       const domain = { chainId: supportedChain.id, verifyingContract: market };
       // Throws on terms that would be refused, so the wallet is never asked to sign them.
       const hash = fractionIntentHash(draft, domain, supportedChain.id);
-      const signature = await signTypedDataAsync({
-        ...fractionIntentTypedData(draft, domain),
-        account: address,
-      });
+      const signature = await operation.authorize(() =>
+        signTypedDataAsync({
+          ...fractionIntentTypedData(draft, domain),
+          account: address,
+        }),
+      );
+      operation.assertCurrent();
       setDigest(hash);
       setSigned(draft);
       setAuthorization(encodeAuthorization(draft, signature));
       setStage("signed");
     } catch (error) {
+      if (operation && !operation.isCurrent()) return;
       setDetail(
         error instanceof Error
           ? error.message
@@ -515,6 +525,7 @@ export function FractionListing({
     }
   }, [
     pending,
+    begin,
     address,
     buildIntent,
     canTransact,
@@ -537,9 +548,11 @@ export function FractionListing({
       return;
     setDetail(undefined);
     actionPending.current = true;
+    let operation: ReturnType<typeof begin> | undefined;
     try {
+      operation = begin();
       setStage("approving");
-      await begin().write("approval", () =>
+      await operation.write("approval", () =>
         writeContractAsync({
           abi: fractionTokenAbi,
           address: token,
@@ -550,8 +563,10 @@ export function FractionListing({
         }),
       );
       await refetchAllowance();
+      operation.assertCurrent();
       setStage(authorization ? "signed" : "idle");
     } catch (error) {
+      if (operation && !operation.isCurrent()) return;
       setDetail(
         error instanceof Error ? error.message : "The approval was not sent.",
       );
@@ -585,9 +600,11 @@ export function FractionListing({
       return;
     setDetail(undefined);
     actionPending.current = true;
+    let operation: ReturnType<typeof begin> | undefined;
     try {
+      operation = begin();
       setStage("revoking");
-      await begin().write("withdrawal", () =>
+      await operation.write("withdrawal", () =>
         writeContractAsync({
           abi: artFiFractionMarketAbi,
           address: market,
@@ -602,6 +619,7 @@ export function FractionListing({
       setDigest(undefined);
       setStage("idle");
     } catch (error) {
+      if (operation && !operation.isCurrent()) return;
       setDetail(
         error instanceof Error ? error.message : "The withdrawal was not sent.",
       );
@@ -633,9 +651,11 @@ export function FractionListing({
       return;
     setDetail(undefined);
     actionPending.current = true;
+    let operation: ReturnType<typeof begin> | undefined;
     try {
+      operation = begin();
       setStage("revoking");
-      await begin().write("withdrawal", () =>
+      await operation.write("withdrawal", () =>
         writeContractAsync({
           abi: artFiFractionMarketAbi,
           address: market,
@@ -645,11 +665,13 @@ export function FractionListing({
         }),
       );
       await refetchEpoch();
+      operation.assertCurrent();
       setAuthorization(undefined);
       setSigned(undefined);
       setDigest(undefined);
       setStage("idle");
     } catch (error) {
+      if (operation && !operation.isCurrent()) return;
       setDetail(
         error instanceof Error ? error.message : "The withdrawal was not sent.",
       );
@@ -679,7 +701,7 @@ export function FractionListing({
     )
       return;
     setDetail(undefined);
-    const decoded = decodeAuthorization(pasted);
+    const decoded = decodeAuthorization(pasted, market);
     if ("error" in decoded) {
       setDetail(decoded.error);
       setStage("error");
@@ -717,58 +739,29 @@ export function FractionListing({
       setStage("error");
       return;
     }
-    if (
-      pastedSellerEpoch === undefined ||
-      alreadyFilled === undefined ||
-      pilotHeadroom === undefined ||
-      marketPaused !== false ||
-      assetAllowed !== true
-    ) {
-      setDetail(
-        "The market, seller epoch, remaining amount, asset permission or pilot cap could not be confirmed. No approval was requested.",
-      );
-      setStage("error");
-      return;
-    }
-    // Checked against the chain's own counters and the instant of the click, not against what the
-    // pasted text claims: another buyer may have taken part of this authorization, and the seller
-    // may have withdrawn it, since it was written.
-    const state = fractionIntentFillable(
-      intent,
-      Math.floor(Date.now() / 1000),
-      pastedSellerEpoch,
-      alreadyFilled,
-      amount,
-    );
-    if (!state.fillable) {
-      setDetail(fillReasonLabels[state.reason] ?? "This fill was refused.");
-      setStage("error");
-      return;
-    }
-    // Fail closed, and before the approval rather than after it. `undefined` is not a pass: an
-    // allowlist standing that has not been read is not one that has been confirmed, and the cost of
-    // waiting is a retry while the cost of guessing is a stranded allowance.
-    const approvable = fractionPaymentApprovable(paymentAllowed);
-    if (!approvable.approvable) {
-      setDetail(
-        approvable.reason === "not-allowlisted"
-          ? "This authorization's payment token is not on the market's allowlist, so the fill would be refused on chain. No approval was requested."
-          : "The payment token's allowlist standing could not be read, so no approval was requested.",
-      );
-      setStage("error");
-      return;
-    }
     const payment = fractionFillPayment(intent, amount);
-    if (pilotHeadroom !== undefined && payment > pilotHeadroom) {
-      setDetail(
-        "This fill is above your remaining pilot spend cap for that payment token, so the market would refuse it.",
-      );
-      setStage("error");
-      return;
-    }
     actionPending.current = true;
+    let operation: ReturnType<typeof begin> | undefined;
     try {
-      await begin().settle({
+      operation = begin(
+        fractionIntentHash(
+          intent,
+          { chainId: supportedChain.id, verifyingContract: market },
+          supportedChain.id,
+        ),
+      );
+      setStage("approving");
+      await verifyFractionSale({
+        client: publicClient,
+        intent,
+        signature,
+        buyer: address,
+        expectedChainId: supportedChain.id,
+        domain: { chainId: supportedChain.id, verifyingContract: market },
+        amount,
+      });
+      operation.assertCurrent();
+      await operation.settle({
         onStage: setStage,
         approvePayment: () =>
           writeContractAsync({
@@ -795,8 +788,10 @@ export function FractionListing({
         refetchAllowance(),
         refetchPilotUsed(),
       ]);
+      operation.assertCurrent();
       setStage("filled");
     } catch (error) {
+      if (operation && !operation.isCurrent()) return;
       setDetail(
         error instanceof Error ? error.message : "The settlement was not sent.",
       );
@@ -808,10 +803,7 @@ export function FractionListing({
     pending,
     begin,
     address,
-    alreadyFilled,
-    assetAllowed,
     canTransact,
-    marketPaused,
     publicClient,
     refetchFilled,
     refetchHolding,
@@ -821,9 +813,6 @@ export function FractionListing({
     fillAmount,
     market,
     pasted,
-    paymentAllowed,
-    pastedSellerEpoch,
-    pilotHeadroom,
     writeContractAsync,
   ]);
 
@@ -869,6 +858,35 @@ export function FractionListing({
         that maximum, and only against the terms you signed. You can withdraw
         what is left at any time.
       </p>
+
+      <NativeOrderPanel
+        kind="fraction"
+        market={market}
+        asset={token}
+        authorization={ownsAuthorization ? authorization : undefined}
+        operationContext={JSON.stringify([
+          pasted,
+          fillAmount,
+          maxAmount,
+          unitPrice,
+          paymentToken,
+          namedBuyer,
+          durationHours,
+        ])}
+        publicClient={publicClient}
+        onSelect={(value) => {
+          setPasted(value);
+          setStage("idle");
+          setDetail(undefined);
+          setTransactionHash(undefined);
+        }}
+      />
+      {isConnected && !authenticated && (
+        <p className="dao-alert dao-alert--warning">
+          Sign in with your connected wallet before signing, publishing,
+          approving or settling a sale.
+        </p>
+      )}
 
       <dl className="contract-facts">
         <div>
@@ -933,6 +951,7 @@ export function FractionListing({
               Fractions to authorize, at most
               <input
                 value={maxAmount}
+                disabled={busy}
                 onChange={(event) => setMaxAmount(event.target.value)}
                 inputMode="numeric"
                 placeholder="100"
@@ -942,6 +961,7 @@ export function FractionListing({
               Price per fraction, in the payment token&apos;s smallest unit
               <input
                 value={unitPrice}
+                disabled={busy}
                 onChange={(event) => setUnitPrice(event.target.value)}
                 inputMode="numeric"
                 placeholder="1000000"
@@ -951,6 +971,7 @@ export function FractionListing({
               Payment token
               <input
                 value={paymentToken}
+                disabled={busy}
                 onChange={(event) => setPaymentToken(event.target.value)}
                 placeholder="0x…"
               />
@@ -959,6 +980,7 @@ export function FractionListing({
               Open for, in hours
               <input
                 value={durationHours}
+                disabled={busy}
                 onChange={(event) => setDurationHours(event.target.value)}
                 inputMode="numeric"
               />
@@ -967,6 +989,7 @@ export function FractionListing({
               Buyer, or blank for anyone
               <input
                 value={namedBuyer}
+                disabled={busy}
                 onChange={(event) => setNamedBuyer(event.target.value)}
                 placeholder="0x…"
               />
@@ -1043,11 +1066,9 @@ export function FractionListing({
           {authorization && ownsAuthorization && (
             <div className="transaction-panel">
               <p>
-                <strong>Signed, and published nowhere.</strong> ArtFi has no
-                order store yet, so this authorization exists only in this
-                browser. Send it to a buyer yourself. It settles only against
-                the terms above, up to the maximum you named, and withdrawing it
-                on chain makes it unusable even to someone holding this text.
+                <strong>Signed sale terms.</strong> Signing does not publish or
+                transfer anything. Use Publish sale terms to make this original
+                authorization public. Withdrawal on chain retires its authority.
               </p>
               {digest && (
                 <p className="charity-digest">
@@ -1196,34 +1217,47 @@ export function FractionListing({
           <button
             type="button"
             className="secondary"
-            disabled={busy || !canTransact}
+            disabled={busy || !publicClient}
             onClick={async () => {
               if (actionPending.current) return;
               actionPending.current = true;
               setStage("filling");
               setDetail(undefined);
+              const isCurrent = captureReadContext();
               try {
-                const kind = await reconcile();
-                await Promise.all([
-                  refetchEpoch(),
-                  refetchFilled(),
-                  refetchHolding(),
-                  refetchAllowance(),
-                  refetchPilotUsed(),
-                ]);
-                if (kind === "withdrawal") {
-                  setAuthorization(undefined);
-                  setDigest(undefined);
-                  setSigned(undefined);
-                }
-                setStage(kind === "fill" ? "filled" : "idle");
-              } catch (error) {
-                setDetail(
-                  error instanceof Error
-                    ? error.message
-                    : "The transaction is not confirmed.",
-                );
-                setStage("error");
+                await reconcileCurrentView({
+                  isCurrent,
+                  read: reconcile,
+                  refresh: () =>
+                    Promise.all([
+                      refetchEpoch(),
+                      refetchFilled(),
+                      refetchHolding(),
+                      refetchAllowance(),
+                      refetchPilotUsed(),
+                    ]),
+                  publish: (checked) => {
+                    if (checked?.kind === "withdrawal") {
+                      setAuthorization(undefined);
+                      setDigest(undefined);
+                      setSigned(undefined);
+                    }
+                    setStage(
+                      checked?.kind === "fill" &&
+                        checked.intentHash === pastedDigest
+                        ? "filled"
+                        : "idle",
+                    );
+                  },
+                  fail: (error) => {
+                    setDetail(
+                      error instanceof Error
+                        ? error.message
+                        : "The transaction is not confirmed.",
+                    );
+                    setStage("error");
+                  },
+                });
               } finally {
                 actionPending.current = false;
               }
