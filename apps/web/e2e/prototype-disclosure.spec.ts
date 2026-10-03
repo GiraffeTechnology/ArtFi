@@ -52,9 +52,13 @@ test("a whole artwork states who the holder authority is", async ({ page }) => {
   await expect(authority).toBeVisible();
   await expect(authority).toContainText("Registry of record");
   await expect(authority).toContainText("Authority for holdership");
-  // The public Oracle read API has no holder address; references and statuses create no holder claim.
+  // Temporal holder reads are separate from certificate/status observations;
+  // their presence never gives ArtFi authority to invent a holder.
   await expect(authority).toContainText(
-    "Holder unavailable through the public Oracle read API",
+    "The separate register-projection read below reports the recorded holder",
+  );
+  await expect(authority).toContainText(
+    "No holder is inferred from a reference, status, or certificate",
   );
   await expect(authority).toContainText("Authoritative for nothing");
   await expect(authority).toContainText("never resolves one by asserting");
