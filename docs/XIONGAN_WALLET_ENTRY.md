@@ -2,6 +2,16 @@
 
 ## Bounded requirement and implementation
 
+8415 Wallet is the product; Xiongan Wallet is its V2 tenant with the assigned public domain
+`xiongan.8415wallet.com`. The deployment still supplies the complete URL through the runtime
+configuration below; this product identity does not add a source-code hostname or port default.
+
+The test entry may open without login. Asset display is a separate authenticated workflow:
+balances, holdings, and history require login, and must disappear on logout, session expiry,
+or a change away from the authenticated account. Opening the page or connecting a browser
+wallet is not authentication. The entry implementation below does not establish that these
+wallet-side asset-display requirements have already been verified or deployed.
+
 The client's 2026-10-03 instruction asks for a discoverable path from ArtFi at
 `https://io.artcch.com` to Xiongan Wallet, with login omitted from this navigation
 test. This is an application-side integration under AGENTS.md section 1.3.
