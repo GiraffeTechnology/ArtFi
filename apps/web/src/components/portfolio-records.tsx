@@ -2,30 +2,31 @@
 
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
+import { useUserSession } from "@/components/user-session-provider";
+import { portfolioSessionKey } from "@/lib/portfolio-session";
 
 import {
   loadPortfolioRecords,
   type PortfolioState,
 } from "@/lib/portfolio-records-state";
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
-
 export function PortfolioRecords() {
-  const { address, isConnected } = useAccount();
-  if (!isConnected) {
+  const wallet = useAccount();
+  const auth = useUserSession();
+  const sessionKey = portfolioSessionKey(auth, wallet);
+  if (!sessionKey || !wallet.address) {
     return (
       <section className="portfolio-records" aria-live="polite">
         <h2>Runtime positions and history</h2>
         <p>
-          Connect a wallet to query the indexed public records for its address.
+          Sign in with the connected wallet to view its holdings and history.
         </p>
       </section>
     );
   }
 
-  if (!address) return null;
   return (
-    <ConnectedPortfolioRecords key={address.toLowerCase()} address={address} />
+    <ConnectedPortfolioRecords key={sessionKey} address={wallet.address} />
   );
 }
 
@@ -38,7 +39,6 @@ function ConnectedPortfolioRecords({ address }: { address: string }) {
     const controller = new AbortController();
     void loadPortfolioRecords({
       address,
-      apiURL,
       signal: controller.signal,
       update: setState,
     });

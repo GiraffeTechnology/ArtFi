@@ -36,7 +36,6 @@ function load(
 ) {
   return loadPortfolioRecords({
     address: owner,
-    apiURL: "",
     signal,
     request,
     update,

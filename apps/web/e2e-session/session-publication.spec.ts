@@ -439,3 +439,46 @@ for (const kind of ["whole", "fraction"] as const) {
     expect(wallet.state.publicationPosts).toBe(2);
   });
 }
+
+test("portfolio assets require signed login and disappear after logout", async ({
+  page,
+  wallet,
+}) => {
+  await page.goto("/portfolio");
+  await connectSessionWallet(page);
+  await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
+  const portfolioStatus = () =>
+    page.evaluate(async (address) => {
+      const response = await fetch(`/api/portfolio/${address}`, {
+        cache: "no-store",
+      });
+      await response.body?.cancel();
+      return response.status;
+    }, wallet.address);
+  expect(await portfolioStatus()).toBe(401);
+  expect(wallet.state.personalSigns).toBe(0);
+
+  await signInSessionWallet(page);
+  await expect(
+    page.getByRole("heading", { name: "Authenticated portfolio", exact: true }),
+  ).toBeVisible();
+  expect(await portfolioStatus()).toBe(200);
+  await expect(
+    page.getByText(
+      "No indexed token position is associated with this address.",
+    ),
+  ).toBeVisible();
+
+  await visibleButton(page, "Sign out").click();
+  await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
+  await expect(
+    page.getByText(
+      "No indexed token position is associated with this address.",
+    ),
+  ).toHaveCount(0);
+  await expect(visibleButton(page, "Sign in")).toBeEnabled();
+  expect(await portfolioStatus()).toBe(401);
+  await page.reload();
+  await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
+  expect(await portfolioStatus()).toBe(401);
+});
