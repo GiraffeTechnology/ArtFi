@@ -1,6 +1,6 @@
 # ArtCCH ArtFi Product Requirements Document
 
-Version: 2026-10-02  
+Version: 2026-10-04  
 Repository: `GiraffeTechnology/ArtFi`  
 Delivery destination: `https://io.artcch.com`  
 Companions: `ACCEPTANCE.md` for evidence and promotion, `STATUS.md` for current evidence
@@ -32,6 +32,12 @@ The client clarification of 2026-10-02 establishes this product order and meanin
 
 The requested delivery destination is `io.artcch.com`. This destination does not select a
 production chain or, by itself, authorize real-asset or real-money transactions.
+
+The current NFT experience mirrors OpenSea operations inside ArtFi. The frontend-to-venue
+relationship is analogous to trading exchange-listed securities through a securities firm's
+website: users discover assets and manage orders in ArtFi while the integrated venue and
+protocol provide the order and settlement infrastructure. This is a workflow analogy, not a
+licensing assertion, custody model, or expansion into securities products.
 
 Use the following documents for their distinct purposes:
 
@@ -71,9 +77,17 @@ existing charity-edition workflow remain part of the product. ArtFi links to CCH
 wallet-verified holder access defined in section 4.7.
 
 OpenSea is the primary trading venue for this section, with other supported venues retained where
-applicable. Do not translate this into either an OpenSea-only product rule or a promise that every
-NFT transaction must occur on ArtFi. ArtFi supplies the edition experience, truthful marketplace
-information and links, and its existing authorized integration paths.
+applicable. ArtFi at `io.artcch.com` is the native operational frontend for the corresponding
+OpenSea NFT workflows: discovery, collection and item details, listings, purchases, offers,
+offer acceptance, eligible order cancellation, and result tracking. Users complete these
+workflows in ArtFi through official supported OpenSea APIs, SDKs, and settlement protocols.
+
+Do not implement this requirement as a homepage redirect, outbound asset link, iframe, or
+read-only catalog. Main NFT controls remain inside ArtFi. An optional external OpenSea website
+link belongs in the footer, not the primary navigation or purchase flow. Retain source URLs
+and venue attribution as evidence without using them as a substitute for native operations.
+Unsupported or unconfigured operations remain visible with their actual availability reason;
+their absence is an implementation gap, not a reduction of this product scope.
 
 For the existing charity editions, the only holder benefit is access to the specified
 high-resolution watermarked copy. They confer no physical title, possession, redemption,
@@ -113,7 +127,7 @@ also applies to the underlying RWA of section 1.3; registry synchronization appl
 the asset is registry-backed. The isolated TEST_ONLY boundary remains as defined in section 7.
 
 ArtFi trading remains part of this section. Approved external venues and their attributed
-mirrors remain supported as applicable. The NFT section's external-trading emphasis does not
+mirrors remain supported as applicable. The NFT section's OpenSea integration does not
 turn this section into a mirror-only product or delete its signed order and settlement paths.
 
 The receipt model does not make `ownerOf`, an ArtFi balance, or a successful token transfer proof
@@ -150,8 +164,8 @@ Apply them to the relevant asset and integration path, not by requiring completi
 independent Oracle, Kit, or wallet product before any fractional function can be delivered.
 
 ArtFi order flow, matching, signed settlement, history, portfolio, and governance remain in
-scope. The digital NFT section's venue preference and the external mirror's read-only boundary
-do not prohibit these functions.
+scope. The digital NFT section's venue preference and the passive event adapter's read-only
+boundary do not prohibit these functions or the native OpenSea workflow.
 
 ### 1.4 Rights and record authority
 
@@ -255,14 +269,14 @@ static landing page alone is not that delivery.
 
 Keep these existing stage labels as groupings of requirements, not new scope or approval gates:
 
-| Stage | Functional delivery                                                                                                                       |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| S-CH  | Digital charity edition page, rights disclosures, external purchase/venue path, and wallet-verified access to the watermarked holder file |
-| S-XM  | Attributed listings, offers, sales, transfers, and cancellations with source, time, freshness, and venue links                            |
-| S-WA  | Whole-artwork receipt experience with distinct registry and token states and the applicable issuance, listing, and signed settlement path |
-| S-FR  | Inherited fractionalization, issuance, holdings and trading, plus the governance workflow defined by the asset model                      |
-| S-OPS | The monitoring, alerting, and operator functions applicable to the delivered stage                                                        |
-| S-MKT | The complete market combining all applicable product and final operational requirements                                                   |
+| Stage | Functional delivery                                                                                                                              |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| S-CH  | Digital charity edition page, rights disclosures, native OpenSea-backed purchase path, and wallet-verified access to the watermarked holder file |
+| S-XM  | Native OpenSea-backed discovery, listing, buying, offers, cancellation, and attributed result tracking with source, time, and freshness          |
+| S-WA  | Whole-artwork receipt experience with distinct registry and token states and the applicable issuance, listing, and signed settlement path        |
+| S-FR  | Inherited fractionalization, issuance, holdings and trading, plus the governance workflow defined by the asset model                             |
+| S-OPS | The monitoring, alerting, and operator functions applicable to the delivered stage                                                               |
+| S-MKT | The complete market combining all applicable product and final operational requirements                                                          |
 
 M5 applies throughout. A stage's finite requirement set and actual test environment are recorded
 before its handover. Later valid work remains visible without becoming an unrelated prerequisite.
@@ -348,6 +362,11 @@ licensing conclusion.
 - Wallet-signature login uses a SIWE-style nonce challenge, JWT issue/refresh, persistent
   sessions, wallet-address binding, logout, and permission enforcement. Unauthenticated users
   cannot trade.
+- Public marketplace discovery and opening the Xiongan Wallet test entry do not require
+  login. Wallet assets, balances, holdings, and history require an authenticated session;
+  connecting a wallet address or opening its page does not satisfy this requirement. Never
+  expose a previous user's assets after logout, expiry, or an account change. This bounded
+  test-entry exception does not disable production authentication or transaction approval.
 - Support the existing limit and market order requirements for ERC-20 fractions: creation,
   amendment, cancellation, lifecycle states, and partial fills.
 - An order is an EIP-712 signed intent with a maximum authorized quantity and stated terms.
@@ -467,10 +486,11 @@ requirement ledger; it did not first introduce charity into ArtFi.
   minted once with fixed supply. No additional-mint or external burn entry point exists.
   The formal historical set is 37 works, `UNIT-A01` and `UNIT-A03`–`UNIT-A38`; the 13-work
   tranche is contained in it, and neither includes withdrawn `UNIT-A02`.
-- **CH.2** The recorded primary unit price is `0.01 ETH`. The existing edition trading path
-  executes at the external venue; the charity mirror does not create, sign, match, fulfil,
-  or settle venue orders. OpenSea is primary, not an exclusive-venue constraint. Retain
-  existing applicable later ArtFi rollout scope without silently switching it on.
+- **CH.2** The recorded primary unit price is `0.01 ETH`. Edition trading uses the native
+  ArtFi frontend and its OpenSea integration. ArtFi prepares and relays supported order
+  operations; the user confirms the applicable wallet signature or transaction, and the
+  venue/protocol executes and settles. OpenSea is primary, not exclusive. Preserve the
+  edition's rights, beneficiary, release, and holder-access controls throughout this flow.
 - **CH.3** Record sellout only when the distribution wallet balance is zero and external
   sale evidence is reconciled.
 - **CH.4** Hash-record CCHS physical-donation acceptance only after sellout is recorded.
@@ -502,34 +522,58 @@ real donation, tax receipt, or holder entitlement.
 
 ### 4.8 XM External marketplace integration and mirroring
 
-XM.1–XM.6 apply to the external marketplace boundary. They do not ban ArtFi's own whole-artwork
-or fractional order book, matching, or signature-settled trading.
+XM.1–XM.6 cover both attributed event ingestion and the native OpenSea operational frontend.
+The ingestion adapter remains passive. The application-side order workflow is active and
+noncustodial. Neither boundary bans ArtFi's own whole-artwork or fractional trading.
 
-- **XM.1** A mirror is read-only with respect to external venue execution. It does not act as
-  counterparty, custody assets, or create, sign, match, claim, fulfil, or settle venue orders.
-  The historical mirror-only operating phase is not a prohibition on building ArtFi trading.
+- **XM.1** Provide native discovery, item/order details, listing creation, purchases,
+  offers, offer acceptance, eligible cancellation, and result tracking through official
+  supported OpenSea interfaces. ArtFi orchestrates user-approved requests without becoming
+  the counterparty or holding private keys or assets. Wallets authorize signatures and
+  transactions; the venue and protocol remain authoritative for execution and settlement.
 - **XM.2** Use approved-source adapters with explicit backfill and realtime lifecycles,
   schema version, retained raw payload, source version, and an approved-source allowlist.
 - **XM.3** Realtime events and REST gap-fill converge under duplication, out-of-order
   delivery, disconnect/reconnect, gaps, stale versions, sale after cancel, and stale listing
   after sale.
-- **XM.4** Mirror APIs and screens retain the external market, order ID, event time,
-  freshness, and HTTPS deep link. The user can reach the actual venue. An external link is
-  not an exposure failure. Existing transaction-orchestration implementation, where authorized
-  and applicable, is separately identified and is not passed off as read-only mirror evidence.
+- **XM.4** APIs and screens retain the venue, chain, asset identity, order ID, event time,
+  freshness, and source URL. NFT navigation, review, submission, and results remain within
+  ArtFi; the external OpenSea website link is footer-only. Order review shows the precise
+  asset and quantity, price/payment token, fees, expiry, chain, account, and action before
+  wallet approval. A redirect, embedded OpenSea page, or passive feed does not satisfy this.
 - **XM.5** Label fixtures, observed data, network, and freshness truthfully. Claim realtime
   only for a connected adapter with observation time and freshness. Never present a mainnet
   event as a testnet event.
 - **XM.6** Preserve applicable transaction-result handling for `initiated`, `awaiting-wallet`,
   `submitted`, `accepted`, `rejected`, `pending`, `confirmed`, `failed`, and `cancelled`.
   Reconcile external state under retries, duplicate submissions, cancellation, reorgs,
-  disconnects, and out-of-order callbacks. A mirror does not fabricate transactions to
-  exercise these states.
+  disconnects, account/network changes, and out-of-order callbacks. Distinguish signed,
+  published, submitted, and chain-confirmed results. An off-chain order cancellation is
+  reported only within the protocol's supported guarantees; it is not automatically final
+  on-chain revocation. Never fabricate a transaction or success to exercise these states.
 
-Retain compatible integration code and tests. Their existence neither activates a trading path
-nor creates a new requirement. Where a venue does not support Hoodi, report `unsupported-chain`
+Retain compatible integration code and tests, including read-only event ingestion. Their
+existence does not prove that every native operation is delivered. Keep API keys and
+credential-bearing SDK calls server-side; return validated action data to the frontend for
+user wallet confirmation. Apply the venue's current supported chains, protocol versions,
+authentication, rate limits, and terms to the relevant adapter rather than assuming parity
+with every feature of the OpenSea website. Missing credentials or capabilities fail closed
+with a specific reason, without exposing secrets, fabricated assets, or substitute success.
+
+Where a venue does not support Hoodi, report `unsupported-chain`
 for the affected live venue operation; continue supported adapter, validation, recovery, error,
 and non-write integration tests without invented data or unrelated blocks.
+
+Native-flow verification covers browse/detail, list, buy, make/accept offer, and cancel using
+isolated mocks or approved test assets, including rejection, expiry, stale order, duplicate
+clicks, refresh, interrupted wallet approval, account/chain changes, and reconciliation. A
+documentation update or a passing passive-mirror test does not establish operational delivery.
+
+Official implementation references, checked 2026-10-04:
+
+- [OpenSea NFT trading guide](https://docs.opensea.io/docs/buy-and-sell-nfts)
+- [OpenSea TypeScript SDK](https://docs.opensea.io/reference/opensea-sdk)
+- [Order cancellation and advanced use cases](https://github.com/ProjectOpenSea/opensea-sdk/blob/main/developerDocs/advanced-use-cases.md)
 
 ## 5. Nonfunctional requirements
 
@@ -676,6 +720,14 @@ The independent wallet is a separate product. ArtFi implements and verifies the 
 wallet and Oracle interfaces its actual workflows require. Neither the existence of legacy
 wallet-extension code nor an ecosystem diagram imports every independent product milestone into
 ArtFi's current handover.
+
+The product is 8415 Wallet and Xiongan Wallet is its V2 tenant. Its assigned domain is
+`xiongan.8415wallet.com`. ArtFi consumes a complete absolute deployment URL through the
+server-only `ARTFI_XIONGAN_WALLET_URL` and no-store `/api/wallet-config` route; code supplies
+no default hostname or port. The public entry may be opened without login during testing,
+but assets, balances, holdings, and history remain unavailable until login. ArtFi and the
+wallet must not imply a shared session or cross-origin signing capability that is not
+implemented. Missing configuration and unavailable interfaces are reported truthfully.
 
 Approved external registries, custodians, warehouses, and evidence providers are pluggable
 sources, not ArtFi subsidiaries, exclusive dependencies, or universally authoritative sources.

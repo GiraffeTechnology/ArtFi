@@ -20,8 +20,11 @@ watermarked copy. They convey no physical title, possession, redemption, copyrig
 or reproduction right. CCHS donation records do not turn the NFT into a physical-artwork receipt.
 Charity editions remain independent of the ERC-8415 RWA model.
 
-ArtFi provides edition information, rights disclosures, attributed venue data and links, and the
-applicable authorized integration paths. Public charity metadata does not expose artwork previews
+ArtFi provides edition information, rights disclosures, and a native OpenSea-backed NFT experience:
+browsing, listing, buying, offers, eligible cancellation, and result tracking remain inside ArtFi.
+Official venue APIs and protocols support the flow; users confirm wallet actions. A redirect,
+iframe, or read-only catalog does not satisfy it. The optional external OpenSea link belongs in
+the footer. Public charity metadata does not expose artwork previews
 or masters, and ArtFi does not issue donation receipts or promise tax credits.
 
 ### 2 Whole artwork RWA receipts
@@ -90,15 +93,22 @@ For registry-backed assets:
 | M5     | Security review, penetration testing, remediation, audit evidence, and secret/key protection                                            |
 | M6     | CI/CD, deployment, monitoring, backup/restore, operational tooling, and handover documentation                                          |
 | CH     | Existing charity-edition rules and protected holder-file access                                                                         |
-| XM     | External marketplace adapters, attributed mirroring, venue links, and applicable result reconciliation                                  |
+| XM     | External marketplace adapters, native OpenSea-backed NFT operations, attributed data, and result reconciliation                         |
 
 ArtFi records signed intent and finds counterparties; the chain enforces authorized settlement.
 Fixed-price and order-book assets remain in their owners' wallets until atomic fill. Existing
 auction escrow is limited to its accepted auction terms and retains safe settlement, withdrawal,
 and cancellation behavior. Platform administration cannot move or reassign user property.
 
-The external mirror's read-only boundary does not prohibit ArtFi's own RWA or fractional trading.
-Keep fixture data distinct from real observations and display source, time, freshness, and chain.
+Passive external-event ingestion stays read-only while the native NFT frontend orchestrates
+user-approved venue operations. Preserve ArtFi's own RWA and fractional trading. Keep fixture
+data distinct from real observations and display source, time, freshness, and chain. Missing
+venue credentials, supported-chain configuration, or wallet capabilities fail closed and do not
+establish that trading has been delivered.
+
+Xiongan Wallet is the V2 tenant of 8415 Wallet, assigned to `xiongan.8415wallet.com`. ArtFi reads
+its complete deployment URL at runtime without hardcoded destinations or ports. Test navigation
+may open without login; wallet assets, balances, holdings, and history require login.
 
 ## Working delivery and production
 

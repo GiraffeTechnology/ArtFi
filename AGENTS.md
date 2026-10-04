@@ -50,6 +50,13 @@ or global prerequisite. Writing a proposal into a PRD or acceptance file does no
   turn the NFT into physical backing.
 - OpenSea is primary for the NFT section, not exclusive. Do not apply the old blanket
   "ArtFi is primary for every line" wording to this section.
+- The NFT section at `io.artcch.com` must provide native OpenSea-backed discovery and
+  trading: browse, inspect, list, buy, make and accept offers, cancel eligible orders, and
+  track results through ArtFi. Use the supported official API, SDK, and settlement protocol.
+  A homepage redirect, asset deep link, iframe, or read-only catalog is not this workflow.
+- Keep the optional external OpenSea website link in the footer. Main NFT navigation and
+  trading controls stay in ArtFi. Preserve attributed source URLs as data rather than
+  substituting outbound links for product actions.
 - Whole-artwork tokens have receipt/voucher semantics. Do not label their chain ownership
   as unrestricted physical title or collapse them into fractional fund tokens.
 - Preserve inherited fractionalization, trading, portfolio, and DAO workflows. Their
@@ -60,10 +67,12 @@ or global prerequisite. Writing a proposal into a PRD or acceptance file does no
   sources such as custody, warehouse, and certificate evidence. Preserve applicable ERC-8415
   identity, restriction, and lifecycle requirements, plus registry synchronization where the
   asset is registry-backed. Charity NFT independence is not a general exemption for fractions.
-- The external mirror's read-only execution boundary applies to that integration. It does
-  not prohibit ArtFi's own whole-artwork or fractional order book, matching, or settlement.
-- Keep approved external adapters and venue links. Neither primary-venue wording nor a
-  change in the business rollout retires compatible integration code without authorization.
+- Passive event ingestion remains read-only; that adapter constraint is not a prohibition
+  on the native OpenSea order workflow. ArtFi prepares and relays approved requests, users
+  confirm wallet actions, and the venue/protocol remains authoritative for execution.
+- Preserve compatible approved adapters, source attribution, and ArtFi's own whole-artwork
+  and fractional order book, matching, and settlement. The securities-website analogy
+  describes the frontend/venue relationship, not licensing, custody, or new product scope.
 
 ### 1.2 Assets and authority
 
@@ -89,6 +98,22 @@ ArtFi is a commercial application, not a demo, an ERC8415-Kit repository, an Ora
 or the independent wallet product. Its application-side integrations remain in scope. Complete
 only the interfaces actually needed by the current workflow; do not import every external
 product milestone as a prerequisite.
+
+The wallet product is 8415 Wallet; Xiongan Wallet is its V2 tenant, with the assigned public
+domain `xiongan.8415wallet.com`. ArtFi's test entry may open without login, but wallet assets,
+balances, holdings, and history require an authenticated session. Opening a wallet page or
+connecting an address is not login, shared session establishment, or authority to sign.
+Preserve production authentication and existing wallet-confirmation boundaries. Consume the
+complete deployment-supplied `ARTFI_XIONGAN_WALLET_URL` through the no-store runtime route;
+never hardcode a destination or port or invent a cross-origin wallet protocol.
+
+Keep OpenSea API credentials and credential-bearing SDK calls server-side. Validate the
+supported chain, asset, order, account, amount, fees, expiry, and protocol before requesting
+wallet approval. Missing configuration, stale orders, unsupported chains, upstream failures,
+and absent wallet capabilities must produce truthful unavailable states. Never substitute
+fixtures for live assets or treat request acceptance as confirmed settlement. Implement and
+test with isolated mocks or approved test chains; do not execute real-value transactions,
+listings, offers, signatures, or cancellations as implementation validation.
 
 Stage 2 NO-HIL capability remains the cumulative scope incorporated by #110. Preserve its
 A1–A10 capabilities, A0–A6 acceptance, authority separation, deterministic policy, RWA grounding,
