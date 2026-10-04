@@ -28,13 +28,11 @@ export type PortfolioState = {
 /** A cancelled wallet request cannot publish a late response, including delayed JSON parsing. */
 export async function loadPortfolioRecords({
   address,
-  apiURL,
   signal,
   update,
   request = fetch,
 }: {
   address: string;
-  apiURL: string;
   signal: AbortSignal;
   update: (state: PortfolioState) => void;
   request?: typeof fetch;
@@ -43,8 +41,13 @@ export async function loadPortfolioRecords({
   update({ loading: true });
   try {
     const response = await request(
-      `${apiURL}/v1/portfolio/${encodeURIComponent(address)}`,
-      { cache: "no-store", signal },
+      `/api/portfolio/${encodeURIComponent(address)}`,
+      {
+        cache: "no-store",
+        credentials: "same-origin",
+        redirect: "error",
+        signal,
+      },
     );
     if (!response.ok)
       throw new Error(`Portfolio API returned ${response.status}.`);

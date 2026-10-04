@@ -12,7 +12,7 @@ const journeys = [
   ["/market/rwa/blue-hour-archive", "Blue Hour Archive"],
   ["/market/fractionals", "Fractional trading & DAO."],
   ["/market/fractionals/blue-hour-archive", "Blue Hour Archive"],
-  ["/portfolio", "Your public portfolio."],
+  ["/portfolio", "Your wallet portfolio."],
   ["/dao", "The holders govern the corresponding physical asset."],
   ["/create/rwa", "Mint, verify, and route the token."],
   ["/charity", "Charity editions."],
@@ -47,7 +47,9 @@ test("wallet entry point never implies a transaction", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Connect wallet" }).first(),
   ).toBeVisible();
-  await expect(page.getByText("No signature is requested.")).toBeVisible();
+  await expect(
+    page.getByText("Connecting a wallet is not sign-in.", { exact: false }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /buy|mint|bid|claim/i }),
   ).toHaveCount(0);

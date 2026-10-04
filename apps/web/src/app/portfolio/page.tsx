@@ -13,14 +13,16 @@ export default function PortfolioPage() {
     <main className="approved-page page-shell">
       <div className="module-banner">
         <span>Wallet / read-only</span>
-        <strong>No custody · No signature for viewing</strong>
+        <strong>No custody · Sign-in required for assets</strong>
       </div>
       <header className="approved-page__header">
         <p className="approved-eyebrow">Wallet</p>
-        <h1>Your public portfolio.</h1>
+        <h1>Your wallet portfolio.</h1>
         <p>
-          Connect a standard external wallet to read public Hoodi state. ArtFi
-          never receives a private key or seed phrase.
+          Connect a standard external wallet and sign in to view balances,
+          holdings and history. Sign-in proves wallet control; it does not
+          authorize a transaction. ArtFi never receives a private key or seed
+          phrase.
         </p>
       </header>
       <section className="wallet-dao-link" aria-label="Xiongan Wallet DApp">

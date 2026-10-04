@@ -103,7 +103,7 @@ test("portfolio and repeated wallet-modal links never claim a connection", async
     walletURL,
   );
   await expect(
-    page.getByRole("heading", { name: "Your public portfolio." }),
+    page.getByRole("heading", { name: "Your wallet portfolio." }),
   ).toBeVisible();
 
   const connect = page

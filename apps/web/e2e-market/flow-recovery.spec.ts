@@ -223,9 +223,36 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
   page,
 }) => {
   await walletFixture(page);
+  // Explicit UI-only authentication fixture. The session-browser suite verifies real SIWE login.
+  let sessionAddress: string | undefined;
+  let sessionExpiry = Date.now() + 60_000;
+  let portfolioReads = 0;
+  await page.route("**/api/user/auth/*", async (route) => {
+    if (route.request().url().endsWith("/logout")) {
+      sessionAddress = undefined;
+      return route.fulfill({ json: { signedOut: true } });
+    }
+    if (!sessionAddress)
+      return route.fulfill({
+        status: 401,
+        json: { detail: "Fixture session absent" },
+      });
+    return route.fulfill({
+      json: {
+        session: {
+          id: `fixture-${sessionAddress}`,
+          address: sessionAddress,
+          chainId: 560048,
+          expiresAt: sessionExpiry,
+          accessExpiresAt: sessionExpiry,
+        },
+      },
+    });
+  });
   let phase: "failed" | "ready" | "hold-wallet-b" = "failed";
   const heldWalletB: Array<() => void> = [];
-  await page.route("**/v1/portfolio/**", async (route) => {
+  await page.route("**/api/portfolio/**", async (route) => {
+    portfolioReads += 1;
     if (phase === "failed")
       return route.fulfill({
         status: 503,
@@ -265,6 +292,11 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
   await page.goto("/charity/1");
   await connect(page);
   await page.goto("/portfolio");
+  await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
+  expect(portfolioReads).toBe(0);
+  sessionAddress = walletA;
+  // Restore the explicit signed-in fixture on a fresh page, after proving connection alone is gated.
+  await page.reload();
   await expect(
     page.getByRole("button", { name: "Retry indexed records" }),
   ).toBeVisible();
@@ -278,6 +310,15 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
   await expect(page.getByText("WALLET_A_ONLY", { exact: true })).toBeVisible();
   phase = "hold-wallet-b";
   await switchWallet(page, walletB);
+  await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
+  await expect(page.getByText("WALLET_A_ONLY", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("button", { name: "Sign in", exact: true })
+      .filter({ visible: true }),
+  ).toBeEnabled();
+  sessionAddress = walletB;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect.poll(() => heldWalletB.length).toBeGreaterThan(0);
   await expect(
     page.getByText("Loading indexed records…", { exact: true }),
@@ -286,10 +327,15 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
   phase = "ready";
   heldWalletB.forEach((release) => release());
   await expect(page.getByText("WALLET_B_ONLY", { exact: true })).toBeVisible();
+  // Expiry removes an already-rendered balance/portfolio without relying on a route change.
+  sessionExpiry = Date.now() + 750;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
+  await expect(page.getByText("WALLET_B_ONLY", { exact: true })).toHaveCount(0);
   await switchWallet(page);
   await expect(
     page.getByText(
-      "Connect a wallet to query the indexed public records for its address.",
+      "Sign in with the connected wallet to view its holdings and history.",
     ),
   ).toBeVisible();
   await expect(page.getByText("WALLET_B_ONLY", { exact: true })).toHaveCount(0);
