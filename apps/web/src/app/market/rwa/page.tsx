@@ -17,9 +17,9 @@ export default function RwaMarketPage() {
         <p>
           Read-only listings and sale context from approved external venues,
           each attributed to its source with the time it was observed, how fresh
-          that observation is, and the venue link the source reported. Execution
-          completes on the venue: ArtFi initiates no transaction and performs no
-          wallet submission, matching, custody or settlement.
+          that observation is, and the reference the source reported. This
+          activity catalog does not submit orders. Native NFT trading is not yet
+          available in this build.
         </p>
       </header>
       <LiveMarketCatalog />

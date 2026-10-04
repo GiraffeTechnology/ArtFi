@@ -69,13 +69,13 @@ test("an unreachable mirror is not reported as an empty history", async ({
   await expect(page.getByTestId("activity-list")).toHaveCount(0);
 });
 
-// Nothing on this surface may imply ArtFi executes any of it.
-test("the surface states that execution happens on the venue", async ({
+// This event history must remain distinct from the native order workflow.
+test("the surface states that its history panel does not submit orders", async ({
   page,
 }) => {
   await page.goto(activityPath);
   await expect(
-    page.getByText(/creates, signs, matches, fulfils and settles none of it/i),
+    page.getByText(/history panel is read-only and does not submit orders/i),
   ).toBeVisible();
   await expect(
     page.getByText(/execution completes on the venue/i),

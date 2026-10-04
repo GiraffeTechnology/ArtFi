@@ -825,14 +825,10 @@ function RwaCreateForm() {
                 </span>
               ) : null}
               {discovery?.discovered && discovery.marketplaceUrl ? (
-                <a
-                  className="text-link"
-                  href={discovery.marketplaceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Verify discovered NFT on OpenSea ↗
-                </a>
+                <details className="market-source-reference">
+                  <summary>OpenSea discovery source</summary>
+                  <p data-no-translate>{discovery.marketplaceUrl}</p>
+                </details>
               ) : null}
               <a className="text-link" href={mintedDaoHref(mintedAsset)}>
                 Continue to Vault and DAO verification →

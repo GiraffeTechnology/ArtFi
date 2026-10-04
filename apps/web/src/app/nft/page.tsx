@@ -18,19 +18,14 @@ export default function NftPage() {
         <h1>Digital art, independently collected.</h1>
         <p>
           This product line is for NFTs without real-world asset backing. It
-          primarily connects with CCHS at cchsc.ca, with trading primarily on
-          OpenSea. These NFTs are not warehouse receipts, physical artwork
-          ownership or fractional investment positions.
+          connects with CCHS at cchsc.ca and uses OpenSea as its primary
+          integrated venue. These NFTs are not warehouse receipts, physical
+          artwork ownership or fractional investment positions.
         </p>
       </header>
       <nav className="product-actions" aria-label="NFT actions">
-        <a
-          className="primary"
-          href="https://opensea.io/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Visit OpenSea ↗
+        <a className="primary" href="#nft-editions">
+          Browse NFT editions
         </a>
         <a
           className="secondary"
@@ -44,19 +39,24 @@ export default function NftPage() {
           View observed marketplace records
         </Link>
       </nav>
-      <p className="product-note">
-        OpenSea and CCHS links above open their homepages. They do not assert
-        that an ArtFi collection is listed or available to buy. Asset-specific
-        marketplace links appear only when reported by the observed source.
+      <p className="product-note" data-testid="nft-trading-availability">
+        Native OpenSea listing, buying, offers and cancellation are not yet
+        available in this build. Edition browsing and holder-access checks
+        remain available below. Observed marketplace records do not establish
+        that an NFT is currently available to buy.
       </p>
 
-      <section className="product-tools" aria-labelledby="nft-charity-title">
+      <section
+        className="product-tools"
+        id="nft-editions"
+        aria-labelledby="nft-charity-title"
+      >
         <header className="section-heading">
           <p className="approved-eyebrow">Independent Charity capability</p>
           <h2 id="nft-charity-title">Charity editions</h2>
           <p>
             Keep cultural and philanthropic editions separate from RWA receipt
-            assets. Inspect the edition terms, follow an observed OpenSea link,
+            assets. Inspect the edition terms and observed marketplace records,
             and verify holder access on an edition&apos;s detail page.
           </p>
         </header>

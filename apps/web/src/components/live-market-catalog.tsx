@@ -281,14 +281,10 @@ export function LiveMarketCatalog() {
                   ) : null}
                 </dl>
                 {link ? (
-                  <a
-                    className="text-link market-venue-link"
-                    href={link}
-                    rel="noopener noreferrer nofollow"
-                    target="_blank"
-                  >
-                    Open this record on {venueLabel(asset.source)}
-                  </a>
+                  <details className="market-source-reference">
+                    <summary>Source reference</summary>
+                    <p data-no-translate>{link}</p>
+                  </details>
                 ) : (
                   <p className="market-gate">
                     No venue link was attributed to this record. ArtFi does not
@@ -296,9 +292,8 @@ export function LiveMarketCatalog() {
                   </p>
                 )}
                 <p className="market-gate">
-                  Mirrored record. Execution completes on{" "}
-                  {venueLabel(asset.source)}; ArtFi creates, signs, matches,
-                  custodies, fulfils and settles nothing on its behalf.
+                  Observed record only. This panel does not submit an order.
+                  Native NFT trading is not yet available in this build.
                 </p>
               </div>
             </article>

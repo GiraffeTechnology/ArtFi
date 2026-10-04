@@ -17,25 +17,7 @@ import {
   venueLink,
 } from "@/lib/market-links";
 
-/**
- * The mirrored activity history — Issue #110's external-marketplace baseline, `PRD.md` §4.8
- * XM.2–XM.4, and §3.2's delivery standard.
- *
- * `/v1/market/activity` existed with no screen reaching it, and served at most the hundred most
- * recent events. Under §3.2 an endpoint no screen reaches is progress, not a handover; this is the
- * screen, and the endpoint now issues a keyset cursor so the whole history can be walked.
- *
- * What it will not do:
- *
- *   - **It never constructs a venue link.** Each row shows the URL the source reported, re-validated
- *     by `venueLink`; an unverifiable one renders as text saying so. Assembling one from a chain and
- *     a token id is a claim about the venue that no observed event supports (XM.5).
- *   - **It never infers an empty history.** The API answers 503 rather than an empty list when the
- *     mirror is unreachable, and this says the mirror is unavailable rather than "no activity" —
- *     which are opposite statements to a reader deciding whether a market is quiet or broken.
- *   - **It never implies execution here.** Every row is read-only and attributed; ArtFi creates,
- *     signs, matches, fulfils and settles none of it.
- */
+/** Read-only source history. Native order operations are a separate application workflow. */
 
 const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 const pageSize = 25;
@@ -99,9 +81,8 @@ export function MarketActivityHistory() {
       </h2>
       <p>
         Listings, offers, sales, transfers and cancellations observed on
-        OpenSea, each with its source, time, freshness and the link the venue
-        itself reported. ArtFi creates, signs, matches, fulfils and settles none
-        of it.
+        OpenSea, each with its source, time, freshness and reported source
+        reference. This history panel is read-only and does not submit orders.
       </p>
 
       {error && (
@@ -165,14 +146,10 @@ export function MarketActivityHistory() {
                     </div>
                   </dl>
                   {link ? (
-                    <a
-                      className="text-link market-venue-link"
-                      href={link}
-                      rel="noopener noreferrer nofollow"
-                      target="_blank"
-                    >
-                      Open this event on {venueLabel(item.source)}
-                    </a>
+                    <details className="market-source-reference">
+                      <summary>Source reference</summary>
+                      <p data-no-translate>{link}</p>
+                    </details>
                   ) : (
                     <p className="market-gate">
                       No venue link was attributed to this event. ArtFi does not

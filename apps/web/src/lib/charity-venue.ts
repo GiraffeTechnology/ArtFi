@@ -1,20 +1,6 @@
 import { venueLabel, venueLink } from "./market-links";
 
-/**
- * The venue a charity edition can be reached at — `PRD.md` §4.8 XM.4, §3.2.3 stage `S-CH`.
- *
- * XM.4 requires a user to be able to reach OpenSea for every product line, and the `S-CH` row makes a
- * venue deep link part of what the edition page must show. Charity is also the line whose rollout
- * opens on OpenSea first (`AGENTS.md` §1.1 invariant 6), so for now the link out *is* the trading
- * surface for an edition.
- *
- * **The link is attributed, never constructed.** ArtFi does not assemble
- * `https://opensea.io/assets/<chain>/<contract>/<id>` from what it knows about the token: a URL no
- * observed event supports is a claim about the venue, which XM.5 forbids and `ACCEPTANCE.md` §7.8
- * fails an audit over. The only link this module will produce is one the mirror observed and
- * reported, re-validated by `venueLink`. When no event has been observed, or its URL cannot be shown
- * safely, the answer is that there is no link — never a guess.
- */
+/** Retain only source-attributed, validated venue URLs as evidence; never invent a listing. */
 
 export type CharityVenueRecord = {
   source: string;

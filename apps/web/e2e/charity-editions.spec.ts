@@ -28,7 +28,7 @@ test("no artwork preview and no trading control appears on the charity surface",
   await expect(page.getByTestId("charity-edition-terms")).toContainText(
     "Not provided",
   );
-  // CH.2: ArtFi creates, signs, matches, fulfils and settles nothing for these editions.
+  // This build does not yet expose native edition trading.
   await expect(
     page.getByRole("button", { name: /buy|bid|offer|purchase|settle/i }),
   ).toHaveCount(0);
