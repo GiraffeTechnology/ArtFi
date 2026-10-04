@@ -295,7 +295,8 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
   await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
   expect(portfolioReads).toBe(0);
   sessionAddress = walletA;
-  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  // Restore the explicit signed-in fixture on a fresh page, after proving connection alone is gated.
+  await page.reload();
   await expect(
     page.getByRole("button", { name: "Retry indexed records" }),
   ).toBeVisible();
