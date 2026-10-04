@@ -10,25 +10,7 @@ import {
 } from "@/lib/charity-venue";
 import { freshness } from "@/lib/market-links";
 
-/**
- * The way out to the venue for a charity edition — `PRD.md` §4.8 XM.4, §3.2.3 stage `S-CH`.
- *
- * XM.4 requires a user to be able to reach OpenSea for every product line, and the `S-CH` row makes a
- * venue deep link part of what an edition page must show. Charity opens on OpenSea first
- * (`AGENTS.md` §1.1 invariant 6), so until the line opens on ArtFi this link is how an edition is
- * bought at all — and ArtFi creates, signs, matches, fulfils and settles none of it.
- *
- * **The link is attributed, never constructed.** This surface shows a URL the mirror observed and
- * reported, re-validated on the way to the page. It never assembles one from the contract and the
- * token id, because a URL no observed event supports is a claim about the venue that XM.5 forbids and
- * `ACCEPTANCE.md` §7.8 fails an audit over. So the four states below are all distinct, and none of
- * them is a guess:
- *
- *   - an observed record with a safe URL — the link;
- *   - an observed record without one — said plainly, not hidden behind a link that might work;
- *   - nothing observed for this edition — said plainly, and not the same statement as the above;
- *   - the mirror unreachable — said plainly, with no cached or invented answer behind it.
- */
+/** Observed edition activity and source evidence. External navigation belongs in the footer. */
 
 const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
@@ -168,10 +150,9 @@ export function CharityVenueLink({ tokenId }: Readonly<{ tokenId: string }>) {
     <div className="transaction-panel" data-testid="charity-venue">
       <p className="eyebrow">Where this edition trades</p>
       <p>
-        This edition is listed on {state.venue}. Execution completes there:
-        ArtFi creates, signs, matches, fulfils and settles no order for it, and
-        the link below is the one {state.venue} reported, not one this site
-        assembled.
+        Activity for this edition was observed on {state.venue}. This does not
+        establish a current executable listing. Native NFT trading is not yet
+        available in this build.
       </p>
       <dl className="contract-facts">
         <div>
@@ -193,14 +174,10 @@ export function CharityVenueLink({ tokenId }: Readonly<{ tokenId: string }>) {
           <dd>{freshness(state.observedAt)}</dd>
         </div>
       </dl>
-      <a
-        className="text-link"
-        href={state.url}
-        target="_blank"
-        rel="noreferrer noopener"
-      >
-        Open this edition on {state.venue}
-      </a>
+      <details className="market-source-reference">
+        <summary>Source reference</summary>
+        <p data-no-translate>{state.url}</p>
+      </details>
     </div>
   );
 }

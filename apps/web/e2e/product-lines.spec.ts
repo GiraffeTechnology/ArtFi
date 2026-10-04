@@ -39,7 +39,7 @@ test("the overview exposes exactly three actionable product entries", async ({
   await expect(page).toHaveURL(/\/market\/fractionals$/);
 });
 
-test("NFT keeps CCHS, OpenSea and independent Charity paths usable", async ({
+test("NFT stays in ArtFi and keeps the optional OpenSea link in the footer", async ({
   page,
 }) => {
   await page.goto("/nft");
@@ -48,8 +48,26 @@ test("NFT keeps CCHS, OpenSea and independent Charity paths usable", async ({
     "https://cchsc.ca/",
   );
   await expect(
-    page.getByRole("link", { name: "Visit OpenSea" }),
-  ).toHaveAttribute("href", "https://opensea.io/");
+    page.getByRole("main").locator('a[href*="opensea.io"]'),
+  ).toHaveCount(0);
+  const website = page
+    .getByRole("contentinfo")
+    .getByRole("link", { name: "OpenSea website" });
+  await expect(website).toHaveAttribute("href", "https://opensea.io/");
+  await expect(website).toHaveAttribute("target", "_blank");
+  await expect(website).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(page.getByTestId("nft-trading-availability")).toContainText(
+    "not yet available in this build",
+  );
+  await page.getByRole("link", { name: "Browse NFT editions" }).click();
+  await expect(page).toHaveURL(/\/nft#nft-editions$/);
+  await expect(
+    page.getByRole("heading", { name: "Charity editions", exact: true }),
+  ).toBeInViewport();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/nft$/);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/nft#nft-editions$/);
   await expect(page.getByTestId("charity-edition-rights-notice")).toContainText(
     "no copyright, physical title",
   );

@@ -30,6 +30,13 @@ export default function RootLayout({
             <p>
               ArtCCH:ArtFi · Where living traditions become contemporary art.
             </p>
+            <a
+              href="https://opensea.io/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              OpenSea website ↗
+            </a>
             <p
               className="technical-support"
               data-no-translate

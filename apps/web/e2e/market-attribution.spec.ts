@@ -48,7 +48,7 @@ async function serveCatalog(
   );
 }
 
-test("a mirrored record carries source, order id, time, freshness and a venue link", async ({
+test("a mirrored record retains attribution without an outbound trading link", async ({
   page,
 }) => {
   await serveCatalog(page, "https://opensea.io/assets/ethereum/0xabc/42");
@@ -60,16 +60,16 @@ test("a mirrored record carries source, order id, time, freshness and a venue li
   await expect(card).toContainText("0xcdcdcdcd…cdcdcd");
   await expect(card).toContainText("14 minutes ago");
 
-  const link = card.getByRole("link", { name: /open this record on opensea/i });
-  await expect(link).toHaveAttribute(
-    "href",
+  await expect(card.locator("a")).toHaveCount(0);
+  await card.getByText("Source reference", { exact: true }).click();
+  await expect(card).toContainText(
     "https://opensea.io/assets/ethereum/0xabc/42",
   );
-  // It leaves ArtFi, so it opens away from the app and carries no referrer or opener.
-  await expect(link).toHaveAttribute("target", "_blank");
-  const rel = (await link.getAttribute("rel")) ?? "";
-  expect(rel).toContain("noopener");
-  expect(rel).toContain("noreferrer");
+  await expect(
+    page
+      .getByRole("contentinfo")
+      .getByRole("link", { name: "OpenSea website" }),
+  ).toBeVisible();
 });
 
 test("the mirror states that execution completes on the venue", async ({
@@ -78,7 +78,7 @@ test("the mirror states that execution completes on the venue", async ({
   await serveCatalog(page, "https://opensea.io/assets/ethereum/0xabc/42");
   await page.goto("/market/rwa");
   await expect(page.locator(".market-mirror-card").first()).toContainText(
-    "ArtFi creates, signs, matches, custodies, fulfils and settles nothing",
+    "Native NFT trading is not yet available in this build",
   );
   // Mirror-only means no trading control on this surface.
   await expect(

@@ -204,8 +204,8 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
           </section>
 
           <p className="charity-detail__settlement">
-            ArtFi creates, signs, matches, fulfils and settles no order for this
-            edition. Primary proceeds are designated for CCHS.
+            Native NFT trading is not yet available in this build. Primary
+            proceeds are designated for CCHS.
           </p>
 
           <CharityVenueLink tokenId={edition.tokenId} />
@@ -215,9 +215,7 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
       )}
 
       {/*
-        The way to the venue does not depend on the series loading. XM.4 asks that a user be able to
-        reach OpenSea for this line, and charity opens there first, so the record for a token id is
-        shown whether or not the contract read for that series succeeded.
+        The observed source record remains independent of the edition's contract read.
       */}
       {!edition && <CharityVenueLink tokenId={tokenId} />}
 

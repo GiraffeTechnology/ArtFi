@@ -1,19 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-/**
- * The way out to the venue for a charity edition — `PRD.md` §4.8 XM.4, §3.2.3 stage `S-CH`.
- *
- * XM.4 requires a user to be able to reach OpenSea for every product line, and the `S-CH` row makes a
- * venue deep link part of what the edition page must show. Charity opens on OpenSea first
- * (`AGENTS.md` §1.1 invariant 6), so this link is how an edition is bought at all until the line
- * opens on ArtFi.
- *
- * What these tests hold to is the rule that makes such a link safe: **it is attributed, never
- * constructed**. Nothing is deployed and no mirror is reachable here, so the surface must say which
- * of those is true and show no link whatsoever. A page that assembled
- * `https://opensea.io/assets/<chain>/<contract>/<id>` from what it knows would be the XM.5 defect
- * `ACCEPTANCE.md` §7.8 fails an audit over, and it would pass a naive "is there a venue link" test.
- */
+/** Source evidence must be truthful even when the edition or marketplace is unavailable. */
 
 const editionPath = "/charity/1";
 

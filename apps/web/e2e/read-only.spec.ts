@@ -252,7 +252,14 @@ test("market mirror exposes functional search, filters and sort controls", async
   await expect(page.getByLabel("Listing status")).toHaveValue("all");
   await expect(page.getByLabel("Sort")).toHaveValue("newest");
   await expect(page.getByText("OpenSea information mirror only")).toBeVisible();
-  await expect(page.locator('a[href*="opensea" i]')).toHaveCount(0);
+  await expect(
+    page.getByRole("main").locator('a[href*="opensea" i]'),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("contentinfo")
+      .getByRole("link", { name: "OpenSea website" }),
+  ).toHaveAttribute("href", "https://opensea.io/");
   await expect(
     page.getByRole("button", {
       name: /prepare external purchase|connect wallet to trade|confirm in external wallet/i,

@@ -2666,6 +2666,9 @@ p {
   max-width: 240px;
   font-size: 0.75rem;
 }
+.market-source-reference p {
+  overflow-wrap: anywhere;
+}
 .mobile-wallet-controls {
   display: none;
 }
