@@ -1,321 +1,186 @@
-# ArtCCH:ArtFi
+# ArtCCH ArtFi
 
-ArtCCH:ArtFi is a commercial digital art and Real-World Asset (RWA) application platform.
+ArtCCH:ArtFi is a commercial digital art and Real-World Asset application built on an existing
+RWA, vault, fractional trading, and DAO product. The current delivery brings its three distinct
+sections together at [io.artcch.com](https://io.artcch.com).
 
-This repository is the source of truth for the ArtFi application. It is not a demo and it is not an ERC-8415 implementation repository.
+This repository contains the ArtFi application. It consumes ERC-8415 capabilities through Oracle
+and does not implement the separate ERC8415-Kit, Oracle, or independent wallet product.
 
-## Product Blueprint
+## Three product sections
 
-ArtFi is the application layer in the ERC-8415 ecosystem:
+### 1 Digital NFTs and CCHS
 
-```
-ERC-8415
-(Standard)
-      |
-      v
-ERC8415-Kit
-(Infrastructure)
-      |
-      v
-Oracle
-(Verification / Integration Layer)
-      |
-      v
-ArtCCH:ArtFi
-(Application Layer)
-```
+Digital NFTs have no physical-asset backing. This section connects to
+[CCHS](https://cchsc.ca) and preserves the existing charity-edition business and holder-access
+workflow. OpenSea is the primary marketplace, not the exclusive marketplace.
 
-ArtFi consumes infrastructure capabilities through Oracle. It does not directly implement ERC-8415 protocol logic.
+The existing charity editions grant only wallet-verified access to the specified high-resolution
+watermarked copy. They convey no physical title, possession, redemption, copyright, commercial-use,
+or reproduction right. CCHS donation records do not turn the NFT into a physical-artwork receipt.
+Charity editions remain independent of the ERC-8415 RWA model.
 
----
+ArtFi provides edition information, rights disclosures, and a native OpenSea-backed NFT experience:
+browsing, listing, buying, offers, eligible cancellation, and result tracking remain inside ArtFi.
+Official venue APIs and protocols support the flow; users confirm wallet actions. A redirect,
+iframe, or read-only catalog does not satisfy it. The optional external OpenSea link belongs in
+the footer. Public charity metadata does not expose artwork previews
+or masters, and ArtFi does not issue donation receipts or promise tax credits.
 
-# Product Lines
+### 2 Whole artwork RWA receipts
 
-The PRD defines three product lines.
+A whole-artwork token is a delivery voucher or warehouse receipt for an identified artwork under
+its custody and registry record. ArtFi is an ERC-8415 standard commercial application for this
+receipt model.
 
-## 1. ERC-8415 Based Artwork Asset Products
-
-Purpose:
-
-Represent physical artwork identity, custody records, registry synchronization and market workflows.
-
-Blueprint:
-
-```
-Artwork
-   |
-Custody
-   |
-Registry
-   |
-ERC-8415 asset representation
-   |
-Market workflow
+```text
+Artwork -> custody and registry record -> ERC-8415 receipt -> applicable market and lifecycle workflow
 ```
 
-The system preserves the distinction between:
+ArtFi preserves the distinction between the token's blockchain state and the registry-confirmed
+holder and asset state. A chain transfer alone is not proof that registry transfer or physical
+delivery has completed. ArtFi's database is a projection, not an authority over rights.
 
-- blockchain tradeable position;
-- registry-confirmed asset state.
+The section retains its applicable ArtFi signed-trading and external-market integration scope.
+The NFT section's venue preference does not reduce the RWA application to external mirroring.
 
-ArtFi must not merge these concepts.
+### 3 Fractional trading and DAO
 
-```
-ERC-721 ownerOf
-        !=
-Confirmed registry holder
-```
+Fractionalization and DAO are inherited from the original PRD and MVP. The section preserves and
+completes NFT selection, exact-token approval, vault deposit, ERC-20 issuance, fractional holdings,
+buying and selling, history, and the governance defined by the asset structure.
 
----
-
-## 2. Artwork Investment Products
-
-ArtFi supports artwork-specific investment structures.
-
-Blueprint:
-
-```
-Artwork
-   |
-Single-asset investment product
-   |
-Fund participation
-   |
-DAO governance
+```text
+Asset -> vault or asset-specific fund -> fractions or participation tokens -> trading and DAO
 ```
 
-Governance rights depend on the asset model.
+Token possession does not automatically confer unspecified governance or physical-asset rights.
+Every underlying RWA retains the Stage 1 requirement for approved-source, machine-verifiable
+correspondence evidence before minting or activation, whether backed by registry, custody,
+warehouse, certificate, or other approved evidence. Applicable ERC-8415 identity, restriction,
+and lifecycle requirements remain in force, with registry synchronization for registry-backed assets. This section is not given a
+blanket ERC-8415 exemption, and its delivery does not require completion of every independent
+wallet or infrastructure product.
 
-Token possession alone does not automatically define governance authority.
+## Application architecture
 
----
-
-## 3. Charity NFT Editions
-
-Charity NFT editions are an independent cultural and philanthropic product line.
-
-They are not required to follow the ERC-8415 asset model and have independent requirements.
-
----
-
-# Functional Blueprint
-
-## M1 — Smart Contracts
-
-PRD scope:
-
-- artwork asset contracts;
-- auction and market contracts;
-- fractional asset components;
-- revenue distribution;
-- governance contracts;
-- multi-signature administration;
-- deployment tooling;
-- contract testing.
-
-## M2 — Backend Core Trading
-
-Business model:
-
-ArtFi is a trading intermediary, not a custodian or exchange.
-
-Required architecture:
-
-```
-User Wallet
-      |
-Signed Intent
-      |
-ArtFi Backend
-      |
-On-chain Settlement
+```text
+ERC-8415 standard
+  -> ERC8415-Kit
+  -> Oracle
+  -> ArtFi application
 ```
 
-Rules:
+ArtFi integrates with approved, replaceable sources and application-side wallet interfaces.
+A registry or infrastructure provider gains no universal authority or privileged marketplace
+path because it is integrated. ArtCCH's own-account listings follow the same settlement and
+matching rules as other participants.
 
-- ArtFi does not hold user assets;
-- ArtFi does not control user funds;
-- administration cannot move user property;
-- chain state remains ownership authority.
+For registry-backed assets:
 
-Backend scope:
+- The registry of record establishes recorded holdership within its approved scope.
+- The chain establishes token balances, contract state, and settlement.
+- ArtFi read models report and reconcile those records without replacing them.
 
-- authentication;
-- wallet binding;
-- order workflow;
-- signed intents;
-- trade history;
-- API services;
-- audit records.
+## Functional scope
 
-## M3 — Frontend UX
+| Module | Scope                                                                                                                                   |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| M1     | Existing asset and vault contracts, auctions, distribution, governance, multisignature controls, deployment tooling, and contract tests |
+| M2     | Authentication, wallet binding, signed orders, matching, settlement integration, positions, history, APIs, and audited administration   |
+| M3     | Discovery, trading, personal center, governance, charity workflows, and responsive multilingual UI                                      |
+| M4     | Asset-specific voting power, proposal lifecycle, timelock execution, and administration                                                 |
+| M5     | Security review, penetration testing, remediation, audit evidence, and secret/key protection                                            |
+| M6     | CI/CD, deployment, monitoring, backup/restore, operational tooling, and handover documentation                                          |
+| CH     | Existing charity-edition rules and protected holder-file access                                                                         |
+| XM     | External marketplace adapters, native OpenSea-backed NFT operations, attributed data, and result reconciliation                         |
 
-PRD scope:
+ArtFi records signed intent and finds counterparties; the chain enforces authorized settlement.
+Fixed-price and order-book assets remain in their owners' wallets until atomic fill. Existing
+auction escrow is limited to its accepted auction terms and retains safe settlement, withdrawal,
+and cancellation behavior. Platform administration cannot move or reassign user property.
 
-- artwork discovery;
-- market interface;
-- personal centre;
-- holdings display;
-- governance interface;
-- charity interface;
-- responsive and multilingual UI.
+Passive external-event ingestion stays read-only while the native NFT frontend orchestrates
+user-approved venue operations. Preserve ArtFi's own RWA and fractional trading. Keep fixture
+data distinct from real observations and display source, time, freshness, and chain. Missing
+venue credentials, supported-chain configuration, or wallet capabilities fail closed and do not
+establish that trading has been delivered.
 
-Prototype screens define UX direction, not final delivery alone.
+Xiongan Wallet is the V2 tenant of 8415 Wallet, assigned to `xiongan.8415wallet.com`. ArtFi reads
+its complete deployment URL at runtime without hardcoded destinations or ports. Test navigation
+may open without login; wallet assets, balances, holdings, and history require login.
 
-## M4 — DAO Governance
+## Working delivery and production
 
-Governance blueprint:
+Delivery is measured by a user completing the applicable workflow through the ArtFi UI, on
+desktop and mobile, with current evidence. Code, a contract deployment, a test, or a static page
+alone is not a stage handover.
 
-- voting power model;
-- proposal lifecycle;
-- timelock execution;
-- administrative controls.
+The requested application destination is [io.artcch.com](https://io.artcch.com). Application
+deployment, test-chain verification, business opening, final production acceptance, and mainnet
+operation are distinct. The domain does not itself authorize real-asset or real-money operations.
 
-Governance follows asset structure.
+- Development and integration write-testing use Hoodi, chain ID `560048`, with isolated TEST_ONLY assets.
+- Historical Sepolia charity records remain immutable and are not migrated or re-minted for tests.
+- Real charity release evidence does not block the isolated Hoodi technical path.
+- A pending visual redesign, later-stage work, or full independent-wallet completion does not
+  block an otherwise independent working stage.
+- Applicable production audit, mainnet, 48-hour stability, and final operator-handover requirements
+  retain their final-stage placement and applicable authorization.
+- Stage 2 NO-HIL autonomous operation remains cumulative scope, with its own bounded-authority,
+  evidence, recovery, and continuous-operation acceptance. Stage 1 delivery does not claim Stage 2 completion.
 
-## M5 — Security
+For actual completion, test results, deployment evidence, and remaining work, use
+[`docs/STATUS.md`](docs/STATUS.md). This README does not promote a requirement or claim that an
+unverified workflow is delivered.
 
-Required:
+## Repository structure
 
-- security review;
-- penetration testing;
-- remediation verification;
-- secret/key protection.
-
-## M6 — Operations
-
-Required:
-
-- deployment;
-- monitoring;
-- CI/CD;
-- production operation evidence.
-
----
-
-# Current Implementation Status (2026-09-20)
-
-The repository contains substantial implementation across the PRD scope, but production acceptance is not complete.
-
-Implemented areas include:
-
-## Contracts
-
-- artwork market foundations;
-- fractional asset foundations;
-- revenue distribution components;
-- governance contracts;
-- charity NFT related contracts.
-
-## Backend
-
-- API service framework;
-- asset workflows;
-- external market integration framework;
-- OpenAPI definitions;
-- runtime validation boundaries.
-
-## Frontend
-
-- Next.js application;
-- responsive UI framework;
-- multilingual framework;
-- wallet/application interaction layer.
-
-## Testing
-
-Implemented:
-
-- contract tests;
-- fuzz/invariant tests;
-- API tests;
-- frontend contract tests;
-- browser contract tests.
-
-Current limitations:
-
-- production chain deployment is not approved;
-- real-money operation is not approved;
-- runtime evidence remains required for acceptance.
-
----
-
-# Delivery Rule
-
-ArtFi follows evidence-based delivery:
-
-```
-Code
-  |
-Tests
-  |
-Deployment Environment
-  |
-User Visible Workflow
-  |
-Acceptance Evidence
-```
-
-Code completion alone does not equal delivery.
-
----
-
-# Repository Structure
-
-```
+```text
 apps/
   web/                 Next.js application
   api/                 API service
-  wallet-extension/    Wallet extension alpha
+  market-mirror/       External marketplace integration
+  wallet-extension/    Existing wallet extension alpha
 
 packages/
   contracts/           Solidity contracts
   api-client/          Generated API client
 
-docs/                  Product, architecture and delivery documents
+docs/                  Product, architecture, evidence, and delivery documents
 ```
 
----
+The wallet-extension directory is existing implementation. Its presence does not make the
+entire independent wallet product a prerequisite for ArtFi handover.
 
-# Primary Documents
+## Primary documents
 
-| Document           | Purpose                                       |
-| ------------------ | --------------------------------------------- |
-| docs/PRD.md        | Product blueprint and functional requirements |
-| docs/ACCEPTANCE.md | Delivery evidence and promotion rules         |
-| docs/STATUS.md     | Requirement status                            |
-| AGENTS.md          | Engineering execution rules                   |
+| Document                         | Purpose                                                    |
+| -------------------------------- | ---------------------------------------------------------- |
+| [PRD](docs/PRD.md)               | Coordinated product definition and functional requirements |
+| [Acceptance](docs/ACCEPTANCE.md) | Applicable evidence and promotion rules                    |
+| [Status](docs/STATUS.md)         | Requirement state and current verification evidence        |
+| [Agent instructions](AGENTS.md)  | Execution boundaries and scope control                     |
 
-Historical documents provide traceability but are not acceptance targets unless referenced by current baseline documents.
+[Issue #110](https://github.com/GiraffeTechnology/ArtFi/issues/110) incorporates the inherited
+[#84 baseline](https://github.com/GiraffeTechnology/ArtFi/issues/84). Explicit later client
+instructions amend the affected provisions. Historical records do not override the latest
+product definition or create new delivery prerequisites.
 
----
+## Scope boundaries
 
-# Scope Boundary
+ArtFi supplies the commercial application and user workflows. It does not become the protocol
+implementation, Oracle infrastructure, independent wallet, registry of record, legal title
+adjudication system, or replacement custodian. Native mobile apps, fiat on/off-ramp, automatic
+debit, forced liquidation, and real buyout settlement remain outside the current scope described
+in the PRD.
 
-ArtFi is:
+## Disclosed patent filing references
 
-- commercial application layer;
-- artwork marketplace and user experience platform;
-- consumer of Oracle and ERC-8415 ecosystem infrastructure.
+| Subject                                       | Application number | Related area                |
+| --------------------------------------------- | ------------------ | --------------------------- |
+| Unattended issuance of off-chain source facts | `202611389399.6`   | Oracle                      |
+| Credential mapping from off-chain registries  | `202611389374.6`   | Registry credential mapping |
 
-ArtFi is not:
-
-- ERC-8415 protocol implementation;
-- ERC8415-Kit infrastructure;
-- Oracle infrastructure;
-- legal title adjudication system;
-- custody replacement system.
-
----
-
-# Patent Disclosure Boundary
-
-Publicly disclosed applications:
-
-| Application                                                              | Number           | Scope                           |
-| ------------------------------------------------------------------------ | ---------------- | ------------------------------- |
-| Unattended system and method for issuing off-chain data-source facts     | `202611389399.6` | Oracle                          |
-| Data credential mapping method and system based on an off-chain registry | `202611389374.6` | ERC registry credential mapping |
-
-Patent filing does not mean grant, production acceptance or commercial deployment.
-
+These are filing references retained from the repository. Filing does not establish patent
+grant, production acceptance, or commercial deployment.
