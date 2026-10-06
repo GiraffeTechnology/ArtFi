@@ -1,5 +1,15 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-07 PR #102 current-main recovery source
+
+Based on main `bf31bf0202d40ef977aed9986f0d02de341c68ff`, this bounded candidate
+clears old catalogue cards when refresh fails and supports manual retry alongside
+polling without overlapping requests. Current venue, price and freshness fields
+and filter state are preserved. Browser fixtures cover manual and polling recovery
+and the retained local font. This is a source-only record before fresh CI;
+production provider connectivity and deployment are unverified. Existing module
+statuses and historical evidence below remain unchanged.
+
 ## 2026-10-07 PR #67 current-main source refresh
 
 The bounded startup database-pool slice is reapplied to main
