@@ -1,0 +1,116 @@
+:root {
+  color-scheme: light;
+  font:
+    16px/1.5 system-ui,
+    sans-serif;
+  color: #14243b;
+  background: #f2f5f9;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 960px;
+  margin: auto;
+  padding: 24px;
+}
+h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+h2 {
+  font-size: 1.2rem;
+}
+.scope {
+  font-weight: 600;
+  color: #244268;
+}
+section,
+form {
+  padding: 20px;
+  margin-top: 20px;
+  background: white;
+  border: 1px solid #b8c5d6;
+  border-radius: 12px;
+}
+label {
+  display: block;
+  font-weight: 600;
+  margin-top: 12px;
+}
+input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px;
+  font: inherit;
+  border: 1px solid #65758b;
+  border-radius: 4px;
+}
+button {
+  margin: 16px 12px 0 0;
+  padding: 10px 16px;
+  border: 1px solid #163453;
+  border-radius: 6px;
+  background: #163453;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  background: #e2e8f0;
+  color: #455469;
+  border-color: #8998ab;
+  cursor: not-allowed;
+}
+:focus-visible {
+  outline: 3px solid #a44600;
+  outline-offset: 3px;
+}
+pre,
+dd {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+pre {
+  padding: 12px;
+  border: 1px solid #c3cddd;
+  background: #f8fafc;
+  font-size: 0.875rem;
+}
+dl {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+}
+dt {
+  font-weight: 600;
+}
+dd {
+  margin: 0;
+}
+[role="status"] {
+  min-height: 24px;
+  border-left: 4px solid #315c8b;
+  padding-left: 12px;
+}
+@media (max-width: 480px) {
+  main {
+    padding: 16px;
+  }
+  section,
+  form {
+    padding: 14px;
+  }
+  dl {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  dd {
+    margin-bottom: 12px;
+  }
+  button {
+    width: 100%;
+    margin-right: 0;
+  }
+}

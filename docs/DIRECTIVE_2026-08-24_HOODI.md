@@ -223,7 +223,7 @@ not mistaken for progress against them.
 | Item                                                                  | State                                            |
 | --------------------------------------------------------------------- | ------------------------------------------------ |
 | M2 backend trading — 115 days, the largest line item                  | No implementation                                |
-| M5 third-party security audit — USD 20,000 budget line                | Not engaged                                      |
+| M5 third-party security audit — budget line                           | Not engaged                                      |
 | M6 operations — CD, cluster, replication, monitoring, alerting        | Not implemented                                  |
 | Class B surfaces — auction, trade history, search, P&L, notifications | Mock or absent                                   |
 | A01–A38 compliant previews                                            | Zero present; `ACCEPTANCE.md` §7.8 audit failure |

@@ -10,6 +10,13 @@ const recoveryFont = localFont({
   fallback: [],
 });
 
+import {
+  freshness,
+  shortOrderId,
+  venueLabel,
+  venueLink,
+} from "@/lib/market-links";
+
 const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
 type MarketAsset = {
@@ -24,6 +31,7 @@ type MarketAsset = {
   orderStatus?: string;
   price?: string;
   paymentSymbol?: string;
+  marketplaceUrl?: string;
 };
 
 type MarketCatalogResponse = {
@@ -256,6 +264,9 @@ export function LiveMarketCatalog() {
           const key = `${asset.chain}:${asset.contractAddress}:${asset.tokenId}`;
           const active =
             asset.orderStatus === "active" && Boolean(asset.orderHash);
+          const orderId = shortOrderId(asset.orderHash);
+          // The link is the one the source reported, re-validated here; never one ArtFi assembles.
+          const link = venueLink(asset.source, asset.marketplaceUrl);
           return (
             <article className="market-mirror-card" key={key}>
               <div className="market-mirror-card__artwork market-placeholder">
@@ -269,14 +280,28 @@ export function LiveMarketCatalog() {
                 </p>
                 <dl>
                   <div>
+                    <dt>Source</dt>
+                    <dd>{venueLabel(asset.source)}</dd>
+                  </div>
+                  <div>
                     <dt>Order</dt>
                     <dd>
                       {active ? "Active listing" : asset.orderStatus || "None"}
                     </dd>
                   </div>
+                  {orderId ? (
+                    <div>
+                      <dt>Order ID</dt>
+                      <dd data-no-translate>{orderId}</dd>
+                    </div>
+                  ) : null}
                   <div>
                     <dt>Observed</dt>
                     <dd>{formatObserved(asset.latestEventTimestamp)}</dd>
+                  </div>
+                  <div>
+                    <dt>Freshness</dt>
+                    <dd>{freshness(asset.latestEventTimestamp)}</dd>
                   </div>
                   {asset.price ? (
                     <div>
@@ -287,9 +312,20 @@ export function LiveMarketCatalog() {
                     </div>
                   ) : null}
                 </dl>
+                {link ? (
+                  <details className="market-source-reference">
+                    <summary>Source reference</summary>
+                    <p data-no-translate>{link}</p>
+                  </details>
+                ) : (
+                  <p className="market-gate">
+                    No venue link was attributed to this record. ArtFi does not
+                    construct one.
+                  </p>
+                )}
                 <p className="market-gate">
-                  Source attributed to OpenSea · no external link or trade
-                  action
+                  Observed record only. This panel does not submit an order.
+                  Native NFT trading is not yet available in this build.
                 </p>
               </div>
             </article>

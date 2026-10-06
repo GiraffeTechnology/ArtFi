@@ -4,12 +4,37 @@ pragma solidity 0.8.30;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-/// @title ArtFi testnet market
-/// @notice Escrowed fixed-price, auction, and capped offering settlement with pull-based refunds.
-contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
+/// @title ArtFi fractions market
+/// @notice The fractions venue: signature-settled fixed-price fills, escrowed auctions, and capped
+///         offerings with pull-based refunds.
+/// @dev This is the market for `PRD.md` §1.0.1 model B -- fund tokens and fractions of one artwork,
+///      ERC-20, stage `S-FR`. The whole artwork is model A and settles in `WholeArtworkMarket.sol`.
+///
+///      **The fixed-price path settles by signature.** `PRD.md` §4.2.2, client ruling 2026-08-30:
+///      "the fixed-price and order-book path settles by signature -- assets remain in the owner's
+///      wallet and move only in the atomic fill the owner signed. `_pullExact` on listing is removed
+///      from that path; the market contract pulls from both parties at fill time and never holds a
+///      resting balance." The two consequences that ruling states are what `fillIntent` is measured
+///      by: the fixed-price path holds nothing at rest, and a seller may keep the same tokens
+///      authorized in several places at once, because an authorization is not a transfer.
+///
+///      The same ruling **retains escrow for auctions**, where locking the asset for the auction's
+///      duration is structurally necessary, so `createAuctionListing`, `placeBid`, `settleAuction`
+///      and the credit ledger they use are unchanged. `createListing` therefore no longer accepts
+///      `ListingKind.FixedPrice`: that kind now has a settlement path that does not escrow, and
+///      leaving the escrowing one reachable would keep the contradiction the ruling closed.
+///      The enum value is kept so `Auction` keeps its ordinal and the `listings` getter stays
+///      ABI-compatible.
+///
+///      Partial fills follow §4.2 rather than burning the signature on first use: each fill adds to
+///      `intentFilled[digest]`, a fill beyond the authorized maximum reverts, and a fully consumed
+///      or revoked authorization cannot be filled again.
+contract ArtFiMarket is AccessControl, EIP712, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -63,6 +88,37 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         bool successful;
     }
 
+    /// @notice An off-chain authorization to sell fractions at stated terms.
+    /// @param seller The holder authorizing the sale. The signature must verify against it.
+    /// @param assetToken The fraction or fund token being sold.
+    /// @param paymentToken The ERC-20 the buyer pays in.
+    /// @param maxAmount The most that may ever be sold under this authorization, across all fills.
+    /// @param unitPrice Price per unit of `assetToken`, in `paymentToken` units.
+    /// @param buyer The only address allowed to fill, or the zero address for an open intent.
+    /// @param salt Caller-chosen value making otherwise identical intents distinct.
+    /// @param startsAt Inclusive lower bound of the fill window.
+    /// @param endsAt Exclusive upper bound of the fill window.
+    /// @param epoch The seller's epoch at signing time; `incrementSellerEpoch` invalidates every
+    ///        intent signed against an earlier one.
+    struct SaleIntent {
+        address seller;
+        address assetToken;
+        address paymentToken;
+        uint256 maxAmount;
+        uint256 unitPrice;
+        address buyer;
+        uint256 salt;
+        uint48 startsAt;
+        uint48 endsAt;
+        uint256 epoch;
+    }
+
+    /// @dev Field order fixes the EIP-712 type hash. `intentHash` is exposed so an off-chain signer
+    ///      can be compared against this deployment rather than trusted to agree with it.
+    bytes32 public constant SALE_INTENT_TYPEHASH = keccak256(
+        "SaleIntent(address seller,address assetToken,address paymentToken,uint256 maxAmount,uint256 unitPrice,address buyer,uint256 salt,uint48 startsAt,uint48 endsAt,uint256 epoch)"
+    );
+
     struct ListingParams {
         bytes32 requestId;
         IERC20 assetToken;
@@ -81,10 +137,18 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
     error ActiveBidExists();
     error AmountUnavailable();
     error AuctionEndOverflow();
+    error EpochMismatch();
+    error FixedPriceSettlesBySignature();
     error IdempotencyConflict(bytes32 requestId);
+    error IntentExhausted();
+    error IntentExpired();
+    error IntentNotYetOpen();
     error InvalidConfiguration();
+    error InvalidSignature();
     error InvalidState();
     error NotAuthorized();
+    error NotTheBuyer();
+    error SellerMayNotBuy();
     error OfferingNotSuccessful();
     error OfferingSuccessful();
     error PilotCapExceeded();
@@ -95,9 +159,16 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
     event ListingCreated(
         bytes32 indexed requestId, uint256 indexed listingId, address indexed seller
     );
-    event FixedOrderFilled(
-        uint256 indexed listingId, address indexed buyer, uint256 amount, uint256 payment
+    event IntentFilled(
+        bytes32 indexed intentHash,
+        address indexed seller,
+        address indexed buyer,
+        uint256 amount,
+        uint256 payment,
+        uint256 filledToDate
     );
+    event IntentRevoked(bytes32 indexed intentHash, address indexed seller);
+    event SellerEpochIncremented(address indexed seller, uint256 epoch);
     event BidPlaced(uint256 indexed listingId, address indexed bidder, uint256 amount);
     event AuctionExtended(uint256 indexed listingId, uint48 previousEnd, uint48 extendedEnd);
     event AuctionReserveNotMet(
@@ -128,6 +199,12 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
     mapping(address account => mapping(address paymentToken => uint256)) public pilotPaymentCap;
     mapping(address account => mapping(address paymentToken => uint256)) public pilotPaymentUsed;
 
+    /// @dev Cumulative quantity sold under each authorization. A revocation sets it to the
+    ///      authorized maximum, so a revoked intent and an exhausted one are refused by the same
+    ///      check and a counterparty holding the signature cannot fill either.
+    mapping(bytes32 intentHash => uint256 amountFilled) public intentFilled;
+    mapping(address seller => uint256 epoch) public sellerEpoch;
+
     mapping(bytes32 requestId => uint256 recordId) private _listingByRequest;
     mapping(bytes32 requestId => bytes32 intentHash) private _listingIntent;
     mapping(bytes32 requestId => uint256 recordId) private _offeringByRequest;
@@ -135,7 +212,9 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
     uint256 private _nextListingId = 1;
     uint256 private _nextOfferingId = 1;
 
-    constructor(address admin, address pauser, address tokenManager) {
+    constructor(address admin, address pauser, address tokenManager)
+        EIP712("ArtFi Fractions Market", "1")
+    {
         if (admin == address(0) || pauser == address(0) || tokenManager == address(0)) {
             revert ZeroAddress();
         }
@@ -209,17 +288,10 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         uint48 endsAt,
         ListingKind kind
     ) external whenNotPaused nonReentrant returns (uint256 listingId) {
-        uint256 reservePrice = kind == ListingKind.Auction ? unitPrice : 0;
-        uint256 minimumBidIncrement = kind == ListingKind.Auction ? 1 : 0;
-        uint48 extensionWindow;
-        uint48 extensionDuration;
-        if (kind == ListingKind.Auction) {
-            uint48 auctionDuration = endsAt > startsAt ? endsAt - startsAt : 0;
-            extensionWindow = auctionDuration < LEGACY_AUCTION_EXTENSION_WINDOW
-                ? auctionDuration
-                : LEGACY_AUCTION_EXTENSION_WINDOW;
-            extensionDuration = LEGACY_AUCTION_EXTENSION_DURATION;
-        }
+        // `PRD.md` §4.2.2 removed the pull at listing time from the fixed-price path. That path is
+        // `fillIntent`, which escrows nothing; creating an escrowed fixed-price listing here would
+        // reintroduce exactly the resting balance the ruling closed.
+        if (kind != ListingKind.Auction) revert FixedPriceSettlesBySignature();
         return _createListing(
             ListingParams({
                 requestId: requestId,
@@ -229,11 +301,14 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
                 unitPrice: unitPrice,
                 startsAt: startsAt,
                 endsAt: endsAt,
-                kind: kind,
-                reservePrice: reservePrice,
-                minimumBidIncrement: minimumBidIncrement,
-                extensionWindow: extensionWindow,
-                extensionDuration: extensionDuration
+                kind: ListingKind.Auction,
+                reservePrice: unitPrice,
+                minimumBidIncrement: 1,
+                extensionWindow: endsAt > startsAt
+                    && endsAt - startsAt < LEGACY_AUCTION_EXTENSION_WINDOW
+                    ? endsAt - startsAt
+                    : LEGACY_AUCTION_EXTENSION_WINDOW,
+                extensionDuration: LEGACY_AUCTION_EXTENSION_DURATION
             })
         );
     }
@@ -357,21 +432,86 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         );
     }
 
-    function buyFixed(uint256 listingId, uint256 amount) external whenNotPaused nonReentrant {
-        Listing storage listing = _listings[listingId];
-        _requireLive(listing);
+    /// @notice The EIP-712 digest a seller signs for `intent`.
+    function intentHash(SaleIntent calldata intent) public view returns (bytes32) {
+        return _hashTypedDataV4(_intentStructHash(intent));
+    }
+
+    /// @notice Domain separator, exposed so an off-chain signer can be checked against this
+    ///         deployment rather than against a hardcoded chain id or address.
+    function domainSeparator() external view returns (bytes32) {
+        return _domainSeparatorV4();
+    }
+
+    /// @notice How much of `intent` may still be filled.
+    function intentRemaining(SaleIntent calldata intent) external view returns (uint256) {
+        uint256 filled = intentFilled[_hashTypedDataV4(_intentStructHash(intent))];
+        return filled >= intent.maxAmount ? 0 : intent.maxAmount - filled;
+    }
+
+    /// @notice Settles `amount` of `intent` in one transaction: payment from the caller to the
+    ///         seller, fractions from the seller to the caller.
+    /// @dev The contract is on neither side of the trade and holds nothing at rest. It verifies the
+    ///      seller's authorization, counts the fill against it, and moves both legs atomically.
+    function fillIntent(SaleIntent calldata intent, bytes calldata signature, uint256 amount)
+        external
+        whenNotPaused
+        nonReentrant
+    {
+        if (!allowedAssetToken[intent.assetToken]) revert TokenNotAllowed();
+        if (!allowedPaymentToken[intent.paymentToken]) revert TokenNotAllowed();
         if (
-            listing.kind != ListingKind.FixedPrice || amount == 0
-                || amount > listing.amountRemaining
-        ) revert AmountUnavailable();
-        uint256 payment = amount * listing.unitPrice;
-        _consumePilotCap(msg.sender, address(listing.paymentToken), payment);
-        _pullExact(listing.paymentToken, msg.sender, payment);
-        listing.amountRemaining -= amount;
-        credits[listing.seller][address(listing.paymentToken)] += payment;
-        if (listing.amountRemaining == 0) listing.state = State.Settled;
-        listing.assetToken.safeTransfer(msg.sender, amount);
-        emit FixedOrderFilled(listingId, msg.sender, amount, payment);
+            intent.seller == address(0) || intent.maxAmount == 0 || intent.unitPrice == 0
+                || intent.startsAt >= intent.endsAt
+        ) revert InvalidConfiguration();
+        if (amount == 0) revert AmountUnavailable();
+        if (block.timestamp < intent.startsAt) revert IntentNotYetOpen();
+        if (block.timestamp >= intent.endsAt) revert IntentExpired();
+        if (intent.buyer != address(0) && intent.buyer != msg.sender) revert NotTheBuyer();
+        if (intent.seller == msg.sender) revert SellerMayNotBuy();
+        if (intent.epoch != sellerEpoch[intent.seller]) revert EpochMismatch();
+
+        bytes32 digest = _hashTypedDataV4(_intentStructHash(intent));
+        uint256 filled = intentFilled[digest] + amount;
+        // Cumulative, so partial fills are possible without the signature ever authorizing more
+        // than the seller stated. A revocation sets the counter to the maximum and lands here too.
+        if (filled > intent.maxAmount) revert IntentExhausted();
+
+        // Accepts an EIP-1271 signature as well as a secp256k1 one, so a contract wallet can
+        // authorize a sale on the same path as an EOA.
+        if (!SignatureChecker.isValidSignatureNow(intent.seller, digest, signature)) {
+            revert InvalidSignature();
+        }
+
+        uint256 payment = amount * intent.unitPrice;
+        _consumePilotCap(msg.sender, intent.paymentToken, payment);
+
+        // Count the fill before either transfer: a token whose hook re-enters finds it already
+        // spent.
+        intentFilled[digest] = filled;
+
+        _moveExact(IERC20(intent.paymentToken), msg.sender, intent.seller, payment);
+        _moveExact(IERC20(intent.assetToken), intent.seller, msg.sender, amount);
+
+        emit IntentFilled(digest, intent.seller, msg.sender, amount, payment, filled);
+    }
+
+    /// @notice Revokes one authorization on chain, so holding the signature is no longer enough.
+    /// @dev Deliberately not `whenNotPaused`. Revocation withdraws an authorization the seller
+    ///      gave; an administrative pause must never be able to keep one alive.
+    function revokeIntent(SaleIntent calldata intent) external {
+        if (intent.seller != msg.sender) revert NotAuthorized();
+        bytes32 digest = _hashTypedDataV4(_intentStructHash(intent));
+        if (intentFilled[digest] >= intent.maxAmount) revert IntentExhausted();
+        intentFilled[digest] = intent.maxAmount;
+        emit IntentRevoked(digest, msg.sender);
+    }
+
+    /// @notice Invalidates every authorization this seller signed against the current epoch.
+    /// @dev Also not `whenNotPaused`, for the reason given on `revokeIntent`.
+    function incrementSellerEpoch() external {
+        uint256 next = ++sellerEpoch[msg.sender];
+        emit SellerEpochIncremented(msg.sender, next);
     }
 
     function placeBid(uint256 listingId, uint256 bidAmount) external whenNotPaused nonReentrant {
@@ -591,6 +731,32 @@ contract ArtFiMarket is AccessControl, Pausable, ReentrancyGuard {
         if (token.balanceOf(address(this)) - beforeBalance != amount) {
             revert TransferAmountMismatch();
         }
+    }
+
+    /// @dev Moves `amount` directly between two parties, never through this contract, and rejects a
+    ///      fee-on-transfer token rather than settling on terms the seller did not sign.
+    function _moveExact(IERC20 token, address from, address to, uint256 amount) private {
+        uint256 beforeBalance = token.balanceOf(to);
+        token.safeTransferFrom(from, to, amount);
+        if (token.balanceOf(to) - beforeBalance != amount) revert TransferAmountMismatch();
+    }
+
+    function _intentStructHash(SaleIntent calldata intent) private pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                SALE_INTENT_TYPEHASH,
+                intent.seller,
+                intent.assetToken,
+                intent.paymentToken,
+                intent.maxAmount,
+                intent.unitPrice,
+                intent.buyer,
+                intent.salt,
+                intent.startsAt,
+                intent.endsAt,
+                intent.epoch
+            )
+        );
     }
 
     function _consumePilotCap(address account, address paymentToken, uint256 amount) private {

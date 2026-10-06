@@ -21,6 +21,7 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
     error AlreadyFractionalized();
     error InvalidFractionConfiguration();
     error InvalidNFT();
+    error InvalidRecoveryRecipient(address recipient, address originalOwner);
     error NotDeposited();
     error RecoveryAfterFractionalizationForbidden();
     error ZeroAddress();
@@ -102,6 +103,7 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
             revert RecoveryAfterFractionalizationForbidden();
         }
         if (recipient == address(0)) revert ZeroAddress();
+        if (recipient != originalOwner) revert InvalidRecoveryRecipient(recipient, originalOwner);
 
         deposited = false;
         collection.safeTransferFrom(address(this), recipient, tokenId);
