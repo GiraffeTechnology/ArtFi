@@ -260,3 +260,14 @@ Use the client-supplied Wallet Beta handoff on branch `delivery/install-handoff-
 For this deployment, TCP 443 and occupied ports are excluded on the target servers. Preserve SSH, shared bridges and other-task services. Inspect current listeners and allocations; reuse a suitable confirmed allocation or select an actually free non-443 port within the client's existing deployment authority. No new per-port client approval cycle is required merely because 443 is unavailable. Actual firewall/ingress authorization still applies to the target rule; approved SIN TCP 9445/9446 are recorded deployment allocations, not hardcoded source defaults.
 
 Configure complete public URLs, including scheme, domain, port and entry path. Preserve existing wallet origins and recovery journals during upgrades. Execute application builds, deployment and tests only in approved CTYun/SIN Linux environments; Windows remains a source/report workstation. Do not expand this instruction into mainnet, real-value transactions, credential disclosure, shared-service changes or transaction replay. GitHub changes remain English only.
+
+## Delivery archive inventory (2026-10-05)
+
+The private delivery archive inventory and GitHub-safe publication mirrors are
+recorded in [releases/2026-10-05-delivery-archive/README.md](releases/2026-10-05-delivery-archive/README.md).
+Read the manifest, SHA-256 checksums, omission records and candidate labels before
+using any package. Sanitized mirrors have different bytes and hashes from their
+original handoffs; their publication commit is not their application source identity.
+Publication does not establish a merge, deployment, general release, current-head
+CI pass or genuine-device acceptance. Existing product, security and port rules
+remain in force.
