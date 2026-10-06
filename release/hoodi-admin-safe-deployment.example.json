@@ -1,0 +1,52 @@
+{
+  "schema": "artfi-hoodi-admin-safe-deployment/v1",
+  "chainId": 560048,
+  "safeId": "hoodi-560048-0x1111111111111111111111111111111111111111-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "adminSafe": {
+    "address": "0x1111111111111111111111111111111111111111",
+    "runtimeCodehash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "ownersSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "ownerCount": 2,
+    "threshold": 2,
+    "delaySeconds": 86400
+  },
+  "stages": {
+    "stage2": {
+      "safeId": "hoodi-560048-0x1111111111111111111111111111111111111111-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "bootstrapDeployerRolesRevoked": true,
+      "roleHolders": {
+        "registryAdmin": "0x1111111111111111111111111111111111111111",
+        "registryRegistrar": "0x1111111111111111111111111111111111111111",
+        "registryPauser": "0x1111111111111111111111111111111111111111",
+        "rwaAdmin": "0x1111111111111111111111111111111111111111",
+        "rwaPauser": "0x1111111111111111111111111111111111111111"
+      },
+      "rwaMinterHolder": "registry"
+    },
+    "stage3": {
+      "safeId": "hoodi-560048-0x1111111111111111111111111111111111111111-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "roleHolders": {
+        "factoryAdmin": "0x1111111111111111111111111111111111111111",
+        "factoryCreator": "0x1111111111111111111111111111111111111111",
+        "factoryPauser": "0x1111111111111111111111111111111111111111"
+      },
+      "futureVaultRoleBinding": "controlled-action-must-bind-admin-safe"
+    },
+    "charity": {
+      "enabled": false,
+      "safeId": "hoodi-560048-0x1111111111111111111111111111111111111111-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "roleHolders": {
+        "charityAdmin": "0x1111111111111111111111111111111111111111",
+        "charitySeriesCreator": "0x1111111111111111111111111111111111111111",
+        "charityDonationRecorder": "0x1111111111111111111111111111111111111111",
+        "charityPauser": "0x1111111111111111111111111111111111111111"
+      }
+    }
+  },
+  "treasuryAuthority": {
+    "status": "not-applicable",
+    "rationale": "These deployment paths assign contract roles only and do not configure an ERC-721, ERC-1155, or payment-token treasury receiver."
+  },
+  "nftTreasuryCustodyClaimed": false,
+  "testAssetMarkers": ["TESTNET", "NO REAL-WORLD VALUE", "NO LEGAL EFFECT"]
+}

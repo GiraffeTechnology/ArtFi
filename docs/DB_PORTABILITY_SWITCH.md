@@ -1,10 +1,14 @@
 # MySQL portability and controlled switching
 
+2026-10-07 refresh: based on main `840d5fe057268d015cefece0ef8330a59aba236f`.
+This refreshed source has not been formatted or tested on Linux. Historical results
+below remain bound to their original head, not this candidate.
+
 This independent candidate implements a prerequisite, not a hot switch. It maps to
 PRD M6.2/M6.5 and the user's DB P0 ruling. No production switch, new DB installation,
 customer-data copy, deletion, credential disclosure or blockchain action is authorized
 by this document. Only the dedicated CTYun DB or an explicitly approved new DB host
-may hold a database; abcdyi and Aivan are application/bridge hosts, not DB targets.
+may hold a database; application and bridge hosts are not approved DB hosts, not DB targets.
 
 ## Implemented boundary and evidence status
 

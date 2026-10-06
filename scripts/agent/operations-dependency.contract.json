@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 2,
+  "dependencyRole": "OPERATIONS_HEALTH_INPUT",
+  "satisfiesOperationsAgent": false,
+  "artifact": {
+    "name": "ArtFiLinkOps-a1-binding-delta",
+    "version": "20260912-r2",
+    "archiveSha256": "7EABD33341EC32A57CC7EED64C8D5728C446C11E5D049F48A0999653FA3B21A9",
+    "manifestSha256": "4A9DE5B06CAF3E536B3D2DF6F0992E1033E9439C9733A576D5C51F9BCC5A1722",
+    "integritySha256": "F10EF8CC353EBDE3CAB53ED703A4F139AF5053A36A23159F54DF79F1AE7D1A05",
+    "testResultsSha256": "3CF524365D5AFF81B0A30478377C03C98AF320BF6FB8503E0C01AE04654B0E25"
+  },
+  "healthContract": {
+    "snapshotSchemaVersion": 2,
+    "producerHostRole": "ctyun-abcdyi",
+    "hostRole": "artfi-delivery-link",
+    "freshnessSeconds": 180,
+    "requiredChecks": [
+      "tunnel-service",
+      "tunnel-listener",
+      "sin-service",
+      "sin-app-listener",
+      "sin-e2e-health",
+      "db-select1"
+    ]
+  },
+  "capabilities": {
+    "healthSnapshot": true,
+    "execute": false,
+    "reconcile": false,
+    "revoke": false,
+    "sign": false,
+    "rpc": false,
+    "broadcast": false
+  },
+  "gates": {
+    "independentIntegrity": false,
+    "completeHttpProjection": false,
+    "zeroCallerPathStartup": false,
+    "managedDatabaseProbe": false,
+    "installed": false,
+    "injected": false,
+    "callable": false,
+    "upgradeRollback": false,
+    "alertingAndStaleWatch": false,
+    "recoveryEvidence": false,
+    "soak": false
+  },
+  "status": "PARTIAL_INPUT_READY_NOT_7X24",
+  "productionReady": false
+}

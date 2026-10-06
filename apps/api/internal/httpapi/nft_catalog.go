@@ -19,10 +19,7 @@ type mintedNFT struct {
 func (service *rwaService) getMintedNFTs(writer http.ResponseWriter, request *http.Request) {
 	page, pageSize := pagination(request)
 	if service.db == nil {
-		writeJSON(writer, http.StatusOK, map[string]any{
-			"data": []mintedNFT{}, "total": 0, "page": page, "pageSize": pageSize,
-			"chainId": hoodiChainID, "runtime": true,
-		})
+		writeProblem(writer, request, http.StatusServiceUnavailable, "NFT catalog unavailable", "The indexed NFT catalog is not connected to persistence.")
 		return
 	}
 
