@@ -19,11 +19,12 @@ or real-money transaction. Historical Sepolia deployment records remain historic
 - Reuse the existing ArtFi build, bridge, Qwen API operations and 24-hour supervision after
   checking the current deployment configuration. A related `artcch.com` build must be
   identified as the intended ArtFi application before replacement.
-- TCP `443` and occupied ports are excluded for the current CTYun/SIN deployment. Preserve
+- Obtain port allocations and reservations from the target deployment configuration. Preserve
   SSH, shared bridges and other-task listeners. Inspect current allocations and choose a
-  suitable free non-443 port under the client's existing deployment authority; do not invent
+  suitable free, unreserved port under the client's existing deployment authority; do not invent
   a separate per-port approval requirement. Actual public-ingress authority remains scoped
-  to its target rule. Configure the resulting complete public URL, not a default-443 origin.
+  to its target rule. Configure the complete public URL; standard HTTPS may omit its default
+  port when that is the selected deployment endpoint.
 
 DNS, TLS, host listeners and deployment changes belong to the existing deployment task.
 This repository provides the application images and interface contract.
@@ -59,7 +60,7 @@ Retain the previous image digest for the existing rollback procedure.
   client-supplied forwarded headers do not establish authority.
 - Keep Next `ARTFI_WEB_URL` and API `ARTFI_WEB_ORIGIN` consistent with
   the complete configured public URL, including its actual port. Public HTTP-to-HTTPS routing belongs to the SIN public origin;
-  it must not consume CTYun's SSH port.
+  preserve the deployment's configured reservations and existing listeners.
 - Use the existing `ARTFI_API_URL`, `ARTFI_USER_AUTH_API_URL`, `ARTFI_OPERATOR_API_URL`
   and `ARTFI_ORACLE_READ_API_URL` server bindings. Resolve their supported upstream paths
   from existing operations configuration. Native order and ordinary-user auth adapters
