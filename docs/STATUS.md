@@ -1,5 +1,16 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-07 PR #67 current-main source refresh
+
+The bounded startup database-pool slice is reapplied to main
+`840d5fe057268d015cefece0ef8330a59aba236f`. It preserves startup defaults,
+externalizes bounded pool settings, and replaces raw startup driver errors with
+fixed codes. Source regressions cover defaults, pool setters and invalid inputs.
+This refreshed source is NOT_TESTED and NOT_PUBLISHED. Historical PR #67 CI is not
+inherited. Dedicated CTYun database integration, TLS, backup/restore and runtime
+switching remain unverified; no hot-switch implementation or acceptance is claimed.
+Current evidence and module statuses below remain unchanged.
+
 ## 2026-10-03 Xiongan runtime destination correction
 
 The client's explicit correction removes the hardcoded wallet URL and all implicit
