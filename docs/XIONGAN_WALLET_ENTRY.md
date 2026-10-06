@@ -132,9 +132,8 @@ just from opening the DApp. Separately verify the approved endpoint is reachable
 and its redirects preserve the owner's assigned destination. An external redirect
 or unavailable wallet service is deployment evidence, not repaired by source alone.
 
-Existing CTYun and SIN TCP 443 bridge/listener allocations must be preserved. Do
-not add a new binding or disrupt/rebind a service there; CTYun's SSH reservation
-also remains in force. Reuse only the deployment owner's confirmed allocation.
-These are current deployment constraints, not a general URL-port blacklist for
-future hosts. This source change makes no SSH, firewall, listener, proxy, TLS,
+Preserve existing bridge/listener allocations and the target deployment's
+configured port reservations. Do not disrupt or rebind other services. Use the
+deployment owner's confirmed allocation; environment names do not define a
+product-wide URL-port blacklist. This source change makes no SSH, firewall, listener, proxy, TLS,
 credential, production deployment, real-chain or real-asset changes.
