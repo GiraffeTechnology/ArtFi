@@ -269,4 +269,3 @@ original handoffs; their publication commit is not their application source iden
 Publication does not establish a merge, deployment, general release, current-head
 CI pass or genuine-device acceptance. Existing product, security and port rules
 remain in force.
-
