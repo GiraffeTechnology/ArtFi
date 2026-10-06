@@ -1,5 +1,14 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-07 PR #125 dependency source refresh
+
+Based on main `0574d8dfef70dd6ea8e3a903cb47ed5d8441221a`, this candidate
+updates the Web Zod dependency from 4.6.2 to 4.6.5 and only its qualified lock
+references and integrity. Current Vitest and other dependencies are retained.
+This is a source record before fresh frozen installation and full CI; no runtime
+or deployment acceptance is inferred. Existing evidence and module states below
+remain unchanged.
+
 ## 2026-10-07 PR #102 current-main recovery source
 
 Based on main `bf31bf0202d40ef977aed9986f0d02de341c68ff`, this bounded candidate
