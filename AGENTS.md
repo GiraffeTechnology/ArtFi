@@ -251,13 +251,15 @@ Confirm that:
 Deliver bounded working stages and preserve the existing product. Do not turn ArtFi into an
 indefinitely expanding pre-delivery project.
 
-## CTYun TCP port 443 reservation
+## Current deployment execution and port allocation
 
-On CTYun hosts, TCP port 443 is reserved for SSH. Do not configure HTTP, HTTPS, web servers, reverse proxies, or TLS listeners to bind to TCP port 443. Do not stop, rebind, replace, or otherwise disrupt SSH to free that port.
+The client's current delivery instruction assigns ArtFi iteration, installation and joint testing to Artfi control. Development-only restrictions and older task-specific scheduling do not prohibit that authorized work. Historical Charity A-I closure, full Wallet V3 acceptance and Stage 2 completion are not global prerequisites for independent Stage 1 web/Beta installation and testing. Retain their valid scoped evidence gaps without replaying completed batches or unknown transaction outcomes.
 
-Before selecting a web or bridge port, inspect the existing deployment and operations configuration and reuse an explicitly confirmed allocation. Do not guess a replacement port. If the allocation is unclear, report the missing configuration rather than changing a service binding.
+Use the client-supplied Wallet Beta handoff on branch `delivery/install-handoff-20261004`; verify its immutable archive and exact source identity before installation. Beta installation and production-like testing are authorized within the existing approved Linux and test-asset boundaries; publication, page navigation and CI do not prove genuine-wallet or full-product acceptance. Public entry navigation may skip login; protected wallet data still requires verified login.
 
-This constraint applies only to CTYun hosts; do not extend it to SIN or other environments without an explicit instruction. Recording this rule does not authorize server access or changes to SSH, firewalls, credentials, network settings, or security settings.
+For this deployment, TCP 443 and occupied ports are excluded on the target servers. Preserve SSH, shared bridges and other-task services. Inspect current listeners and allocations; reuse a suitable confirmed allocation or select an actually free non-443 port within the client's existing deployment authority. No new per-port client approval cycle is required merely because 443 is unavailable. Actual firewall/ingress authorization still applies to the target rule; approved SIN TCP 9445/9446 are recorded deployment allocations, not hardcoded source defaults.
+
+Configure complete public URLs, including scheme, domain, port and entry path. Preserve existing wallet origins and recovery journals during upgrades. Execute application builds, deployment and tests only in approved CTYun/SIN Linux environments; Windows remains a source/report workstation. Do not expand this instruction into mainnet, real-value transactions, credential disclosure, shared-service changes or transaction replay. GitHub changes remain English only.
 
 ## Delivery archive inventory (2026-10-05)
 

@@ -1,6 +1,6 @@
 # UI deployment contract
 
-`https://io.artcch.com` is the ArtFi UI origin for the current three sections:
+The complete deployment-configured URL for `io.artcch.com` is the ArtFi UI origin for the current three sections:
 digital NFTs without physical backing linked to CCHS and primarily traded on OpenSea;
 whole-artwork receipt/voucher tokens using ERC-8415; and the existing fractional trading
 and DAO workflows. Native receipt and fractional settlement remain available where their
@@ -19,10 +19,11 @@ or real-money transaction. Historical Sepolia deployment records remain historic
 - Reuse the existing ArtFi build, bridge, Qwen API operations and 24-hour supervision after
   checking the current deployment configuration. A related `artcch.com` build must be
   identified as the intended ArtFi application before replacement.
-- CTYun TCP port `443` is reserved for SSH. Do not bind HTTP, HTTPS, reverse proxies or TLS
-  listeners there, or move/stop SSH to free it. Resolve web and bridge ports from existing
-  confirmed operations configuration; do not guess replacements. This reservation does not
-  apply to SIN.
+- TCP `443` and occupied ports are excluded for the current CTYun/SIN deployment. Preserve
+  SSH, shared bridges and other-task listeners. Inspect current allocations and choose a
+  suitable free non-443 port under the client's existing deployment authority; do not invent
+  a separate per-port approval requirement. Actual public-ingress authority remains scoped
+  to its target rule. Configure the resulting complete public URL, not a default-443 origin.
 
 DNS, TLS, host listeners and deployment changes belong to the existing deployment task.
 This repository provides the application images and interface contract.
@@ -57,7 +58,7 @@ Retain the previous image digest for the existing rollback procedure.
   publication checks that Host and the exact browser Origin independently. Untrusted
   client-supplied forwarded headers do not establish authority.
 - Keep Next `ARTFI_WEB_URL` and API `ARTFI_WEB_ORIGIN` consistent with
-  `https://io.artcch.com`. Public HTTP-to-HTTPS routing belongs to the SIN public origin;
+  the complete configured public URL, including its actual port. Public HTTP-to-HTTPS routing belongs to the SIN public origin;
   it must not consume CTYun's SSH port.
 - Use the existing `ARTFI_API_URL`, `ARTFI_USER_AUTH_API_URL`, `ARTFI_OPERATOR_API_URL`
   and `ARTFI_ORACLE_READ_API_URL` server bindings. Resolve their supported upstream paths
