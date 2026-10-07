@@ -428,6 +428,194 @@ test("new runtime discovers committed STARTED without HTTP IDs, retries DB outag
   assert.equal(f.row.lease_token, null);
 });
 
+test(
+  "new runtime survives a hung observer, retries DB outage and reconciles STARTED without execute",
+  { timeout: 2000 },
+  async () => {
+    const f = fixture("STARTED");
+    f.setAvailable(false);
+    const controller = new AbortController();
+    let sends = 0,
+      authorityCalls = 0;
+    const unused = async () => {
+      throw Error("UNEXPECTED_ADAPTER");
+    };
+    const runtime = createDurableRuntime({
+      pool: f.pool,
+      kernelOptions: {
+        authorize: unused,
+        observe: unused,
+        execute: async () => {
+          sends++;
+          throw Error("UNEXPECTED_SEND");
+        },
+        verify: unused,
+        mintAuthority: async () => {
+          authorityCalls++;
+          throw Error("UNEXPECTED_PREFLIGHT");
+        },
+        reconcile: async () => ({
+          state: "SETTLED",
+          canonical: true,
+          accountingMatches: true,
+        }),
+      },
+      serviceOptions: {
+        ethers,
+        policy: servicePolicy,
+        planFor: unused,
+        observe: unused,
+        inspectRevocation: unused,
+      },
+    });
+    let observations = 0;
+    await runtime.run({
+      signal: controller.signal,
+      intervalMs: 10,
+      onBatch: (result) => {
+        observations++;
+        assert.equal(observations, 1);
+        assert.equal(result.state, "SAFE_DEGRADED");
+        f.setAvailable(true);
+        setTimeout(() => controller.abort(), 100);
+        return new Promise(() => {});
+      },
+    });
+    assert.equal(observations, 1);
+    assert.equal(sends, 0);
+    assert.equal(authorityCalls, 0);
+    assert.equal(hydrateOperation(f.row).state, "SETTLED");
+    assert.equal(f.row.lease_token, null);
+  },
+);
+
+test(
+  "a hung observer remains single-flight across sequential runtime restarts",
+  { timeout: 2000 },
+  async () => {
+    const f = fixture("STARTED");
+    const unused = async () => {
+      throw Error("UNEXPECTED_ADAPTER");
+    };
+    const runtime = createDurableRuntime({
+      pool: f.pool,
+      kernelOptions: {
+        authorize: unused,
+        observe: unused,
+        execute: unused,
+        verify: unused,
+        mintAuthority: unused,
+        reconcile: async () => ({
+          state: "SETTLED",
+          canonical: true,
+          accountingMatches: true,
+        }),
+      },
+      serviceOptions: {
+        ethers,
+        policy: servicePolicy,
+        planFor: unused,
+        observe: unused,
+        inspectRevocation: unused,
+      },
+    });
+    const first = new AbortController();
+    let observations = 0;
+    await runtime.run({
+      signal: first.signal,
+      intervalMs: 10,
+      onBatch: () => {
+        observations++;
+        first.abort();
+        return new Promise(() => {});
+      },
+    });
+    const second = new AbortController();
+    const timer = setTimeout(() => second.abort(), 50);
+    try {
+      await runtime.run({
+        signal: second.signal,
+        intervalMs: 10,
+        onBatch: () => {
+          observations++;
+          return new Promise(() => {});
+        },
+      });
+    } finally {
+      clearTimeout(timer);
+      second.abort();
+    }
+    assert.equal(observations, 1);
+    assert.equal(hydrateOperation(f.row).state, "SETTLED");
+    assert.equal(f.row.lease_token, null);
+  },
+);
+
+for (const failure of ["throw", "reject"]) {
+  test(
+    `recovery continues and observer notifications resume after ${failure}`,
+    { timeout: 2000 },
+    async () => {
+      const f = fixture("STARTED");
+      f.setAvailable(false);
+      const unused = async () => {
+        throw Error("UNEXPECTED_ADAPTER");
+      };
+      const runtime = createDurableRuntime({
+        pool: f.pool,
+        kernelOptions: {
+          authorize: unused,
+          observe: unused,
+          execute: unused,
+          verify: unused,
+          mintAuthority: unused,
+          reconcile: async () => ({
+            state: "SETTLED",
+            canonical: true,
+            accountingMatches: true,
+          }),
+        },
+        serviceOptions: {
+          ethers,
+          policy: servicePolicy,
+          planFor: unused,
+          observe: unused,
+          inspectRevocation: unused,
+        },
+      });
+      const controller = new AbortController();
+      const outcomes = [];
+      const timer = setTimeout(() => controller.abort(), 1000);
+      try {
+        await runtime.run({
+          signal: controller.signal,
+          intervalMs: 10,
+          onBatch: (result) => {
+            outcomes.push(structuredClone(result));
+            // Observer-owned snapshots cannot rewrite persisted recovery state.
+            result.state = "OBSERVER_MUTATION";
+            if (outcomes.length === 1) {
+              f.setAvailable(true);
+              if (failure === "throw") throw Error("OBSERVER_FAILURE");
+              return Promise.reject(Error("OBSERVER_FAILURE"));
+            }
+            controller.abort();
+          },
+        });
+      } finally {
+        clearTimeout(timer);
+        controller.abort();
+      }
+      // Assertions stay outside the deliberately exception-isolated observer.
+      assert.equal(outcomes.length, 2);
+      assert.equal(outcomes[0].state, "SAFE_DEGRADED");
+      assert.equal(outcomes[1].outcomes[0].state, "SETTLED");
+      assert.equal(hydrateOperation(f.row).state, "SETTLED");
+      assert.equal(f.row.lease_token, null);
+    },
+  );
+}
+
 test("durable runtime scans confirmed revoked PREPARED, persists terminal and excludes next batch", async () => {
   const f = fixture();
   f.row.lease_token = null;
@@ -476,8 +664,35 @@ test("durable runtime scans confirmed revoked PREPARED, persists terminal and ex
   assert.equal(calls, 0);
 });
 
+test("durable revocation refuses zero hash before acquiring a database connection", async () => {
+  let connections = 0;
+  const store = createDurableStore({
+    mode: "TEST_ONLY_NO_REAL_VALUE",
+    pool: {
+      getConnection: async () => {
+        connections++;
+        throw Error("UNEXPECTED_DATABASE_ACCESS");
+      },
+    },
+  });
+  await assert.rejects(
+    store.noteRevocation(request.operationId, address, {
+      transactionHash: "0x" + "00".repeat(32),
+      wallet: address,
+      nonce: "0",
+      executor: address,
+      chainId: "560048",
+      state: "CONFIRMED",
+      canonical: true,
+    }),
+    /REVOCATION_RECORD_INVALID/,
+  );
+  assert.equal(connections, 0);
+});
+
 test("durable hydration refuses revoked proof identity corruption before worker execution", async () => {
   for (const change of [
+    { transactionHash: "0x" + "00".repeat(32) },
     { nonce: "1" },
     { chainId: "1" },
     { canonical: false },

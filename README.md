@@ -1,155 +1,186 @@
-# ArtFi
+# ArtCCH ArtFi
 
-ArtFi is a commercial digital art and real-world asset platform. It is a commercial application, not a demo.
+ArtCCH:ArtFi is a commercial digital art and Real-World Asset application built on an existing
+RWA, vault, fractional trading, and DAO product. The current delivery brings its three distinct
+sections together at [io.artcch.com](https://io.artcch.com).
 
-This repository is the single source of truth for the rebuilt ArtFi platform.
+This repository contains the ArtFi application. It consumes ERC-8415 capabilities through Oracle
+and does not implement the separate ERC8415-Kit, Oracle, or independent wallet product.
 
-## Product lines
+## Three product sections
 
-ArtFi supports three product lines.
+### 1 Digital NFTs and CCHS
 
-### 1. ERC-8415 asset market
+Digital NFTs have no physical-asset backing. This section connects to
+[CCHS](https://cchsc.ca) and preserves the existing charity-edition business and holder-access
+workflow. OpenSea is the primary marketplace, not the exclusive marketplace.
 
-ArtFi applies ERC-8415 concepts to connect physical artwork identity, custody records, ownership state, and blockchain settlement. ERC-8415 covers asset identity, registry synchronization, ownership-related workflows, and asset lifecycle management.
+The existing charity editions grant only wallet-verified access to the specified high-resolution
+watermarked copy. They convey no physical title, possession, redemption, copyright, commercial-use,
+or reproduction right. CCHS donation records do not turn the NFT into a physical-artwork receipt.
+Charity editions remain independent of the ERC-8415 RWA model.
 
-**Full artwork asset receipt** — individual artwork ownership representation and transfer:
+ArtFi provides edition information, rights disclosures, and a native OpenSea-backed NFT experience:
+browsing, listing, buying, offers, eligible cancellation, and result tracking remain inside ArtFi.
+Official venue APIs and protocols support the flow; users confirm wallet actions. A redirect,
+iframe, or read-only catalog does not satisfy it. The optional external OpenSea link belongs in
+the footer. Public charity metadata does not expose artwork previews
+or masters, and ArtFi does not issue donation receipts or promise tax credits.
+
+### 2 Whole artwork RWA receipts
+
+A whole-artwork token is a delivery voucher or warehouse receipt for an identified artwork under
+its custody and registry record. ArtFi is an ERC-8415 standard commercial application for this
+receipt model.
 
 ```text
-Artwork → Custody → Registry → ERC-8415 asset representation → Market transfer
+Artwork -> custody and registry record -> ERC-8415 receipt -> applicable market and lifecycle workflow
 ```
 
-A token may represent one specific artwork custody certificate.
+ArtFi preserves the distinction between the token's blockchain state and the registry-confirmed
+holder and asset state. A chain transfer alone is not proof that registry transfer or physical
+delivery has completed. ArtFi's database is a projection, not an authority over rights.
 
-**Artwork investment fund** — an asset-specific investment product:
+The section retains its applicable ArtFi signed-trading and external-market integration scope.
+The NFT section's venue preference does not reduce the RWA application to external mirroring.
+
+### 3 Fractional trading and DAO
+
+Fractionalization and DAO are inherited from the original PRD and MVP. The section preserves and
+completes NFT selection, exact-token approval, vault deposit, ERC-20 issuance, fractional holdings,
+buying and selling, history, and the governance defined by the asset structure.
 
 ```text
-Artwork → Single-asset fund → Fund token → DAO governance
+Asset -> vault or asset-specific fund -> fractions or participation tokens -> trading and DAO
 ```
 
-Each artwork may form an independent investment product with tokenized participation and asset-specific governance.
+Token possession does not automatically confer unspecified governance or physical-asset rights.
+Every underlying RWA retains the Stage 1 requirement for approved-source, machine-verifiable
+correspondence evidence before minting or activation, whether backed by registry, custody,
+warehouse, certificate, or other approved evidence. Applicable ERC-8415 identity, restriction,
+and lifecycle requirements remain in force, with registry synchronization for registry-backed assets. This section is not given a
+blanket ERC-8415 exemption, and its delivery does not require completion of every independent
+wallet or infrastructure product.
 
-### 2. ArtFi DAO governance
+## Application architecture
 
-DAO governance follows the underlying asset model. For artwork investment products, fund token holders participate in governance according to the defined governance rules. For direct artwork receipt products, governance follows the defined asset authority model.
+```text
+ERC-8415 standard
+  -> ERC8415-Kit
+  -> Oracle
+  -> ArtFi application
+```
 
-Token possession alone does not define governance rights unless the asset model specifies it.
+ArtFi integrates with approved, replaceable sources and application-side wallet interfaces.
+A registry or infrastructure provider gains no universal authority or privileged marketplace
+path because it is integrated. ArtCCH's own-account listings follow the same settlement and
+matching rules as other participants.
 
-### 3. Charity NFT editions
+For registry-backed assets:
 
-Charity NFT editions are an independent product line for cultural and philanthropic fundraising. They are not required to follow the ERC-8415 asset model.
+- The registry of record establishes recorded holdership within its approved scope.
+- The chain establishes token balances, contract state, and settlement.
+- ArtFi read models report and reconcile those records without replacing them.
 
-## Current status
+## Functional scope
 
-- Delivery phase: **Stage 2–7 integrated implementation**
-- Test chain: **Hoodi `560048`**; the production chain is undecided
-- Mainnet and real-money operation: **not approved**
-- Runtime chain evidence: **none on any chain; not claimed as passed**
-- Requirement status, item by item: [`docs/STATUS.md`](docs/STATUS.md)
+| Module | Scope                                                                                                                                   |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| M1     | Existing asset and vault contracts, auctions, distribution, governance, multisignature controls, deployment tooling, and contract tests |
+| M2     | Authentication, wallet binding, signed orders, matching, settlement integration, positions, history, APIs, and audited administration   |
+| M3     | Discovery, trading, personal center, governance, charity workflows, and responsive multilingual UI                                      |
+| M4     | Asset-specific voting power, proposal lifecycle, timelock execution, and administration                                                 |
+| M5     | Security review, penetration testing, remediation, audit evidence, and secret/key protection                                            |
+| M6     | CI/CD, deployment, monitoring, backup/restore, operational tooling, and handover documentation                                          |
+| CH     | Existing charity-edition rules and protected holder-file access                                                                         |
+| XM     | External marketplace adapters, native OpenSea-backed NFT operations, attributed data, and result reconciliation                         |
 
-## Workspace
+ArtFi records signed intent and finds counterparties; the chain enforces authorized settlement.
+Fixed-price and order-book assets remain in their owners' wallets until atomic fill. Existing
+auction escrow is limited to its accepted auction terms and retains safe settlement, withdrawal,
+and cancellation behavior. Platform administration cannot move or reassign user property.
+
+Passive external-event ingestion stays read-only while the native NFT frontend orchestrates
+user-approved venue operations. Preserve ArtFi's own RWA and fractional trading. Keep fixture
+data distinct from real observations and display source, time, freshness, and chain. Missing
+venue credentials, supported-chain configuration, or wallet capabilities fail closed and do not
+establish that trading has been delivered.
+
+Xiongan Wallet is the V2 tenant of 8415 Wallet, assigned to `xiongan.8415wallet.com`. ArtFi reads
+its complete deployment URL at runtime without hardcoded destinations or ports. Test navigation
+may open without login; wallet assets, balances, holdings, and history require login.
+
+## Working delivery and production
+
+Delivery is measured by a user completing the applicable workflow through the ArtFi UI, on
+desktop and mobile, with current evidence. Code, a contract deployment, a test, or a static page
+alone is not a stage handover.
+
+The requested application destination is [io.artcch.com](https://io.artcch.com). Application
+deployment, test-chain verification, business opening, final production acceptance, and mainnet
+operation are distinct. The domain does not itself authorize real-asset or real-money operations.
+
+- Development and integration write-testing use Hoodi, chain ID `560048`, with isolated TEST_ONLY assets.
+- Historical Sepolia charity records remain immutable and are not migrated or re-minted for tests.
+- Real charity release evidence does not block the isolated Hoodi technical path.
+- A pending visual redesign, later-stage work, or full independent-wallet completion does not
+  block an otherwise independent working stage.
+- Applicable production audit, mainnet, 48-hour stability, and final operator-handover requirements
+  retain their final-stage placement and applicable authorization.
+- Stage 2 NO-HIL autonomous operation remains cumulative scope, with its own bounded-authority,
+  evidence, recovery, and continuous-operation acceptance. Stage 1 delivery does not claim Stage 2 completion.
+
+For actual completion, test results, deployment evidence, and remaining work, use
+[`docs/STATUS.md`](docs/STATUS.md). This README does not promote a requirement or claim that an
+unverified workflow is delivered.
+
+## Repository structure
 
 ```text
 apps/
-  web/          Next.js user application
-  api/          Go API
-  wallet-extension/  Non-custodial Manifest V3 Alpha
+  web/                 Next.js application
+  api/                 API service
+  market-mirror/       External marketplace integration
+  wallet-extension/    Existing wallet extension alpha
+
 packages/
-  contracts/    Solidity contracts and deployment tooling
-  api-client/   OpenAPI-generated types and fetch client
-docs/           Product, architecture, security, and operations
+  contracts/           Solidity contracts
+  api-client/          Generated API client
+
+docs/                  Product, architecture, evidence, and delivery documents
 ```
 
-## Quick start
+The wallet-extension directory is existing implementation. Its presence does not make the
+entire independent wallet product a prerequisite for ArtFi handover.
 
-Prerequisites:
+## Primary documents
 
-- Node.js 24 LTS
-- pnpm 11.22.0
-- Go 1.26.x
-- Docker with Compose
-- Foundry 1.5.x for contract work
+| Document                         | Purpose                                                    |
+| -------------------------------- | ---------------------------------------------------------- |
+| [PRD](docs/PRD.md)               | Coordinated product definition and functional requirements |
+| [Acceptance](docs/ACCEPTANCE.md) | Applicable evidence and promotion rules                    |
+| [Status](docs/STATUS.md)         | Requirement state and current verification evidence        |
+| [Agent instructions](AGENTS.md)  | Execution boundaries and scope control                     |
 
-```bash
-cp .env.example .env
-docker compose up -d mysql redis
-pnpm install
-pnpm api:generate
-pnpm dev
-```
+[Issue #110](https://github.com/GiraffeTechnology/ArtFi/issues/110) incorporates the inherited
+[#84 baseline](https://github.com/GiraffeTechnology/ArtFi/issues/84). Explicit later client
+instructions amend the affected provisions. Historical records do not override the latest
+product definition or create new delivery prerequisites.
 
-The web app runs at `http://localhost:3000`. Start the read-only API in a second terminal:
+## Scope boundaries
 
-```bash
-cd apps/api
-go run ./cmd/server
-```
+ArtFi supplies the commercial application and user workflows. It does not become the protocol
+implementation, Oracle infrastructure, independent wallet, registry of record, legal title
+adjudication system, or replacement custodian. Native mobile apps, fiat on/off-ramp, automatic
+debit, forced liquidation, and real buyout settlement remain outside the current scope described
+in the PRD.
 
-The health endpoint is `http://localhost:8080/healthz`; the OpenAPI contract is at `apps/api/openapi/openapi.yaml`.
+## Disclosed patent filing references
 
-## Quality gates
+| Subject                                       | Application number | Related area                |
+| --------------------------------------------- | ------------------ | --------------------------- |
+| Unattended issuance of off-chain source facts | `202611389399.6`   | Oracle                      |
+| Credential mapping from off-chain registries  | `202611389374.6`   | Registry credential mapping |
 
-```bash
-pnpm peers check
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm test:e2e
-pnpm contracts:format:check
-pnpm contracts:lint
-pnpm contracts:build
-pnpm contracts:test
-(cd apps/api && go vet ./... && go test -race ./...)
-docker compose config
-```
-
-## Delivery plan
-
-**The current baseline is three documents.** Read them before anything else, and see
-[`AGENTS.md`](AGENTS.md) for how they bind:
-
-- [**PRD**](docs/PRD.md) — what must exist and how it must behave
-- [**Acceptance standard**](docs/ACCEPTANCE.md) — what proves it exists, and the G1–G4 promotion gates
-- [**Status**](docs/STATUS.md) — where every requirement stands right now, item by item
-
-Client directives override them where they conflict, newest first:
-[2026-09-18 charity module](docs/DIRECTIVE_2026-09-18_CHARITY_MODULE.md) (charity requirement
-coverage),
-[2026-09-18 product alignment](docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md) (positioning, asset
-models, product invariants),
-[2026-08-30 delivery](docs/DIRECTIVE_2026-08-30_DELIVERY.md) (measurement, G3 split, Hoodi test
-payload) and [2026-08-24 Hoodi](docs/DIRECTIVE_2026-08-24_HOODI.md) (test chain).
-
-### Superseded, retained as history
-
-The documents below predate the baseline above. They record how the project got here; they are not
-the acceptance target.
-
-[the staged roadmap](docs/ROADMAP.md), [PRD traceability](docs/PRD_TRACEABILITY.md),
-[Claude Code acceptance PRD](docs/PRD_CLAUDE_CODE_ACCEPTANCE.md),
-[Stage 1 acceptance evidence](docs/STAGE_1_ACCEPTANCE.md),
-[Stage 2 acceptance evidence](docs/STAGE_2_ACCEPTANCE.md),
-[Stage 3 acceptance evidence](docs/STAGE_3_ACCEPTANCE.md),
-[Stage 4 acceptance evidence](docs/STAGE_4_ACCEPTANCE.md),
-[Stage 5 acceptance evidence](docs/STAGE_5_ACCEPTANCE.md),
-[Stage 6 acceptance evidence](docs/STAGE_6_ACCEPTANCE.md),
-[Stage 7 acceptance evidence](docs/STAGE_7_ACCEPTANCE.md),
-[pre-chain deployment evidence](docs/PRECHAIN_DEPLOYMENT_EVIDENCE.md),
-[UI deployment contract](docs/UI_DEPLOYMENT_CONTRACT.md),
-[Sepolia mint package gate](docs/MINT_PACKAGE.md),
-[Sepolia/OpenSea validation status](docs/TESTNET_MARKETPLACE_VALIDATION.md), and
-[architecture](docs/ARCHITECTURE.md).
-
-## 专利申请状态与披露边界
-
-以下申请状态由项目负责人确认；负责人明确允许公开以下专利申请号：
-
-| 申请名称                                   | 申请号           | 关联范围               |
-| ------------------------------------------ | ---------------- | ---------------------- |
-| 一种链外数据源事实的无人值守出具系统及方法 | `202611389399.6` | Oracle                 |
-| 一种基于链下登记簿的数据凭证映射方法及系统 | `202611389374.6` | ERC 登记簿凭证映射标准 |
-
-两项申请均已提交并取得受理通知。申请受理不等于专利授权，也不表示技术交付或生产验收完成。
-
-本次仅披露上述申请名称、申请号及申请状态，不上传受理通知书 PDF、申请材料、个人信息、客户私域数据或其他商业信息。不得要求负责人向 AI 提供保密协议、商业尽调材料或与技术无关的信息，作为更新上述状态或推进无关技术开发、脱敏测试的前提。技术验收仍依据代码、可复核测试及授权范围内的运行证据，不代替任何人的法律或商业签署。
+These are filing references retained from the repository. Filing does not establish patent
+grant, production acceptance, or commercial deployment.

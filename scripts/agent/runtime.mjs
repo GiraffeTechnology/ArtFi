@@ -40,6 +40,9 @@ export function createDurableRuntime({
   });
   const worker = createRecoveryWorker({ mode, store, tick });
   let running = false;
+  // Keep the observer bound across sequential run() calls as well as ticks.
+  // A hung observer must not accumulate another notification on every restart.
+  let observerRunning = false;
   return Object.freeze({
     service,
     runBatch: (signal) => worker.runBatch(signal),
@@ -54,6 +57,16 @@ export function createDurableRuntime({
         throw Error("RUNTIME_CONFIGURATION_INVALID");
       if (running) throw Error("RUNTIME_ALREADY_RUNNING");
       running = true;
+      const notify = (result) => {
+        if (observerRunning) return;
+        observerRunning = true;
+        void Promise.resolve()
+          .then(() => onBatch(structuredClone(result)))
+          .catch(() => {})
+          .finally(() => {
+            observerRunning = false;
+          });
+      };
       try {
         while (!signal.aborted) {
           let result;
@@ -65,7 +78,10 @@ export function createDurableRuntime({
               reason: "RECOVERY_DEPENDENCY_UNAVAILABLE",
             };
           }
-          await onBatch(result);
+          // Batch observation is non-authoritative. A broken or permanently
+          // hung metrics/logging sink cannot stop durable recovery. At most one
+          // notification remains in flight; later snapshots may be dropped.
+          notify(result);
           if (signal.aborted) break;
           await new Promise((resolve) => {
             const done = () => {
