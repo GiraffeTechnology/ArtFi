@@ -117,7 +117,7 @@ test("wallet refuses an account change after signature", async () => {
   await assert.rejects(adapter.signIntent(draft), /WALLET_ACCOUNT_CHANGED/);
 });
 
-test("wallet delegates one exact revocation and rechecks identity", async () => {
+test("wallet delegates one exact revocation and returns its recovery hash without post-send provider calls", async () => {
   const f = fixture();
   let supplied;
   const adapter = createAgentBrowserWallet({
@@ -140,7 +140,7 @@ test("wallet delegates one exact revocation and rechecks identity", async () => 
   assert.deepEqual(supplied, input);
   assert.deepEqual(
     f.calls.map(({ method }) => method),
-    ["eth_chainId", "eth_accounts", "eth_chainId", "eth_accounts"],
+    ["eth_chainId", "eth_accounts"],
   );
 });
 
@@ -200,4 +200,68 @@ test("wallet rejects a zero revocation transaction hash", async () => {
     }),
     /REVOCATION_RESULT_INVALID/,
   );
+});
+
+for (const afterSubmission of ["account-change", "disconnect"]) {
+  test(`known revocation hash survives ${afterSubmission} without a second send`, async () => {
+    let submitted = false;
+    let sends = 0;
+    let postSubmissionReads = 0;
+    const provider = {
+      async request({ method }) {
+        if (submitted) {
+          postSubmissionReads++;
+          if (afterSubmission === "disconnect") throw Error("DISCONNECTED");
+          if (method === "eth_chainId") return "0x88bb0";
+          if (method === "eth_accounts") return [executor];
+        }
+        if (method === "eth_chainId") return "0x88bb0";
+        if (method === "eth_accounts") return [wallet];
+        throw Error("UNEXPECTED_PROVIDER_METHOD");
+      },
+    };
+    const adapter = createAgentBrowserWallet({
+      provider,
+      sendRevocation: async () => {
+        sends++;
+        submitted = true;
+        return { transactionHash: txHash };
+      },
+    });
+    assert.deepEqual(
+      await adapter.revokeNonce({
+        id: bytes32,
+        wallet,
+        nonce: "1",
+        executor,
+        chainId: "560048",
+      }),
+      { transactionHash: txHash.toLowerCase() },
+    );
+    assert.equal(sends, 1);
+    assert.equal(postSubmissionReads, 0);
+  });
+}
+
+test("wrong wallet before revocation still refuses dispatch", async () => {
+  const f = fixture({ accounts: [[executor]] });
+  let sends = 0;
+  const adapter = createAgentBrowserWallet({
+    provider: f.provider,
+    sendRevocation: async () => {
+      sends++;
+      return { transactionHash: txHash };
+    },
+  });
+  await assert.rejects(
+    adapter.revokeNonce({
+      id: bytes32,
+      wallet,
+      nonce: "1",
+      executor,
+      chainId: "560048",
+    }),
+    /WALLET_ACCOUNT_REFUSED/,
+  );
+  assert.equal(sends, 0);
 });

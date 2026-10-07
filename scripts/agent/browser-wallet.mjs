@@ -144,7 +144,7 @@ export function createAgentBrowserWallet({ provider, sendRevocation }) {
         String(value.chainId) !== CHAIN_ID
       )
         fail("REVOCATION_REQUEST_INVALID");
-      const wallet = await identity(value.wallet);
+      await identity(value.wallet);
       let result;
       try {
         result = clone(
@@ -155,7 +155,11 @@ export function createAgentBrowserWallet({ provider, sendRevocation }) {
         providerFailure(error);
       }
       if (!hash(result?.transactionHash)) fail("REVOCATION_RESULT_INVALID");
-      if ((await identity()) !== wallet) fail("WALLET_ACCOUNT_CHANGED");
+      // Submission has already happened. Return the known hash immediately so
+      // the caller can journal it before any further wallet/provider operation.
+      // A later disconnect or account switch cannot erase this recovery handle.
+      // This is not confirmation: the service still verifies canonical evidence
+      // against the original operation, wallet, nonce, executor and chain.
       return { transactionHash: result.transactionHash.toLowerCase() };
     },
   });

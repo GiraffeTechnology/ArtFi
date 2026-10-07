@@ -214,6 +214,25 @@ percentage of elapsed effort, and never in person-days.
 `STATUS.md` is updated on every delivery commit. A commit that changes source without updating it
 is incomplete.
 
+### 6.2 Stage delivery — UI-visible evidence
+
+Client ruling of 2026-09-19 (`DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md` §3). §6 above defines
+when **the complete RWA market** is delivered. This subsection defines the evidence for **one
+stage** of `PRD.md` §3.2.3.
+
+A stage is delivered when, for every requirement in that stage:
+
+1. a user in the stage's intended role can carry out the function **from the ArtFi UI**;
+2. the surface has G1 human visual sign-off, desktop and mobile (§4, G1);
+3. the evidence rules of §3 are satisfied for each item.
+
+**A requirement no screen reaches is not delivered**, whatever its implementation state — a working
+endpoint, a deployed contract, a passing test or a generated client is `IMPLEMENTED-NOT-VERIFIED`,
+not a stage handover. Fixtures presented as live behaviour fail this outright (§3).
+
+This adds no gate and no status value. G1–G4 and the six values of §2 are unchanged, and items 7–10
+of §6 remain the terminus for the complete market only — **a stage does not require mainnet**.
+
 ---
 
 ## 7. Audit instructions (human or agent reviewer)
@@ -229,8 +248,19 @@ is incomplete.
 6. Fail the audit if a Class A surface regressed without approval.
 7. Fail the audit if local, mock or historical evidence is described as current runtime delivery.
 8. Fail the audit if any A01–A38 compliant preview is missing, or if the public UI exposes an
-   external-marketplace redirect, an unwatermarked master, a master download path, a private key,
-   a server credential, a raw signed transaction, a prohibited IP or internal topology.
+   unwatermarked master, a master download path, a private key, a server credential, a raw signed
+   transaction, a prohibited IP or internal topology.
+
+   > **The former "external-marketplace redirect" item is removed, not suspended.** Mirroring _is_
+   > attributed data plus an HTTPS link out to the venue (`PRD.md` §4.8 XM.4, carrying the original
+   > `MARKET-004`), and the ruling of 2026-09-19 requires ArtFi to mirror until a product line opens
+   > on ArtFi. An item that forbids the thing a requirement mandates cannot be an audit condition:
+   > this file is priority 4 in `AGENTS.md` §1 and may record a higher source, never contradict one.
+   >
+   > The removal is bounded to that one item. **Every other listed exposure still fails an audit**,
+   > and a link is only ever the one the source attributed — `market-links.ts` refuses a non-HTTPS
+   > scheme, embedded credentials and any host but the venue's, and ArtFi never constructs one.
+
 9. Fail the audit if A02 enters the formal 37-work set or any mainnet manifest.
 10. Fail the audit if tested, deployed and documented commits differ.
 11. Fail the audit if a non-mainnet-only requirement is deferred without completed test evidence.

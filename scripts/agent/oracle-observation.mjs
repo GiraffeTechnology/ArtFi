@@ -29,6 +29,7 @@ export function createOracleApiVerifier({ mode, verifyUrl, fetchImpl }) {
     try {
       response = await fetchImpl(endpoint.toString(), {
         method: "POST",
+        redirect: "error",
         headers: {
           accept: "application/json",
           "content-type": "application/json",
@@ -44,6 +45,8 @@ export function createOracleApiVerifier({ mode, verifyUrl, fetchImpl }) {
     signal?.throwIfAborted();
     if (!response || typeof response.status !== "number")
       throw Error("SOURCE_UNAVAILABLE");
+    if (response.redirected === true)
+      throw Error("ATTESTATION_VERIFICATION_FAILED");
     if (!response.ok) {
       if (response.status === 429) throw Error("SOURCE_RATE_LIMITED");
       if ([502, 503, 504].includes(response.status))
@@ -56,8 +59,10 @@ export function createOracleApiVerifier({ mode, verifyUrl, fetchImpl }) {
     try {
       result = await response.json();
     } catch {
+      signal?.throwIfAborted();
       throw Error("ATTESTATION_VERIFICATION_FAILED");
     }
+    signal?.throwIfAborted();
     if (
       typeof result?.valid !== "boolean" ||
       (result.valid === true && result.errorCode !== null) ||
@@ -208,6 +213,7 @@ export function assertOracleIdentity(value, request) {
     ) ||
     !/^0x[0-9a-fA-F]{40}$/.test(subject.contract) ||
     !/^(0|[1-9][0-9]{0,77})$/.test(subject.tokenId) ||
+    BigInt(subject.tokenId) > (1n << 256n) - 1n ||
     subject.chainId !== request?.execution?.chainId ||
     subject.contract.toLowerCase() !== request?.sale?.nft?.toLowerCase() ||
     subject.tokenId !== request?.sale?.tokenId
