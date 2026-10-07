@@ -82,6 +82,10 @@ func NewHandler() http.Handler {
 
 func newHandler(rwa *rwaService) http.Handler {
 	mux := http.NewServeMux()
+	userAuth := registerUserAuthRoutes(mux, rwa)
+	mux.HandleFunc("GET /v1/orders", rwa.getSignedOrders)
+	mux.HandleFunc("GET /v1/orders/{intentHash}", rwa.getSignedOrder)
+	mux.HandleFunc("POST /v1/indexer/signed-orders", func(w http.ResponseWriter, r *http.Request) { rwa.ingestSignedOrder(w, r, userAuth) })
 	mux.HandleFunc("GET /healthz", status("ok"))
 	mux.HandleFunc("GET /readyz", status("ready"))
 	mux.HandleFunc("GET /v1/config", func(writer http.ResponseWriter, _ *http.Request) {
@@ -112,6 +116,7 @@ func newHandler(rwa *rwaService) http.Handler {
 	mux.HandleFunc("POST /v1/vault/intents/{intentID}/submission", rwa.recordVaultSubmission)
 	mux.HandleFunc("POST /v1/indexer/events", rwa.ingestChainEvent)
 	mux.HandleFunc("POST /v1/indexer/market-events", rwa.ingestMarketEvent)
+	mux.HandleFunc("POST /v1/indexer/market-snapshots", rwa.ingestMarketSnapshot)
 	mux.HandleFunc("GET /v1/market/activity", rwa.getMarketActivity)
 	mux.HandleFunc("GET /v1/market/assets", rwa.getMarketAssets)
 	mux.HandleFunc("POST /v1/market/intents", rwa.createMarketIntent)
