@@ -41,20 +41,6 @@ const transactionHash = (value) =>
 const stable = (code) => {
   throw new Error(code);
 };
-export function oracleAttestationText(evidence) {
-  if (evidence === undefined) return "";
-  const valid = evidence?.valid === true && evidence.errorCode === null;
-  const code =
-    typeof evidence?.errorCode === "string" &&
-    /^[A-Z][A-Z0-9_]{0,63}$/.test(evidence.errorCode)
-      ? evidence.errorCode
-      : "ATTESTATION_VERIFICATION_FAILED";
-  return (
-    "Oracle attestation (last check, not current authority): " +
-    (valid ? "valid" : "rejected · " + code)
-  );
-}
-
 export function canRequestRevocation(record) {
   return record?.revocation?.state === "NOT_REQUESTED";
 }
@@ -409,17 +395,12 @@ export function mountAgentConsole(
     const authorityText = [
       authority.status,
       authority.reason,
-
       "requested block " + (authority.requestedBlockNumber ?? "UNKNOWN"),
       authority.requestedBlockHash ?? "UNKNOWN",
     ]
       .filter(Boolean)
       .join(" · ");
     values.grounding.textContent += " · mint authority: " + authorityText;
-    const oracleText = oracleAttestationText(
-      record.grounding.oracleAttestation,
-    );
-    if (oracleText) values.grounding.textContent += " · " + oracleText;
     values.execution.textContent +=
       " · last new-action preflight (not current authority): " + authorityText;
     values.recovery.textContent +=

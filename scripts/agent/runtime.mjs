@@ -1,6 +1,5 @@
 import { createDurableStore } from "./durable-store.mjs";
 import { createAgentKernel } from "./agent-kernel.mjs";
-import { createOracleObservation } from "./oracle-observation.mjs";
 import { createAgentService } from "./agent-service.mjs";
 import { createRecoveryWorker } from "./recovery-worker.mjs";
 
@@ -11,33 +10,11 @@ export function createDurableRuntime({
   storeOptions = {},
   kernelOptions,
   serviceOptions,
-  oracleAttestation,
 }) {
   const mode = "TEST_ONLY_NO_REAL_VALUE";
   const store = createDurableStore({ ...storeOptions, mode, pool });
-  if (
-    oracleAttestation !== undefined &&
-    (typeof oracleAttestation?.verifyAttestation !== "function" ||
-      Object.hasOwn(oracleAttestation, "verifyOracleAttestation") ||
-      Object.hasOwn(oracleAttestation, "attestationService"))
-  )
-    throw Error("ORACLE_RUNTIME_API_VERIFIER_REQUIRED");
-  const wrapObservation = (observe) =>
-    oracleAttestation === undefined
-      ? observe
-      : createOracleObservation({ ...oracleAttestation, mode, observe });
-  const tick = createAgentKernel({
-    ...kernelOptions,
-    observe: wrapObservation(kernelOptions.observe),
-    mode,
-    store,
-  });
-  const service = createAgentService({
-    ...serviceOptions,
-    observe: wrapObservation(serviceOptions.observe),
-    mode,
-    store,
-  });
+  const tick = createAgentKernel({ ...kernelOptions, mode, store });
+  const service = createAgentService({ ...serviceOptions, mode, store });
   const worker = createRecoveryWorker({ mode, store, tick });
   let running = false;
   return Object.freeze({
@@ -54,17 +31,6 @@ export function createDurableRuntime({
         throw Error("RUNTIME_CONFIGURATION_INVALID");
       if (running) throw Error("RUNTIME_ALREADY_RUNNING");
       running = true;
-      let observerRunning = false;
-      const notify = (result) => {
-        if (observerRunning) return;
-        observerRunning = true;
-        void Promise.resolve()
-          .then(() => onBatch(structuredClone(result)))
-          .catch(() => {})
-          .finally(() => {
-            observerRunning = false;
-          });
-      };
       try {
         while (!signal.aborted) {
           let result;
@@ -76,10 +42,7 @@ export function createDurableRuntime({
               reason: "RECOVERY_DEPENDENCY_UNAVAILABLE",
             };
           }
-          // Batch observation is non-authoritative. A broken or permanently
-          // hung metrics/logging sink cannot stop durable recovery. At most one
-          // notification remains in flight; later snapshots may be dropped.
-          notify(result);
+          await onBatch(result);
           if (signal.aborted) break;
           await new Promise((resolve) => {
             const done = () => {

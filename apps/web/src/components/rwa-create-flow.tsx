@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { parseEventLogs, type Address, type Hex } from "viem";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { type Address, type Hex } from "viem";
 import {
   useAccount,
   useChainId,
@@ -9,10 +16,25 @@ import {
   useSignMessage,
   useWriteContract,
 } from "wagmi";
-
 import { rwaRegistryAbi } from "@/lib/contracts";
+import { currentOperation } from "@/lib/current-operation";
+import { isDaoWalletRejection } from "@/lib/dao-action-state";
+import {
+  confirmMarketReceipt,
+  MarketReceiptFinalError,
+} from "@/lib/market-transaction";
+import {
+  assertMintIntent,
+  isMintRecovery,
+  mintedDaoHref,
+  prepareMint,
+  recoverMintedAsset,
+  type MintDraft,
+  type MintIntent,
+  type MintRecovery,
+} from "@/lib/rwa-mint-recovery";
+import { setupRecoverySession } from "@/lib/setup-recovery";
 import { supportedChain } from "@/lib/wagmi";
-
 import { NFTWalletImport } from "./nft-wallet-import";
 
 type FlowStatus =
@@ -24,26 +46,8 @@ type FlowStatus =
   | "confirming"
   | "confirmed"
   | "error";
-
-type MintIntent = {
-  intentId: string;
-  requestId: Hex;
-  recipient: Address;
-  registryAddress: Address;
-  chainId: number;
-  metadataUri: string;
-  metadataSha256: Hex;
-  status: string;
-};
-
 type OperatorStatus =
   "checking" | "unauthenticated" | "verifying" | "authenticated";
-
-type MintedAsset = {
-  collectionAddress: Address;
-  tokenId: string;
-};
-
 type DiscoveryResult = {
   checkId: string;
   result: "discovered" | "not-found" | "unsupported-chain";
@@ -52,7 +56,6 @@ type DiscoveryResult = {
   evidenceSha256: string;
   observedAt: string;
 };
-
 const labels: Record<FlowStatus, string> = {
   idle: "Ready for review",
   hashing: "Verifying file digest",
@@ -63,202 +66,403 @@ const labels: Record<FlowStatus, string> = {
   confirmed: "Mint confirmed on Hoodi",
   error: "Action needs attention",
 };
+const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
 export function RwaCreateFlow() {
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  return (
+    <RwaCreateForm
+      key={`${isConnected}:${chainId}:${address?.toLowerCase()}`}
+    />
+  );
+}
+
+function RwaCreateForm() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const { signMessageAsync } = useSignMessage();
-  const idempotencyKey = useRef(crypto.randomUUID());
-  const [status, setStatus] = useState<FlowStatus>("idle");
+  const session = useMemo(
+    () =>
+      setupRecoverySession<MintRecovery>(
+        `mint:${chainId}:${address?.toLowerCase() ?? "disconnected"}`,
+        (value): value is MintRecovery =>
+          isMintRecovery(value) &&
+          value.chainId === chainId &&
+          value.wallet.toLowerCase() === address?.toLowerCase(),
+      ),
+    [chainId, address],
+  );
+  const snapshot = useSyncExternalStore(
+    session.subscribe,
+    session.getSnapshot,
+    session.getServerSnapshot,
+  );
+  const active = useRef<ReturnType<typeof currentOperation> | undefined>(
+    undefined,
+  );
+  const view = useRef(currentOperation());
+  const form = useRef<HTMLFormElement>(null);
+  const authBusy = useRef(false);
+  const logBusy = useRef(false);
+  const [localStatus, setStatus] = useState<FlowStatus>("idle");
   const [message, setMessage] = useState(
     "Review every field before asking your wallet to sign.",
   );
-  const [transactionHash, setTransactionHash] = useState<Hex>();
   const [operatorStatus, setOperatorStatus] =
     useState<OperatorStatus>("checking");
   const [operatorAddress, setOperatorAddress] = useState<string>();
-  const [mintedAsset, setMintedAsset] = useState<MintedAsset>();
   const [discovery, setDiscovery] = useState<DiscoveryResult>();
   const [discoveryPending, setDiscoveryPending] = useState(false);
+  const [logging, setLogging] = useState(false);
+  const [newMint, setNewMint] = useState(false);
+  const [logMessage, setLogMessage] = useState("");
+  const data = snapshot.record?.data;
+  const pending = snapshot.record?.pending;
+  const mintedAsset = data?.minted;
+  const transactionHash = pending?.hash ?? data?.hash;
+  const status: FlowStatus = mintedAsset
+    ? "confirmed"
+    : snapshot.error
+      ? "error"
+      : pending
+        ? pending.hash
+          ? "confirming"
+          : "awaiting-wallet"
+        : localStatus;
+
+  useLayoutEffect(() => {
+    session.restore(() => sessionStorage);
+    view.current = currentOperation();
+    const screen = view.current;
+    const retire = () => active.current?.retire();
+    window.addEventListener("pagehide", retire);
+    window.addEventListener("popstate", retire);
+    return () => {
+      screen.retire();
+      retire();
+      window.removeEventListener("pagehide", retire);
+      window.removeEventListener("popstate", retire);
+    };
+  }, [session]);
 
   useEffect(() => {
     let cancelled = false;
-    const check = async () => {
+    const screen = view.current;
+    void (async () => {
       if (!address || chainId !== supportedChain.id) {
-        if (!cancelled) {
-          setOperatorAddress(undefined);
-          setOperatorStatus("unauthenticated");
-        }
+        setOperatorStatus("unauthenticated");
         return;
       }
       try {
-        const response = await fetch("/api/operator/auth/session", {
-          cache: "no-store",
-        });
-        const body = (await response.json()) as {
+        const body = await fetchJSON<{
           authenticated?: boolean;
           address?: string;
-        };
+        }>("/api/operator/auth/session", { cache: "no-store" });
+        if (cancelled || !screen.isCurrent()) return;
         const matches =
-          response.ok &&
           body.authenticated === true &&
           body.address?.toLowerCase() === address.toLowerCase();
-        if (!cancelled) {
-          setOperatorAddress(matches ? body.address : undefined);
-          setOperatorStatus(matches ? "authenticated" : "unauthenticated");
-        }
+        setOperatorAddress(matches ? body.address : undefined);
+        setOperatorStatus(matches ? "authenticated" : "unauthenticated");
       } catch {
-        if (!cancelled) {
+        if (!cancelled && screen.isCurrent()) {
           setOperatorAddress(undefined);
           setOperatorStatus("unauthenticated");
         }
       }
-    };
-    void check();
+    })();
     return () => {
       cancelled = true;
     };
   }, [address, chainId]);
 
-  const canSubmit =
+  const authorized =
     isConnected &&
     chainId === supportedChain.id &&
     operatorStatus === "authenticated" &&
-    operatorAddress?.toLowerCase() === address?.toLowerCase() &&
-    status !== "confirming" &&
-    status !== "awaiting-wallet";
-  const boundary = useMemo(() => {
-    if (!isConnected) return "Connect an external wallet to continue.";
-    if (chainId !== supportedChain.id)
-      return "Switch the wallet network to Hoodi.";
-    if (operatorStatus === "checking")
-      return "Checking the current administrator-wallet session.";
-    if (operatorStatus !== "authenticated")
-      return "Verify that this wallet currently holds REGISTRAR_ROLE on the reviewed registry contract.";
-    return "REGISTRAR_ROLE is verified on Hoodi. The browser never receives the operator API credential.";
-  }, [chainId, isConnected, operatorStatus]);
+    operatorAddress?.toLowerCase() === address?.toLowerCase();
+  const canSubmit =
+    authorized &&
+    !snapshot.busy &&
+    !snapshot.blocked &&
+    !pending &&
+    (!mintedAsset || newMint);
+  const boundary = !isConnected
+    ? "Connect an external wallet to continue."
+    : chainId !== supportedChain.id
+      ? "Switch the wallet network to Hoodi."
+      : operatorStatus === "checking"
+        ? "Checking the current administrator-wallet session."
+        : !authorized
+          ? "Verify that this wallet currently holds REGISTRAR_ROLE on the reviewed registry contract."
+          : "REGISTRAR_ROLE is verified on Hoodi. The browser never receives the operator API credential.";
+
+  function operation() {
+    active.current?.retire();
+    // A newer action owns its own indicators; retired callbacks cannot clear them later.
+    setLogging(false);
+    setDiscoveryPending(false);
+    const token = currentOperation();
+    const screen = view.current;
+    active.current = token;
+    return {
+      isCurrent: () => screen.isCurrent() && token.isCurrent(),
+      assertCurrent() {
+        screen.assertCurrent();
+        token.assertCurrent();
+      },
+    };
+  }
 
   async function verifyOperator() {
-    if (!address || chainId !== supportedChain.id) return;
+    if (!address || chainId !== supportedChain.id || authBusy.current) return;
+    authBusy.current = true;
+    const op = operation();
     try {
       setOperatorStatus("verifying");
-      setStatus("idle");
       setMessage(
         "Sign the administrator challenge. It creates no transaction and transfers no rights.",
       );
-      const challenge = await fetchJSON<{
-        address: string;
-        message: string;
-      }>("/api/operator/auth/challenge", {
-        method: "POST",
-        body: JSON.stringify({ address }),
-      });
-      if (challenge.address.toLowerCase() !== address.toLowerCase()) {
+      const challenge = await fetchJSON<{ address: string; message: string }>(
+        "/api/operator/auth/challenge",
+        { method: "POST", body: JSON.stringify({ address }) },
+      );
+      op.assertCurrent();
+      if (challenge.address.toLowerCase() !== address.toLowerCase())
         throw new Error("The administrator challenge address does not match.");
-      }
       const signature = await signMessageAsync({ message: challenge.message });
-      const session = await fetchJSON<{
+      op.assertCurrent();
+      const verified = await fetchJSON<{
         authenticated: boolean;
         address: string;
       }>("/api/operator/auth/verify", {
         method: "POST",
         body: JSON.stringify({ address, signature }),
       });
+      op.assertCurrent();
       if (
-        !session.authenticated ||
-        session.address.toLowerCase() !== address.toLowerCase()
-      ) {
+        !verified.authenticated ||
+        verified.address.toLowerCase() !== address.toLowerCase()
+      )
         throw new Error("The administrator session could not be verified.");
-      }
-      setOperatorAddress(session.address);
+      setOperatorAddress(verified.address);
       setOperatorStatus("authenticated");
       setMessage("Administrator wallet verified. Review the asset record.");
     } catch (error) {
-      setOperatorAddress(undefined);
-      setOperatorStatus("unauthenticated");
-      setStatus("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "The administrator wallet could not be verified.",
+      if (op.isCurrent()) {
+        setOperatorAddress(undefined);
+        setOperatorStatus("unauthenticated");
+        setStatus("error");
+        setMessage(errorText(error));
+      }
+    } finally {
+      authBusy.current = false;
+    }
+  }
+
+  async function deployment() {
+    return fetchJSON<{ chainId: number; registryAddress: Address }>(
+      `${apiURL}/v1/config`,
+      { cache: "no-store" },
+    );
+  }
+
+  // Logging is deliberately independent of chain confirmation. A slow/failed API cannot hide the saved hash.
+  async function logSubmission(
+    intent: MintIntent,
+    hash: Hex,
+    op: ReturnType<typeof operation>,
+    lease: number,
+  ) {
+    if (!authorized || logBusy.current || !op.isCurrent()) return;
+    logBusy.current = true;
+    setLogging(true);
+    try {
+      await fetchJSON(
+        `/api/operator/v1/rwa/intents/${intent.intentId}/submission`,
+        {
+          method: "POST",
+          body: JSON.stringify({ transactionHash: hash }),
+          signal: AbortSignal.timeout(12_000),
+        },
       );
+      if (op.isCurrent()) {
+        const latest = session.getSnapshot().record?.data;
+        if (
+          latest?.intent?.intentId === intent.intentId &&
+          latest.hash === hash
+        )
+          session.save(lease, { ...latest, loggedHash: hash });
+        setLogMessage("Transaction submission recorded by the API.");
+      }
+    } catch {
+      if (op.isCurrent())
+        setLogMessage(
+          "API submission recording is incomplete. You can retry it independently of chain confirmation.",
+        );
+    } finally {
+      logBusy.current = false;
+      if (op.isCurrent()) setLogging(false);
+    }
+  }
+
+  async function confirm(
+    lease: number,
+    saved: MintRecovery,
+    hash: Hex | undefined,
+    op: ReturnType<typeof operation>,
+  ) {
+    if (!saved.intent || !publicClient) return;
+    let confirmedHash = hash;
+    let blockNumber: bigint | undefined;
+    if (hash) {
+      const receipt = await confirmMarketReceipt(publicClient, hash, (next) =>
+        session.repriced(lease, next),
+      );
+      op.assertCurrent();
+      confirmedHash = receipt.transactionHash;
+      blockNumber = receipt.blockNumber;
+    }
+    const minted = await recoverMintedAsset(
+      publicClient,
+      saved.intent,
+      saved.wallet,
+      op.assertCurrent,
+      blockNumber,
+    );
+    op.assertCurrent();
+    session.resolved(lease, { ...saved, hash: confirmedHash, minted });
+    setStatus("confirmed");
+    setMessage(
+      "The registry commitment and NFT mint are confirmed. OpenSea discovery is a separate evidence check.",
+    );
+    if (confirmedHash)
+      await logSubmission(saved.intent, confirmedHash, op, lease);
+  }
+
+  async function retryLogging() {
+    if (!data?.intent || !data.hash) return;
+    const lease = session.begin(true);
+    if (lease === undefined) return;
+    const op = operation();
+    try {
+      await logSubmission(data.intent, data.hash, op, lease);
+    } finally {
+      session.finish(lease);
     }
   }
 
   async function submit(formData: FormData) {
     if (!address || !canSubmit || !publicClient) return;
-    const file = formData.get("image");
-    if (!(file instanceof File) || file.size === 0) {
-      setStatus("error");
-      setMessage("Choose a PNG, JPEG, or WebP image up to 10 MiB.");
-      return;
-    }
-
+    const lease = session.begin();
+    if (lease === undefined) return;
+    const op = operation();
+    let walletRequested = false;
+    let saved: MintRecovery | undefined;
     try {
-      setTransactionHash(undefined);
-      setMintedAsset(undefined);
       setDiscovery(undefined);
-      setStatus("hashing");
-      setMessage("Computing the SHA-256 commitment in this browser.");
-      const digest = await sha256Hex(await file.arrayBuffer());
-
-      setStatus("uploading");
-      setMessage(
-        "The API will reject any byte that differs from the reviewed digest.",
-      );
-      const upload = await fetchJSON<{ uploadId: string; uploadUrl: string }>(
-        "/api/operator/v1/uploads/intents",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            fileName: file.name,
-            contentType: file.type,
-            sha256: digest,
-            size: file.size,
-          }),
-        },
-      );
-      const uploadResponse = await fetch(`/api/operator${upload.uploadUrl}`, {
-        method: "PUT",
-        headers: { "Content-Type": file.type, "Content-SHA256": digest },
-        body: file,
-      });
-      if (!uploadResponse.ok) throw await responseError(uploadResponse);
-
-      setStatus("preparing");
-      setMessage(
-        "Creating content-addressed metadata and deterministic contract arguments.",
-      );
-      const intent = await fetchJSON<MintIntent>(
-        "/api/operator/v1/rwa/intents",
-        {
-          method: "POST",
-          headers: { "Idempotency-Key": idempotencyKey.current },
-          body: JSON.stringify({
-            uploadId: upload.uploadId,
-            recipient: address,
-            name: formData.get("name"),
-            artist: formData.get("artist"),
-            year: Number(formData.get("year")),
-            medium: formData.get("medium"),
-            location: formData.get("location"),
-            description: formData.get("description"),
-          }),
-        },
-      );
+      setLogMessage("");
+      setNewMint(false);
+      const selected = formData.get("image");
+      const file =
+        selected instanceof File && selected.size > 0 ? selected : undefined;
       if (
-        intent.chainId !== supportedChain.id ||
-        intent.recipient.toLowerCase() !== address.toLowerCase()
-      ) {
-        throw new Error("The API returned an unsafe chain or recipient.");
+        file &&
+        (file.size > 10 * 1024 * 1024 ||
+          !["image/png", "image/jpeg", "image/webp"].includes(file.type))
+      )
+        throw new Error("Choose a PNG, JPEG, or WebP image up to 10 MiB.");
+      const draft: MintDraft = {
+        name: String(formData.get("name") ?? ""),
+        artist: String(formData.get("artist") ?? ""),
+        year: Number(formData.get("year")),
+        medium: String(formData.get("medium") ?? ""),
+        location: String(formData.get("location") ?? ""),
+        description: String(formData.get("description") ?? ""),
+      };
+      saved = await prepareMint({
+        previous: session.getSnapshot().record?.data,
+        draft,
+        file,
+        wallet: address,
+        chainId,
+        assertCurrent: op.assertCurrent,
+        save: (value) => session.save(lease, value),
+        stage: (next) => {
+          setStatus(next);
+          setMessage(labels[next]);
+        },
+        upload: async (image, digest) => {
+          op.assertCurrent();
+          const upload = await fetchJSON<{
+            uploadId: string;
+            uploadUrl: string;
+          }>("/api/operator/v1/uploads/intents", {
+            method: "POST",
+            body: JSON.stringify({
+              fileName: image.name,
+              contentType: image.type,
+              sha256: digest,
+              size: image.size,
+            }),
+          });
+          op.assertCurrent();
+          if (!/^\/v1\/uploads\/[a-zA-Z0-9-]+$/.test(upload.uploadUrl))
+            throw new Error("The API returned an invalid upload destination.");
+          const response = await fetch(`/api/operator${upload.uploadUrl}`, {
+            method: "PUT",
+            headers: { "Content-Type": image.type, "Content-SHA256": digest },
+            body: image,
+          });
+          op.assertCurrent();
+          if (!response.ok) throw await responseError(response);
+          return upload.uploadId;
+        },
+        prepare: async (value) => {
+          const config = await deployment();
+          op.assertCurrent();
+          const intent = await fetchJSON<MintIntent>(
+            "/api/operator/v1/rwa/intents",
+            {
+              method: "POST",
+              headers: { "Idempotency-Key": value.idempotencyKey },
+              body: JSON.stringify({
+                uploadId: value.uploadId,
+                recipient: address,
+                ...value.draft,
+              }),
+            },
+          );
+          op.assertCurrent();
+          assertMintIntent(intent, address, config);
+          return intent;
+        },
+      });
+      op.assertCurrent();
+      const config = await deployment();
+      op.assertCurrent();
+      assertMintIntent(saved.intent, address, config);
+      const intent = await fetchJSON<MintIntent>(
+        `/api/operator/v1/rwa/intents/${saved.intent.intentId}`,
+        { cache: "no-store" },
+      );
+      op.assertCurrent();
+      assertMintIntent(intent, address, config, saved.intent);
+      session.awaitWallet(lease, "mint");
+      if (intent.transactionHash) {
+        session.broadcast(lease, intent.transactionHash);
+        await confirm(lease, saved, intent.transactionHash, op);
+        return;
       }
-
       setStatus("awaiting-wallet");
       setMessage(
         `Confirm one call to ${shortAddress(intent.registryAddress)}. No ETH value or approval is requested.`,
       );
+      op.assertCurrent();
+      walletRequested = true;
       const hash = await writeContractAsync({
         abi: rwaRegistryAbi,
         address: intent.registryAddress,
@@ -271,70 +475,90 @@ export function RwaCreateFlow() {
           intent.metadataSha256,
         ],
       });
-      setTransactionHash(hash);
-      await fetchJSON(
-        `/api/operator/v1/rwa/intents/${intent.intentId}/submission`,
-        {
-          method: "POST",
-          body: JSON.stringify({ transactionHash: hash }),
-        },
-      );
-
+      // A late wallet result is still the original operation's public evidence.
+      session.broadcast(lease, hash);
+      op.assertCurrent();
+      saved = { ...saved, hash };
+      session.save(lease, saved);
       setStatus("confirming");
       setMessage(
-        "The wallet submitted the transaction. Waiting for one Hoodi confirmation.",
+        "The wallet submitted the transaction. Waiting for Hoodi confirmation.",
       );
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1,
-      });
-      if (receipt.status !== "success")
-        throw new Error("The Hoodi transaction reverted.");
-
-      const createdEvents = parseEventLogs({
-        abi: rwaRegistryAbi,
-        eventName: "AssetCreated",
-        logs: receipt.logs.filter(
-          (log) =>
-            log.address.toLowerCase() === intent.registryAddress.toLowerCase(),
-        ),
-        strict: true,
-      });
-      const created = createdEvents.find(
-        (event) =>
-          event.args.requestId.toLowerCase() ===
-            intent.requestId.toLowerCase() &&
-          event.args.recipient.toLowerCase() === address.toLowerCase(),
-      );
-      if (!created)
-        throw new Error("The confirmed asset event is missing or mismatched.");
-      const collectionAddress = await publicClient.readContract({
-        abi: rwaRegistryAbi,
-        address: intent.registryAddress,
-        functionName: "nft",
-      });
-      setMintedAsset({
-        collectionAddress,
-        tokenId: created.args.tokenId.toString(),
-      });
-
-      setStatus("confirmed");
-      setMessage(
-        "The registry commitment and NFT mint are confirmed. OpenSea discovery is a separate evidence check.",
-      );
-      idempotencyKey.current = crypto.randomUUID();
+      await confirm(lease, saved, hash, op);
     } catch (error) {
-      setStatus("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "The mint flow could not be completed.",
-      );
+      if (walletRequested && isDaoWalletRejection(error))
+        session.rejected(lease);
+      if (op.isCurrent()) {
+        if (error instanceof MarketReceiptFinalError && saved)
+          session.resolved(lease, {
+            ...saved,
+            lastFailedHash:
+              session.getSnapshot().record?.pending?.hash ?? saved.hash,
+            intent: undefined,
+            hash: undefined,
+            idempotencyKey: crypto.randomUUID(),
+          });
+        session.fail(lease, error);
+        setStatus("error");
+        setMessage(errorText(error));
+      }
+    } finally {
+      session.finish(lease);
+    }
+  }
+
+  async function checkTransaction() {
+    if (!address || chainId !== supportedChain.id || !publicClient) return;
+    const lease = session.begin(true);
+    if (lease === undefined) return;
+    const op = operation();
+    const saved = session.getSnapshot().record?.data;
+    try {
+      if (!saved?.intent) throw new Error("The saved mint intent is missing.");
+      const reviewed = {
+        chainId: saved.chainId,
+        registryAddress: saved.intent.registryAddress,
+      };
+      assertMintIntent(saved.intent, address, reviewed);
+      let hash = session.getSnapshot().record?.pending?.hash ?? saved.hash;
+      if (!hash) {
+        // Intent lookup is optional evidence; an API outage must not suppress independent chain recovery.
+        const intent = await fetchJSON<MintIntent>(
+          `/api/operator/v1/rwa/intents/${saved.intent.intentId}`,
+          { cache: "no-store", signal: AbortSignal.timeout(8_000) },
+        ).catch(() => undefined);
+        op.assertCurrent();
+        if (intent) {
+          assertMintIntent(intent, address, reviewed, saved.intent);
+          hash = intent.transactionHash;
+          if (hash) session.broadcast(lease, hash);
+        }
+      }
+      op.assertCurrent();
+      await confirm(lease, saved, hash, op);
+    } catch (error) {
+      if (op.isCurrent()) {
+        if (error instanceof MarketReceiptFinalError && saved)
+          session.resolved(lease, {
+            ...saved,
+            lastFailedHash:
+              session.getSnapshot().record?.pending?.hash ?? saved.hash,
+            intent: undefined,
+            hash: undefined,
+            idempotencyKey: crypto.randomUUID(),
+          });
+        session.fail(lease, error);
+        setStatus("error");
+        setMessage(errorText(error));
+      }
+    } finally {
+      session.finish(lease);
     }
   }
 
   async function checkDiscovery() {
-    if (!mintedAsset || operatorStatus !== "authenticated") return;
+    if (!mintedAsset || !authorized || discoveryPending) return;
+    const op = operation();
     try {
       setDiscoveryPending(true);
       const result = await fetchJSON<DiscoveryResult>(
@@ -349,16 +573,12 @@ export function RwaCreateFlow() {
           }),
         },
       );
+      op.assertCurrent();
       setDiscovery(result);
     } catch (error) {
-      setStatus("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "OpenSea discovery could not be checked.",
-      );
+      if (op.isCurrent()) setMessage(errorText(error));
     } finally {
-      setDiscoveryPending(false);
+      if (op.isCurrent()) setDiscoveryPending(false);
     }
   }
 
@@ -366,6 +586,16 @@ export function RwaCreateFlow() {
     <div className="create-layout">
       <form
         className="rwa-form"
+        ref={form}
+        onChange={() => {
+          active.current?.retire();
+          setLogging(false);
+          setDiscoveryPending(false);
+          setStatus("idle");
+          setMessage(
+            "Review the changed asset record before preparing a new mint.",
+          );
+        }}
         onSubmit={(event) => {
           event.preventDefault();
           void submit(new FormData(event.currentTarget));
@@ -376,15 +606,28 @@ export function RwaCreateFlow() {
           <div className="field-grid">
             <label>
               Work title
-              <input name="name" minLength={2} maxLength={120} required />
+              <input
+                defaultValue={data?.draft.name}
+                name="name"
+                minLength={2}
+                maxLength={120}
+                required
+              />
             </label>
             <label>
               Artist or maker
-              <input name="artist" minLength={2} maxLength={120} required />
+              <input
+                defaultValue={data?.draft.artist}
+                name="artist"
+                minLength={2}
+                maxLength={120}
+                required
+              />
             </label>
             <label>
               Year
               <input
+                defaultValue={data?.draft.year}
                 name="year"
                 type="number"
                 min="1000"
@@ -394,15 +637,28 @@ export function RwaCreateFlow() {
             </label>
             <label>
               Medium
-              <input name="medium" minLength={2} maxLength={160} required />
+              <input
+                defaultValue={data?.draft.medium}
+                name="medium"
+                minLength={2}
+                maxLength={160}
+                required
+              />
             </label>
             <label className="field-span">
               Location
-              <input name="location" minLength={2} maxLength={160} required />
+              <input
+                defaultValue={data?.draft.location}
+                name="location"
+                minLength={2}
+                maxLength={160}
+                required
+              />
             </label>
             <label className="field-span">
               Description
               <textarea
+                defaultValue={data?.draft.description}
                 name="description"
                 minLength={20}
                 maxLength={2000}
@@ -416,7 +672,7 @@ export function RwaCreateFlow() {
                 name="image"
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
-                required
+                required={!data?.uploadId}
               />
               <small>
                 Maximum 10 MiB. The browser and API independently verify
@@ -454,6 +710,34 @@ export function RwaCreateFlow() {
         >
           Review and mint on Hoodi
         </button>
+        {mintedAsset && !newMint ? (
+          <button
+            className="secondary"
+            type="button"
+            disabled={!authorized || snapshot.busy}
+            onClick={() => {
+              setNewMint(true);
+              setMessage(
+                "Review a new asset record before asking the wallet to mint again.",
+              );
+            }}
+          >
+            Prepare another mint
+          </button>
+        ) : null}
+        {data?.intent && !mintedAsset && !pending ? (
+          <button
+            className="secondary"
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => {
+              if (form.current?.reportValidity())
+                void submit(new FormData(form.current));
+            }}
+          >
+            Retry prepared mint
+          </button>
+        ) : null}
       </form>
 
       <aside
@@ -462,7 +746,33 @@ export function RwaCreateFlow() {
       >
         <p className="eyebrow">Transaction lifecycle</p>
         <h2>{labels[status]}</h2>
-        <p>{message}</p>
+        <p>{snapshot.error || message}</p>
+        {pending ? (
+          <button
+            className="secondary"
+            type="button"
+            disabled={
+              !isConnected || chainId !== supportedChain.id || snapshot.busy
+            }
+            onClick={() => void checkTransaction()}
+          >
+            Check mint transaction
+          </button>
+        ) : null}
+        {mintedAsset &&
+        data?.intent &&
+        transactionHash &&
+        data.loggedHash !== transactionHash ? (
+          <button
+            className="secondary"
+            type="button"
+            disabled={!authorized || logging || snapshot.busy}
+            onClick={() => void retryLogging()}
+          >
+            {logging ? "Recording submission…" : "Retry submission record"}
+          </button>
+        ) : null}
+        {logMessage ? <p>{logMessage}</p> : null}
         <ol>
           <li>Hash and validate upload</li>
           <li>Persist immutable metadata</li>
@@ -498,7 +808,7 @@ export function RwaCreateFlow() {
               <button
                 className="secondary"
                 type="button"
-                disabled={discoveryPending}
+                disabled={discoveryPending || snapshot.busy}
                 onClick={() => void checkDiscovery()}
               >
                 {discoveryPending
@@ -515,16 +825,12 @@ export function RwaCreateFlow() {
                 </span>
               ) : null}
               {discovery?.discovered && discovery.marketplaceUrl ? (
-                <a
-                  className="text-link"
-                  href={discovery.marketplaceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Verify discovered NFT on OpenSea ↗
-                </a>
+                <details className="market-source-reference">
+                  <summary>OpenSea discovery source</summary>
+                  <p data-no-translate>{discovery.marketplaceUrl}</p>
+                </details>
               ) : null}
-              <a className="text-link" href="/dao">
+              <a className="text-link" href={mintedDaoHref(mintedAsset)}>
                 Continue to Vault and DAO verification →
               </a>
             </div>
@@ -535,11 +841,10 @@ export function RwaCreateFlow() {
   );
 }
 
-async function sha256Hex(value: ArrayBuffer) {
-  const digest = await crypto.subtle.digest("SHA-256", value);
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+function errorText(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "The mint flow could not be completed.";
 }
 
 async function fetchJSON<T>(path: string, init: RequestInit): Promise<T> {
@@ -550,7 +855,6 @@ async function fetchJSON<T>(path: string, init: RequestInit): Promise<T> {
   if (!response.ok) throw await responseError(response);
   return (await response.json()) as T;
 }
-
 async function responseError(response: Response) {
   const fallback = `Request failed with status ${response.status}.`;
   try {
@@ -560,7 +864,6 @@ async function responseError(response: Response) {
     return new Error(fallback);
   }
 }
-
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }

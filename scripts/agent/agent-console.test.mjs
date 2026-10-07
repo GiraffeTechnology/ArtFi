@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import {
   canRequestRevocation,
   normalizeRevocationHash,
-  oracleAttestationText,
   validateRevocationResult,
 } from "./agent-console.mjs";
 
@@ -58,38 +57,4 @@ test("revocation result binds the operation and only accepts durable states", ()
       () => validateRevocationResult(result, "operation-1"),
       /REVOCATION_RESULT_INVALID/,
     );
-});
-
-for (const errorCode of [
-  "NOT_CURRENT",
-  "REVOKED",
-  "SOURCE_TIMEOUT",
-  "SOURCE_CIRCUIT_OPEN",
-  "SOURCE_RATE_LIMITED",
-]) {
-  test(`console exposes persisted ${errorCode} as a historical rejection`, () => {
-    assert.equal(
-      oracleAttestationText({ valid: false, errorCode }),
-      "Oracle attestation (last check, not current authority): rejected · " +
-        errorCode,
-    );
-  });
-}
-test("console distinguishes valid history, absent optional evidence, and malformed evidence", () => {
-  assert.equal(oracleAttestationText(), "");
-  assert.match(
-    oracleAttestationText({ valid: true, errorCode: null }),
-    /not current authority\): valid$/,
-  );
-  for (const evidence of [
-    null,
-    { valid: true },
-    { valid: "true", errorCode: null },
-    { valid: false, errorCode: "<script>private details</script>" },
-  ]) {
-    assert.match(
-      oracleAttestationText(evidence),
-      /rejected · ATTESTATION_VERIFICATION_FAILED$/,
-    );
-  }
 });

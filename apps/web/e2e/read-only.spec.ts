@@ -2,16 +2,22 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 const journeys = [
-  ["/", "Art, provenance, and transparent ownership."],
+  ["/", "Three ways to participate in art."],
+  ["/nft", "Digital art, independently collected."],
+  ["/rwa", "One artwork. Its receipt. Its record."],
   ["/projects", "Context assembled before assets move."],
   ["/projects/material-memory", "Material Memory"],
   ["/market/rwa", "Live market signals."],
+  ["/market/activity", "The mirrored history."],
   ["/market/rwa/blue-hour-archive", "Blue Hour Archive"],
-  ["/market/fractionals", "Understand the position before the transaction."],
+  ["/market/fractionals", "Fractional trading & DAO."],
   ["/market/fractionals/blue-hour-archive", "Blue Hour Archive"],
-  ["/portfolio", "Your public portfolio."],
+  ["/portfolio", "Your wallet portfolio."],
   ["/dao", "The holders govern the corresponding physical asset."],
   ["/create/rwa", "Mint, verify, and route the token."],
+  ["/charity", "Charity editions."],
+  ["/charity/1", "Edition 1."],
+  ["/operations", "Dependency status."],
 ] as const;
 
 for (const [path, heading] of journeys) {
@@ -23,7 +29,9 @@ for (const [path, heading] of journeys) {
       page.getByRole("heading", { level: 1, name: heading }),
     ).toBeVisible();
     await expect(
-      page.getByText("External market information mirror only"),
+      page.getByText(
+        "No real assets or real money · Wallet-confirmed writes where configured",
+      ),
     ).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
     expect(
@@ -39,7 +47,9 @@ test("wallet entry point never implies a transaction", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Connect wallet" }).first(),
   ).toBeVisible();
-  await expect(page.getByText("No signature is requested.")).toBeVisible();
+  await expect(
+    page.getByText("Connecting a wallet is not sign-in.", { exact: false }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /buy|mint|bid|claim/i }),
   ).toHaveCount(0);
@@ -242,7 +252,14 @@ test("market mirror exposes functional search, filters and sort controls", async
   await expect(page.getByLabel("Listing status")).toHaveValue("all");
   await expect(page.getByLabel("Sort")).toHaveValue("newest");
   await expect(page.getByText("OpenSea information mirror only")).toBeVisible();
-  await expect(page.locator('a[href*="opensea" i]')).toHaveCount(0);
+  await expect(
+    page.getByRole("main").locator('a[href*="opensea" i]'),
+  ).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("contentinfo")
+      .getByRole("link", { name: "OpenSea website" }),
+  ).toHaveAttribute("href", "https://opensea.io/");
   await expect(
     page.getByRole("button", {
       name: /prepare external purchase|connect wallet to trade|confirm in external wallet/i,
@@ -271,6 +288,9 @@ test("production health endpoint reports the enforced operating mode", async ({
   expect(response.ok()).toBe(true);
   await expect(response.json()).resolves.toEqual({
     chainId: 560048,
+    buildRevision: /^[a-f0-9]{40}$/.test(process.env.ARTFI_BUILD_SHA ?? "")
+      ? process.env.ARTFI_BUILD_SHA
+      : null,
     marketplaceMode: "external-mirror",
     service: "artfi-web",
     status: "ok",

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -22,26 +23,29 @@ func (service *rwaService) attachPersistence(dsn string) {
 	if dsn == "" {
 		return
 	}
-	db, err := sql.Open("mysql", dsn)
+	options, err := persistencePoolOptionsFromEnv(os.Getenv)
 	if err != nil {
-		slog.Error("open persistence", "error", err)
+		slog.Error("persistence unavailable", "stage", "configuration", "code", "DB_POOL_CONFIGURATION_REFUSED")
 		return
 	}
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		slog.Error("persistence unavailable", "stage", "open", "code", "DB_OPEN_FAILED")
+		return
+	}
+	options.apply(db)
+	ctx, cancel := context.WithTimeout(context.Background(), options.connectTimeout)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
-		slog.Error("ping persistence", "error", err)
+		slog.Error("persistence unavailable", "stage", "ping", "code", "DB_PING_FAILED")
 		return
 	}
 	service.db = db
 	if err := service.hydratePersistence(ctx); err != nil {
 		service.db = nil
 		_ = db.Close()
-		slog.Error("hydrate persistence", "error", err)
+		slog.Error("persistence unavailable", "stage", "hydrate", "code", "DB_HYDRATE_FAILED")
 	}
 }
 
