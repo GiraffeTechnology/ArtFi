@@ -95,12 +95,18 @@ jobs:
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000006_dao_rwa_governance.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000007_external_trade_orchestration.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000008_hoodi_test_chain.up.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000009_native_signed_orders.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000010_wallet_user_sessions.up.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "31"
       - name: MySQL restart, replay, conflict, reorg, and projection tests
         working-directory: apps/api
         env:
           ARTFI_INTEGRATION_MYSQL_DSN: root:local-root-only@tcp(127.0.0.1:3306)/artfi?parseTime=true
-        run: go test ./...
+        run: go test -v ./...
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000010_wallet_user_sessions.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "28"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000009_native_signed_orders.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000008_hoodi_test_chain.down.sql
       - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000007_external_trade_orchestration.down.sql
@@ -135,3 +141,63 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
       - run: pnpm test:e2e
+
+  market-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:market
+
+  oracle-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:oracle
+
+  session-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.26.5
+          cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
+      - run: docker compose -p artfi-session-e2e up -d --wait mysql
+      - name: Apply disposable session and order migrations
+        run: |
+          for migration in apps/api/migrations/0000{01..10}_*.up.sql; do
+            docker compose -p artfi-session-e2e exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < "$migration"
+          done
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:session
+      - if: always()
+        run: docker compose -p artfi-session-e2e down -v

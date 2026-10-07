@@ -253,11 +253,6 @@ export function createAgentKernel({
           observe(structuredClone(persisted), signal),
         );
         checkLease(record);
-        if (Object.hasOwn(observation, "oracleAttestation"))
-          await save({
-            state: "PREPARED",
-            oracleAttestation: structuredClone(observation.oracleAttestation),
-          });
         await refreshLease();
         const decision = await bounded("AUTHORIZE", (signal) =>
           authorize(

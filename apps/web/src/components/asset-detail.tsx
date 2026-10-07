@@ -3,6 +3,10 @@ import Link from "next/link";
 import { formatUsd, type Artwork } from "@/lib/catalog";
 
 import { ArtworkVisual } from "./artwork-visual";
+import { AssetHolderAuthority } from "./asset-holder-authority";
+import { FractionListing } from "./fraction-listing";
+import { PrototypeDataNotice } from "./prototype-data-notice";
+import { WholeArtworkListing } from "./whole-artwork-listing";
 
 export function AssetDetail({
   artwork,
@@ -15,12 +19,13 @@ export function AssetDetail({
   return (
     <main className="page-shell page-main">
       <nav className="breadcrumb" aria-label="Breadcrumb">
-        <Link href={fractional ? "/market/fractionals" : "/market/rwa"}>
-          {fractional ? "Fractionals" : "RWA market"}
+        <Link href={fractional ? "/market/fractionals" : "/rwa"}>
+          {fractional ? "Fractions & DAO" : "Whole-artwork RWA"}
         </Link>
         <span aria-hidden="true">/</span>
         <span>{artwork.title}</span>
       </nav>
+      <PrototypeDataNotice />
       <section className="asset-hero">
         <ArtworkVisual accent={artwork.accent} label={artwork.title} />
         <div className="asset-summary">
@@ -53,16 +58,16 @@ export function AssetDetail({
               </dd>
             </div>
           </dl>
-          <div className="disabled-action" role="note">
-            <strong>
-              {fractional
-                ? "Trading unlocks in Stage 4"
-                : "Minting unlocks in Stage 2"}
-            </strong>
-            <span>
-              This read-only release never requests a transaction or signature.
-            </span>
-          </div>
+          {fractional && (
+            <div className="disabled-action" role="note">
+              <strong>These figures are fixture data</strong>
+              <span>
+                The available percentage, the reference price and the fraction
+                count come from `lib/catalog.ts` and describe no deployed token.
+                Settlement below reads its state from chain.
+              </span>
+            </div>
+          )}
         </div>
       </section>
       <section className="record-grid">
@@ -74,9 +79,7 @@ export function AssetDetail({
               <li key={record}>
                 <span>{String(index + 1).padStart(2, "0")}</span>
                 <strong>{record}</strong>
-                <small>
-                  Fixture record · pending Stage 2 immutable reference
-                </small>
+                <small>Fixture record · no immutable reference behind it</small>
               </li>
             ))}
           </ol>
@@ -104,6 +107,12 @@ export function AssetDetail({
           </dl>
         </aside>
       </section>
+      {fractional ? (
+        <FractionListing slug={artwork.slug} />
+      ) : (
+        <WholeArtworkListing slug={artwork.slug} />
+      )}
+      {!fractional && <AssetHolderAuthority slug={artwork.slug} />}
     </main>
   );
 }

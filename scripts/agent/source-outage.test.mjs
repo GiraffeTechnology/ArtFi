@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createAgentService } from "./agent-service.mjs";
-import { createOracleObservation } from "./oracle-observation.mjs";
 const address = "0x" + "ab".repeat(20),
   hash = "0x" + "12".repeat(32),
   mixedCaseRevocationHash = "0x" + "aB".repeat(32);
@@ -60,22 +59,7 @@ test("source throw/unavailable/stale preserves owned durable read and independen
       policy,
       clock: () => 1000,
       sourceObservationTimeoutMs: 20,
-      observe: createOracleObservation({
-        mode: "TEST_ONLY_NO_REAL_VALUE",
-        observe,
-        resolveRequiredAttestation: async () => ({
-          attestation: { envelope: { attestationId: "fixture-attestation-1" } },
-          expectedSubject: {
-            assetId: "fixture",
-            chainId: "560048",
-            contract: address,
-            tokenId: "1",
-            purpose: "fixture-required-flow",
-          },
-        }),
-        attestationService: { verify() {} },
-        verifyOracleAttestation: async () => ({ valid: true, errorCode: null }),
-      }),
+      observe,
       planFor: async () => {
         throw Error("UNUSED");
       },

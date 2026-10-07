@@ -369,9 +369,6 @@ export function createAgentService({
         fresh: observation.available === true && observation.current === true,
         observedAt: observation.observedAt,
         grounding: {
-          ...(row.oracleAttestation
-            ? { oracleAttestation: structuredClone(row.oracleAttestation) }
-            : {}),
           state:
             observation.assetRestricted === true
               ? "RESTRICTED"

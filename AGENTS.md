@@ -1,212 +1,273 @@
-# ArtFi agent instructions
-
-Read this before touching the repository. This file defines the execution boundary for every coding, review, PM, audit, or AI agent working on ArtFi.
-
-## 0. P0 governance rule
-
-**Issue #110 — `[GOVERNING][NO COMMENTS] ArtFi Product Baseline — #84 plus the 2026-09-18 rulings` — is the sole product baseline.**
-
-#110 **incorporates #84 by reference and does not replace it.** #84 remains the text for Stage 1 / Stage 2 architecture, A1–A10, the A0–A6 gates, the authority model, key safety and partner neutrality. #110 adds what #84 does not cover — product positioning, the charity NFT module, external-marketplace mirroring, and the delivery standard — and where the two differ, #110 controls. **Cite #110, not #84.** #84 stays locked and unedited as the historical record.
-
-No agent may create, infer, extend, reinterpret, or write back a product requirement that cannot be traced to #110 or to an explicit later client ruling.
-
-This applies equally to Codex, Claude Code, reviewers, automation, and human contributors acting through an agent.
-
-An agent may:
-
-- implement an existing requirement;
-- verify implementation against an existing requirement;
-- report a gap, defect, conflict, risk, or missing decision;
-- propose an option in a separate non-governing issue for client decision.
-
-An agent may **not**:
-
-- add a gate, status value, delivery condition, acceptance obligation, architecture requirement, product principle, scope item, dependency, or client obligation on its own authority;
-- convert an observation, recommendation, risk, or interpretation into a requirement;
-- amend #110 through comments, another document, a commit message, `ACCEPTANCE.md`, `STATUS.md`, or an issue;
-- make its own proposed rule authoritative by writing it into a governance or acceptance document;
-- block implementation on a condition that is not traceable to #110 or an explicit client ruling.
-
-**If no trace exists, it is not a requirement. Report it; do not legislate it.**
-
----
-
-## 1. Authority order
-
-Use the following authority order. Lower levels may explain or record higher levels; they may never expand them.
-
-| Priority | Source                                                                   | Role                                                                                                          |
-| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| 1        | **Issue #110** (incorporates #84)                                        | Sole product baseline: what ArtFi is and what must be built                                                   |
-| 2        | **Explicit later client rulings**                                        | Authorized amendments or decisions; must identify the client ruling and must not be invented by an agent      |
-| 3        | `AGENTS.md`                                                              | Execution and agent-control rules                                                                             |
-| 4        | `docs/ACCEPTANCE.md`                                                     | Evidence and promotion process only                                                                           |
-| 5        | `docs/STATUS.md`                                                         | Evidence snapshot only; it records state and creates no requirement                                           |
-| 6        | legacy PRDs, roadmaps, directives, issues, comments, and commit messages | Historical/reference material only unless #110 or an explicit client ruling incorporates a specific provision |
-
-**No issue number other than #110, and #84 through it, is automatically governing merely because an older document or comment calls it governing.** Temporary cleanup issues, audit issues, and historical PM issues are execution records only.
-
-`docs/PRD.md` is **not an independent authority**. #110 preserves the required Stage 1 substrate; legacy Stage 1 detail may be used only to the extent that it is incorporated by #110 and does not conflict with #110 or a later client ruling.
-
-If two sources conflict, use the higher source. Do not reconcile a conflict by inventing a third rule.
-
-### 1.1 Product invariants
-
-Client ruling of 2026-09-18, recorded in
-[`docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md`](docs/DIRECTIVE_2026-09-18_PRODUCT_ALIGNMENT.md).
-Priority 2 in the table above. These rules preserve the commercial product design; they are cited,
-not invented, and they create no new delivery obligation.
-
-1. **ArtFi is a commercial platform.** It must not be treated as an ERC-8415 demo application.
-2. **Supported product models** are artwork receipt assets, artwork investment funds, and charity NFT editions.
-3. **ERC-8415 boundary.** ERC-8415 applies to asset identity, registry synchronization, ownership-related workflows, and asset lifecycle management.
-4. **Charity NFT boundary.** Charity NFT is an independent product line and must not be forced into the ERC-8415 asset model.
-5. **Governance boundary.** DAO governance follows the underlying product structure. Economic participation and governance authority must be explicitly defined by the corresponding asset model. Token possession alone does not define governance rights.
-
----
-
-## 2. Mandatory traceability
-
-Every change that claims to satisfy product scope must cite one of:
-
-1. a specific section of #110; or
-2. an explicit later client ruling.
-
-Every audit finding must separately identify:
-
-- **baseline:** the #110 section or client ruling;
-- **evidence:** file path, test, CI run, transaction/receipt, or observed runtime behaviour;
-- **finding:** what does not match.
-
-If the baseline field cannot be filled, the finding may be recorded as a recommendation or question, but **must not become a blocker or requirement**.
-
----
-
-## 3. Governance contamination rule
-
-The repository contains historical AI-authored requirements that exceeded the agent's authority. Issues #91 and #92 identify known examples.
-
-During cleanup:
-
-- remove or freeze requirements, gates, states, delivery obligations, and derived blockers that have no valid trace to #110 or an explicit client ruling;
-- preserve valid client rulings even where an agent previously over-expanded them;
-- preserve useful implemented code, tests, security fixes, and infrastructure when they remain compatible with #110;
-- do not roll back working implementation merely because Claude Code or another AI contributed it;
-- do not keep an invalid requirement merely because implementation effort has already been spent on it;
-- do not create replacement requirements while deleting invalid ones.
-
-**Governance rollback is not code rollback. Provenance alone is never a reason to delete useful code.**
-
-Where useful existing code is not currently required for the active delivery stage but is compatible with #110, freeze it in place rather than expanding current scope around it. Delete code only when it is demonstrably harmful, contradictory, dead, security-sensitive, or creates an active maintenance/behavioural conflict.
-
----
-
-## 4. Staged delivery — anti-black-hole rule
-
-ArtFi is delivered in bounded stages. The project must not remain in an indefinitely expanding pre-delivery state.
-
-For each active stage:
-
-1. define a finite deliverable set traced to #110;
-2. freeze that stage's scope before implementation begins;
-3. finish, test, integrate, and demonstrate that set;
-4. record remaining valid requirements as later-stage work;
-5. do not pull later-stage work forward unless it is a true technical prerequisite for the active stage;
-6. do not add new requirements during implementation without an explicit client ruling.
-
-A later-stage missing feature is **not** a blocker for the current stage unless the current stage cannot function without it.
-
-The default priority is:
-
-```text
-finish useful existing work
-→ close the current bounded stage
-→ demonstrate it
-→ only then open the next stage
-```
-
-Not:
-
-```text
-find more requirements
-→ enlarge the gate
-→ redesign the stage
-→ defer delivery
-→ repeat
-```
-
-No audit, review, refactor, architecture exercise, or governance activity may indefinitely displace delivery of a bounded working slice.
-
----
-
-## 5. Standing engineering rules
-
-**Evidence.** Self-assessment is not delivery evidence. Every delivery claim cites a file path, test name, CI run, or transaction hash with receipt as applicable.
-
-**Status.** `docs/STATUS.md` records evidence and current state. It does not create scope. Status vocabulary must not be expanded by an agent.
-
-**One reviewable change per pull request.** Prefer bounded, reviewable PRs with green CI. Avoid broad speculative rewrites.
-
-**Fixtures are not live product data.** Never present mock/static data as live behaviour.
-
-**Do not rebuild valid working surfaces without a product reason.** Preserve useful existing implementation and improve only where #110 or a verified defect requires it.
-
-**Blockers must be real.** A blocker must identify the exact active-stage requirement it prevents and the evidence for the dependency. Unsupported or later-stage work is not a blocker.
-
-**Questions do not block by default.** If #110 leaves something unspecified, choose the least-expansive reversible implementation that preserves #110, or raise a separate question. Do not freeze delivery by inventing an approval dependency.
-
----
-
-## 6. Hard boundaries
-
-- No private keys, seed phrases, credentials, database dumps, or raw signed transactions in Web, API, MySQL, servers, GitHub, CI, or logs.
-- No mainnet, real assets, or real-money operation without separate written approval.
-- The current test chain is Hoodi `560048`; it does not determine the production chain.
-- Historical mint evidence must remain immutable.
-- Test assets must remain clearly isolated from production/real-asset records.
-- External partner identities in governing product material must use the neutral placeholder policy already stated in #110.
-- LLM output is advisory; transaction authority must come from deterministic policy and valid authority as defined by #110.
-- An operational agent must never infer higher authority from lower authority.
-
----
-
-## 7. Cleanup protocol
-
-When performing a repository-wide cleanup, classify every disputed item into exactly one of four buckets:
-
-### KEEP
-
-Implemented and useful, compatible with #110. Preserve it and its valid tests/evidence.
-
-### FINISH-NOW
-
-Valid #110 requirement needed for the currently declared delivery stage and sufficiently close to completion. Finish it within the bounded stage.
-
-### FREEZE-LATER
-
-Valid under #110 but not required for the current stage. Keep existing useful work, stop expansion, and move it to a later-stage backlog.
-
-### REMOVE
-
-No valid trace to #110/client ruling, or actively harmful/contradictory/dead. Remove the invalid governance requirement or, where justified, the conflicting implementation.
-
-Every REMOVE decision must state what valid source, if any, replaces it. `No replacement — agent-authored scope expansion` is acceptable.
-
-Do not use cleanup to generate a fifth bucket of newly invented work.
-
----
-
-## 8. Before handoff
-
-Before declaring a stage or cleanup batch complete, confirm:
-
-- all changed product behaviour traces to #110 or an explicit later client ruling;
-- no new agent-authored requirement, gate, status, or delivery condition was introduced;
-- useful compatible implementation was preserved;
-- current-stage scope is finite and written down;
-- later-stage items are frozen rather than allowed to block current delivery;
-- tests and CI for the changed area are green;
-- `docs/STATUS.md` records evidence only and does not expand scope;
-- any unresolved question is clearly marked non-governing and non-blocking unless the client explicitly ruled otherwise.
-
-**Primary operating principle: deliver bounded working stages; do not turn ArtFi into an endless governance project.**
+# ArtFi Agent Instructions
+
+Read this file before changing ArtFi. These rules apply to implementation, review, audit,
+automation, and project coordination. Complete the client's bounded working product; do not
+replace delivery with expanding requirements or repeated governance work.
+
+## 0. Product authority
+
+[Issue #110](https://github.com/GiraffeTechnology/ArtFi/issues/110) is the inherited product
+baseline and incorporates [Issue #84](https://github.com/GiraffeTechnology/ArtFi/issues/84).
+Explicit later client instructions amend the affected provisions and control a conflict.
+Unchanged incorporated requirements remain binding.
+
+The 2026-10-02 client clarification and delivery task define the three sections in this order:
+
+1. Digital NFTs without physical-asset backing, linked to CCHS at `https://cchsc.ca`, with
+   OpenSea as the primary, nonexclusive marketplace.
+2. Whole-artwork RWA tokens as delivery vouchers or warehouse receipts, implemented as an
+   ERC-8415 standard commercial product.
+3. Fractional trading and DAO inherited from the original PRD and MVP.
+
+The requested web delivery destination is `https://io.artcch.com`. This instruction does not
+itself select the production chain or authorize real-asset or real-money execution.
+
+Use the source hierarchy by purpose:
+
+| Source                                                            | Authority and use                                                                                           |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| #110 with incorporated #84 and explicit later client instructions | Product requirements; the latest explicit client instruction controls the affected conflict                 |
+| `docs/PRD.md`                                                     | Coordinated record of those requirements, not an independent source of new scope                            |
+| `AGENTS.md`                                                       | Agent execution rules within the product authority                                                          |
+| `docs/ACCEPTANCE.md`                                              | Applicable evidence and promotion process only                                                              |
+| `docs/STATUS.md`                                                  | Current evidence and state only                                                                             |
+| Other directives, issues, comments, and commit messages           | Historical or implementation references, except provisions explicitly incorporated by the product authority |
+
+Do not modify or append interpretations to the locked governing issues. Cite #110 and the
+specific applicable later instruction. A document title or an agent's use of the words
+"client ruling" is not, on its own, evidence of a new client decision.
+
+An agent may implement, verify, report a gap or conflict, or propose a separate option. It may
+not invent a requirement, gate, status, architecture obligation, client input, approval cycle,
+or global prerequisite. Writing a proposal into a PRD or acceptance file does not authorize it.
+
+## 1. Product boundaries to preserve
+
+### 1.1 Three sections and venue scope
+
+- Retain the NFT/CCHS and charity-edition functionality. Digital NFT ownership conveys none
+  of the physical-asset or redemption rights prohibited by CH.8. A donation record does not
+  turn the NFT into physical backing.
+- OpenSea is primary for the NFT section, not exclusive. Do not apply the old blanket
+  "ArtFi is primary for every line" wording to this section.
+- The NFT section at `io.artcch.com` must provide native OpenSea-backed discovery and
+  trading: browse, inspect, list, buy, make and accept offers, cancel eligible orders, and
+  track results through ArtFi. Use the supported official API, SDK, and settlement protocol.
+  A homepage redirect, asset deep link, iframe, or read-only catalog is not this workflow.
+- Keep the optional external OpenSea website link in the footer. Main NFT navigation and
+  trading controls stay in ArtFi. Preserve attributed source URLs as data rather than
+  substituting outbound links for product actions.
+- Whole-artwork tokens have receipt/voucher semantics. Do not label their chain ownership
+  as unrestricted physical title or collapse them into fractional fund tokens.
+- Preserve inherited fractionalization, trading, portfolio, and DAO workflows. Their
+  presence in the latest three-section description is not a new scope expansion.
+- Preserve Stage 1 approved-source, machine-verifiable correspondence evidence before RWA
+  minting or activation in both the whole-artwork and fractional sections. It applies to
+  authenticated assets and enforceable real-world rights, including approved non-registry
+  sources such as custody, warehouse, and certificate evidence. Preserve applicable ERC-8415
+  identity, restriction, and lifecycle requirements, plus registry synchronization where the
+  asset is registry-backed. Charity NFT independence is not a general exemption for fractions.
+- Passive event ingestion remains read-only; that adapter constraint is not a prohibition
+  on the native OpenSea order workflow. ArtFi prepares and relays approved requests, users
+  confirm wallet actions, and the venue/protocol remains authoritative for execution.
+- Preserve compatible approved adapters, source attribution, and ArtFi's own whole-artwork
+  and fractional order book, matching, and settlement. The securities-website analogy
+  describes the frontend/venue relationship, not licensing, custody, or new product scope.
+
+### 1.2 Assets and authority
+
+- The registry of record determines recorded holdership within its scope; the chain
+  determines token state and settlement; ArtFi stores are read-only projections.
+- On divergence, show the sources and their different claims. Never resolve a property
+  question from ArtFi's database or silently equate token transfer with registry transfer.
+- Registry authority belongs to the source role, not to ArtCCH as platform operator.
+  ArtFi consumes registries and does not become a registry in this application.
+- Disclose own-account sales, but grant ArtCCH no seller, matching, fee, visibility,
+  settlement, or administrative property privilege.
+- Fixed-price and order-book trading use the existing valid signed intents and atomic
+  settlement. No resting custody is introduced. Preserve bounded partial fills and
+  revocation, expiry, quantity, replay, and signature checks.
+- Keep the existing auction escrow exception, bounded by its accepted terms and with
+  settlement, credit withdrawal, and the required seller escape available during pause.
+- Governance rights follow the actual asset structure; token possession does not create
+  unspecified economic, voting, or physical rights.
+
+### 1.3 Application and ecosystem
+
+ArtFi is a commercial application, not a demo, an ERC8415-Kit repository, an Oracle implementation,
+or the independent wallet product. Its application-side integrations remain in scope. Complete
+only the interfaces actually needed by the current workflow; do not import every external
+product milestone as a prerequisite.
+
+The wallet product is 8415 Wallet; Xiongan Wallet is its V2 tenant, with the assigned public
+domain `xiongan.8415wallet.com`. ArtFi's test entry may open without login, but wallet assets,
+balances, holdings, and history require an authenticated session. Opening a wallet page or
+connecting an address is not login, shared session establishment, or authority to sign.
+Preserve production authentication and existing wallet-confirmation boundaries. Consume the
+complete deployment-supplied `ARTFI_XIONGAN_WALLET_URL` through the no-store runtime route;
+never hardcode a destination or port or invent a cross-origin wallet protocol.
+
+Keep OpenSea API credentials and credential-bearing SDK calls server-side. Validate the
+supported chain, asset, order, account, amount, fees, expiry, and protocol before requesting
+wallet approval. Missing configuration, stale orders, unsupported chains, upstream failures,
+and absent wallet capabilities must produce truthful unavailable states. Never substitute
+fixtures for live assets or treat request acceptance as confirmed settlement. Implement and
+test with isolated mocks or approved test chains; do not execute real-value transactions,
+listings, offers, signatures, or cancellations as implementation validation.
+
+Stage 2 NO-HIL capability remains the cumulative scope incorporated by #110. Preserve its
+A1–A10 capabilities, A0–A6 acceptance, authority separation, deterministic policy, RWA grounding,
+key safety, autonomous recovery, and partner neutrality. Do not retroactively require full
+Stage 2 operation or soak evidence for an otherwise independent Stage 1 delivery.
+
+Keep infrastructure and registry partners neutral and pluggable. CCHS and OpenSea are the
+client-specified business and marketplace references, not architectural privileges. Authorized
+real deployment bindings remain isolated in `docs/DEPLOYMENT_ENVIRONMENT.md` and removable.
+The established delivery/database zone and SIN chain-execution zone remain distinct.
+`<LLM_PROVIDER_A>` is replaceable; model output is advisory and never transaction authority.
+
+## 2. Traceability and evidence
+
+For a product change, identify the applicable #110 provision or explicit later client instruction.
+For a finding, record separately:
+
+1. Baseline: the requirement that applies.
+2. Evidence: exact file, test, CI run, transaction and receipt, or observed runtime behavior.
+3. Finding: the specific mismatch and the function affected.
+
+If a requirement trace is absent, label the observation as a recommendation or question. Do not
+turn it into a blocking acceptance condition.
+
+`docs/STATUS.md` records evidence and the existing six status values. It creates no scope.
+Do not promote completion from code presence, a self-assessment, stale test counts, another
+commit's results, a screenshot alone, or fixture data presented as live. Record unrun checks.
+
+Historical checkpoints are historical evidence, not a current stage declaration. In particular,
+the 2026-09-20 S-XM/PR #114 checkpoint and its test counts in earlier revisions of this file must
+not be applied to a changed head. Consult current code, CI, and `docs/STATUS.md` for present state.
+
+## 3. Bounded working delivery
+
+For each stage:
+
+1. Identify a finite set of existing requirements and the applicable environment.
+2. Finish, test, integrate, and demonstrate that set through real desktop and mobile screens.
+3. Record remaining valid work in its appropriate stage.
+4. Pull later work forward only when an evidenced technical dependency makes it necessary.
+5. Do not add scope during implementation without an explicit client instruction.
+
+The working priority is to finish useful existing work, close a bounded stage, demonstrate it,
+and proceed. Neither architecture review nor cleanup may indefinitely displace working delivery.
+
+The current three-section web delivery is to `io.artcch.com`. A requested web deployment is not
+equivalent to mainnet contract deployment, real-asset opening, or final complete-market production
+acceptance. Perform the authorized web build and deployment needed for the requested delivery;
+do not use the final-production-last rule to avoid it.
+
+The existing S-CH, S-XM, S-WA, S-FR, S-OPS, and S-MKT labels group requirements only. They add no
+gate, status, or requirement denominator. Only the complete market has the complete end-state
+handover. A stage does not inherit unrelated mainnet, 48-hour final stability, all-partner,
+independent-wallet-complete, or Stage 2 autonomous-operation conditions.
+
+Business opening conditions retain their proper scope. Real charity evidence applies to the
+real release; whole-artwork opening uses its applicable Oracle, wallet, and registry path;
+fractional commercial opening retains the client-side compliance condition. None prohibits
+building and verifying independent functions with the approved test payload.
+
+A stage is verified on function. Preserve valid existing interaction patterns. Missing prototype
+reference images or a pending Figma redesign affect their specific visual comparison, not all
+functional delivery. Rights disclosures, file access controls, preview restrictions, and
+fail-closed behavior remain functional requirements.
+
+## 4. Standing engineering rules
+
+- Preserve useful compatible code, tests, security fixes, and infrastructure regardless of
+  who wrote them. Do not rebuild working surfaces without a product reason or verified defect.
+- Keep changes bounded and reviewable. Run the applicable tests and final integration checks;
+  do not treat a focused test as a complete pass.
+- Fixtures and static examples must remain visibly distinct from live product data.
+- A blocker must name the exact current-stage function it prevents and the evidence for that
+  dependency. Unknown or later-stage work is not a blocker by default.
+- Resolve technical questions from existing requirements and implementation evidence. Where
+  unspecified, choose the least-expansive reversible implementation and record the choice.
+- Ask the client only for an actual product/commercial decision or input their side must
+  supply, such as a missing asset, environment, credential, or channel. Do not refer ordinary
+  engineering choices upward as approval requirements.
+- Distinguish required missing inputs, product decisions, and technical defects. Continue
+  unaffected work instead of turning one unavailable dependency into a project-wide stop.
+- Follow the actual authorization and tool-safety rules for consequential actions. Product
+  goals, a green test, or an agent-authored acceptance sentence do not create execution authority.
+
+## 5. Hard safety and data boundaries
+
+- No private keys, seed phrases, credentials, database dumps, or raw signed transactions in
+  ArtFi web/API storage, databases, GitHub, CI, logs, or other prohibited surfaces. Use only
+  approved secret-handling and signing paths; never log or publish sensitive values.
+- Mainnet, real assets, and real-money operation require the applicable written authority.
+  Historical automatic-promotion wording conflicts with the separate-approval wording in
+  the repository. Do not infer permission from that conflict; report the exact action to
+  the delivery owner and follow the applicable execution rules.
+- The current write-testing chain is Hoodi `560048`; it does not select the production chain.
+- Isolated Hoodi assets are TEST_ONLY. Real CCHS/ArtCCH documents are not prerequisites for
+  their technical testing. Keep those fixtures separate from real donation, receipt,
+  valuation, holder-benefit, production, and mainnet records.
+- Preserve immutable historical mint evidence, including the distinct Sepolia records.
+- Protect charity masters, enforce CH.7 and CH.11 preview restrictions, and release only the
+  authorized distinct watermarked holder file after wallet ownership verification.
+- External-source names and infrastructure bindings follow the established neutrality policy.
+- LLM output is advisory. User, operational, and constitutional authorities remain distinct.
+  No operational agent infers higher authority from lower authority.
+
+## 6. Cleanup without scope loss
+
+Classify disputed requirements or implementation into the existing four buckets:
+
+| Bucket       | Treatment                                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| KEEP         | Preserve useful compatible implementation and valid evidence                                                                          |
+| FINISH-NOW   | Complete existing requirements needed by the bounded current stage                                                                    |
+| FREEZE-LATER | Preserve compatible later-stage work without expanding the current stage                                                              |
+| REMOVE       | Remove unsupported governance or demonstrably harmful, contradictory, dead, or security-sensitive implementation with a stated reason |
+
+Governance rollback is not code rollback. Provenance alone is never a reason to delete useful
+implementation. Do not retain an invalid obligation because effort was spent on it, and do not
+invent replacement obligations while removing it. State the valid replacement source, if any,
+for each removal. No fifth bucket of agent-created requirements is allowed.
+
+## 7. Before handover
+
+Confirm that:
+
+- The changed behavior follows the three-section definition and its inherited requirements.
+- NFT venue preference has not disabled RWA or fractional trading.
+- The whole-artwork token remains a receipt/voucher and chain state remains distinct from registry rights.
+- Charity functionality, inherited fractional/DAO functions, and applicable ERC-8415 controls remain present.
+- No new scope, gate, status, blanket exemption, or client obligation was introduced.
+- The finite delivered workflows are reachable and operable from the UI in their actual environment.
+- Applicable tests, integration checks, and current-head CI evidence are recorded accurately.
+- `docs/STATUS.md` records what was verified and what remains; it does not claim unrun production or mainnet checks.
+- Unresolved product decisions and missing inputs are identified without blocking unrelated work.
+
+Deliver bounded working stages and preserve the existing product. Do not turn ArtFi into an
+indefinitely expanding pre-delivery project.
+
+## Current deployment execution and port allocation
+
+The client's current delivery instruction assigns ArtFi iteration, installation and joint testing to Artfi control. Development-only restrictions and older task-specific scheduling do not prohibit that authorized work. Historical Charity A-I closure, full Wallet V3 acceptance and Stage 2 completion are not global prerequisites for independent Stage 1 web/Beta installation and testing. Retain their valid scoped evidence gaps without replaying completed batches or unknown transaction outcomes.
+
+Use the client-supplied Wallet Beta handoff on branch `delivery/install-handoff-20261004`; verify its immutable archive and exact source identity before installation. Beta installation and production-like testing are authorized within the existing approved Linux and test-asset boundaries; publication, page navigation and CI do not prove genuine-wallet or full-product acceptance. Public entry navigation may skip login; protected wallet data still requires verified login.
+
+Port allocations and reservations belong to the target deployment configuration, not the product requirements. Preserve SSH, shared bridges and other-task services. Inspect current listeners and configured reservations; reuse a suitable confirmed allocation or select an actually free, unreserved port within the client's existing deployment authority. Do not infer a reservation from an environment name or hardcode a port in product behavior. Actual firewall/ingress authorization still applies to its target rule.
+
+Configure complete public URLs, including scheme, domain, port and entry path. Preserve existing wallet origins and recovery journals during upgrades. Execute application builds, deployment and tests only in approved CTYun/SIN Linux environments; Windows remains a source/report workstation. Do not expand this instruction into mainnet, real-value transactions, credential disclosure, shared-service changes or transaction replay. GitHub changes remain English only.
+
+## Delivery archive inventory (2026-10-05)
+
+The private delivery archive inventory and GitHub-safe publication mirrors are
+recorded in [releases/2026-10-05-delivery-archive/README.md](releases/2026-10-05-delivery-archive/README.md).
+Read the manifest, SHA-256 checksums, omission records and candidate labels before
+using any package. Sanitized mirrors have different bytes and hashes from their
+original handoffs; their publication commit is not their application source identity.
+Publication does not establish a merge, deployment, general release, current-head
+CI pass or genuine-device acceptance. Existing product, security and port rules
+remain in force.

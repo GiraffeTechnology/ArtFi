@@ -78,7 +78,7 @@ const request = {
     maxOpenOrders: "0",
     maxAggregateExposure: "100",
   },
-  sale: { nft: address, tokenId: "1", price: "10" },
+  sale: { nft: address, price: "10" },
 };
 const authority = {
   status: "EXCLUSIVE_AT_PINNED_BLOCK",
@@ -372,6 +372,62 @@ test("drifted evidence cannot hydrate; historical state cannot overwrite authori
     /MINT_AUTHORITY_PATCH_STATE_REFUSED/,
   );
 });
+test("new runtime discovers committed STARTED without HTTP IDs, retries DB outage and reconciles without execute", async () => {
+  const f = fixture("STARTED");
+  f.setAvailable(false);
+  const controller = new AbortController();
+  let sends = 0,
+    authorityCalls = 0;
+  const unused = async () => {
+    throw Error("UNEXPECTED_ADAPTER");
+  };
+  const runtime = createDurableRuntime({
+    pool: f.pool,
+    kernelOptions: {
+      authorize: unused,
+      observe: unused,
+      execute: async () => {
+        sends++;
+        throw Error("UNEXPECTED_SEND");
+      },
+      verify: unused,
+      mintAuthority: async () => {
+        authorityCalls++;
+        throw Error("UNEXPECTED_PREFLIGHT");
+      },
+      reconcile: async () => ({
+        state: "SETTLED",
+        canonical: true,
+        accountingMatches: true,
+      }),
+    },
+    serviceOptions: {
+      ethers,
+      policy: servicePolicy,
+      planFor: unused,
+      observe: unused,
+      inspectRevocation: unused,
+    },
+  });
+  const outcomes = [];
+  await runtime.run({
+    signal: controller.signal,
+    intervalMs: 10,
+    onBatch: (result) => {
+      outcomes.push(result);
+      if (outcomes.length === 1) {
+        assert.equal(result.state, "SAFE_DEGRADED");
+        f.setAvailable(true);
+      } else controller.abort();
+    },
+  });
+  assert.equal(outcomes[1].outcomes[0].state, "SETTLED");
+  assert.equal(sends, 0);
+  assert.equal(authorityCalls, 0);
+  assert.equal(hydrateOperation(f.row).state, "SETTLED");
+  assert.equal(f.row.lease_token, null);
+});
+
 test(
   "new runtime survives a hung observer, retries DB outage and reconciles STARTED without execute",
   { timeout: 2000 },
@@ -432,6 +488,133 @@ test(
     assert.equal(f.row.lease_token, null);
   },
 );
+
+test(
+  "a hung observer remains single-flight across sequential runtime restarts",
+  { timeout: 2000 },
+  async () => {
+    const f = fixture("STARTED");
+    const unused = async () => {
+      throw Error("UNEXPECTED_ADAPTER");
+    };
+    const runtime = createDurableRuntime({
+      pool: f.pool,
+      kernelOptions: {
+        authorize: unused,
+        observe: unused,
+        execute: unused,
+        verify: unused,
+        mintAuthority: unused,
+        reconcile: async () => ({
+          state: "SETTLED",
+          canonical: true,
+          accountingMatches: true,
+        }),
+      },
+      serviceOptions: {
+        ethers,
+        policy: servicePolicy,
+        planFor: unused,
+        observe: unused,
+        inspectRevocation: unused,
+      },
+    });
+    const first = new AbortController();
+    let observations = 0;
+    await runtime.run({
+      signal: first.signal,
+      intervalMs: 10,
+      onBatch: () => {
+        observations++;
+        first.abort();
+        return new Promise(() => {});
+      },
+    });
+    const second = new AbortController();
+    const timer = setTimeout(() => second.abort(), 50);
+    try {
+      await runtime.run({
+        signal: second.signal,
+        intervalMs: 10,
+        onBatch: () => {
+          observations++;
+          return new Promise(() => {});
+        },
+      });
+    } finally {
+      clearTimeout(timer);
+      second.abort();
+    }
+    assert.equal(observations, 1);
+    assert.equal(hydrateOperation(f.row).state, "SETTLED");
+    assert.equal(f.row.lease_token, null);
+  },
+);
+
+for (const failure of ["throw", "reject"]) {
+  test(
+    `recovery continues and observer notifications resume after ${failure}`,
+    { timeout: 2000 },
+    async () => {
+      const f = fixture("STARTED");
+      f.setAvailable(false);
+      const unused = async () => {
+        throw Error("UNEXPECTED_ADAPTER");
+      };
+      const runtime = createDurableRuntime({
+        pool: f.pool,
+        kernelOptions: {
+          authorize: unused,
+          observe: unused,
+          execute: unused,
+          verify: unused,
+          mintAuthority: unused,
+          reconcile: async () => ({
+            state: "SETTLED",
+            canonical: true,
+            accountingMatches: true,
+          }),
+        },
+        serviceOptions: {
+          ethers,
+          policy: servicePolicy,
+          planFor: unused,
+          observe: unused,
+          inspectRevocation: unused,
+        },
+      });
+      const controller = new AbortController();
+      const outcomes = [];
+      const timer = setTimeout(() => controller.abort(), 1000);
+      try {
+        await runtime.run({
+          signal: controller.signal,
+          intervalMs: 10,
+          onBatch: (result) => {
+            outcomes.push(structuredClone(result));
+            // Observer-owned snapshots cannot rewrite persisted recovery state.
+            result.state = "OBSERVER_MUTATION";
+            if (outcomes.length === 1) {
+              f.setAvailable(true);
+              if (failure === "throw") throw Error("OBSERVER_FAILURE");
+              return Promise.reject(Error("OBSERVER_FAILURE"));
+            }
+            controller.abort();
+          },
+        });
+      } finally {
+        clearTimeout(timer);
+        controller.abort();
+      }
+      // Assertions stay outside the deliberately exception-isolated observer.
+      assert.equal(outcomes.length, 2);
+      assert.equal(outcomes[0].state, "SAFE_DEGRADED");
+      assert.equal(outcomes[1].outcomes[0].state, "SETTLED");
+      assert.equal(hydrateOperation(f.row).state, "SETTLED");
+      assert.equal(f.row.lease_token, null);
+    },
+  );
+}
 
 test("durable runtime scans confirmed revoked PREPARED, persists terminal and excludes next batch", async () => {
   const f = fixture();
@@ -504,178 +687,4 @@ test("durable hydration refuses revoked proof identity corruption before worker 
     });
     assert.throws(() => hydrateOperation(f.row), /REVOCATION_RECORD_INVALID/);
   }
-});
-
-test("optional Oracle runtime adapter persists rejection evidence through durable hydration", async () => {
-  const f = fixture();
-  f.row.lease_token = null;
-  f.row.lease_expires_ms = 0;
-  const unused = async () => {
-    throw Error("UNEXPECTED_ADAPTER");
-  };
-  const runtime = createDurableRuntime({
-    pool: f.pool,
-    kernelOptions: {
-      observe: async () => ({
-        available: true,
-        current: true,
-        groundingCurrent: true,
-        assetRestricted: false,
-      }),
-      authorize: async () => {
-        throw Error("STATE_NOT_ELIGIBLE");
-      },
-      execute: unused,
-      verify: unused,
-      reconcile: unused,
-      mintAuthority: async () => authority,
-    },
-    oracleAttestation: {
-      resolveRequiredAttestation: async () => ({
-        attestation: { envelope: { attestationId: "fixture-attestation-1" } },
-        expectedSubject: {
-          assetId: "test-asset",
-          chainId: "560048",
-          contract: address,
-          tokenId: "1",
-          purpose: "test-required-flow",
-        },
-      }),
-      verifyAttestation: async () => ({
-        valid: false,
-        errorCode: "REVOKED",
-      }),
-    },
-    serviceOptions: {
-      ethers,
-      policy: servicePolicy,
-      planFor: unused,
-      observe: async () => ({
-        available: true,
-        current: true,
-        groundingCurrent: true,
-        assetRestricted: false,
-      }),
-      inspectRevocation: unused,
-    },
-  });
-  const result = await runtime.runBatch();
-  assert.equal(result.outcomes[0].state, "SAFE_DEGRADED");
-  const restored = hydrateOperation(f.row);
-  assert.equal(restored.state, "PREPARED");
-  assert.equal(restored.mintAuthority.status, "EXCLUSIVE_AT_PINNED_BLOCK");
-  assert.equal(restored.oracleAttestation.errorCode, "REVOKED");
-  assert.equal(f.row.lease_token, null);
-});
-
-test("durable runtime refuses direct SDK composition outside the synthetic compatibility test", () => {
-  const f = fixture();
-  const unused = async () => {};
-  assert.throws(
-    () =>
-      createDurableRuntime({
-        pool: f.pool,
-        kernelOptions: {
-          observe: unused,
-          authorize: unused,
-          execute: unused,
-          verify: unused,
-          reconcile: unused,
-          mintAuthority: unused,
-        },
-        serviceOptions: {
-          ethers,
-          policy: servicePolicy,
-          planFor: unused,
-          observe: unused,
-          inspectRevocation: unused,
-        },
-        oracleAttestation: {
-          resolveRequiredAttestation: unused,
-          attestationService: { verify() {} },
-          verifyOracleAttestation: unused,
-        },
-      }),
-    /ORACLE_RUNTIME_API_VERIFIER_REQUIRED/,
-  );
-});
-
-for (const errorCode of [null, "NOT_CURRENT", "REVOKED"]) {
-  test(`durable Oracle ${errorCode ?? "valid"} evidence retains exact identity`, async () => {
-    const f = fixture();
-    f.row.lease_token = null;
-    f.row.lease_expires_ms = 0;
-    const store = createDurableStore({
-      mode: "TEST_ONLY_NO_REAL_VALUE",
-      pool: f.pool,
-    });
-    const row = await store.claim("test-1", kernelRequestDigest(request));
-    const evidence = {
-      valid: errorCode === null,
-      errorCode,
-      checkedAt: "2026-09-13T00:00:00.000Z",
-      attestationId: "fixture-attestation-1",
-      expectedSubject: {
-        assetId: "test-asset",
-        chainId: request.execution.chainId,
-        contract: request.sale.nft,
-        tokenId: request.sale.tokenId,
-        purpose: "fixture-required-flow",
-      },
-    };
-    await store.transition(
-      row.id,
-      row.version,
-      { state: "PREPARED", oracleAttestation: evidence },
-      row.leaseToken,
-    );
-    assert.deepEqual(hydrateOperation(f.row).oracleAttestation, evidence);
-    for (const change of [
-      { attestationId: undefined },
-      { attestationId: 123 },
-      { attestationId: "a".repeat(129) },
-      { expectedSubject: undefined },
-      ...[
-        { chainId: "1" },
-        { contract: "0x" + "cd".repeat(20) },
-        { tokenId: "2" },
-        { purpose: "" },
-        { assetId: "a".repeat(129) },
-        { extra: "not-allowed" },
-      ].map((fields) => ({
-        expectedSubject: { ...evidence.expectedSubject, ...fields },
-      })),
-    ]) {
-      const corrupted = {
-        ...f.row,
-        record_json: JSON.stringify({
-          state: "PREPARED",
-          oracleAttestation: { ...evidence, ...change },
-        }),
-      };
-      assert.throws(
-        () => hydrateOperation(corrupted),
-        /ORACLE_EVIDENCE_IDENTITY_INVALID/,
-      );
-    }
-  });
-}
-test("source-resolution failure may hydrate without identity but valid may not", () => {
-  const f = fixture();
-  f.row.record_json = JSON.stringify({
-    state: "PREPARED",
-    oracleAttestation: { valid: false, errorCode: "SOURCE_TIMEOUT" },
-  });
-  assert.equal(
-    hydrateOperation(f.row).oracleAttestation.errorCode,
-    "SOURCE_TIMEOUT",
-  );
-  f.row.record_json = JSON.stringify({
-    state: "PREPARED",
-    oracleAttestation: { valid: true, errorCode: null },
-  });
-  assert.throws(
-    () => hydrateOperation(f.row),
-    /ORACLE_EVIDENCE_IDENTITY_INVALID/,
-  );
 });
