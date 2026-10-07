@@ -123,9 +123,10 @@ func (service *rwaService) persistChainEvent(request *http.Request, input chainE
 		rows.Close()
 		_, err = tx.ExecContext(request.Context(), `
 			UPDATE chain_events SET block_number = ?, block_hash = ?, removed = ?,
+			confirmed = GREATEST(confirmations, ?) > 0,
 			confirmations = GREATEST(confirmations, ?), observed_at = CURRENT_TIMESTAMP(6)
 			WHERE chain_id = ? AND LOWER(transaction_hash) = LOWER(?) AND log_index = ?`,
-			input.BlockNumber, incomingBlockHash, input.Removed, input.Confirmations,
+			input.BlockNumber, incomingBlockHash, input.Removed, input.Confirmations, input.Confirmations,
 			input.ChainID, input.TransactionHash, input.LogIndex)
 		if err != nil {
 			return 0, err
@@ -207,7 +208,7 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		Offers: []map[string]any{}, Notifications: []map[string]any{},
 	}
 	if service.db == nil {
-		writeJSON(writer, http.StatusOK, response)
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The indexed portfolio is not connected to persistence.")
 		return
 	}
 	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "portfolio:"+address, "", &response)
