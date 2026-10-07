@@ -271,3 +271,34 @@ original handoffs; their publication commit is not their application source iden
 Publication does not establish a merge, deployment, general release, current-head
 CI pass or genuine-device acceptance. Existing product, security and port rules
 remain in force.
+
+## Stage-Based Delivery Rule
+
+Current stage: **Stage 1 — Demonstrable Capability**, as approved by the client in [#100](https://github.com/GiraffeTechnology/ArtFi/issues/100). ArtFi's bounded scope is cultural asset application delivery: artist management, artwork management, exhibition workflow, marketplace workflow, verified asset presentation, and the Oracle integration boundary. Token economics, secondary market infrastructure, and advanced RWA mechanisms do not block this stage. Preserve useful later-stage code without adding it to current-stage acceptance.
+
+Agents must work on the current stage only.
+
+Agents MUST NOT:
+
+- move future-stage requirements into current acceptance;
+- create additional gates;
+- redefine protocol semantics;
+- expand PRD scope.
+
+Agents MUST:
+
+- implement;
+- test;
+- provide evidence;
+- freeze completed stages.
+
+Preserve existing code.
+
+Classification:
+
+- KEEP
+- FINISH-NOW
+- FREEZE-LATER
+- REMOVE
+
+The client-approved [ArtFi + Oracle Delivery Stage Framework v1.1](https://github.com/GiraffeTechnology/ArtFi/issues/100) separates stage acceptance without lowering engineering standards or expanding product scope. Each stage has independent acceptance. Future-stage capabilities MUST NOT block current-stage delivery.
