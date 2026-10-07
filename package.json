@@ -8,6 +8,7 @@
   },
   "scripts": {
     "agent:test": "node --test scripts/agent/*.test.mjs",
+    "ops:test": "node --test scripts/ops/*.test.mjs",
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
     "format": "prettier --write .",

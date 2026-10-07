@@ -1,0 +1,42 @@
+[Unit]
+Description=ArtFi deterministic monitor (%i) - monitor only
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=artfi-monitor-%i
+Group=artfi-monitor-%i
+StateDirectory=artfi-monitor-%i
+StateDirectoryMode=0700
+WorkingDirectory=/opt/artfi-monitor
+# Template only. Installer must bind verified runtime/code/config pins and target inventory.
+ExecStart=/usr/bin/flock --nonblock /var/lib/artfi-monitor-%i/instance.lock /opt/artfi-monitor/runtime/node /opt/artfi-monitor/scripts/ops/monitor-service.mjs /etc/artfi-monitor/%i.json
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=35
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+CapabilityBoundingSet=
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=256M
+CPUQuota=25%
+TasksMax=32
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

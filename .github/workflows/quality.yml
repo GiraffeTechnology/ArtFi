@@ -27,6 +27,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm security:secrets
       - run: pnpm agent:test
+      - run: pnpm ops:test
       - run: pnpm release:verify-schema
       - run: pnpm hoodi-admin-safe:verify-schema
       - run: pnpm hoodi-admin-safe:verifier:test

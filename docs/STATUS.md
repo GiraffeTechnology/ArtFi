@@ -970,3 +970,12 @@ does not promote a Stage 1 item.
 The earlier unnamed-runner claims of old-code RED, non-race Go results and regenerated-client consistency are **not accepted as independently verified evidence here**; local artifact hashes without an accessible artifact do not close those checks. The linked CI jobs and their logs are the evidence for the narrower claims above. New heads require their own applicable CI and fresh review, and unavailable/expired logs must be re-established before acceptance.
 
 No requirement status or count is promoted. M2.9 remains `NOT-IMPLEMENTED`; full cursor history, provider freshness/outage handling, loaded-card stale handling, real provider/<CLOUD_PROVIDER_A> data, G1 and deployment remain open. This is not `GRAY_AVAILABLE`. The CI migration job's GitHub-hosted database does not constitute the required dedicated-<CLOUD_PROVIDER_A> DB acceptance.
+
+## Bounded monitor source integration
+
+The PR66 monitor-only source is being reconciled with current main. Its model and
+notifier remain disabled by default. Source CI tests do not provision telemetry,
+install a daemon, enable supervision or establish continuous operations acceptance.
+No shared bridge, database, SSH, model-provider or other-task configuration is
+changed by this source integration. Actual installed channels, least privilege,
+restart/fault behavior and measured soak evidence remain separate pending work.
