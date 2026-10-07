@@ -34,6 +34,10 @@ const operationStates = new Set([
   "SETTLED",
   "TERMINAL_REJECTED",
 ]);
+const transactionHash = (value) =>
+  typeof value === "string" &&
+  /^0x[0-9a-fA-F]{64}$/.test(value) &&
+  !/^0x0{64}$/i.test(value);
 const stable = (code) => {
   throw new Error(code);
 };
@@ -55,8 +59,7 @@ export function canRequestRevocation(record) {
   return record?.revocation?.state === "NOT_REQUESTED";
 }
 export function normalizeRevocationHash(value) {
-  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(value))
-    stable("REVOCATION_SUBMISSION_INVALID");
+  if (!transactionHash(value)) stable("REVOCATION_SUBMISSION_INVALID");
   return value.toLowerCase();
 }
 export function validateRevocationResult(result, operationId) {
@@ -424,8 +427,8 @@ export function mountAgentConsole(
         ? " · 已终止，未声称成交或对账成功"
         : " · historical reconciliation remains allowed";
     values.revocation.textContent = record.revocation.state;
-    values.transaction.textContent = /^0x[0-9a-fA-F]{64}$/.test(
-      record.execution.transactionHash ?? "",
+    values.transaction.textContent = transactionHash(
+      record.execution.transactionHash,
     )
       ? record.execution.transactionHash
       : "UNKNOWN";

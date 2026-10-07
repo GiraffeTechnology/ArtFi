@@ -1,5 +1,9 @@
 # Stage 2 bounded delivery acceptance
 
+> Historical bounded Stage 2 record, dated 2026-09-20. Preserve its exact
+> evidence scope. Current AGENTS.md and later client instructions control execution;
+> this record does not create a global Stage 1 delivery or deployment gate.
+
 Status: evidence and promotion process only. This document creates no product requirement.
 
 ## Authority and precedence

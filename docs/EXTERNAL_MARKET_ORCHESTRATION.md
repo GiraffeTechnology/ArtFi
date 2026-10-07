@@ -1,8 +1,15 @@
 # External marketplace orchestration
 
-ArtFi mirrors approved external venues and may prepare a transaction for an external wallet. It is
-not an exchange, broker-dealer, orderbook, matcher, custodian, fulfiller, settlement agent, or
-counterparty. OpenSea/Seaport remains the executing venue and protocol.
+ArtFi's required NFT experience is a native OpenSea-backed operational frontend, as defined in
+PRD section 4.8. Discovery, listing, buying, offers, eligible cancellation, and results remain
+inside ArtFi. Users approve wallet actions and OpenSea/Seaport supplies the venue/protocol
+execution path. ArtFi gains no custody or counterparty role from this integration.
+
+The implementation described below is the existing bounded fulfillment increment, not complete
+coverage of that requirement. Listing creation, offers, offer acceptance, and cancellation still
+need their supported native paths and verification. The read-only event adapter remains useful
+and does not prohibit a separate active order adapter. Footer-only external OpenSea navigation
+must not replace native operations.
 
 ## Runtime flow
 
@@ -31,10 +38,13 @@ counterparty. OpenSea/Seaport remains the executing venue and protocol.
 - A missing database, OpenSea API key, active canonical order, protocol address, HTTPS OpenSea URL,
   safe transaction shape, external wallet, or approved source rejects the request before a wallet
   prompt.
-- Only the externally supplied chain may be used. Project mint, Vault, and DAO writes remain
-  Sepolia-only.
-- Cross-chain, multi-call, token-approval, bridge, sweep, offer-acceptance, listing creation, and
-  ArtFi-operated order paths are rejected in this release.
+- Only the configured and supported external chain may be used. Project mint, Vault, and DAO
+  write-testing use Hoodi `560048`; historical Sepolia records remain immutable. A missing
+  OpenSea Hoodi capability must be reported as unsupported, not silently remapped to mainnet.
+- The current fulfillment increment rejects cross-chain, multi-call, token-approval, bridge,
+  sweep, offer-acceptance, and listing-creation payloads. These implementation limits do not
+  remove the native listing/offer/cancellation requirements from the PRD. Expand supported
+  operations with their own validation and tests; do not weaken the existing fulfillment gate.
 - Live enabling requires a separate legal and security approval tied to exact chains, collections,
   payment tokens, OpenSea terms, limits, monitoring, incident response, and user disclosures.
 

@@ -1,5 +1,9 @@
 # Stage 2 bounded delivery status
 
+> Historical bounded Stage 2 record, dated 2026-09-20. Preserve its exact
+> evidence scope. Current AGENTS.md and later client instructions control execution;
+> this record does not create a global Stage 1 delivery or deployment gate.
+
 Status: evidence snapshot only. This file creates no product requirement and makes no delivery
 claim.
 
@@ -90,3 +94,12 @@ The next promotion work is the smallest available real vertical-slice dependency
 
 If one dependency is unavailable, record that dependency and continue the next unblocked P0 path.
 No fixture, draft, queued job, or zero-step CI result may be used to promote a status.
+
+## Source reconciliation on 2026-10-07
+
+The historical candidate and observations above retain their original identities.
+The refreshed Oracle Agent source is now merged as
+`94bac9c45f679d12279768167d3269cd111e0621`; its direct-main quality run
+`37622602929` completed successfully with eight actual jobs. Those source checks
+are separate from this document refresh and do not clear live database, wallet,
+receipt, continuous operation or Stage 2 acceptance gaps.

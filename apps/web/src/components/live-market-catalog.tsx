@@ -1,6 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import localFont from "next/font/local";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const recoveryFont = localFont({
+  src: "../fonts/InterVariable.woff2",
+  display: "swap",
+  weight: "100 900",
+  fallback: [],
+});
+
+import {
+  freshness,
+  shortOrderId,
+  venueLabel,
+  venueLink,
+} from "@/lib/market-links";
 
 const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
@@ -16,6 +31,7 @@ type MarketAsset = {
   orderStatus?: string;
   price?: string;
   paymentSymbol?: string;
+  marketplaceUrl?: string;
 };
 
 type MarketCatalogResponse = {
@@ -32,9 +48,13 @@ export function LiveMarketCatalog() {
   const [listingStatus, setListingStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [page, setPage] = useState(1);
+  const requestInFlight = useRef(false);
   const pageSize = 12;
 
   const loadCatalog = useCallback(async () => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
+    setLoading(true);
     try {
       const collected: MarketAsset[] = [];
       let sourcePage = 1;
@@ -56,12 +76,14 @@ export function LiveMarketCatalog() {
       setAssets(collected);
       setCatalogError(undefined);
     } catch (error) {
+      setAssets([]);
       setCatalogError(
         error instanceof Error
           ? error.message
           : "Live market data is unavailable.",
       );
     } finally {
+      requestInFlight.current = false;
       setLoading(false);
     }
   }, []);
@@ -183,19 +205,37 @@ export function LiveMarketCatalog() {
         <span>
           {loading
             ? "Loading…"
-            : `${visibleAssets.length} shown · ${filteredAssets.length} matched · ${assets.length} total`}
+            : catalogError
+              ? "Market data unavailable"
+              : `${visibleAssets.length} shown · ${filteredAssets.length} matched · ${assets.length} total`}
         </span>
         <span>
           {lastObserved
             ? `Observed ${formatObserved(lastObserved)}`
-            : "Awaiting source events"}
+            : catalogError
+              ? "Awaiting a successful refresh"
+              : "Awaiting source events"}
         </span>
       </div>
 
       {catalogError ? (
-        <div className="market-runtime-state" role="alert">
+        <div
+          className={`market-runtime-state ${recoveryFont.className}`}
+          role="alert"
+        >
           <strong>Live mirror unavailable</strong>
           <span>{catalogError} No fixture is shown as live data.</span>
+          <span>
+            Previous results are hidden until the market refresh succeeds.
+          </span>
+          <button
+            type="button"
+            className="wallet-button"
+            disabled={loading}
+            onClick={() => void loadCatalog()}
+          >
+            {loading ? "Retrying…" : "Retry market data"}
+          </button>
         </div>
       ) : null}
       {!loading && !catalogError && assets.length === 0 ? (
@@ -224,6 +264,9 @@ export function LiveMarketCatalog() {
           const key = `${asset.chain}:${asset.contractAddress}:${asset.tokenId}`;
           const active =
             asset.orderStatus === "active" && Boolean(asset.orderHash);
+          const orderId = shortOrderId(asset.orderHash);
+          // The link is the one the source reported, re-validated here; never one ArtFi assembles.
+          const link = venueLink(asset.source, asset.marketplaceUrl);
           return (
             <article className="market-mirror-card" key={key}>
               <div className="market-mirror-card__artwork market-placeholder">
@@ -237,14 +280,28 @@ export function LiveMarketCatalog() {
                 </p>
                 <dl>
                   <div>
+                    <dt>Source</dt>
+                    <dd>{venueLabel(asset.source)}</dd>
+                  </div>
+                  <div>
                     <dt>Order</dt>
                     <dd>
                       {active ? "Active listing" : asset.orderStatus || "None"}
                     </dd>
                   </div>
+                  {orderId ? (
+                    <div>
+                      <dt>Order ID</dt>
+                      <dd data-no-translate>{orderId}</dd>
+                    </div>
+                  ) : null}
                   <div>
                     <dt>Observed</dt>
                     <dd>{formatObserved(asset.latestEventTimestamp)}</dd>
+                  </div>
+                  <div>
+                    <dt>Freshness</dt>
+                    <dd>{freshness(asset.latestEventTimestamp)}</dd>
                   </div>
                   {asset.price ? (
                     <div>
@@ -255,9 +312,20 @@ export function LiveMarketCatalog() {
                     </div>
                   ) : null}
                 </dl>
+                {link ? (
+                  <details className="market-source-reference">
+                    <summary>Source reference</summary>
+                    <p data-no-translate>{link}</p>
+                  </details>
+                ) : (
+                  <p className="market-gate">
+                    No venue link was attributed to this record. ArtFi does not
+                    construct one.
+                  </p>
+                )}
                 <p className="market-gate">
-                  Source attributed to OpenSea · no external link or trade
-                  action
+                  Observed record only. This panel does not submit an order.
+                  Native NFT trading is not yet available in this build.
                 </p>
               </div>
             </article>
