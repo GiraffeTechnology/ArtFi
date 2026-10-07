@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createAgentService } from "./agent-service.mjs";
+import { createOracleObservation } from "./oracle-observation.mjs";
 const address = "0x" + "ab".repeat(20),
   hash = "0x" + "12".repeat(32),
   mixedCaseRevocationHash = "0x" + "aB".repeat(32);
@@ -59,7 +60,22 @@ test("source throw/unavailable/stale preserves owned durable read and independen
       policy,
       clock: () => 1000,
       sourceObservationTimeoutMs: 20,
-      observe,
+      observe: createOracleObservation({
+        mode: "TEST_ONLY_NO_REAL_VALUE",
+        observe,
+        resolveRequiredAttestation: async () => ({
+          attestation: { envelope: { attestationId: "fixture-attestation-1" } },
+          expectedSubject: {
+            assetId: "fixture",
+            chainId: "560048",
+            contract: address,
+            tokenId: "1",
+            purpose: "fixture-required-flow",
+          },
+        }),
+        attestationService: { verify() {} },
+        verifyOracleAttestation: async () => ({ valid: true, errorCode: null }),
+      }),
       planFor: async () => {
         throw Error("UNUSED");
       },
@@ -102,6 +118,12 @@ test("source throw/unavailable/stale preserves owned durable read and independen
     );
     assert.equal(before.fresh, false);
     assert.equal(before.execution.state, "PREPARED");
+    await assert.rejects(
+      service.recordRevocation(session, "test", "0x" + "00".repeat(32)),
+      /REVOCATION_HASH_INVALID/,
+    );
+    assert.equal(proofs, 0);
+    assert.equal(row.revocation, undefined);
     assert.equal(
       (await service.recordRevocation(session, "test", mixedCaseRevocationHash))
         .state,

@@ -1,3 +1,4 @@
+import { assertOracleIdentity } from "./oracle-observation.mjs";
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { kernelRequestDigest } from "./agent-kernel.mjs";
@@ -73,6 +74,35 @@ export function reservationIdentity(request) {
 }
 const decode = (value) =>
   typeof value === "string" ? JSON.parse(value) : structuredClone(value);
+function validateOracleEvidence(value, request) {
+  if (
+    !value ||
+    Object.keys(value).some(
+      (key) =>
+        ![
+          "valid",
+          "errorCode",
+          "checkedAt",
+          "attestationId",
+          "expectedSubject",
+        ].includes(key),
+    ) ||
+    typeof value.valid !== "boolean" ||
+    (value.valid
+      ? value.errorCode !== null
+      : !/^[A-Z][A-Z0-9_]{0,63}$/.test(value.errorCode ?? "")) ||
+    (value.checkedAt !== undefined &&
+      (typeof value.checkedAt !== "string" ||
+        !Number.isFinite(Date.parse(value.checkedAt))))
+  )
+    fail("ORACLE_EVIDENCE_INVALID");
+  if (
+    value.valid ||
+    Object.hasOwn(value, "attestationId") ||
+    Object.hasOwn(value, "expectedSubject")
+  )
+    assertOracleIdentity(value, request);
+}
 function validateMintAuthority(value, request) {
   if (
     !value ||
@@ -111,6 +141,7 @@ function validateRevocation(proof, request) {
     Object.keys(proof).length !== keys.length ||
     keys.some((k) => !Object.hasOwn(proof, k)) ||
     !digest(proof.transactionHash) ||
+    /^0x0{64}$/.test(proof.transactionHash) ||
     !address(proof.wallet) ||
     !address(proof.executor) ||
     proof.wallet.toLowerCase() !== request.intent.wallet.toLowerCase() ||
@@ -146,6 +177,8 @@ export function hydrateOperation(row) {
     fail("DURABLE_ROW_INVALID");
   if (Object.hasOwn(record, "revocation"))
     validateRevocation(record.revocation, request);
+  if (Object.hasOwn(record, "oracleAttestation"))
+    validateOracleEvidence(record.oracleAttestation, request);
   if (Object.hasOwn(record, "mintAuthority"))
     validateMintAuthority(record.mintAuthority, request);
   // Immutable identity always comes from verified columns, never record_json.
@@ -433,6 +466,7 @@ export function createDurableStore({
         !address(wallet) ||
         !proof ||
         !digest(proof.transactionHash) ||
+        /^0x0{64}$/.test(proof.transactionHash) ||
         !["PENDING", "CONFIRMED"].includes(proof.state) ||
         typeof proof.canonical !== "boolean"
       )
@@ -562,6 +596,7 @@ export function createDurableStore({
         "reconciliation",
         "reason",
         "mintAuthority",
+        "oracleAttestation",
         "reservedValue",
         "observedAggregateExposure",
       ]);
@@ -587,6 +622,11 @@ export function createDurableStore({
           fail("DURABLE_CAS_REFUSED");
         if (!transitions[row.state].includes(patch.state))
           fail("STATE_TRANSITION_REFUSED");
+        if (Object.hasOwn(patch, "oracleAttestation")) {
+          if (row.state !== "PREPARED" || patch.state !== "PREPARED")
+            fail("ORACLE_EVIDENCE_PATCH_STATE_REFUSED");
+          validateOracleEvidence(patch.oracleAttestation, row.request);
+        }
         if (Object.hasOwn(patch, "mintAuthority")) {
           if (row.state !== "PREPARED" || patch.state !== "PREPARED")
             fail("MINT_AUTHORITY_PATCH_STATE_REFUSED");
@@ -601,6 +641,7 @@ export function createDurableStore({
                   "reason",
                   "recoveryAttempts",
                   "mintAuthority",
+                  "oracleAttestation",
                 ].includes(k),
             )
           )

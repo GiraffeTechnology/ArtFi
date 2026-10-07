@@ -197,7 +197,8 @@ export function createAgentService({
   async function revocationProof(row, transactionHash) {
     if (
       typeof transactionHash !== "string" ||
-      !/^0x[0-9a-fA-F]{64}$/.test(transactionHash)
+      !/^0x[0-9a-fA-F]{64}$/.test(transactionHash) ||
+      /^0x0{64}$/i.test(transactionHash)
     )
       fail("REVOCATION_HASH_INVALID");
     const normalizedHash = transactionHash.toLowerCase();
@@ -369,6 +370,9 @@ export function createAgentService({
         fresh: observation.available === true && observation.current === true,
         observedAt: observation.observedAt,
         grounding: {
+          ...(row.oracleAttestation
+            ? { oracleAttestation: structuredClone(row.oracleAttestation) }
+            : {}),
           state:
             observation.assetRestricted === true
               ? "RESTRICTED"

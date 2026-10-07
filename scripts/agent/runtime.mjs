@@ -1,5 +1,6 @@
 import { createDurableStore } from "./durable-store.mjs";
 import { createAgentKernel } from "./agent-kernel.mjs";
+import { createOracleObservation } from "./oracle-observation.mjs";
 import { createAgentService } from "./agent-service.mjs";
 import { createRecoveryWorker } from "./recovery-worker.mjs";
 
@@ -10,11 +11,33 @@ export function createDurableRuntime({
   storeOptions = {},
   kernelOptions,
   serviceOptions,
+  oracleAttestation,
 }) {
   const mode = "TEST_ONLY_NO_REAL_VALUE";
   const store = createDurableStore({ ...storeOptions, mode, pool });
-  const tick = createAgentKernel({ ...kernelOptions, mode, store });
-  const service = createAgentService({ ...serviceOptions, mode, store });
+  if (
+    oracleAttestation !== undefined &&
+    (typeof oracleAttestation?.verifyAttestation !== "function" ||
+      Object.hasOwn(oracleAttestation, "verifyOracleAttestation") ||
+      Object.hasOwn(oracleAttestation, "attestationService"))
+  )
+    throw Error("ORACLE_RUNTIME_API_VERIFIER_REQUIRED");
+  const wrapObservation = (observe) =>
+    oracleAttestation === undefined
+      ? observe
+      : createOracleObservation({ ...oracleAttestation, mode, observe });
+  const tick = createAgentKernel({
+    ...kernelOptions,
+    observe: wrapObservation(kernelOptions.observe),
+    mode,
+    store,
+  });
+  const service = createAgentService({
+    ...serviceOptions,
+    observe: wrapObservation(serviceOptions.observe),
+    mode,
+    store,
+  });
   const worker = createRecoveryWorker({ mode, store, tick });
   let running = false;
   // Keep the observer bound across sequential run() calls as well as ticks.

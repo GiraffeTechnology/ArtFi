@@ -224,6 +224,7 @@ export function createAgentKernel({
           revoked?.state === "CONFIRMED" &&
           revoked.canonical === true &&
           /^0x[0-9a-f]{64}$/.test(revoked.transactionHash ?? "") &&
+          !/^0x0{64}$/.test(revoked.transactionHash) &&
           typeof revoked.wallet === "string" &&
           typeof revoked.executor === "string" &&
           revoked.wallet.toLowerCase() ===
@@ -253,6 +254,11 @@ export function createAgentKernel({
           observe(structuredClone(persisted), signal),
         );
         checkLease(record);
+        if (Object.hasOwn(observation, "oracleAttestation"))
+          await save({
+            state: "PREPARED",
+            oracleAttestation: structuredClone(observation.oracleAttestation),
+          });
         await refreshLease();
         const decision = await bounded("AUTHORIZE", (signal) =>
           authorize(
