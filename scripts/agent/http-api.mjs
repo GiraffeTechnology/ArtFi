@@ -1,7 +1,9 @@
 const operationId = (value) =>
   typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const transactionHash = (value) =>
-  typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
+  typeof value === "string" &&
+  /^0x[0-9a-fA-F]{64}$/.test(value) &&
+  !/^0x0{64}$/i.test(value);
 const plain = (value) => {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     return false;
@@ -94,8 +96,10 @@ export function createAgentHttpApi({
         ...(payload === undefined ? {} : { body: payload }),
         signal: controller.signal,
       });
+      controller.signal.throwIfAborted();
       if (
         !response ||
+        response.redirected === true ||
         !Number.isInteger(response.status) ||
         typeof response.headers?.get !== "function" ||
         typeof response.text !== "function"
@@ -112,6 +116,7 @@ export function createAgentHttpApi({
       )
         fail("HTTP_RESPONSE_TOO_LARGE");
       text = await response.text();
+      controller.signal.throwIfAborted();
     } catch (error) {
       if (controller.signal.aborted) fail("DEPENDENCY_TIMEOUT");
       if (/^[A-Z][A-Z0-9_]{0,63}$/.test(error?.message ?? "")) throw error;
@@ -147,10 +152,12 @@ export function createAgentHttpApi({
       return value;
     },
     async createIntent(input) {
-      if (!plain(input)) fail("HTTP_REQUEST_SCHEMA_INVALID");
+      if (!plain(input) || !operationId(input.operationId))
+        fail("HTTP_REQUEST_SCHEMA_INVALID");
       const value = await request("POST", "/intents", structuredClone(input));
       if (
         !operationId(value.id) ||
+        value.id !== input.operationId ||
         !states.has(value.state) ||
         typeof value.existing !== "boolean"
       )

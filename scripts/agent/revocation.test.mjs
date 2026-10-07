@@ -87,6 +87,7 @@ test("pending, noncanonical and identity-drift evidence cannot permanently termi
     { state: "PENDING" },
     { canonical: false },
     { transactionHash: "bad" },
+    { transactionHash: "0x" + "00".repeat(32) },
     { wallet: executor },
     { executor: wallet },
     { chainId: "1" },

@@ -12,7 +12,12 @@ test("revocation hashes use one canonical boundary", () => {
     normalizeRevocationHash(`0x${"aB".repeat(32)}`),
     `0x${"ab".repeat(32)}`,
   );
-  for (const value of [undefined, "0x12", `0x${"gg".repeat(32)}`])
+  for (const value of [
+    undefined,
+    "0x12",
+    `0x${"gg".repeat(32)}`,
+    `0x${"00".repeat(32)}`,
+  ])
     assert.throws(
       () => normalizeRevocationHash(value),
       /REVOCATION_SUBMISSION_INVALID/,

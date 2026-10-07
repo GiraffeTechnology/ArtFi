@@ -141,6 +141,7 @@ function validateRevocation(proof, request) {
     Object.keys(proof).length !== keys.length ||
     keys.some((k) => !Object.hasOwn(proof, k)) ||
     !digest(proof.transactionHash) ||
+    /^0x0{64}$/.test(proof.transactionHash) ||
     !address(proof.wallet) ||
     !address(proof.executor) ||
     proof.wallet.toLowerCase() !== request.intent.wallet.toLowerCase() ||
@@ -193,7 +194,8 @@ export function hydrateOperation(row) {
 }
 
 // No connection/configuration discovery or credential handling here. The trusted
-// composition root supplies a mysql2-compatible pool for approved CTYun only.
+// composition root supplies a mysql2-compatible pool for the approved dedicated
+// <CLOUD_PROVIDER_A> TEST_ONLY database role only.
 // Unit contracts are not evidence of an actual DB transaction/lease campaign.
 export function createDurableStore({
   mode,
@@ -464,6 +466,7 @@ export function createDurableStore({
         !address(wallet) ||
         !proof ||
         !digest(proof.transactionHash) ||
+        /^0x0{64}$/.test(proof.transactionHash) ||
         !["PENDING", "CONFIRMED"].includes(proof.state) ||
         typeof proof.canonical !== "boolean"
       )

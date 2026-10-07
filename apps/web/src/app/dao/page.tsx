@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { DaoCreationFlow } from "@/components/dao-creation-flow";
 import { DaoGovernance } from "@/components/dao-governance";
@@ -23,6 +24,11 @@ const governanceRules = [
 export default function DaoPage() {
   return (
     <main className="approved-page approved-page--dao page-shell">
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link href="/market/fractionals">Fractions &amp; DAO</Link>
+        <span aria-hidden="true">/</span>
+        <span>DAO</span>
+      </nav>
       <div className="module-banner">
         <span>DAO / Hoodi governance</span>
         <strong>RWA ownership verification required</strong>

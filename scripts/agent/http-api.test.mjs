@@ -133,3 +133,88 @@ test("client bounds a hung authenticated request", async () => {
   });
   await assert.rejects(api.getIntent("op-1"), /DEPENDENCY_TIMEOUT/);
 });
+
+test("zero revocation hash and invalid create identity are rejected before transport", async () => {
+  let calls = 0;
+  const api = createAgentHttpApi({
+    basePath: "/api/agent/v1",
+    fetchImpl: async () => {
+      calls++;
+      return json({});
+    },
+  });
+  await assert.rejects(
+    api.recordRevocation("op-1", "0x" + "00".repeat(32)),
+    /REVOCATION_HASH_INVALID/,
+  );
+  for (const input of [{}, { operationId: "../op-1" }])
+    await assert.rejects(api.createIntent(input), /HTTP_REQUEST_SCHEMA_INVALID/);
+  assert.equal(calls, 0);
+});
+
+test("create response cannot replace the immutable recovery operation ID", async () => {
+  let calls = 0;
+  const api = createAgentHttpApi({
+    basePath: "/api/agent/v1",
+    fetchImpl: async () => {
+      calls++;
+      return json({ id: "another-op", state: "PREPARED", existing: false });
+    },
+  });
+  await assert.rejects(
+    api.createIntent({ operationId: "op-1", signature: "synthetic" }),
+    /HTTP_RESPONSE_INVALID/,
+  );
+  assert.equal(calls, 1); // Ambiguous create must not be retried by the client.
+});
+
+test("client rejects a transport-reported redirect without consuming its body", async () => {
+  let bodyReads = 0;
+  const api = createAgentHttpApi({
+    basePath: "/api/agent/v1",
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      redirected: true,
+      headers: new Headers({ "content-type": "application/json" }),
+      text: async () => {
+        bodyReads++;
+        return JSON.stringify({ id: "op-1", mode: "TEST_ONLY_NO_REAL_VALUE" });
+      },
+    }),
+  });
+  await assert.rejects(api.getIntent("op-1"), /HTTP_RESPONSE_INVALID/);
+  assert.equal(bodyReads, 0);
+});
+
+for (const phase of ["fetch", "body"]) {
+  test(
+    `client refuses successful ${phase} completion after its deadline`,
+    { timeout: 1000 },
+    async () => {
+      const value = { id: "op-1", mode: "TEST_ONLY_NO_REAL_VALUE" };
+      const api = createAgentHttpApi({
+        basePath: "/api/agent/v1",
+        requestTimeoutMs: 10,
+        fetchImpl: async (_url, { signal }) => {
+          const afterAbort = (result) =>
+            new Promise((resolve) => {
+              if (signal.aborted) resolve(result);
+              else
+                signal.addEventListener("abort", () => resolve(result), {
+                  once: true,
+                });
+            });
+          if (phase === "fetch") return afterAbort(json(value));
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers({ "content-type": "application/json" }),
+            text: () => afterAbort(JSON.stringify(value)),
+          };
+        },
+      });
+      await assert.rejects(api.getIntent("op-1"), /DEPENDENCY_TIMEOUT/);
+    },
+  );
+}

@@ -11,12 +11,20 @@
     "adminSafe",
     "stages",
     "treasuryAuthority",
-    "nftTreasuryCustodyClaimed"
+    "nftTreasuryCustodyClaimed",
+    "testAssetMarkers"
   ],
   "properties": {
-    "schema": { "const": "artfi-hoodi-admin-safe-deployment/v1" },
-    "chainId": { "const": 560048 },
-    "safeId": { "type": "string", "minLength": 1 },
+    "schema": {
+      "const": "artfi-hoodi-admin-safe-deployment/v1"
+    },
+    "chainId": {
+      "const": 560048
+    },
+    "safeId": {
+      "type": "string",
+      "minLength": 1
+    },
     "adminSafe": {
       "type": "object",
       "additionalProperties": false,
@@ -29,12 +37,30 @@
         "delaySeconds"
       ],
       "properties": {
-        "address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
-        "runtimeCodehash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "ownersSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-        "ownerCount": { "type": "integer", "minimum": 2 },
-        "threshold": { "type": "integer", "minimum": 2 },
-        "delaySeconds": { "type": "integer", "minimum": 1 }
+        "address": {
+          "type": "string",
+          "pattern": "^0x[0-9a-fA-F]{40}$"
+        },
+        "runtimeCodehash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "ownersSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "ownerCount": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "threshold": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "delaySeconds": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "stages": {
@@ -42,9 +68,15 @@
       "required": ["stage2", "stage3", "charity"],
       "additionalProperties": false,
       "properties": {
-        "stage2": { "$ref": "#/$defs/stage2" },
-        "stage3": { "$ref": "#/$defs/stage3" },
-        "charity": { "$ref": "#/$defs/charity" }
+        "stage2": {
+          "$ref": "#/$defs/stage2"
+        },
+        "stage3": {
+          "$ref": "#/$defs/stage3"
+        },
+        "charity": {
+          "$ref": "#/$defs/charity"
+        }
       }
     },
     "treasuryAuthority": {
@@ -52,14 +84,36 @@
       "additionalProperties": false,
       "required": ["status", "rationale"],
       "properties": {
-        "status": { "const": "not-applicable" },
-        "rationale": { "type": "string", "minLength": 1 }
+        "status": {
+          "const": "not-applicable"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
-    "nftTreasuryCustodyClaimed": { "const": false }
+    "nftTreasuryCustodyClaimed": {
+      "const": false
+    },
+    "testAssetMarkers": {
+      "type": "array",
+      "description": "PRD.md §7.0 test-asset markers. This record describes a Hoodi deployment, so it must say in §7.0's own words that the assets carry no real-world value and no legal effect.",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 3,
+      "uniqueItems": true,
+      "contains": {
+        "enum": ["TESTNET", "NO REAL-WORLD VALUE", "NO LEGAL EFFECT"]
+      }
+    }
   },
   "$defs": {
-    "address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+    "address": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$"
+    },
     "stage2": {
       "type": "object",
       "additionalProperties": false,
@@ -70,8 +124,13 @@
         "rwaMinterHolder"
       ],
       "properties": {
-        "safeId": { "type": "string", "minLength": 1 },
-        "bootstrapDeployerRolesRevoked": { "const": true },
+        "safeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bootstrapDeployerRolesRevoked": {
+          "const": true
+        },
         "roleHolders": {
           "type": "object",
           "additionalProperties": false,
@@ -83,14 +142,26 @@
             "rwaPauser"
           ],
           "properties": {
-            "registryAdmin": { "$ref": "#/$defs/address" },
-            "registryRegistrar": { "$ref": "#/$defs/address" },
-            "registryPauser": { "$ref": "#/$defs/address" },
-            "rwaAdmin": { "$ref": "#/$defs/address" },
-            "rwaPauser": { "$ref": "#/$defs/address" }
+            "registryAdmin": {
+              "$ref": "#/$defs/address"
+            },
+            "registryRegistrar": {
+              "$ref": "#/$defs/address"
+            },
+            "registryPauser": {
+              "$ref": "#/$defs/address"
+            },
+            "rwaAdmin": {
+              "$ref": "#/$defs/address"
+            },
+            "rwaPauser": {
+              "$ref": "#/$defs/address"
+            }
           }
         },
-        "rwaMinterHolder": { "const": "registry" }
+        "rwaMinterHolder": {
+          "const": "registry"
+        }
       }
     },
     "stage3": {
@@ -98,15 +169,24 @@
       "additionalProperties": false,
       "required": ["safeId", "roleHolders", "futureVaultRoleBinding"],
       "properties": {
-        "safeId": { "type": "string", "minLength": 1 },
+        "safeId": {
+          "type": "string",
+          "minLength": 1
+        },
         "roleHolders": {
           "type": "object",
           "additionalProperties": false,
           "required": ["factoryAdmin", "factoryCreator", "factoryPauser"],
           "properties": {
-            "factoryAdmin": { "$ref": "#/$defs/address" },
-            "factoryCreator": { "$ref": "#/$defs/address" },
-            "factoryPauser": { "$ref": "#/$defs/address" }
+            "factoryAdmin": {
+              "$ref": "#/$defs/address"
+            },
+            "factoryCreator": {
+              "$ref": "#/$defs/address"
+            },
+            "factoryPauser": {
+              "$ref": "#/$defs/address"
+            }
           }
         },
         "futureVaultRoleBinding": {
@@ -119,8 +199,13 @@
       "additionalProperties": false,
       "required": ["enabled", "safeId", "roleHolders"],
       "properties": {
-        "enabled": { "type": "boolean" },
-        "safeId": { "type": "string", "minLength": 1 },
+        "enabled": {
+          "type": "boolean"
+        },
+        "safeId": {
+          "type": "string",
+          "minLength": 1
+        },
         "roleHolders": {
           "type": "object",
           "additionalProperties": false,
@@ -131,10 +216,18 @@
             "charityPauser"
           ],
           "properties": {
-            "charityAdmin": { "$ref": "#/$defs/address" },
-            "charitySeriesCreator": { "$ref": "#/$defs/address" },
-            "charityDonationRecorder": { "$ref": "#/$defs/address" },
-            "charityPauser": { "$ref": "#/$defs/address" }
+            "charityAdmin": {
+              "$ref": "#/$defs/address"
+            },
+            "charitySeriesCreator": {
+              "$ref": "#/$defs/address"
+            },
+            "charityDonationRecorder": {
+              "$ref": "#/$defs/address"
+            },
+            "charityPauser": {
+              "$ref": "#/$defs/address"
+            }
           }
         }
       }
