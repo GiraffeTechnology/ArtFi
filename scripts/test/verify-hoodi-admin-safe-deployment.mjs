@@ -75,8 +75,16 @@ try {
   reject("missing treasury applicability declaration", (candidate) => {
     delete candidate.treasuryAuthority;
   });
+  // PRD.md §7.0's second place: a Hoodi deployment record that does not declare the markers, and
+  // one that declares only some of them.
+  reject("missing test-asset markers", (candidate) => {
+    delete candidate.testAssetMarkers;
+  });
+  reject("partial test-asset markers", (candidate) => {
+    candidate.testAssetMarkers = ["TESTNET"];
+  });
   process.stdout.write(
-    "hoodi-admin-safe-verifier-tests=pass (1 positive, 15 negative)\n",
+    "hoodi-admin-safe-verifier-tests=pass (1 positive, 17 negative)\n",
   );
 } finally {
   rmSync(scratch, { recursive: true, force: true });

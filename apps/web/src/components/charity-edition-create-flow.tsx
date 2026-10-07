@@ -21,6 +21,7 @@ import {
 import { charityEditionsAbi } from "@/lib/contracts";
 import { supportedChain } from "@/lib/wagmi";
 
+import { CharityEditionRightsNotice } from "./charity-edition-rights-notice";
 import { NFTWalletImport } from "./nft-wallet-import";
 
 type EditionStatus =
@@ -386,6 +387,7 @@ export function CharityEditionCreateFlow() {
             ) : null}
           </>
         ) : null}
+        <CharityEditionRightsNotice className="nft-wallet-import__status" />
       </aside>
     </div>
   );

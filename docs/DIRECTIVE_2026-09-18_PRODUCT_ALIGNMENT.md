@@ -97,5 +97,5 @@ These rules preserve the commercial product design.
 - No requirement status or count in `docs/STATUS.md` moves.
 - The promotion gates in `docs/ACCEPTANCE.md` are unaffected.
 - The test chain remains Hoodi `560048`; the production chain remains undecided.
-- Issue #84 remains the product baseline. This directive is an explicit later client ruling under
-  `AGENTS.md` §1 priority 2 and is read alongside it, correcting positioning where the two differ.
+- Issue #110 is the product baseline and incorporates #84. This directive is consolidated into #110
+  §1; it remains the record of the ruling that produced it.

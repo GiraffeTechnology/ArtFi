@@ -37,7 +37,7 @@ the newly authorized observation version, not a permanent equality to the creati
 snapshot. This does not replace nonce/reservation enforcement or chain checks.
 
 `durable-store.sql` is an unapplied schema template, not a numbered deployment
-migration. A reviewed exclusive CTYun TEST schema and non-root TLS pool are still
+migration. A reviewed exclusive <CLOUD_PROVIDER_A> TEST schema and non-root TLS pool are still
 required. Uint256 reservations use canonical decimal strings in MySQL-compatible
 `VARCHAR(78)` columns and are range-checked before write and after read. The code
 expects a mysql2-compatible pool, but installs no driver and
@@ -73,6 +73,11 @@ database, installation, rollback, alerting, recovery and soak fields describe
 currently unverified implementation evidence only. They do not amend issue #84 or
 independently block a bounded stage. This read-only artifact does not implement
 the autonomous responsibilities described by issue #84 sections 30 and 36.
+
+The frozen r2 producer predates the vendor-neutral host-role ruling. Its exact
+`producerHostRole` is accepted only at this versioned compatibility boundary and
+is normalized to `artfi-delivery-link` for ArtFi's internal contract. New
+producers and schemas may not reuse the legacy producer field.
 
 The separately frozen `ArtFiLinkOps` r3 package is audit-only provenance, not
 an executable dependency contract: archive
