@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  assertOracleIdentity,
   createOracleApiVerifier,
   createOracleObservation,
 } from "./oracle-observation.mjs";
@@ -83,6 +84,7 @@ test("Oracle API verifier posts only the attestation and exact expected subject"
     "https://oracle.example/v1/rwa/attestations/verify",
   );
   assert.equal(captured.init.method, "POST");
+  assert.equal(captured.init.redirect, "error");
   assert.equal(captured.init.signal, signal);
   assert.deepEqual(JSON.parse(captured.init.body), {
     attestation: required.attestation,
@@ -373,4 +375,76 @@ test("required verdicts map to existing policy fields without replacing mint aut
   assert.equal(unavailable.available, false);
   assert.equal(unavailable.current, false);
   assert.equal(Object.hasOwn(valid, "mintAuthority"), false);
+});
+
+test("Oracle API verifier rejects a redirected response even from an injected transport", async () => {
+  let bodyReads = 0;
+  const verify = createOracleApiVerifier({
+    mode,
+    verifyUrl: "https://oracle.example/v1/rwa/attestations/verify",
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      redirected: true,
+      json: async () => {
+        bodyReads++;
+        return { valid: true, errorCode: null };
+      },
+    }),
+  });
+  await assert.rejects(
+    verify(required.attestation, subject),
+    /ATTESTATION_VERIFICATION_FAILED/,
+  );
+  assert.equal(bodyReads, 0);
+});
+
+for (const bodyRejects of [false, true]) {
+  test(`Oracle API verifier propagates cancellation during body read (reject=${bodyRejects})`, async () => {
+    const controller = new AbortController();
+    const verify = createOracleApiVerifier({
+      mode,
+      verifyUrl: "https://oracle.example/v1/rwa/attestations/verify",
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => {
+          controller.abort();
+          if (bodyRejects) throw Error("BODY_READ_ABORTED");
+          return { valid: true, errorCode: null };
+        },
+      }),
+    });
+    await assert.rejects(
+      verify(required.attestation, subject, new Date(), controller.signal),
+      { name: "AbortError" },
+    );
+  });
+}
+
+test("Oracle evidence token identity accepts uint256 max and rejects noncanonical or overflowing IDs", () => {
+  const maximum = (1n << 256n) - 1n;
+  const check = (tokenId) => {
+    const expectedSubject = { ...subject, tokenId };
+    return assertOracleIdentity(
+      { attestationId: "fixture-attestation-1", expectedSubject },
+      {
+        execution: { chainId: subject.chainId },
+        sale: { nft: subject.contract, tokenId },
+      },
+    );
+  };
+  for (const tokenId of ["0", maximum.toString()])
+    assert.doesNotThrow(() => check(tokenId));
+  for (const tokenId of [
+    (maximum + 1n).toString(),
+    "9".repeat(78),
+    "9".repeat(79),
+    "-1",
+    "+1",
+    "01",
+    " 1",
+    "1.0",
+  ])
+    assert.throws(() => check(tokenId), /ORACLE_EVIDENCE_IDENTITY_INVALID/);
 });

@@ -1,4 +1,5 @@
--- Unnumbered TEST_ONLY schema draft. Apply only to an approved exclusive CTYun
+-- Unnumbered TEST_ONLY schema draft. Apply only to an approved exclusive
+-- <CLOUD_PROVIDER_A> TEST_ONLY database
 -- test schema after integration assigns the actual next-free migration number.
 CREATE TABLE agent_slice_operations (
   operation_id VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,

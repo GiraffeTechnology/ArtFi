@@ -38,12 +38,15 @@ for migration in \
   apps/api/migrations/000004_stage4_market_governance.up.sql \
   apps/api/migrations/000005_stage6_compliance_operations.up.sql \
   apps/api/migrations/000006_dao_rwa_governance.up.sql \
-  apps/api/migrations/000007_external_trade_orchestration.up.sql; do
+  apps/api/migrations/000007_external_trade_orchestration.up.sql \
+  apps/api/migrations/000008_hoodi_test_chain.up.sql \
+  apps/api/migrations/000009_native_signed_orders.up.sql \
+  apps/api/migrations/000010_wallet_user_sessions.up.sql; do
   "${compose[@]}" exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot "$test_database" < "$migration"
 done
 
 test "$("${compose[@]}" exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot "$test_database" \
-  -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
+  -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "31"
 
 docker run --rm --network host \
   -e GOPROXY=off \
@@ -52,9 +55,12 @@ docker run --rm --network host \
   -v /home/dev/go/pkg/mod:/go/pkg/mod \
   -w /src/apps/api \
   golang:1.26.5-bookworm \
-  sh -lc '/usr/local/go/bin/go test -race ./...'
+  sh -lc '/usr/local/go/bin/go test -race -v ./...'
 
 for rollback in \
+  apps/api/migrations/000010_wallet_user_sessions.down.sql \
+  apps/api/migrations/000009_native_signed_orders.down.sql \
+  apps/api/migrations/000008_hoodi_test_chain.down.sql \
   apps/api/migrations/000007_external_trade_orchestration.down.sql \
   apps/api/migrations/000006_dao_rwa_governance.down.sql \
   apps/api/migrations/000005_stage6_compliance_operations.down.sql \

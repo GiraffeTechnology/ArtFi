@@ -1,0 +1,121 @@
+{
+  "publication_date": "2026-10-05",
+  "repository": "GiraffeTechnology/ArtFi",
+  "source_identity_is_not_publication_commit": true,
+  "archives": [
+    {
+      "original_filename": "01-ArtFi-Wallet-Handoff-20261003.zip",
+      "original_size": 13169357,
+      "original_sha256": "bcef7acbc598048dc3d061bec6b3bb3066f110d9279cf68abf5c4edc8e558d3b",
+      "repository": "GiraffeTechnology/ArtFi",
+      "archive_status": "historical",
+      "representation": "github_safe_archive",
+      "files": [
+        {
+          "path": "releases/2026-10-05-delivery-archive/01-ArtFi-Wallet-Handoff-20261003-github-safe.zip",
+          "size": 8814894,
+          "sha256": "fcc44b25898c9e8f88ee1b44c15ca2510fd454ff9840bc7144be4f1614d3bb1f",
+          "git_blob_sha1": "30dbe9db764cb4cf25799ecca3f9bc4b02cb5947"
+        }
+      ],
+      "mirror_full_filename": "01-ArtFi-Wallet-Handoff-20261003-github-safe.zip",
+      "mirror_full_size": 8814894,
+      "mirror_full_sha256": "fcc44b25898c9e8f88ee1b44c15ca2510fd454ff9840bc7144be4f1614d3bb1f"
+    },
+    {
+      "original_filename": "ArtFi-Coding-Handoff-13f9b6b7-20261003.zip",
+      "original_size": 1545898,
+      "original_sha256": "6ddaf09fbd6b93abc726b2ceb0fce5badec8103bc71ee7d69bc7931eab82b4c0",
+      "repository": "GiraffeTechnology/ArtFi",
+      "archive_status": "historical",
+      "representation": "github_safe_archive",
+      "files": [
+        {
+          "path": "releases/2026-10-05-delivery-archive/ArtFi-Coding-Handoff-13f9b6b7-20261003-github-safe.zip",
+          "size": 1546934,
+          "sha256": "dc9469f39c9acf187b1fda2cc00a31460dd06488a1af6fdf52b0a0546fe10418",
+          "git_blob_sha1": "29704186525fa5576392c6f87a3c2c81af515009"
+        }
+      ],
+      "mirror_full_filename": "ArtFi-Coding-Handoff-13f9b6b7-20261003-github-safe.zip",
+      "mirror_full_size": 1546934,
+      "mirror_full_sha256": "dc9469f39c9acf187b1fda2cc00a31460dd06488a1af6fdf52b0a0546fe10418"
+    },
+    {
+      "original_filename": "artfi-deployment-contract-20261003.zip",
+      "original_size": 1469647,
+      "original_sha256": "0a819d30edf2d85c310fd7a33890c4917049b46d9cba7a4aa0c145154142de9c",
+      "repository": "GiraffeTechnology/ArtFi",
+      "archive_status": "historical",
+      "representation": "github_safe_archive",
+      "files": [
+        {
+          "path": "releases/2026-10-05-delivery-archive/artfi-deployment-contract-20261003-github-safe.zip",
+          "size": 1472263,
+          "sha256": "a2fc10f7b02a643a0fa293a6add2aac357208615db5ddb0a9eb7fcbaabf8a096",
+          "git_blob_sha1": "d0763ace0e9283be4d73425dc38d24a4cf74b742"
+        }
+      ],
+      "mirror_full_filename": "artfi-deployment-contract-20261003-github-safe.zip",
+      "mirror_full_size": 1472263,
+      "mirror_full_sha256": "a2fc10f7b02a643a0fa293a6add2aac357208615db5ddb0a9eb7fcbaabf8a096"
+    },
+    {
+      "original_filename": "artfi-mint-vault-recovery-candidate-20261003.zip",
+      "original_size": 1595968,
+      "original_sha256": "f0f81fbe45921812a4f7fb6d442dabd4c20bb619c9707b416f884b4441cbfb69",
+      "repository": "GiraffeTechnology/ArtFi",
+      "archive_status": "historical",
+      "representation": "github_safe_archive",
+      "files": [
+        {
+          "path": "releases/2026-10-05-delivery-archive/artfi-mint-vault-recovery-candidate-20261003-github-safe.zip",
+          "size": 1599136,
+          "sha256": "17991804831bdbf306c84a3b0d18a885607be9a13b7bcf23d0d28f7d68405671",
+          "git_blob_sha1": "2ab109026d29122b7e7f24fecd296ac6b7892424"
+        }
+      ],
+      "mirror_full_filename": "artfi-mint-vault-recovery-candidate-20261003-github-safe.zip",
+      "mirror_full_size": 1599136,
+      "mirror_full_sha256": "17991804831bdbf306c84a3b0d18a885607be9a13b7bcf23d0d28f7d68405671"
+    },
+    {
+      "original_filename": "artfi-native-rebuilt-candidate-20261003.zip",
+      "original_size": 1739662,
+      "original_sha256": "b825d3528cd2880601d8a17039987159bdc7ee4956e0e36764f4bba6cba33160",
+      "repository": "GiraffeTechnology/ArtFi",
+      "archive_status": "historical",
+      "representation": "github_safe_archive",
+      "files": [
+        {
+          "path": "releases/2026-10-05-delivery-archive/artfi-native-rebuilt-candidate-20261003-github-safe.zip",
+          "size": 1742918,
+          "sha256": "af086167d5cf26e440b98f8464215e34867e9a028a6e6a69f0c42b65400f606a",
+          "git_blob_sha1": "ed3ad50497e4b0333bab54d24d3f4d4d5cc4cd2c"
+        }
+      ],
+      "mirror_full_filename": "artfi-native-rebuilt-candidate-20261003-github-safe.zip",
+      "mirror_full_size": 1742918,
+      "mirror_full_sha256": "af086167d5cf26e440b98f8464215e34867e9a028a6e6a69f0c42b65400f606a"
+    },
+    {
+      "original_filename": "artfi-portfolio-read-models-20261003.zip",
+      "original_size": 1483020,
+      "original_sha256": "edc6799d414ac6b26b82b5e1c4513b587df9021f0daab47815c6298586c3c13e",
+      "repository": "GiraffeTechnology/ArtFi",
+      "archive_status": "historical",
+      "representation": "github_safe_archive",
+      "files": [
+        {
+          "path": "releases/2026-10-05-delivery-archive/artfi-portfolio-read-models-20261003-github-safe.zip",
+          "size": 1485185,
+          "sha256": "d08ce6b96ab59e1db4fe75a6a8000ecb2ebf7a5e6192a6b8197bd0ee3721b9a2",
+          "git_blob_sha1": "2334cfa3d338aaeaa9afa2c2819297c24384dd8d"
+        }
+      ],
+      "mirror_full_filename": "artfi-portfolio-read-models-20261003-github-safe.zip",
+      "mirror_full_size": 1485185,
+      "mirror_full_sha256": "d08ce6b96ab59e1db4fe75a6a8000ecb2ebf7a5e6192a6b8197bd0ee3721b9a2"
+    }
+  ]
+}
