@@ -40,6 +40,9 @@ export function createDurableRuntime({
   });
   const worker = createRecoveryWorker({ mode, store, tick });
   let running = false;
+  // Keep the observer bound across sequential run() calls as well as ticks.
+  // A hung observer must not accumulate another notification on every restart.
+  let observerRunning = false;
   return Object.freeze({
     service,
     runBatch: (signal) => worker.runBatch(signal),
@@ -54,7 +57,6 @@ export function createDurableRuntime({
         throw Error("RUNTIME_CONFIGURATION_INVALID");
       if (running) throw Error("RUNTIME_ALREADY_RUNNING");
       running = true;
-      let observerRunning = false;
       const notify = (result) => {
         if (observerRunning) return;
         observerRunning = true;

@@ -118,6 +118,12 @@ test("source throw/unavailable/stale preserves owned durable read and independen
     );
     assert.equal(before.fresh, false);
     assert.equal(before.execution.state, "PREPARED");
+    await assert.rejects(
+      service.recordRevocation(session, "test", "0x" + "00".repeat(32)),
+      /REVOCATION_HASH_INVALID/,
+    );
+    assert.equal(proofs, 0);
+    assert.equal(row.revocation, undefined);
     assert.equal(
       (await service.recordRevocation(session, "test", mixedCaseRevocationHash))
         .state,

@@ -1,5 +1,57 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-07 PR #125 dependency source refresh
+
+Based on main `0574d8dfef70dd6ea8e3a903cb47ed5d8441221a`, this candidate
+updates the Web Zod dependency from 4.6.2 to 4.6.5 and only its qualified lock
+references and integrity. Current Vitest and other dependencies are retained.
+This is a source record before fresh frozen installation and full CI; no runtime
+or deployment acceptance is inferred. Existing evidence and module states below
+remain unchanged.
+
+## 2026-10-07 PR #102 current-main recovery source
+
+Based on main `bf31bf0202d40ef977aed9986f0d02de341c68ff`, this bounded candidate
+clears old catalogue cards when refresh fails and supports manual retry alongside
+polling without overlapping requests. Current venue, price and freshness fields
+and filter state are preserved. Browser fixtures cover manual and polling recovery
+and the retained local font. This is a source-only record before fresh CI;
+production provider connectivity and deployment are unverified. Existing module
+statuses and historical evidence below remain unchanged.
+
+## 2026-10-07 PR #67 current-main source refresh
+
+The bounded startup database-pool slice is reapplied to main
+`840d5fe057268d015cefece0ef8330a59aba236f`. It preserves startup defaults,
+externalizes bounded pool settings, and replaces raw startup driver errors with
+fixed codes. Source regressions cover defaults, pool setters and invalid inputs.
+This refreshed source is NOT_TESTED and NOT_PUBLISHED. Historical PR #67 CI is not
+inherited. Dedicated CTYun database integration, TLS, backup/restore and runtime
+switching remain unverified; no hot-switch implementation or acceptance is claimed.
+Current evidence and module statuses below remain unchanged.
+
+## 2026-10-03 Xiongan runtime destination correction
+
+The client's explicit correction removes the hardcoded wallet URL and all implicit
+application defaults. The Web server reads the complete public destination from
+`ARTFI_XIONGAN_WALLET_URL` at request time through a no-store configuration route.
+All wallet entry points share it; missing, invalid or failed configuration shows
+an unavailable state without an old URL fallback. Browser Wallet and authentication
+are unchanged. [Validation, isolated tests and deployment contract](XIONGAN_WALLET_ENTRY.md)
+record the bounded change. Exact-head CI and actual deployed endpoint checks remain
+separate evidence; no server, bridge, port binding or transaction was changed.
+
+## 2026-10-03 Xiongan navigation increment
+
+The client-requested ArtFi-to-Xiongan DApp entry is implemented as an explicit
+external link in the overview, desktop/mobile navigation, portfolio and wallet
+chooser. The existing portfolio and Browser Wallet provider remain. Opening the
+DApp is explicitly not a wallet connection. [Scope, reviewed source revisions,
+local checks, browser/toolchain limits and deployment handoff](XIONGAN_WALLET_ENTRY.md)
+are recorded separately. Current-head CI and deployed navigation verification
+remain required evidence; this increment claims no login, signature, transaction
+or complete-product acceptance.
+
 | Field       | Value                                                                 |
 | ----------- | --------------------------------------------------------------------- |
 | Reviewed    | `9afce78` on `main` (PR #65)                                          |
@@ -34,6 +86,26 @@
 
 ## Headline
 
+### Portfolio read-model corrections (2026-10-03)
+
+Under the client's approved bounded three-section delivery and existing portfolio workflow,
+indexed balances now say `base units (unscaled)` and explain that token decimals
+have not been applied. The UI preserves raw transfer values without assuming a decimal
+precision or introducing token metadata or RPC dependencies.
+
+Chain-event replay now updates the persisted `confirmed` flag from the retained maximum
+confirmation count, using the existing `confirmations > 0` rule. Removed events still take
+priority in transaction history. `TestMySQLPortfolioConfirmationReplaySurvivesRestart`
+checks 0-to-1 confirmation, lower-count replay, removal/restoration, unchanged raw balances,
+cache invalidation, and fresh service/database connections against real MySQL.
+
+Local checks on this change pass: Go vet, the full Go race suite, web typecheck, web lint,
+all 449 web unit tests, changed-component formatting, and the repository secret scan.
+The real MySQL regression compiled but was skipped because `ARTFI_INTEGRATION_MYSQL_DSN`
+is unset and this executor has no MySQL or Docker binary; the existing migration CI job
+runs it with MySQL. Browser checks, build, current-head CI, deployment, and live chain
+behavior were not verified here. No status or requirement count is promoted.
+
 ### Stage 2 integration work (2026-09-09)
 
 `scripts/agent/README.md` records the first deterministic Agent integration slice
@@ -62,12 +134,12 @@ configuration. These are not real database isolation or deployed chain evidence.
 | Status                     | Count | Meaning here                                      |
 | -------------------------- | ----: | ------------------------------------------------- |
 | `VERIFIED`                 |     4 | Evidence exists on this commit and environment    |
-| `IMPLEMENTED-NOT-VERIFIED` |    36 | **Code exists; only runtime evidence is missing** |
-| `NOT-IMPLEMENTED`          |    35 | Behaviour absent                                  |
+| `IMPLEMENTED-NOT-VERIFIED` |    37 | **Code exists; only runtime evidence is missing** |
+| `NOT-IMPLEMENTED`          |    34 | Behaviour absent                                  |
 | `BLOCKED`                  |     1 | Client-side asset missing                         |
 | `PENDING-GATE`             |     1 | Scheduled, awaiting a named gate                  |
 
-The 36 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
+The 37 `IMPLEMENTED-NOT-VERIFIED` items are the cheapest available progress: one execution of the
 G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ---
@@ -82,57 +154,57 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 | M4 DAO governance  |      6 |          1 |              4 |          1 |                  |
 | M5 Security        |      7 |          1 |              1 |          4 | 1 `PENDING-GATE` |
 | M6 Operations      |      5 |          0 |              2 |          3 |                  |
-| CH Charity NFT     |     11 |          0 |             10 |          1 |                  |
+| CH Charity NFT     |     11 |          0 |             11 |          0 |                  |
 | XM External market |      6 |          0 |              6 |          0 |                  |
 | §5 Non-functional  |      8 |          1 |              0 |          7 |                  |
 | §7 Validation data |      5 |          1 |              2 |          2 |                  |
-| **Total**          | **77** |      **4** |         **36** |     **35** | **2**            |
+| **Total**          | **77** |      **4** |         **37** |     **34** | **2**            |
 
 ---
 
 ## M1 — Smart contracts (`PRD.md` §4.1)
 
-| #    | Requirement                           | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---- | ------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1.1 | Auction: listing, bid, settle, refund | `IMPLEMENTED-NOT-VERIFIED` | `ArtFiMarket.sol`; `MarketGovernance.t.sol` preserves the PR #46 paused seller exit and covers fixed-price and auction settlement, pull refunds, cancellation, and ABI compatibility. Hoodi receipts remain required                                                                                                                                                                                                                                                                                                                                    |
-| M1.2 | Auction: reserve price                | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::testAuctionReserveNotMetRefundsBidAndReturnsAsset`. Hoodi receipt remains required                                                                                                                                                                                                                                                                                                                                                                           |
-| M1.3 | Auction: minimum increment            | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::{testAuctionMinimumIncrementRejectsBelowAndAcceptsExactBoundary,testFuzzAuctionMinimumIncrementBoundary}`. Hoodi receipt remains required                                                                                                                                                                                                                                                                                                                    |
-| M1.4 | Auction: extension on late bid        | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::{testLateBidExtendsAuctionAndOriginalEndCannotSettle,testLateBidExtensionOverflowFailsWithStableError,testLegacyAuctionLateBidExtendsAndOriginalEndCannotSettle}`. Hoodi receipt remains required                                                                                                                                                                                                                                                            |
-| M1.5 | Revenue distribution, claim-based     | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/FractionalToken.sol`; `packages/contracts/src/RevenueDistributor.sol`; `packages/contracts/test/RevenueDistributor.t.sol::{testClaimsUseSnapshotBalancesAfterFractionsMove,testFeeOnTransferRevenueIsRejectedWithoutRoundCreation,testOutboundFeeRevenueRevertsClaimAndAccounting,testRoundingDustIsBoundedAndCannotBeSwept,testFuzzProRataClaimsNeverExceedRevenue,invariant_ClaimsNeverExceedFundedRevenue}`. Claim-based Hoodi runtime receipts remain required                                                              |
-| M1.6 | Multi-signature administration        | `NOT-IMPLEMENTED`          | `packages/contracts/src/ArtFiAdminSafe.sol` and `AdminSafeDeploymentPolicy.sol` exist on main (PR #70). This PR adds `apps/web/src/lib/admin-safe.ts` and `admin-safe.test.ts` (16 test cases) for shared Safe proposal validation, ABI and timelock state. Registry, Vault and Charity operator flows are not connected end to end and privileged role binding/runtime receipts remain missing; helper-only tests do not implement this requirement.                                                                                                   |
-| M1.7 | Deployment tooling, address manifest  | `IMPLEMENTED-NOT-VERIFIED` | 6 Foundry scripts, Hoodi guard verified locally (`a3d6784`); preflight rejects zero and malformed addresses before any broadcast, and `DeployRevenueDistributor` probes the immutable fraction-token dependency (`test/DeployRevenueDistributorGuard.t.sol`, 3 tests). `DeployMarket` and `DeployRevenueDistributor` added behind default-off opt-ins (`fdb90ff`); the tooling verifier now asserts the defaults rather than asserting the market is undeployable. All manifests remain `*.example.json`                                                |
-| M1.8 | Unit / fuzz / invariant / integration | `IMPLEMENTED-NOT-VERIFIED` | 91 Foundry tests pass (`forge test --offline`); see `packages/contracts/test/`. The revenue invariant targets only `RevenueInvariantHandler.fundAndClaim` and requires nonzero calls with zero reverts; `cancelListing` is covered by `testPauseDoesNotTrapEscrowedListing`, and the pause boundary by `testAdministrativePauseNeverFreezesFractions`, `testNftPauseStopsMintingButNeverFreezesAnOwner` and `testPauseBlocksCreationAndRecordsButNeverFreezesAHolder`, each proven to bite by restoring `whenNotPaused` and observing `EnforcedPause()` |
+| #    | Requirement                           | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---- | ------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1.1 | Auction: listing, bid, settle, refund | `IMPLEMENTED-NOT-VERIFIED` | `ArtFiMarket.sol`; `MarketGovernance.t.sol` preserves the PR #46 paused seller exit, now carried on the auction path because `PRD.md` §4.2.2 removed escrow from the fixed-price one, and covers auction settlement, pull refunds, cancellation, and ABI compatibility. Hoodi receipts remain required                                                                                                                                                                                                                                                                                                                      |
+| M1.2 | Auction: reserve price                | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::testAuctionReserveNotMetRefundsBidAndReturnsAsset`. Hoodi receipt remains required                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| M1.3 | Auction: minimum increment            | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::{testAuctionMinimumIncrementRejectsBelowAndAcceptsExactBoundary,testFuzzAuctionMinimumIncrementBoundary}`. Hoodi receipt remains required                                                                                                                                                                                                                                                                                                                                                                                        |
+| M1.4 | Auction: extension on late bid        | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/ArtFiMarket.sol`; `packages/contracts/test/MarketGovernance.t.sol::{testLateBidExtendsAuctionAndOriginalEndCannotSettle,testLateBidExtensionOverflowFailsWithStableError,testLegacyAuctionLateBidExtendsAndOriginalEndCannotSettle}`. Hoodi receipt remains required                                                                                                                                                                                                                                                                                                                                |
+| M1.5 | Revenue distribution, claim-based     | `IMPLEMENTED-NOT-VERIFIED` | `packages/contracts/src/FractionalToken.sol`; `packages/contracts/src/RevenueDistributor.sol`; `packages/contracts/test/RevenueDistributor.t.sol::{testClaimsUseSnapshotBalancesAfterFractionsMove,testFeeOnTransferRevenueIsRejectedWithoutRoundCreation,testOutboundFeeRevenueRevertsClaimAndAccounting,testRoundingDustIsBoundedAndCannotBeSwept,testFuzzProRataClaimsNeverExceedRevenue,invariant_ClaimsNeverExceedFundedRevenue}`. Claim-based Hoodi runtime receipts remain required                                                                                                                                  |
+| M1.6 | Multi-signature administration        | `NOT-IMPLEMENTED`          | `packages/contracts/src/ArtFiAdminSafe.sol` and `AdminSafeDeploymentPolicy.sol` exist on main (PR #70). This PR adds `apps/web/src/lib/admin-safe.ts` and `admin-safe.test.ts` (16 test cases) for shared Safe proposal validation, ABI and timelock state. Registry, Vault and Charity operator flows are not connected end to end and privileged role binding/runtime receipts remain missing; helper-only tests do not implement this requirement.                                                                                                                                                                       |
+| M1.7 | Deployment tooling, address manifest  | `IMPLEMENTED-NOT-VERIFIED` | 6 Foundry scripts, Hoodi guard verified locally (`a3d6784`); preflight rejects zero and malformed addresses before any broadcast, and `DeployRevenueDistributor` probes the immutable fraction-token dependency (`test/DeployRevenueDistributorGuard.t.sol`, 3 tests). `DeployMarket` and `DeployRevenueDistributor` added behind default-off opt-ins (`fdb90ff`); the tooling verifier now asserts the defaults rather than asserting the market is undeployable. All manifests remain `*.example.json`                                                                                                                    |
+| M1.8 | Unit / fuzz / invariant / integration | `IMPLEMENTED-NOT-VERIFIED` | 135 Foundry tests pass (`forge test`); see `packages/contracts/test/`. 21 of them are `FractionSaleIntent.t.sol` and 23 `WholeArtworkMarket.t.sol`. The revenue invariant targets only `RevenueInvariantHandler.fundAndClaim` and requires nonzero calls with zero reverts; `cancelListing` is covered by `testPauseDoesNotTrapEscrowedListing`, and the pause boundary by `testAdministrativePauseNeverFreezesFractions`, `testNftPauseStopsMintingButNeverFreezesAnOwner` and `testPauseBlocksCreationAndRecordsButNeverFreezesAHolder`, each proven to bite by restoring `whenNotPaused` and observing `EnforcedPause()` |
 
 ## M2 — Backend core trading (`PRD.md` §4.2)
 
-| #     | Requirement                                   | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                 |
-| ----- | --------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| M2.1  | SIWE nonce challenge                          | `IMPLEMENTED-NOT-VERIFIED` | `apps/web/src/lib/operator-auth.ts` — **operator only, not users**                                                                                                                                                                                                                                                             |
-| M2.2  | JWT issue / refresh / session / logout        | `NOT-IMPLEMENTED`          | zero JWT references in `apps/api` or `apps/web/src`                                                                                                                                                                                                                                                                            |
-| M2.3  | Wallet-address binding                        | `NOT-IMPLEMENTED`          |                                                                                                                                                                                                                                                                                                                                |
-| M2.4  | Trading schema                                | `NOT-IMPLEMENTED`          | no `orders`, `trades`, `positions`, `sessions`, `users` table exists. Prerequisite for M2.5–M2.9. Per the intermediary ruling no custody ledger is built                                                                                                                                                                       |
-| M2.5  | Signed-intent orders: create / amend / cancel | `NOT-IMPLEMENTED`          | the only `orders` in Go are OpenSea mirror records. Orders are EIP-712 payloads the user signs                                                                                                                                                                                                                                 |
-| M2.6  | Order lifecycle, partial fills                | `NOT-IMPLEMENTED`          |                                                                                                                                                                                                                                                                                                                                |
-| M2.7  | Matching engine, price-time, replayable       | `NOT-IMPLEMENTED`          | the only "matching" is a word in a test message. Output settles on chain with both signatures                                                                                                                                                                                                                                  |
-| M2.8  | Position projection from chain events         | `NOT-IMPLEMENTED`          | **Rescoped 2026-08-30**: the custodial double-entry ledger is not built. ArtFi is an intermediary; the chain is the ownership authority (`PRD.md` §4.2)                                                                                                                                                                        |
-| M2.9  | Trade history service                         | `NOT-IMPLEMENTED`          | Read-only gray candidate adds missing-persistence HTTP 503 handling in `external_market.go` and `market_orchestration.go`, with `TestMarketReadOnlyEndpointsRejectMissingPersistence`. Cursor history, provider freshness/outage, real data flow and browser acceptance remain required; this candidate is not GRAY_AVAILABLE. |
-| M2.10 | Admin API with audit records                  | `NOT-IMPLEMENTED`          | no `/v1/admin` route. No admin action may move, freeze or reassign user assets                                                                                                                                                                                                                                                 |
-| M2.11 | OpenAPI 3.1, bounded errors                   | `IMPLEMENTED-NOT-VERIFIED` | `apps/api/openapi/openapi.yaml`, drift tested in CI                                                                                                                                                                                                                                                                            |
+| #     | Requirement                                   | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----- | --------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M2.1  | SIWE nonce challenge                          | `IMPLEMENTED-NOT-VERIFIED` | `apps/web/src/lib/operator-auth.ts` — **operator only, not users**                                                                                                                                                                                                                                                                                                                                                              |
+| M2.2  | JWT issue / refresh / session / logout        | `NOT-IMPLEMENTED`          | zero JWT references in `apps/api` or `apps/web/src`                                                                                                                                                                                                                                                                                                                                                                             |
+| M2.3  | Wallet-address binding                        | `NOT-IMPLEMENTED`          |                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| M2.4  | Trading schema                                | `NOT-IMPLEMENTED`          | no `orders`, `trades`, `positions`, `sessions`, `users` table exists. Prerequisite for M2.5–M2.9. Per the intermediary ruling no custody ledger is built                                                                                                                                                                                                                                                                        |
+| M2.5  | Signed-intent orders: create / amend / cancel | `NOT-IMPLEMENTED`          | the only `orders` in Go are OpenSea mirror records. Orders are EIP-712 payloads the user signs. **The on-chain half now exists** and is not this row: `ArtFiMarket.fillIntent`/`revokeIntent`/`incrementSellerEpoch` settle and revoke a signed intent for fractions, and `WholeArtworkMarket` does the same for a whole artwork. No backend stores or amends an intent and no screen reaches either, so this row does not move |
+| M2.6  | Order lifecycle, partial fills                | `NOT-IMPLEMENTED`          | partial fills exist on chain: `intentFilled[digest]` accumulates per fill and a fill past the signed maximum reverts (`FractionSaleIntent.t.sol::{testPartialFillsAccumulateAndStopAtTheAuthorizedMaximum,testAFillBeyondTheAuthorizedMaximumIsRejectedWhole}`). The lifecycle states, their persistence and any surface over them remain absent, so this row does not move                                                     |
+| M2.7  | Matching engine, price-time, replayable       | `NOT-IMPLEMENTED`          | the only "matching" is a word in a test message. Output settles on chain with both signatures                                                                                                                                                                                                                                                                                                                                   |
+| M2.8  | Position projection from chain events         | `NOT-IMPLEMENTED`          | **Rescoped 2026-08-30**: the custodial double-entry ledger is not built. ArtFi is an intermediary; the chain is the ownership authority (`PRD.md` §4.2)                                                                                                                                                                                                                                                                         |
+| M2.9  | Trade history service                         | `NOT-IMPLEMENTED`          | Read-only gray candidate adds missing-persistence HTTP 503 handling in `external_market.go` and `market_orchestration.go`, with `TestMarketReadOnlyEndpointsRejectMissingPersistence`. Cursor history, provider freshness/outage, real data flow and browser acceptance remain required; this candidate is not GRAY_AVAILABLE.                                                                                                  |
+| M2.10 | Admin API with audit records                  | `NOT-IMPLEMENTED`          | no `/v1/admin` route. No admin action may move, freeze or reassign user assets                                                                                                                                                                                                                                                                                                                                                  |
+| M2.11 | OpenAPI 3.1, bounded errors                   | `IMPLEMENTED-NOT-VERIFIED` | `apps/api/openapi/openapi.yaml`, drift tested in CI                                                                                                                                                                                                                                                                                                                                                                             |
 
 ## M3 — Frontend (`PRD.md` §4.3)
 
-| #     | Requirement                            | Status                     | Evidence / gap                                                                                               |
-| ----- | -------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| M3.1  | Auction UI bound to M1 events          | `NOT-IMPLEMENTED`          | "auction" appears only as a DAO proposal label                                                               |
-| M3.2  | Trade and bid history UI               | `NOT-IMPLEMENTED`          |                                                                                                              |
-| M3.3  | Search / filter / sort / pagination    | `NOT-IMPLEMENTED`          | operates on a 3-element Go slice, `handler.go:68`. `ACCEPTANCE.md` §7.5 failure                              |
-| M3.4  | Personal centre live positions and P&L | `NOT-IMPLEMENTED`          | no cost-basis or P&L computation                                                                             |
-| M3.5  | Notifications                          | `NOT-IMPLEMENTED`          | `market.go:207` returns a permanently empty array                                                            |
-| M3.6  | Admin console UI                       | `NOT-IMPLEMENTED`          | no `/admin` route in source; the public 404 is correct behaviour                                             |
-| M3.7  | Real catalogue replaces fixtures       | `NOT-IMPLEMENTED`          | `lib/catalog.ts` holds 6 invented artworks by 6 invented artists; `UNIT-A` appears 0 times in `apps/web/src` |
-| M3.8  | Mobile adaptation                      | `IMPLEMENTED-NOT-VERIFIED` | responsive CSS, mobile Playwright profile                                                                    |
-| M3.9  | Eight-language support                 | `IMPLEMENTED-NOT-VERIFIED` | `language-provider.tsx`, 8 locales                                                                           |
-| M3.10 | Class A visual parity vs `pics/*.png`  | `BLOCKED`                  | **`pics/` and `fractional_steps/` are absent. G1 cannot be signed off.** Client-side                         |
+| #     | Requirement                            | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----- | -------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M3.1  | Auction UI bound to M1 events          | `NOT-IMPLEMENTED`          | "auction" appears only as a DAO proposal label                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| M3.2  | Trade and bid history UI               | `NOT-IMPLEMENTED`          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| M3.3  | Search / filter / sort / pagination    | `NOT-IMPLEMENTED`          | operates on a 3-element Go slice, `handler.go:68`. `ACCEPTANCE.md` §7.5 failure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| M3.4  | Personal centre live positions and P&L | `NOT-IMPLEMENTED`          | no cost-basis or P&L computation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| M3.5  | Notifications                          | `NOT-IMPLEMENTED`          | `market.go:207` returns a permanently empty array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| M3.6  | Admin console UI                       | `NOT-IMPLEMENTED`          | no `/admin` route in source; the public 404 is correct behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| M3.7  | Real catalogue replaces fixtures       | `NOT-IMPLEMENTED`          | `lib/catalog.ts` holds 6 invented artworks by 6 invented artists; `UNIT-A` appears 0 times in it. **Now disclosed, not fixed.** `prototype-data-notice.tsx` renders on `/`, `/projects`, `/projects/[slug]`, `/market/rwa/[slug]`, `/market/fractionals` and `/market/fractionals/[slug]`, stating that the artworks, valuations and provenance are prototype fixtures and not a live catalogue — until now no surface said which it was, which `AGENTS.md` §5 forbids and `ACCEPTANCE.md` §7.7 fails an audit over. 10 browser tests in `prototype-disclosure.spec.ts`, including that the live mirror and the charity surface are **not** labelled as fixtures. **The disclosure is not evidence toward this row**: the real catalogue still does not exist |
+| M3.8  | Mobile adaptation                      | `IMPLEMENTED-NOT-VERIFIED` | responsive CSS, mobile Playwright profile                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| M3.9  | Eight-language support                 | `IMPLEMENTED-NOT-VERIFIED` | `language-provider.tsx`, 8 locales                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| M3.10 | Class A visual parity vs `pics/*.png`  | `BLOCKED`                  | **`pics/` and `fractional_steps/` are absent. G1 cannot be signed off.** Client-side                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ## M4 — DAO governance (`PRD.md` §4.4)
 
@@ -159,13 +231,13 @@ G2 runtime matrix on Hoodi converts them without writing a line of feature code.
 
 ## M6 — Operations (`PRD.md` §4.6)
 
-| #    | Requirement                                      | Status                     | Evidence / gap                                                                                                                                                                                                                                                                 |
-| ---- | ------------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| M6.1 | CI/CD to staging and production                  | `NOT-IMPLEMENTED`          | one workflow, `quality.yml`. No CD                                                                                                                                                                                                                                             |
-| M6.2 | Cluster: load balancing, replica, backup/restore | `NOT-IMPLEMENTED`          | `ACCEPTANCE.md` §5 also mandates a CI backup/restore job that is absent                                                                                                                                                                                                        |
-| M6.3 | Monitoring, log aggregation, alerting            | `NOT-IMPLEMENTED`          | `scripts/ops/` monitor core exists on PR #66 (draft): probing, durable queue, incident lifecycle, crash recovery, 5 test files. **No alert has ever reached a responder** — that is the promotion evidence and it needs open item 12. LLM triage boundary settled at issue #73 |
-| M6.4 | Object storage MIME / size / SHA-256 validation  | `IMPLEMENTED-NOT-VERIFIED` | `s3store.go`, `rwa.go`                                                                                                                                                                                                                                                         |
-| M6.5 | Runbooks and operator documentation              | `IMPLEMENTED-NOT-VERIFIED` | `docs/OPERATIONS_RUNBOOK.md`; no observed drill                                                                                                                                                                                                                                |
+| #    | Requirement                                      | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---- | ------------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M6.1 | CI/CD to staging and production                  | `NOT-IMPLEMENTED`          | one workflow, `quality.yml`. No CD                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| M6.2 | Cluster: load balancing, replica, backup/restore | `NOT-IMPLEMENTED`          | `ACCEPTANCE.md` §5 also mandates a CI backup/restore job that is absent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| M6.3 | Monitoring, log aggregation, alerting            | `NOT-IMPLEMENTED`          | `/operations` now gives an operator a read-only dependency view — web runtime, API runtime, chain identity and head-block age, mirror freshness, and whether the configured editions address answers a read — each reported as observed, with an unreachable dependency never shown as healthy and an absent check reported as `not-checked` rather than rounded up. 21 unit tests in `ops-checks.test.ts`, 4 browser tests in `operations-status.spec.ts` including one asserting no URL, IP or hostname reaches the page (`ACCEPTANCE.md` §7.8). **This does not implement the requirement.** It stores nothing, queues nothing and notifies nobody; the host layer, log aggregation and alerting are absent, and the durable probe-and-incident engine is PR #66, a conflicted draft marked do-not-merge that is not in this branch and was not duplicated |
+| M6.4 | Object storage MIME / size / SHA-256 validation  | `IMPLEMENTED-NOT-VERIFIED` | `s3store.go`, `rwa.go`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| M6.5 | Runbooks and operator documentation              | `IMPLEMENTED-NOT-VERIFIED` | `docs/OPERATIONS_RUNBOOK.md`; no observed drill                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ## CH — Charity NFT editions (`PRD.md` §4.7)
 
@@ -173,23 +245,81 @@ Added 2026-09-18 by client ruling. The module previously appeared in no requirem
 itemize the product rules already stated in `docs/CHARITY_EDITIONS.md`. Each row cites the line it
 comes from. No rule is new and no status is promoted by the act of listing it.
 
-| #     | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ----- | -------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CH.1  | The 13-work set, one ERC-1155 token ID each, exactly 100 units | `IMPLEMENTED-NOT-VERIFIED` | `ArtFiCharityEditions.sol` fixes `EDITIONS_PER_ARTWORK = 100` with a single `_mint` and duplicate artwork/master-hash guards; 9 tests. **The set membership is not enforced**: `verify-charity-edition-package.mjs` matches `^UNIT-A\d{2}$` and checks neither the 13-work list `A01/04/05/11/14/15/16/17/20/21/22/23/24` nor the A16 single-count rule. **Open item 6 conflict stands** — the original requires 13 works / 1,300 units; 37 / 3,700 were minted on Sepolia |
-| CH.2  | Recorded primary unit price `0.01 ETH`; ArtFi settles nothing  | `IMPLEMENTED-NOT-VERIFIED` | `PRIMARY_PRICE_WEI = 0.01 ether`. No order, match or settle path exists for these editions. No chain receipt                                                                                                                                                                                                                                                                                                                                                               |
-| CH.3  | Sellout recorded only after zero distributor balance           | `IMPLEMENTED-NOT-VERIFIED` | `recordSellout` reverts `SeriesNotSoldOut` while the distribution wallet holds units. External reconciliation is procedural and unobserved                                                                                                                                                                                                                                                                                                                                 |
-| CH.4  | Physical donation hash-recorded only after sellout             | `IMPLEMENTED-NOT-VERIFIED` | `recordPhysicalDonation` reverts `SelloutNotRecorded`; `PhysicalDonationAlreadyRecorded` blocks replay. No chain receipt                                                                                                                                                                                                                                                                                                                                                   |
-| CH.5  | Holder benefit: watermarked copy after ownership verification  | `NOT-IMPLEMENTED`          | **The gate is built; the copy is not yet released.** `charity-holder-auth.ts` proves wallet control by signature over a challenge that names the edition, then requires ERC-1155 `balanceOf > 0`; grants are HMAC-signed, scoped to one token ID, 10-minute TTL. 17 tests cover tamper, cross-edition replay and fail-closed RPC. **Still absent: delivery of the watermarked bytes** — the route returns a descriptor, not the object                                     |
-| CH.6  | Master never in public metadata, download, or served object    | `IMPLEMENTED-NOT-VERIFIED` | `charity-assets.ts` refuses any descriptor not classed `watermarked-holder`, any whose digest equals the master digest, and any carrying a preview URL. A caller never names an object, so no traversal reaches a master. 12 tests including a mislabelled master and a digest collision. No deployed runtime proof                                                                                                                                                        |
-| CH.7  | Public token metadata carries no artwork preview               | `IMPLEMENTED-NOT-VERIFIED` | Verifier emits `Artwork preview: Not provided` and asserts `holderAsset.preview !== true`. No published metadata observed                                                                                                                                                                                                                                                                                                                                                  |
-| CH.8  | No copyright / title / redemption right, disclosed on display  | `IMPLEMENTED-NOT-VERIFIED` | `charity-edition-rights-notice.tsx` states the four CH.8/CH.9 facts in one component and is rendered by the charity edition surface. One component so every surface states the same thing. No deployed runtime proof                                                                                                                                                                                                                                                       |
-| CH.9  | Proceeds to CCHS wallet; ArtFi issues no receipt               | `IMPLEMENTED-NOT-VERIFIED` | Verifier pins CCHS as sole proceeds recipient and receipt decision-maker, and locks valuation to the donation-date ETH/CAD fair market value from a CCHS-approved public source, retaining date, price, source and snapshot hash; fail-closed without CCHS written confirmation. No runtime surface, no observed routing                                                                                                                                                   |
-| CH.10 | Release package fails closed; `listingActionConfirmed` false   | `IMPLEMENTED-NOT-VERIFIED` | `verify-charity-edition-package.mjs` full mode requires master, distinct watermarked file, rights, CCHS status, non-zero wallet. CI runs `--schema-only`, so full mode is unexercised                                                                                                                                                                                                                                                                                      |
-| CH.11 | Master and holder file must differ by hash; no browser preview | `IMPLEMENTED-NOT-VERIFIED` | Verifier asserts `holderAsset.watermarked`, `unwatermarkedAvailable === false`, `preview === false`, and that the watermarked holder file hashes differently from the master — **but only in full mode, and CI runs `--schema-only`**, so the distinct-hash check never executes in the pipeline                                                                                                                                                                           |
+| #     | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----- | -------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CH.1  | The 13-work set, one ERC-1155 token ID each, exactly 100 units | `IMPLEMENTED-NOT-VERIFIED` | `ArtFiCharityEditions.sol` fixes `EDITIONS_PER_ARTWORK = 100` with a single `_mint` and duplicate artwork/master-hash guards; 9 tests. **Set membership is now enforced**: the verifier matched `^UNIT-A\d{2}$`, which admitted the withdrawn `UNIT-A02` that `PRD.md` §8.4 and `ACCEPTANCE.md` §7.9 require the formal batch to hard-reject, along with `UNIT-A00`, `UNIT-A39` and every other id naming no work. It now checks the formal set — `UNIT-A01` and `UNIT-A03`–`UNIT-A38` — and rejects A02 by name. The public metadata URI is also bound to the package's own artwork, so a package can no longer declare one work and publish another's metadata. 6 rejection cases in `scripts/test/verify-charity-edition-package.mjs`; all 37 frozen packages re-verified unchanged. **Open item 6 is closed**: the 13 are the first tranche of the formal 37, all inside it and none of them `UNIT-A02`, so there was never a rival count. The verifier enforces the formal set, because that is the rule a per-package check can apply; tranche membership is a batch fact, not a package one                                                       |
+| CH.2  | Recorded primary unit price `0.01 ETH`; ArtFi settles nothing  | `IMPLEMENTED-NOT-VERIFIED` | `PRIMARY_PRICE_WEI = 0.01 ether`. No order, match or settle path exists for these editions. No chain receipt                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| CH.3  | Sellout recorded only after zero distributor balance           | `IMPLEMENTED-NOT-VERIFIED` | `recordSellout` reverts `SeriesNotSoldOut` while the distribution wallet holds units. External reconciliation is procedural and unobserved                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| CH.4  | Physical donation hash-recorded only after sellout             | `IMPLEMENTED-NOT-VERIFIED` | `recordPhysicalDonation` reverts `SelloutNotRecorded`; `PhysicalDonationAlreadyRecorded` blocks replay. No chain receipt                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| CH.5  | Holder benefit: watermarked copy after ownership verification  | `IMPLEMENTED-NOT-VERIFIED` | **Now end to end, and reachable from a screen.** `/charity/[tokenId]` renders `charity-holder-access.tsx`: challenge naming the edition, wallet signature, server-side verification of both signature and ERC-1155 `balanceOf`, then the file. `charity-object-store.ts` signs a server-side GET against a private store and verifies the object's own SHA-256 against the reviewed descriptor before a byte is emitted; `holder-asset/file/route.ts` serves it as an attachment. 17 tests in `charity-object-store.test.ts` cover partial configuration, plaintext endpoint, signature derivation, a swapped master, size and digest mismatch, unreachable store and the size ceiling. `charity-editions.spec.ts` proves the route yields 401 without a grant on desktop and mobile. **Unverified:** no deployed environment has a descriptor store or an object store configured, so no holder has received a file on any environment                                                                                                                                                                                                                  |
+| CH.6  | Master never in public metadata, download, or served object    | `IMPLEMENTED-NOT-VERIFIED` | `charity-assets.ts` refuses any descriptor not classed `watermarked-holder`, any whose digest equals the master digest, and any carrying a preview URL. A caller never names an object, so no traversal reaches a master. 12 tests including a mislabelled master and a digest collision. `charity-object-store.ts` adds the delivery-time check on the object itself, refusing a master that arrives under a holder descriptor. No deployed runtime proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| CH.7  | Public token metadata carries no artwork preview               | `IMPLEMENTED-NOT-VERIFIED` | Verifier emits `Artwork preview: Not provided` and asserts `holderAsset.preview !== true`. The public surface states `Artwork preview: Not provided` and carries no image element; `charity-editions.spec.ts` asserts zero images on the catalog. No published metadata observed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| CH.8  | No copyright / title / redemption right, disclosed on display  | `IMPLEMENTED-NOT-VERIFIED` | `charity-edition-rights-notice.tsx` states the four CH.8/CH.9 facts in one component and is rendered by the charity edition surface. One component so every surface states the same thing, now rendered by `/charity` and `/charity/[tokenId]` as well as the create flow; `charity-editions.spec.ts` asserts all four statements on both. No deployed runtime proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| CH.9  | Proceeds to CCHS wallet; ArtFi issues no receipt               | `IMPLEMENTED-NOT-VERIFIED` | Verifier pins CCHS as sole proceeds recipient and receipt decision-maker, and locks valuation to the donation-date ETH/CAD fair market value from a CCHS-approved public source, retaining date, price, source and snapshot hash; fail-closed without CCHS written confirmation. No runtime surface, no observed routing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| CH.10 | Release package fails closed; `listingActionConfirmed` false   | `IMPLEMENTED-NOT-VERIFIED` | `verify-charity-edition-package.mjs` full mode requires master, rights, CCHS status and a non-zero wallet. **Correction:** this row previously said CI runs `--schema-only` so full mode is unexercised. That was wrong — `.github/workflows/quality.yml` runs `pnpm charity-edition:verifier:test`, which exercises `--local-assets` full mode and a rejection loop of 40 mutations in default mode. No deployed runtime proof                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| CH.11 | Master and holder file must differ by hash; no browser preview | `IMPLEMENTED-NOT-VERIFIED` | **Correction: the check this row described did not exist.** The row claimed the verifier asserted the watermarked holder file hashes differently from the master, only in an unexercised full mode. Both halves were wrong: the manifest carried no holder-file field at all, so nothing was ever compared, and full mode does run in CI. The packaging half now exists — `holderAsset.file` and `holderAsset.sha256`, optional so the 37 frozen packages stay valid (`AGENTS.md` §6), rejected when only half is present or malformed, and **hard-failed when the declared digest equals the master's**, in every mode including `--schema-only`. Under `--local-assets` the file is read and hashed, and a byte-identical holder file is refused. The verifier reports `holderAssetDistinctFromMaster: null` for a package carrying no binding, so an unproven package is visible rather than silently passing. Delivery-time enforcement in `charity-assets.ts` and `charity-object-store.ts` is unchanged. **Unverified:** no package in the frozen batch carries a holder-file binding yet, so CH.11's packaging half is proven for no real package |
 
-**CH.5, CH.6 and CH.8 are the product.** The contract and release layers are the strongest part of
-this module; what a buyer actually receives is absent. Go-live additionally depends on the CCHS-side
-written evidence in `CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md`; that gates release, not implementation.
+> **Charity runtime, 2026-09-20 and after.** A Hoodi run reached steps A–D of
+> `TESTPLAN_HOODI_CHARITY.md`; step E failed and F–I were not executed. Both step E findings are
+> fixed — `PRD.md` §7.0's on-screen markers were absent, and the plan's own "no image element"
+> assertion was stricter than `CH.7` and `CH.6` require. The release verifier also could not have
+> accepted a Hoodi package at all, which would have stopped step I; it now branches on §7.0's two
+> payloads. **No row above moves on any of that:** the run did not finish, A–D predate the fix, and
+> the receipts have not been filed against a reviewed commit (`ACCEPTANCE.md` §3). Close-out in
+> `TESTPLAN_HOODI_CHARITY.md` §12.
+
+> **Charity runtime, 2026-09-25.** A delivery-side report summarises a Hoodi run on candidate
+> `c55852d`, contract `0x2395c8f4eb2847199a61b83ff7857718990ef85b`. **Its own conclusion is that
+> A–I did not all pass.** Steps A, C, D, F1, G1–G6 and H1–H4 ran: the holder gate refused an
+> unauthenticated request, a zero-balance wallet, a grant reused across tokens, a digest collision,
+> a swapped private object and an unset store, serving no bytes in any of them, and a verified
+> holder received the watermarked file rather than the master. B is
+> `EVIDENCE_COLLECTED_PENDING_RECONCILIATION`, E is observation only, F2 is blocked on the delivery
+> side's browser environment, and I passes only for a later fix batch. **No row above moves.** The
+> report carries SHA-256 of evidence files held off-repository but **no transaction hash for any
+> step**, which §7 of the plan asks for, so nothing on chain is checkable here; `CH.5` is the
+> benefit end to end and F2 is what would show it. H5's mismatch was a defect in the plan, not the
+> product — `_update` is deliberately not pausable so a pause never freezes a holder (`PRD.md`
+> §4.2) — and the plan is corrected. Detail in `TESTPLAN_HOODI_CHARITY.md` §13.
+
+> **CI has not executed on this repository since 2026-09-19, and `8af87e8` was merged on local
+> evidence.** Every `quality` run from 276 to 307 failed, across every branch and every triggering
+> actor — the Codex branches, dependabot, and `main`'s own two README commits (runs 299 and 300).
+> The signature is identical each time: `runner_id: 0`, no runner name, no `steps`, two seconds, and
+> HTTP 404 for every job's log, so **no runner was ever assigned and nothing was ever executed.**
+> That rules out the workflow file: an unresolvable action reference would assign a runner and log
+> the failure. It is an account-level condition, outside this repository, and it blocks every pull
+> request including #114.
+>
+> Client decision of 2026-09-26: keep the merge and run the full workflow on `main` once CI is
+> restored, rather than revert. **Until that run exists, nothing here is CI-verified.** The local
+> evidence behind the merge is forge 135, vitest 125, playwright 118 with 2 skips on desktop and
+> mobile, `go vet` / `gofmt` / `go test -race`, and every format, lint, typecheck, build, secret,
+> chain-consistency and release-verifier gate; the MySQL migration job was not run, for want of a
+> container runtime. **No status value moved on any of it.**
+
+> **#114 and #115 are back in, by client decision of 2026-09-26.** They were merged, then reverted
+> here because `AGENTS.md`'s S-XM checkpoint — which arrived as part of #114's own content — states
+> that #114 "is not ready to merge or hand over", on three accepted, unresolved review findings. The
+> client directed that they not be split out, so the reverts are reverted and both are included
+> again. **That checkpoint text is still in `AGENTS.md` and still says what it says**; it is recorded
+> here rather than edited, because the decision to proceed is the client's and the record of the
+> open findings is Codex's. The three findings are unchanged by this merge.
+>
+> Restoring them changed nothing in the operations surface — `operations/page.tsx`,
+> `operations-status.tsx`, `ops-checks.ts` and their spec are byte-identical across the restore. One
+> `operations-status` case failed once in a full-suite run and then passed 12 of 12 across three
+> repeats; it aborts routes, so it is a race in the test, not a regression. Not touched here:
+> changing someone else's passing test is not part of a restore.
+
+**CH.5, CH.6 and CH.8 are the product.** The contract and release layers were always the strongest part of this module; the buyer-facing half now exists as a surface — catalog, edition
+page, rights disclosure, verification and gated delivery. What remains missing is not code but
+configuration and a deployment: no environment holds a descriptor store or an object store, so
+no file has yet been delivered to a holder anywhere. **Go-live** with the real batch additionally depends on the CCHS-side written evidence in
+`CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md`. That gates release of real assets — **it does not gate a
+Hoodi run**: client ruling of 2026-09-19, `PRD.md` §7.0. The Hoodi payload is a separate AI test
+payload that §7.0 forbids to carry CCHS donation, receipt or valuation language at all, so no CCHS
+document can be a precondition for exercising it.
 
 ---
 
@@ -199,14 +329,14 @@ Added 2026-09-18. Charity editions and approved-external-marketplace mirroring a
 paired requirement; the mirroring side was implemented in `apps/api` but itemized nowhere. These rows
 carry the original `MARKET-001`–`MARKET-006` forward. No rule is new.
 
-| #    | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ---- | -------------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| XM.1 | ArtFi-operated order, match, custody and settlement stays shut | `IMPLEMENTED-NOT-VERIFIED` | No order book, counterparty, custody or settlement path exists; no frontend route reaches `ArtFiMarket.sol`. **Tension recorded**: the original marks any deployable implementation `P0 / FAIL`, and `fdb90ff` made deployment possible behind the default-off `ARTFI_DEPLOY_MARKET`                                                                                                                             |
-| XM.2 | Versioned approved-marketplace adapter with a source allowlist | `IMPLEMENTED-NOT-VERIFIED` | `external_market.go` carries `schemaVersion`, persists the raw payload and source version, and rejects anything but `"1"`; sources come from the `ARTFI_MARKETPLACE_SOURCES` allowlist. No live adapter run                                                                                                                                                                                                      |
-| XM.3 | Realtime stream plus REST gap-fill converging to one state     | `IMPLEMENTED-NOT-VERIFIED` | `apps/market-mirror/src/opensea.ts` runs an `OpenSeaStreamClient` over `ws` and a cursor-paged `backfill()`, declaring `realtime: true, restBackfill: true`; `opensea.test.ts` runs in CI. `persistence_integration_test.go` proves cancel-then-stale-version convergence against real MySQL — a v6 event arriving after a v8 cancel stays auditable without overwriting the canonical order. No live stream run |
-| XM.4 | Mirror API, transaction orchestration, external deep links     | `IMPLEMENTED-NOT-VERIFIED` | `/v1/market/activity`, `/v1/market/intents`; `market_orchestration.go` (628 lines) prepares an idempotent intent for an approved external market without matching or settling. No live external submission observed                                                                                                                                                                                              |
-| XM.5 | Data claims accurate: fixtures labelled, freshness real        | `IMPLEMENTED-NOT-VERIFIED` | Missing persistence answers HTTP 503 rather than an empty success (#65); freshness and observation time are persisted. The mainnet-versus-testnet separation the requirement names is asserted nowhere yet                                                                                                                                                                                                       |
-| XM.6 | Result state machine and reconciliation                        | `IMPLEMENTED-NOT-VERIFIED` | All nine states are declared in `000007_external_trade_orchestration.up.sql`, `openapi.yaml` and the generated client. **Gap: no Go code ever writes `accepted`** — the state is declared but unreachable at runtime. Reconciliation on reorg and out-of-order callback is untested                                                                                                                              |
+| #    | Requirement                                                    | Status                     | Evidence / gap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---- | -------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| XM.1 | ArtFi-operated order, match, custody and settlement stays shut | `IMPLEMENTED-NOT-VERIFIED` | No order book, counterparty, custody or settlement path exists; no frontend route reaches `ArtFiMarket.sol`. **Tension recorded**: the original marks any deployable implementation `P0 / FAIL`, and `fdb90ff` made deployment possible behind the default-off `ARTFI_DEPLOY_MARKET`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| XM.2 | Versioned approved-marketplace adapter with a source allowlist | `IMPLEMENTED-NOT-VERIFIED` | `external_market.go` carries `schemaVersion`, persists the raw payload and source version, and rejects anything but `"1"`; sources come from the `ARTFI_MARKETPLACE_SOURCES` allowlist. No live adapter run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| XM.3 | Realtime stream plus REST gap-fill converging to one state     | `IMPLEMENTED-NOT-VERIFIED` | `apps/market-mirror/src/opensea.ts` runs an `OpenSeaStreamClient` over `ws` and a cursor-paged `backfill()`, declaring `realtime: true, restBackfill: true`. Startup waits for a successful Phoenix `phx_reply` join acknowledgement for every configured collection before taking the REST snapshot, spools live events outside the process heap, and establishes an explicit cutover: the completed REST snapshot plus every live event before that cutover are sent as one NDJSON batch to `/v1/indexer/market-snapshots`. The API validates and persists the complete stream inside one database transaction; after indexer authentication and NDJSON media-type validation, it replaces the ordinary whole-request timeout with a 15-second read/write idle deadline refreshed by successful body reads, every scanned record (including buffered and empty records), after persistence, before commit, and after commit before the success response; deadline-setter failure fails closed before or during the transaction, and a post-commit failure suppresses a misleading success response. An invalid/interrupted line or a pre-cutover realtime-buffer failure rolls back the batch instead of exposing a partial snapshot. Events after the cutover use a second bounded spool and drain only after the transaction commits. Reconnect gap-fills remain gated behind that initial commit and drain, then serialize after every later WebSocket generation re-acknowledges all configured collections; a failed recovery disconnects the stream and exits unsuccessfully so startup head-overlap recovery runs again. The snapshot endpoint streams complete histories without an unrecoverable aggregate event cap while retaining a per-event size limit. The pending pre-snapshot queue and total retained realtime spool both have hard byte/event limits; after commit, an individual sink rejection does not disable later realtime delivery. The unbounded cursor traversal fully writes and fsyncs events before its cursor journal under the required `OPENSEA_BACKFILL_STATE_DIRECTORY`; each checkpoint records the committed spool byte offset and last-page event fingerprints. Restart truncates incomplete spool/journal tails to the last complete record, traverses each checkpointed collection from the current head until its committed boundary (not merely one page), then resumes the saved cursor. Cleanup removes known payloads while exclusion remains held and preserves the stable snapshot directory across writer handoff. Stale locks are recovered through a marker bound to the live reclaimer, and abandoned marker ownership is recovered without weakening single-writer exclusion. Repeated cursors are rejected; bounded numeric `Retry-After` applies only to transient responses; the request timeout remains active through response-body parsing. `opensea.test.ts` covers the atomic realtime cutover, reconnect commit gating, initial and reconnect join readiness, serialized reconnect gap-fill and fail-closed recovery, live reclaimer exclusion, tail recovery, multi-page recovery overlap, bounded pending and retained realtime spools, post-commit sink recovery, cleanup, failure shutdown, short writes, abandoned reclamation markers and histories longer than the former 20-page cap; `persistence_integration_test.go` proves both cancel-then-stale-version convergence and whole-snapshot rollback against real MySQL. **No live stream or disconnect/reconnect runtime has been observed.** |
+| XM.4 | Mirror API, transaction orchestration, external deep links     | `IMPLEMENTED-NOT-VERIFIED` | **The mirror now reaches a screen.** `/market/rwa` renders each record's source, order status, short order ID, observed time, freshness and the venue link the source reported; `market-links.ts` re-validates that link and refuses a non-HTTPS scheme, embedded credentials or any host but `opensea.io`, so an unverifiable URL produces no link rather than a hopeful one. **ArtFi never constructs a link** — an absent `marketplaceUrl` is stated as absent. 13 unit tests in `market-links.test.ts`; 4 browser tests in `market-attribution.spec.ts` on desktop and mobile cover the attributed link, its `noopener noreferrer` and `target`, an absent link and a lookalike host. Server side unchanged: `/v1/market/activity`, `/v1/market/intents`, and `market_orchestration.go` (628 lines) prepares an idempotent intent for an approved venue, gated off by default. **Unverified:** no deployed environment, and no observed venue record has yet been rendered from live data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| XM.5 | Data claims accurate: fixtures labelled, freshness real        | `IMPLEMENTED-NOT-VERIFIED` | Missing persistence answers HTTP 503 rather than an empty success (#65); freshness and observation time are persisted, and `/market/rwa` now states freshness as an age rather than leaving a reader to infer it from a timestamp — a future source clock is reported as such instead of rounded to "just now". The mainnet-versus-testnet separation the requirement names is asserted nowhere yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| XM.6 | Result state machine and reconciliation                        | `IMPLEMENTED-NOT-VERIFIED` | All nine states are declared in `000007_external_trade_orchestration.up.sql`, `openapi.yaml` and the generated client. **`accepted` is now reachable**: `planIntentTransitions` enters it when a venue transfer carries the intent's own submitted transaction hash — the narrowest reading the existing data supports, taken from the state order in `PRD.md` §4.8 XM.6, and recorded as correctable. **A mis-attribution defect is fixed in the same place**: a sale on the order used to mark _every_ intent `confirmed`, so a user whose transaction lost the race was told their purchase succeeded. Only the intent whose transaction the venue reported is confirmed now; the rest fail with `external-order-filled-by-another-transaction`, and a sale carrying no transaction hash confirms nobody. Another party's hash is never written into this user's row. 9 tests in `market_reconciliation_test.go`. **Gap: no screen reaches any of these states**, the orchestration path stays gated off by default, and no runtime reconciliation has been observed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ---
 
@@ -276,20 +406,20 @@ carry the original `MARKET-001`–`MARKET-006` forward. No rule is new.
 
 ## Open items
 
-| #     | Item                                                                              | Owner        | Needed by     | Notes                                                                                                                                                                                                                                                                                                             |
-| ----- | --------------------------------------------------------------------------------- | ------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~1~~ | ~~Confirm M2 matching-engine scope~~                                              | ~~Client~~   | —             | **Resolved 2026-08-30: ArtFi is a trading intermediary, not an exchange.** `PRD.md` §4.2. M2 unblocked                                                                                                                                                                                                            |
-| 2     | Reconcile the schedule authorities                                                | PM           | P1 exit       | `PRD.md` §3.1. Person-days retired as a unit by directive §1.3                                                                                                                                                                                                                                                    |
-| 3     | Supply `pics/*.png` and `fractional_steps/*`                                      | Client       | G1            | Only `BLOCKED` item in the matrix                                                                                                                                                                                                                                                                                 |
-| 4     | Hoodi RPC endpoint and funded keystore account                                    | Client       | G2            | SIN access already authorized                                                                                                                                                                                                                                                                                     |
-| 5     | Production chain decision                                                         | Client       | before G4     | Undecided. Hoodi implies nothing                                                                                                                                                                                                                                                                                  |
-| 6     | 13 token IDs / 1,300 units vs. 37 / 3,700 as minted                               | Client       | documentation | `PRD.md` §8.4 conflict; already on Sepolia                                                                                                                                                                                                                                                                        |
-| ~~7~~ | ~~Settlement custody~~                                                            | ~~Client~~   | —             | **Resolved 2026-08-30: signature settlement.** Fixed-price and order-book settle by signature; escrow retained only for auctions (`PRD.md` §4.2.2)                                                                                                                                                                |
-| ~~8~~ | ~~Pausing traps escrowed listings~~                                               | ~~Delivery~~ | —             | **Resolved: `cancelListing` is no longer `whenNotPaused`.** Pausing froze a seller's escrowed asset, which `PRD.md` §4.2 forbids. Proven by `testPauseDoesNotTrapEscrowedListing`, which fails with `EnforcedPause()` before the fix; `testPauseStillBlocksNewListings` proves the pause still stops new activity |
-| 9     | <CLOUD_PROVIDER_A> minimal `TEST_ONLY` profile, executable                        | Client       | M6.2          | Reported by the delivery side on issue #62. Without it `feature/db-startup-pool-options-*` (PR #67) cannot be validated against a real database and stays a draft                                                                                                                                                 |
-| 10    | TLS configuration and a schema permitted for testing, with client / dump evidence | Client       | M6.2          | Same report. Pairs with item 9 — the pool settings are configurable but unexercised until a real endpoint exists                                                                                                                                                                                                  |
-| 11    | Monitor service identity and ACL, real                                            | Client       | M6.3          | Same report. The monitor cannot run under a managed identity that does not exist                                                                                                                                                                                                                                  |
-| 12    | Alert notification target and channel                                             | Client       | M6.3          | Same report. **This is what gates M6.3.** Delivery of an alert to a person is the promotion evidence; local fixtures cannot supply it, so PR #66 stays a draft by the delivery side's own correct judgement                                                                                                       |
+| #     | Item                                                                              | Owner        | Needed by | Notes                                                                                                                                                                                                                                                                                                                                                             |
+| ----- | --------------------------------------------------------------------------------- | ------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~1~~ | ~~Confirm M2 matching-engine scope~~                                              | ~~Client~~   | —         | **Resolved 2026-08-30: ArtFi is a trading intermediary, not an exchange.** `PRD.md` §4.2. M2 unblocked                                                                                                                                                                                                                                                            |
+| 2     | Reconcile the schedule authorities                                                | PM           | P1 exit   | `PRD.md` §3.1. Person-days retired as a unit by directive §1.3                                                                                                                                                                                                                                                                                                    |
+| 3     | Supply `pics/*.png` and `fractional_steps/*`                                      | Client       | G1        | Only `BLOCKED` item in the matrix                                                                                                                                                                                                                                                                                                                                 |
+| 4     | Hoodi RPC endpoint and funded keystore account                                    | Client       | G2        | SIN access already authorized                                                                                                                                                                                                                                                                                                                                     |
+| 5     | Production chain decision                                                         | Client       | before G4 | Undecided. Hoodi implies nothing                                                                                                                                                                                                                                                                                                                                  |
+| ~~6~~ | ~~13 token IDs / 1,300 units vs. 37 / 3,700 as minted~~                           | ~~Client~~   | —         | **Closed 2026-09-19: not a conflict.** CH.1 says the **first** supply is 13 works; `PRD.md` §8.4 says the **formal set** is `UNIT-A01` and `UNIT-A03`–`UNIT-A38`, 37 works. All 13 are inside that 37 and none is the withdrawn `UNIT-A02`, so both sentences hold at once — 13 is the first tranche of the 37, not a rival count. Recorded in `PRD.md` §4.7 CH.1 |
+| ~~7~~ | ~~Settlement custody~~                                                            | ~~Client~~   | —         | **Resolved 2026-08-30: signature settlement.** Fixed-price and order-book settle by signature; escrow retained only for auctions (`PRD.md` §4.2.2)                                                                                                                                                                                                                |
+| ~~8~~ | ~~Pausing traps escrowed listings~~                                               | ~~Delivery~~ | —         | **Resolved: `cancelListing` is no longer `whenNotPaused`.** Pausing froze a seller's escrowed asset, which `PRD.md` §4.2 forbids. Proven by `testPauseDoesNotTrapEscrowedListing`, which fails with `EnforcedPause()` before the fix; `testPauseStillBlocksNewListings` proves the pause still stops new activity                                                 |
+| 9     | <CLOUD_PROVIDER_A> minimal `TEST_ONLY` profile, executable                        | Client       | M6.2      | Reported by the delivery side on issue #62. Without it `feature/db-startup-pool-options-*` (PR #67) cannot be validated against a real database and stays a draft                                                                                                                                                                                                 |
+| 10    | TLS configuration and a schema permitted for testing, with client / dump evidence | Client       | M6.2      | Same report. Pairs with item 9 — the pool settings are configurable but unexercised until a real endpoint exists                                                                                                                                                                                                                                                  |
+| 11    | Monitor service identity and ACL, real                                            | Client       | M6.3      | Same report. The monitor cannot run under a managed identity that does not exist                                                                                                                                                                                                                                                                                  |
+| 12    | Alert notification target and channel                                             | Client       | M6.3      | Same report. **This is what gates M6.3.** Delivery of an alert to a person is the promotion evidence; local fixtures cannot supply it, so PR #66 stays a draft by the delivery side's own correct judgement                                                                                                                                                       |
 
 Items 9–12 are client-side supply, not delivery work. Until they exist the operations line
 stops where PR #66 and PR #67 stand: source complete, CI green, delivery unprovable. The client
@@ -299,6 +429,495 @@ client ruling at issue #72 §2, and the model boundary for its LLM triage is set
 ---
 
 ## Change log
+
+### 2026-09-29 — `claude/ci-all-pr-6dytk9`: the activity history becomes walkable (stage `S-XM`)
+
+`AGENTS.md`'s S-XM checkpoint names this as the slice after PR #114's findings: complete
+cursor-paginated activity history in API, OpenAPI, client and UI. Two things were wrong with
+`/v1/market/activity`. It served a `limit` alone, capped at 100, so the most any reader could ever
+see was the hundred most recent events while the rest of the history sat in the mirror unreachable.
+And **no screen reached it at all**, which `PRD.md` §3.2 counts as progress rather than a handover.
+
+**Keyset, not offset.** Rows arrive continuously, and offset paging over a feed that grows at its
+head skips and repeats rows as it walks — a reader would be told a complete history while silently
+missing events. The cursor is the ordering tuple of the last row served,
+`(event_timestamp, received_at, event_id)` descending; the primary key breaks the tie so the order is
+strict and a cursor names exactly one position. The existing `idx_external_market_activity` covers
+the seek. One row beyond the page is read to decide whether another page exists and is not served, so
+a client is never told there is more when there is not.
+
+**The end is stated, never inferred.** `nextCursor` is absent once the history has ended. A short
+page is not the end — the server may return fewer rows and still have more — so a client that
+guessed from page length would report a history that stopped when it had not.
+
+**A cursor is a position, not an authority.** It is opaque by encoding rather than by secrecy, and
+every field is re-validated on the way in. One this endpoint did not issue is refused with 400 rather
+than rounded to the head: silently restarting would serve the newest page to a reader who asked for
+an older one, with nothing to tell them.
+
+`/market/activity` is the screen, reachable from navigation on desktop and mobile. Each row carries
+source, event type, chain, collection, token, order, price, observed time, freshness and the venue
+link the source reported — re-validated by `venueLink`, never constructed (XM.5). An unreachable
+mirror says so and does **not** render the empty state: "the mirror has observed no activity" would
+be a claim about the market made from a failed request, and the two are opposite statements to a
+reader deciding whether a market is quiet or broken.
+
+Evidence: `market_activity_cursor.go` with 6 Go tests covering the round trip, microsecond
+precision, eleven malformed-cursor refusals including SQL in the event id, and the predicate's
+placeholder/argument binding; `market-activity.ts` with 10 web tests covering order, the stated end,
+no event shown twice, and a non-advancing cursor ending the walk; `market-activity.spec.ts` with 6
+browser tests across desktop and mobile. `TestMySQLPersistenceSurvivesServiceRestart` now walks the
+whole history one event at a time and asserts each is served exactly once — it needs MySQL and did
+not run here. Web 186/186, Playwright 156 passed with 2 intentional skips, Forge 136/136, Go with
+`-race`, OpenAPI regeneration with no drift beyond the documented change, and the format, lint,
+typecheck, build, security, agent, chain-consistency and charity verifier gates.
+
+**No count or status moves.** XM.2 and XM.3 keep `IMPLEMENTED-NOT-VERIFIED`: no live mirror has
+served a page here and no runtime evidence exists.
+
+### 2026-09-29 — `claude/ci-all-pr-6dytk9`: four review findings on the settlement surfaces
+
+Review on PR #127 found four defects in the two entries below. All four are real and all four are
+fixed at `1857c5e`; two of the descriptions in those entries were accordingly too generous when
+written, and this entry corrects them rather than editing them.
+
+**A deployment belonged to every page at once.** `AssetDetail` is shared by all six slugs in
+`lib/catalog.ts`, and both settlement surfaces read their contract from the environment with no
+identifier from the artwork. Once configured, every detail page would have offered the same real
+holding and signing surface under a different artwork's title — a fixture dressed as live data
+(`AGENTS.md` §5, `ACCEPTANCE.md` §3), and a signature over terms the signer did not mean. The
+environment fallback that made this reachable was added by the 2026-09-27 entry below. A deployment
+now names the one slug it belongs to (`lib/asset-binding.ts`), an unnamed one binds nowhere, and
+"deployed, but belongs to another page" is stated on screen as its own case.
+
+**The zero address passed as a party and as a token.** A blank payment-token field became
+`0x00…0`, which `isAddress` accepts and the market refuses, so the form could produce a signed
+authorization that could never settle. Both validators now reject it for the seller, the asset or
+collection and the payment token, and keep it for the buyer field, where it means "anyone may fill".
+
+**An approval could be spent on an unfillable token.** The fraction fill path sent the buyer's ERC-20
+approval without reading `allowedPaymentToken`, so an unallowlisted token — or one whose permission
+was withdrawn after signing — cost the buyer a transaction and left a live allowance behind. It is
+read and blocked on before the approval, and an unread standing does not pass.
+
+**A charity edition past the first page lost its venue link.** The venue lookup read only page one of
+`/v1/market/assets`, whose page size caps at 100. `findCharityVenueRecord` now walks until the
+edition is found, a page is empty, or `total` is exhausted — "not found yet" is not "not observed".
+
+Evidence: four regressions, each verified by mutation. `asset-binding.test.ts` (7 cases),
+`charity-venue.test.ts` (+6), `fraction-intent.test.ts` and `whole-artwork-intent.test.ts` (zero
+address rejected as party or token, still accepted as an open buyer), and
+`fractionPaymentApprovable` covering the unread standing. Web 176/176, Playwright 142 passed with 2
+intentional skips, Forge 136/136, Go with `-race`, and the format, lint, typecheck, build, security,
+agent, chain-consistency, release, charity, Hoodi and contracts-lint gates.
+
+**No count or status moves.** The corrected surfaces keep the statuses the entries below record.
+
+### 2026-09-27 — `claude/ci-all-pr-6dytk9`: the fraction settlement screen (stage `S-FR`)
+
+`PRD.md` §3.2 makes a stage deliverable when its function is operable from a screen, desktop and
+mobile. The signature-settled fixed-price path that the client ruling of 2026-08-30 requires
+(`PRD.md` §4.2.2) was on chain in `ArtFiMarket.sol` with **nothing reaching it** — the fraction page
+said so in as many words: "Fraction trading has no screen yet". Under §3.2 that is progress, not a
+handover. It has a screen now.
+
+**What it does.** A holder authorizes a sale of up to some number of fractions by signing EIP-712
+terms; a buyer settles part or all of it. The fractions never leave the holder's wallet in between,
+ArtFi is never counterparty, and nothing on the surface can move a holder's tokens without the
+signature they produced for that fill. Partial fills are the difference from the whole-artwork
+surface: one signature settles cumulatively up to its maximum, so both sides see what is left, and
+the holder can retire one authorization (`revokeIntent`) or all of them
+(`incrementSellerEpoch`) — neither blocked by an administrative pause.
+
+**What it refuses to hide**, each being a fill that would otherwise revert with no explanation: the
+token allowlist, the buyer's remaining pilot spend cap, the cumulative fill counter read from chain
+rather than taken from the pasted terms, and the seller's current epoch read the same way. Approval
+is its own step for an **exact** amount on each leg — the seller's allowance covers the authorized
+maximum, the buyer's covers this fill. Never an unlimited approval. With no deployed market or
+fraction token the panel names which prerequisite is missing and offers nothing.
+
+Two corrections to the whole-artwork surface, which is the same shape: its buyer path compared a
+pasted intent's epoch against itself, which can never detect the withdrawal the check exists for, so
+the epoch is now read from chain; and it had no configuration path at all — nothing passes a
+collection, so no deployment could have switched it on. Both surfaces now read deployment
+configuration as a fallback to their props.
+
+The browser and the contract are pinned to the same digest,
+`0x9de0ca5c018685d7054b96dbce27834375413de39e1ec02bdcbb5862acde3cbf`, asserted in
+`fraction-intent.test.ts` and `FractionSaleIntent.t.sol::testDigestMatchesTheBrowserSigner`. A field
+renamed, reordered or retyped on either side fails a test on both rather than producing a signature
+the market rejects at fill time.
+
+Evidence: `apps/web/src/lib/fraction-intent.ts` with 22 unit tests, `fraction-listing.tsx`, 7 browser
+tests in `e2e/fraction-listing.spec.ts` across desktop and mobile. Web 147/147, Playwright 132 passed
+with 2 intentional skips, Forge 136/136, mirror 49/49, `gofmt`/`go vet`/`go test -race`, format,
+lint, typecheck, build, and the security, agent, release and chain-consistency gates.
+
+**No count or status moves.** M2.4–M2.9 stay `NOT-IMPLEMENTED`: a signature that lives in one browser
+is not an order store, an order lifecycle service or a matching engine, and the panel says so on
+screen rather than implying a live book. M3.1 stays `NOT-IMPLEMENTED` — auctions keep escrow under
+the same ruling and no surface here reaches them. The fixture figures on the fraction page are
+unchanged and stay labelled; M3.7 is untouched. Nothing is promoted, and no live settlement has been
+observed on any chain.
+
+### 2026-09-27 — `claude/ci-all-pr-6dytk9`: the three open mirror findings (stage `S-XM`)
+
+`AGENTS.md`'s S-XM checkpoint recorded PR #114 as not ready to hand over on three accepted review
+findings that were never fixed: ordered checkpoint/spool cleanup (`4056400240`), recovery overlap
+boundaries (`4056400243`), and aborting the initial REST crawl on fatal realtime failure
+(`4056400246`). All three are in `apps/market-mirror/src/opensea.ts`, and all three are now closed.
+
+**Finalization is ordered.** The checkpoint is the pointer and the spool is the payload, so the
+pointer goes first and the payload only once the pointer is gone. Removing them concurrently could
+leave a checkpoint naming a spool that no longer existed, and every later start then failed at the
+spool's existence check — the mirror could not run again until someone repaired the directory by
+hand. An orphaned pointer is now discarded and the snapshot re-derived, because the spool is staging
+and never an authority.
+
+**Recovery overlap stops at the newest committed page.** A collection is paged from its head
+downwards, so keeping one boundary per collection kept its oldest page and restart walked back over
+nearly the whole committed history before it recognised anything. Every retained boundary now counts.
+
+**The initial REST crawl is abortable.** Aborting the snapshot upload stops publication of what is
+staged and does nothing to a crawl still fetching pages while it holds the durable writer lock. The
+crawl has its own signal now, which the fatal stream path aborts.
+
+Evidence: four regressions in `opensea.test.ts` — `keeps the durable spool when the checkpoint
+cannot be removed`, `re-derives a snapshot when the checkpoint outlives its spool`, `stops recovery
+overlap at the newest committed page boundary`, `aborts the initial REST crawl when the stream
+becomes fatal` — each checked by mutation, so reverting the change it covers makes that test fail.
+Mirror 49/49, Web 125/125, Playwright 118 passed with 2 intentional skips, Forge 135/135,
+`gofmt`/`go vet`/`go test -race` and the Go API suite, format, lint, typecheck, build, and the
+security, agent, release and chain-consistency gates. `forge lint --severity high` is clean after a
+mock ERC20 transfer return value was checked in `FractionSaleIntent.t.sol`.
+
+**No count or status moves.** XM.3 keeps `IMPLEMENTED-NOT-VERIFIED`. The MySQL migration job needs a
+container runtime and was not run here; managed TEST_ONLY database execution and a live OpenSea
+stream/disconnect-reconnect run remain NOT RUN, and independent review of this head has not happened.
+
+### 2026-09-19 — `claude/ci-all-pr-6dytk9`: the charity Hoodi test plan
+
+`TESTPLAN_HOODI_CHARITY.md` — the executable sequence for the one thing this side cannot do, since
+it has no chain access: deploy on Hoodi, create a series from the test payload, prove the supply is
+fixed by the four refusals that keep it fixed, read it back from `/charity` on desktop and mobile,
+run the holder benefit end to end against a loopback object store, prove the gate with six cases
+that must yield **no bytes**, walk the lifecycle in order, and verify a release package that is the
+first to carry a holder-file binding.
+
+It restates `CH.1`–`CH.11`, §7.0 and `ACCEPTANCE.md` §3 as steps and **adds no requirement** — a
+step with no cited requirement is a defect in that file. Each step says what it proves **and what it
+does not**, and §6 states plainly that a fully green run establishes the technical path and nothing
+about money, receipts, legal effect, production readiness or `G3`/`G4`.
+
+`VD.3` — the Hoodi AI test payload — is `NOT-IMPLEMENTED` and §7.0 makes producing it the delivery
+side's. The plan names it as a precondition rather than assuming it exists.
+
+**Executing the plan promotes nothing by itself.** It produces evidence; promotion is a separate
+decision on the exact reviewed commit. No count moves with this commit.
+
+### 2026-09-19 — correction: the CCHS gate never applied to the test chain
+
+Client ruling: **the deliverable is that it runs on Hoodi.** The test chain holds no real asset and
+carries no legal liability, so **no CCHS or ArtCCH issued document is a precondition for it**. The
+purpose of a test-chain run is to prove the technical path, not an economic or legal one. Recorded
+in `PRD.md` §7.0 and `AGENTS.md` §6.
+
+**This corrects an assessment made in this session, not a document.** Asked whether the charity
+module was deliverable, this side listed "CCHS written evidence" among the things still required.
+That was wrong, and it was wrong against text that already existed: `PRD.md` §7.0 isolation rule 5
+says the CCHS donation, receipt, valuation and holder-advantage path **belongs to the real batch
+alone**. A Hoodi payload is forbidden to carry that language at all, so no CCHS document can be a
+precondition for exercising one. Requiring it imported the real batch's gate into a payload that
+may not touch it — a blocker invented out of a rule that says the opposite.
+
+`CHARITY_EDITIONS_PRECHAIN_EVIDENCE.md` is unchanged and still governs the real Sepolia batch.
+Real assets, real money and mainnet still require separate written approval (`AGENTS.md` §6).
+Neither gates Hoodi.
+
+No count moves and no status value changes.
+
+### 2026-09-19 — `claude/ci-all-pr-6dytk9`: three parked questions decided, not referred
+
+Client ruling: **do not treat a client decision as a blocker; the client does not rule on technical
+questions.** Recorded in `AGENTS.md` §5. Three items had been parked as "awaiting a client
+decision" that the documents already answered. Parking them was the error, and it stopped nothing
+but the answer.
+
+**Registry-versus-chain divergence.** `PRD.md` §1.0.5 already assigns each record a different
+question — the registry answers who holds it, the chain answers what settled and when — so a
+divergence is not a tie needing a ruling. On divergence ArtFi reports both records, shows each
+against the question it is authoritative for, substitutes neither for the other, and never answers
+either from its own projection. Written out in §1.0.5.
+
+**Open item 6, closed.** CH.1 says the **first** supply is 13 works; §8.4 says the **formal set** is
+`UNIT-A01` and `UNIT-A03`–`UNIT-A38`, 37 works. All 13 are inside that 37 and none is the withdrawn
+`UNIT-A02`, so both sentences are true at once: **13 is the first tranche of the 37, not a rival
+count.** There was never a conflict to resolve. The verifier keeps enforcing the formal set, which
+is the rule a per-package check can apply; tranche membership is a batch fact.
+
+**`ACCEPTANCE.md` §7.8's redirect item, removed.** It was annotated as not governing and left in
+place "for the client to correct". An audit item that forbids what a requirement mandates is a
+defect in this document by its own §1, not a pending decision. Removed. Every other exposure listed
+there — master, key, credential, raw signed transaction, prohibited IP, internal topology — is
+untouched and still fails an audit.
+
+Also reframed: G1's missing `pics/*.png` was described as a client decision. It is a **missing
+asset**. No reading of any document produces a screenshot. M3.10 stays `BLOCKED` on the artefact,
+and the handoff record now separates decisions from inputs so the two are not listed together.
+
+**No count moves and no status value changes.** Nothing here is evidence; three questions stopped
+being open, and one audit item that could not be satisfied stopped existing.
+
+### 2026-09-19 — `codex/s-xm-backfill-resilience-20260919`: complete REST gap-fill
+
+Issue #110's external-marketplace mirroring baseline, detailed by `PRD.md` §4.8 XM.2–XM.3,
+requires an explicit REST backfill lifecycle that converges with the realtime stream rather than
+silently accepting gaps. The OpenSea adapter now stages events until the provider reports
+completion, follows the provider cursor without a deployment page cap, rejects a cursor that does
+not advance, applies bounded numeric `Retry-After` guidance to transient retries, and keeps every
+REST request timeout active through response-body parsing. Production requires a durable
+`OPENSEA_BACKFILL_STATE_DIRECTORY`; every page fsyncs events before an append-only cursor
+checkpoint, so a restart resumes rather than recrawling from page one. Staged events remain
+invisible until all configured collections reach cursor exhaustion. The stream path parses the
+Phoenix join reply and waits for every remote collection subscription acknowledgement before the
+first REST page is requested.
+
+Evidence on local code merge `5040ba96f4d3253e6cc42aca9e2a2e8deea4c713`, tree
+`e02a3f477bfaf2a40b48fdca5b71bbc0f9e056f4`, integrated with base
+`c55852d42e08f8ba76d6ee63216f9b466a908566`: the market-mirror suite passes 45/45,
+including initial and reconnect subscription readiness, serialized reconnect gap-fill with
+fail-closed recovery, atomic snapshot/realtime cutover, reconnect commit gating, live reclaimer
+exclusion, bounded disk-spooled realtime publication, retained-spool capacity, multi-page recovery
+overlap, commit-window queue overflow rejection, durable cursor resume, short-write handling,
+abandoned-reclaim recovery, process-instance identity against PID reuse, single-writer enforcement,
+post-commit sink recovery and shutdown without publication when snapshotting fails. Full format,
+lint, typecheck, Node unit, production build, browser, secret, chain, release and charity gates pass.
+The snapshot API retains its complete-history, zero-event cutover and bounded idle-deadline contract.
+Fixed Go 1.26.5 validation passed `gofmt -l`, `go vet ./...`, unit and race tests for both tested
+packages; the server package has no test files. Managed database execution was not run and remains
+an independent gate.
+
+The P2 follow-up removes the second full `snapshot.ndjson` copy. The persistent OpenSea spool is
+replayed directly to snapshot upload through a capacity-one asynchronous handoff. A deferred,
+idempotent `commit`/`abort` lease keeps the source spool, checkpoints and lock authoritative until
+the sink commits. Slow-consumer coverage proves bounded one-in/one-out backpressure. Upload-failure
+coverage proves abort preserves source payload and checkpoints, releases the lock, and lets retry
+succeed and clean up. Zero-history and all-zero cutovers, precommit/postcommit order, stale-lock and
+successor safety, and default/reconnect auto-finalization remain covered. The integrated matrix also
+passed Web 125/125, Playwright 118 passed with two intentional skips, Forge 135/135 and Agent 34/34.
+
+Prior-head GitHub run `35481378549` had five jobs with zero executed steps and is infrastructure
+evidence only. The local merge and documentation heads still need fresh CI and independent runtime
+evidence. **No count or status moves:** XM.3 remains `IMPLEMENTED-NOT-VERIFIED`, and no live
+provider connection is claimed.
+
+### 2026-09-19 — `codex/vendor-neutral-operations-20260919`: neutral operations host role
+
+Issue #110 §4 and the 2026-09-19 vendor-neutral operations ruling require deployable behaviour to
+name infrastructure by role rather than bind it to the current vendor. The operations-dependency
+contract uses `artfi-delivery-link` internally; the frozen r2 producer role is
+accepted only at an explicit schema-v2 compatibility boundary, while validation
+and regression tests reject unknown producer roles and any legacy internal role
+deployment-specific host role. The contract remains fail-closed and
+`PARTIAL_INPUT_READY_NOT_7X24`: no capability, readiness gate or production claim changes.
+
+Remaining consolidation is not documentation-only. The Agent durable-store source and schema now
+use the `<CLOUD_PROVIDER_A>` role, while the mint-batch verifier still consumes the historical
+`abcdyiSshRecovered` evidence field as an explicit immutable compatibility exception.
+`docs/DEPLOYMENT_ENVIRONMENT.md` records that executable schema debt and the remaining
+documentation debt. **No count or status moves.**
+
+### 2026-09-19 — `claude/ci-all-pr-6dytk9`: fixture disclosure and holder authority
+
+Two surfaces of the same problem: what a reader is entitled to believe from a page.
+
+**Fixtures were unlabelled.** `/`, `/projects`, `/projects/[slug]`, `/market/rwa/[slug]`,
+`/market/fractionals` and `/market/fractionals/[slug]` render `lib/catalog.ts` — six invented
+artworks by six invented artists, with invented valuations and provenance — and nothing on any of
+them said so. Carrying the fixtures is legitimate inherited prototype material (`PRD.md` §2.1 says
+preserve Class A, do not rebuild); letting a reader take them for a live catalogue is what
+`AGENTS.md` §5 forbids and `ACCEPTANCE.md` §7.7 fails an audit over. One shared component now says
+it on every such surface, in one wording.
+
+**The holder-authority ruling had no UI anywhere.** `PRD.md` §1.0.5 puts the registry of record as
+the holder authority, the chain as its projection and ArtFi's own store as authoritative for
+nothing — and an asset page is where a reader decides what they believe about who owns a thing.
+`asset-holder-authority.tsx` states the three records and their standing on a whole-artwork page,
+including the row that keeps it honest: **no registry of record is connected in this build, so no
+holder is shown from one.** It is not rendered on a fraction page — fractions are a different asset
+model (`PRD.md` §1.0.1 B) and the registry-backed statement must not be copied onto them.
+
+Evidence: 10 browser tests in `prototype-disclosure.spec.ts` across desktop and mobile, including
+the negative cases — the live mirror and the charity surface must **not** carry the fixture label,
+because a disclosure that is wrong in the other direction is just as misleading. 98 browser tests
+in total (96 passing, 2 skipped), accessibility sweep unchanged, all other gates clean.
+
+**No count moves.** M3.7 stays `NOT-IMPLEMENTED`: this discloses the fixtures, it does not replace
+them, and the disclosure is not evidence toward that row.
+
+### 2026-09-19 — `claude/ci-all-pr-6dytk9`: the charity release verifier (stage `S-CH`)
+
+Three charity-only gaps in `verify-charity-edition-package.mjs`, found by reading it rather than by
+trusting this file's description of it.
+
+**The formal set was not enforced.** The artwork id was matched against `^UNIT-A\d{2}$`, which
+admits `UNIT-A02` — the withdrawn test-chain fixture that `PRD.md` §8.4 requires the formal batch to
+hard-reject and `ACCEPTANCE.md` §7.9 fails the audit over — as well as `UNIT-A00`, `UNIT-A39` and
+every other two-digit id naming no work. It now checks the formal set, `UNIT-A01` and
+`UNIT-A03`–`UNIT-A38`, and rejects A02 by name. CH.1's narrower 13-work first supply is **not**
+enforced: that conflict is open item 6 and a client decision, and a verifier picking a side would
+decide it.
+
+**The metadata URI was not bound to its own package.** The check required only the namespace prefix
+and a `.json` suffix, so a package could declare `UNIT-A05` and publish `UNIT-A01`'s metadata. It
+now must end in the package's own artwork id.
+
+**CH.11 had no packaging-time check at all.** This file said the verifier asserted that the
+watermarked holder file hashes differently from the master, in a full mode CI never ran. Both halves
+were wrong — the manifest carried no holder-file field, so nothing was ever compared, and CI does
+run full mode through `pnpm charity-edition:verifier:test`. The binding now exists as optional
+`holderAsset.file` and `holderAsset.sha256`: half of it is never accepted, a declared digest equal
+to the master's is hard-failed in every mode, `--local-assets` reads and hashes the file, and a
+package with no binding reports `holderAssetDistinctFromMaster: null` so its absence is visible.
+
+Optional on purpose: the 37 frozen packages carry no binding and `AGENTS.md` §6 keeps historical
+mint evidence immutable. All 37 were re-verified against every new rule and pass unchanged.
+
+Evidence: 10 new rejection cases and one positive assertion in
+`scripts/test/verify-charity-edition-package.mjs`, which CI already runs; the three charity CI
+commands green; 37/37 frozen packages re-verified.
+
+**No count moves.** CH.1, CH.10 and CH.11 stay `IMPLEMENTED-NOT-VERIFIED`. No package in the frozen
+batch carries a holder-file binding, so CH.11's packaging half is proven for no real package yet.
+
+### 2026-09-19 — `claude/ci-all-pr-6dytk9`: the operator dependency view (stage `S-OPS`, partial)
+
+M6.3's durable probe-and-incident engine is PR #66 — a conflicted draft its own description marks
+do-not-merge, not in this branch. It was not duplicated. What was missing everywhere is the
+operator-facing half: a screen an operator works from.
+
+`/operations` reads the dependencies this build actually has — web runtime, API runtime, chain
+identity and head-block age, mirror freshness, and whether the configured editions address answers
+a read — and reports each as observed. Three rules make it worth reading:
+
+- **An unreachable dependency is never green.** Silence is `unavailable`, not `ok`.
+- **An absent check is an absence.** An empty mirror is `not-checked`, never a healthy quiet
+  market, and it never improves the summary.
+- **The wrong chain is `unavailable`, not `degraded`.** Reading a chain the build is not configured
+  for is worse than reading none: every figure downstream would look plausible and be wrong.
+
+Nothing is stored, queued or notified; a reload re-reads reality. No endpoint, host, address or
+credential is rendered — a browser test asserts no URL, IPv4 or `localhost` string reaches the page
+(`ACCEPTANCE.md` §7.8).
+
+Evidence: 21 unit tests in `ops-checks.test.ts`, 4 browser tests in `operations-status.spec.ts`,
+the accessibility sweep extended to `/operations`, 106 unit tests and 78 browser tests in total.
+
+**M6.3 stays `NOT-IMPLEMENTED` and no count moves.** The host layer, log aggregation and alerting
+are absent; this is one slice of monitoring's read side, not the requirement. M6.1 and M6.2 are
+untouched on purpose: CI/CD to production and the production cluster are production assembly, which
+`PRD.md` §3.2.5 puts with the client's final step and forbids pulling forward.
+
+### 2026-09-19 — `claude/ci-all-pr-6dytk9`: XM.6 reconciliation and the `accepted` state
+
+Two changes in `reconcileMarketIntents`, both traceable to XM.6's "converges with the external
+market's authoritative state".
+
+**A defect fixed.** A sale event on an order marked **every** non-terminal intent on that order
+`confirmed`. An order fills once, so at most one of those intents was the buyer; the rest were told
+their purchase succeeded when somebody else got the item. Now only the intent whose own
+`submitted_transaction_hash` the venue reported is confirmed. The others fail with
+`external-order-filled-by-another-transaction`, a sale reported with no transaction hash confirms
+nobody and fails with `external-sale-unattributed`, and another party's transaction hash is never
+written into this user's row.
+
+**`accepted` is reachable.** It was declared in the migration, the OpenAPI contract and the
+generated client, and no Go code ever wrote it — recorded as a finding on 2026-09-18. Nothing
+defines its trigger, so the reading taken is the narrowest the existing data supports: a venue
+transfer carrying the intent's own submitted transaction hash means the venue observed this user's
+transaction, with the sale record not yet arrived. It is entered only from `awaiting-wallet`,
+`submitted` or `pending`, so a sale that arrived first is not pulled back — that is what XM.6 means
+by converging under out-of-order callbacks. The reading is derived from the state order in
+`PRD.md` §4.8 XM.6 and is recorded in the code as correctable, not asserted as settled product
+meaning.
+
+The decision is a pure function, `planIntentTransitions`, so the attribution rules are provable
+without a database: 9 tests in `market_reconciliation_test.go`, `go vet` and `go test -race ./...`
+clean.
+
+**No count moves.** XM.6 stays `IMPLEMENTED-NOT-VERIFIED`: no screen reaches any of these states,
+the orchestration path is gated off by default, and no runtime reconciliation has been observed.
+The database integration test that would exercise the SQL needs `ARTFI_INTEGRATION_MYSQL_DSN` and
+was not run here — no container runtime is available in this environment.
+
+### 2026-09-19 — `claude/ci-all-pr-6dytk9`: mirror attribution (stage `S-XM`)
+
+XM.4 requires every mirrored record to carry its external market, order ID, time, freshness and an
+HTTPS deep link out to the venue. The API already returned all of it; the page rendered part of it
+and stated "no external link or trade action". Now `/market/rwa` shows source, order status, short
+order ID, observed time, freshness as an age, and the venue link the source reported.
+
+The link is **attributed, never constructed**. `market-links.ts` re-validates the reported URL and
+refuses a non-HTTPS scheme, embedded credentials and any host but `opensea.io`; an unverifiable or
+absent URL renders as "no venue link was attributed" rather than a link the page hopes is safe.
+ArtFi never assembles one from a chain and a token ID, because a URL no observed event supports is
+a claim about the venue (XM.5).
+
+One layout defect fixed along the way: the record grid was a non-wrapping flex row sized for three
+fields, so the two new ones were clipped off the card. It is a wrapping grid now.
+
+Evidence: 13 unit tests in `market-links.test.ts`, 4 browser tests in `market-attribution.spec.ts`
+across desktop and mobile, 85 unit tests and 68 browser tests in total (66 passing, 2 skipped),
+lint, typecheck, build, format, secret scan and chain consistency clean.
+
+**No count moves.** XM.4 and XM.5 keep `IMPLEMENTED-NOT-VERIFIED`: there is no deployed environment
+and no live venue record has been rendered from observed data. The evidence text for both is
+updated; nothing is promoted.
+
+This is the change the previous entry said was still owed after the deep link stopped being held.
+
+### 2026-09-19 — `claude/ci-all-pr-6dytk9`: the charity surface (stage `S-CH`)
+
+`PRD.md` §3.2 makes a stage deliverable when its function is operable from the UI. `S-CH` had API
+routes, a contract and a rights component that **no screen reached**, so the stage was not
+deliverable however complete the code looked.
+
+Added: `/charity` and `/charity/[tokenId]`, both reading the editions contract directly — series
+count, per-series record, minted units, distribution-wallet balance, unit price — with an
+unavailable state and no fixture when the address is unset or the chain is unreadable. The CH.8
+rights disclosure renders on both. `charity-holder-access.tsx` runs the CH.5 flow from the page, and
+`charity-object-store.ts` plus `holder-asset/file/route.ts` deliver the watermarked bytes the
+descriptor route only described.
+
+Evidence on this branch: 72 unit tests (`pnpm test`, including 17 in `charity-object-store.test.ts`
+and 4 in `charity-availability.test.ts`), 60 Playwright tests across desktop and mobile — 58 passing, 2 skipped —
+including six new ones in `charity-editions.spec.ts` and the accessibility sweep extended to both
+new pages,
+`pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm format:check`. `charity-editions-populated.spec.ts`
+covers the populated render path and is skipped unless an editions address is configured.
+
+One count moves: CH.5 `NOT-IMPLEMENTED` → `IMPLEMENTED-NOT-VERIFIED`. `VERIFIED` does not move, and
+no other row changes. **Nothing here is runtime evidence on a deployed environment**: no environment
+has a descriptor store or an object store configured, so no holder has received a file anywhere.
+
+Client ruling the same day: **the UI is being redone in Figma and the delivered version is verified
+on functional delivery** (`PRD.md` §3.2.4). The charity surface was refitted onto the existing
+shared classes accordingly — `contract-facts` for the fact tiles, the market grid and card rules for
+the catalog — cutting the bespoke stylesheet from about 155 lines to under 60 so a re-skin costs
+stylesheet work rather than rebuilt components. No functional behaviour changed and no test was
+relaxed. G1's `pics/*.png` baseline still does not exist and M3.10 stays `BLOCKED`; whether the
+Figma work replaces that baseline is a client decision, recorded here and not made.
+
+The venue deep link was left out of this commit and is **no longer held**. A further ruling of
+2026-09-19 settled it: third-party venues are the early-stage state, ArtFi has trading of its own
+opened per product line, and **until a line opens on ArtFi, ArtFi does mirroring only** — mirroring
+being attributed data plus a link out. The original PRD's J-05 and `MARKET-004` describe that first
+phase correctly and were never a conflict; the earlier reading here treated them as one.
+
+`PRD.md` §1 and §4.8 XM.4 now record this, and `ACCEPTANCE.md` §7.8 carries an annotation: under the
+authority order in `AGENTS.md` §1 its redirect clause does not govern, while every other item in it
+— no master, key, credential, raw signed transaction, prohibited IP or internal topology — still
+fails an audit. No link has been added to any surface yet; that is a code change, not this one.
 
 Local evidence refresh (2026-09-13): the required wallet+DAO production
 dependency's read-only health input advances from r1 to frozen r2 with exact

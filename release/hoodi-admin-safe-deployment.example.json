@@ -47,5 +47,6 @@
     "status": "not-applicable",
     "rationale": "These deployment paths assign contract roles only and do not configure an ERC-721, ERC-1155, or payment-token treasury receiver."
   },
-  "nftTreasuryCustodyClaimed": false
+  "nftTreasuryCustodyClaimed": false,
+  "testAssetMarkers": ["TESTNET", "NO REAL-WORLD VALUE", "NO LEGAL EFFECT"]
 }
