@@ -1,18 +1,52 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+import { productNavigation, toolNavigation } from "@/lib/product-lines";
 
 import { LanguageSwitcher } from "./language-switcher";
+import { UserSessionControls } from "./user-session-controls";
 import { WalletButton } from "./wallet-button";
-
-const navigation = [
-  ["Overview", "/"],
-  ["Market mirror", "/market/rwa"],
-  ["Mint", "/create/rwa"],
-  ["Wallet", "/portfolio"],
-  ["DAO", "/dao"],
-] as const;
+import { XionganWalletLink } from "./xiongan-wallet-link";
 
 export function SiteHeader() {
+  const pathname = usePathname();
+  const xionganLink = (
+    <XionganWalletLink
+      onClick={(event) => {
+        const menu = event.currentTarget.closest("details");
+        if (menu) menu.open = false;
+      }}
+    />
+  );
+
+  const navigationLink = ([label, href]: readonly [string, string]) => (
+    <Link
+      aria-current={pathname === href ? "page" : undefined}
+      href={href}
+      key={href}
+      onClick={(event) => {
+        // A current-page selection only dismisses the menu. Starting another asynchronous
+        // Next navigation here can race Back/Forward and discard the forward history entry.
+        if (
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          !event.altKey &&
+          event.currentTarget.href === window.location.href
+        )
+          event.preventDefault();
+        const menu = event.currentTarget.closest("details");
+        if (menu) menu.open = false;
+      }}
+    >
+      {label}
+    </Link>
+  );
+
   return (
     <header className="site-header">
       <div className="header-inner">
@@ -38,33 +72,38 @@ export function SiteHeader() {
           </span>
         </Link>
         <nav className="primary-nav" aria-label="Primary navigation">
-          {navigation.map(([label, href]) => (
-            <Link href={href} key={href}>
-              {label}
-            </Link>
-          ))}
+          {productNavigation.map(navigationLink)}
+          <details className="tools-menu" key={`tools-${pathname}`}>
+            <summary>Tools</summary>
+            <nav aria-label="Workflow navigation">
+              {toolNavigation.map(navigationLink)}
+              {xionganLink}
+            </nav>
+          </details>
         </nav>
         <div className="header-actions">
           <LanguageSwitcher />
           <div className="desktop-wallet">
+            <UserSessionControls />
             <WalletButton />
           </div>
-          <details className="mobile-menu">
+          <details className="mobile-menu" key={`mobile-${pathname}`}>
             <summary>Menu</summary>
             <nav aria-label="Mobile navigation">
-              {navigation.map(([label, href]) => (
-                <Link href={href} key={href}>
-                  {label}
-                </Link>
-              ))}
+              {productNavigation.map(navigationLink)}
+              {toolNavigation.map(navigationLink)}
+              {xionganLink}
             </nav>
           </details>
         </div>
       </div>
+      <div className="mobile-wallet-controls" aria-label="Wallet controls">
+        <WalletButton />
+        <UserSessionControls />
+      </div>
       <div className="testnet-banner">
-        <span>Testnet / read-only</span>
-        No custody · External market information mirror only · Attributed
-        runtime data
+        <span>Hoodi testnet</span>
+        No real assets or real money · Wallet-confirmed writes where configured
       </div>
     </header>
   );

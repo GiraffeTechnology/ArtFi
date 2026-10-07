@@ -9,7 +9,10 @@
     "start": "next start",
     "test": "vitest run src",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e:market": "playwright test --config=playwright.market.config.ts",
+    "test:e2e:oracle": "playwright test --config=playwright.oracle.config.ts",
+    "test:e2e:session": "playwright test --config=playwright.session.config.ts"
   },
   "dependencies": {
     "@giraffetechnology/artfi-api-client": "workspace:*",
@@ -20,17 +23,18 @@
     "react-dom": "19.2.8",
     "viem": "2.56.0",
     "wagmi": "2.17.5",
-    "zod": "4.4.3"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@playwright/test": "1.62.1",
-    "@types/node": "26.4.0",
+    "@eslint/compat": "2.1.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.5.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
-    "eslint": "9.39.5",
+    "eslint": "10.9.1",
     "eslint-config-next": "16.3.1",
     "typescript": "5.9.3",
-    "vitest": "4.1.11"
+    "vitest": "5.0.3"
   }
 }

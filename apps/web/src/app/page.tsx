@@ -1,76 +1,72 @@
 import Link from "next/link";
 
-import { MarketMirrorCard } from "@/components/market-mirror-card";
 import { WalletButton } from "@/components/wallet-button";
-import { artworks } from "@/lib/catalog";
-
-const modules = [
-  {
-    detail: "Live listings and sale signals from compliant external venues.",
-    href: "/market/rwa",
-    label: "Read-only mirror",
-    number: "01",
-    title: "Market mirror",
-  },
-  {
-    detail: "Authorized ERC-721 records and fixed ERC-1155 edition controls.",
-    href: "/create/rwa",
-    label: "External wallet confirmation",
-    number: "02",
-    title: "Mint",
-  },
-  {
-    detail: "Public-address portfolio and testnet network visibility.",
-    href: "/portfolio",
-    label: "No private-key custody",
-    number: "03",
-    title: "Wallet",
-  },
-  {
-    detail: "Proposal, quorum, treasury and role transparency.",
-    href: "/dao",
-    label: "Execution interface reserved",
-    number: "04",
-    title: "DAO",
-  },
-] as const;
+import { XionganWalletLink } from "@/components/xiongan-wallet-link";
+import { productLines, toolNavigation } from "@/lib/product-lines";
 
 export default function Home() {
   return (
     <main className="approved-overview page-shell">
-      <section className="overview-hero">
-        <div className="overview-hero__copy">
-          <p className="approved-eyebrow">ArtCCH / ArtFi</p>
-          <h1>Art, provenance, and transparent ownership.</h1>
-          <p className="overview-hero__lede">
-            A trusted entry point for curated art assets: inspect provenance,
-            connect an external wallet, and understand markets and governance in
-            one interface.
-          </p>
-          <div className="overview-actions">
-            <WalletButton />
-          </div>
+      <section className="product-home-intro">
+        <p className="approved-eyebrow">ArtCCH / ArtFi</p>
+        <h1>Three ways to participate in art.</h1>
+        <p>
+          Discover digital NFTs, whole-artwork receipt assets, and fractional
+          trading with DAO governance. Choose the product that matches the
+          rights you want to understand.
+        </p>
+        <div className="overview-actions">
+          <a className="primary" href="#products">
+            Choose a product
+          </a>
+          <WalletButton />
         </div>
-        <MarketMirrorCard artwork={artworks[0]} />
       </section>
 
       <section
         className="module-overview"
-        aria-labelledby="module-overview-title"
+        id="products"
+        aria-labelledby="product-overview-title"
       >
-        <h2 id="module-overview-title">Four controlled layers</h2>
-        <div className="module-overview__grid">
-          {modules.map((module) => (
-            <Link href={module.href} key={module.number}>
-              <article>
-                <span>{module.number}</span>
-                <h3>{module.title}</h3>
-                <p>{module.detail}</p>
-                <strong>{module.label}</strong>
-              </article>
-            </Link>
+        <h2 id="product-overview-title">Three product lines</h2>
+        <div className="module-overview__grid product-overview-grid">
+          {productLines.map((product) => (
+            <article className="product-card" key={product.number}>
+              <span>{product.number}</span>
+              <h3>{product.title}</h3>
+              <p>{product.detail}</p>
+              <strong>{product.label}</strong>
+              <Link className="secondary" href={product.href}>
+                {product.action}
+              </Link>
+            </article>
           ))}
         </div>
+      </section>
+
+      <aside
+        className="product-runtime-notice"
+        aria-label="Runtime availability"
+      >
+        <strong>Current environment: Hoodi testnet.</strong>
+        <p>
+          No real assets or real money. Runtime panels show observed records or
+          explain what is unavailable. Sample artwork catalogs are explicitly
+          marked as prototype fixtures. A visible workflow is not a claim that
+          its contracts or services are configured.
+        </p>
+      </aside>
+
+      <section className="product-tools" aria-labelledby="product-tools-title">
+        <h2 id="product-tools-title">Continue an existing workflow</h2>
+        <nav className="product-actions" aria-label="ArtFi tools">
+          {toolNavigation.map(([label, href]) => (
+            <Link className="secondary" href={href} key={href}>
+              {label}
+            </Link>
+          ))}
+          <XionganWalletLink className="secondary" />
+        </nav>
       </section>
     </main>
   );
