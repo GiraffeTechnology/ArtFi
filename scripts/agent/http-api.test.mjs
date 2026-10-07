@@ -148,7 +148,10 @@ test("zero revocation hash and invalid create identity are rejected before trans
     /REVOCATION_HASH_INVALID/,
   );
   for (const input of [{}, { operationId: "../op-1" }])
-    await assert.rejects(api.createIntent(input), /HTTP_REQUEST_SCHEMA_INVALID/);
+    await assert.rejects(
+      api.createIntent(input),
+      /HTTP_REQUEST_SCHEMA_INVALID/,
+    );
   assert.equal(calls, 0);
 });
 
