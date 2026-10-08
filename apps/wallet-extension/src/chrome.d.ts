@@ -38,6 +38,15 @@ interface ChromeScripting {
   ): Promise<void>;
   unregisterContentScripts(filter: { ids: string[] }): Promise<void>;
   getRegisteredContentScripts(): Promise<ChromeRegisteredContentScript[]>;
+  /**
+   * Registration only covers later document loads, so a tab that is already open is injected
+   * directly. Chrome documents the two as separate operations.
+   */
+  executeScript(injection: {
+    target: { tabId: number };
+    files: string[];
+    world?: "MAIN" | "ISOLATED";
+  }): Promise<unknown>;
 }
 
 interface ChromePermissions {
@@ -56,6 +65,7 @@ interface ChromePermissions {
 }
 
 interface ChromeTab {
+  id?: number;
   url?: string;
 }
 
@@ -64,6 +74,7 @@ interface ChromeTabs {
     active?: boolean;
     currentWindow?: boolean;
   }): Promise<ChromeTab[]>;
+  get(tabId: number): Promise<ChromeTab>;
 }
 
 declare const chrome: {

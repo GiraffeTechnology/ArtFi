@@ -57,8 +57,34 @@
       button + button {
         margin-top: 8px;
       }
-      button[hidden] {
+      button[hidden],
+      form[hidden],
+      div[hidden],
+      p[hidden] {
         display: none;
+      }
+      label {
+        display: block;
+        margin: 10px 0 4px;
+        font-size: 12px;
+        color: #b9b2a5;
+      }
+      input,
+      select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        color: #f4efe5;
+        background: #1c1a17;
+        border: 1px solid #3a3630;
+        border-radius: 6px;
+        font: inherit;
+      }
+      #vault-submit {
+        margin-top: 12px;
+      }
+      #vault-error {
+        color: #ffb4a2;
       }
     </style>
   </head>
@@ -69,6 +95,36 @@
       WalletConnect session.
     </p>
     <p id="status">Checking encrypted vault…</p>
+
+    <form id="vault-form" hidden>
+      <label for="vault-password" id="vault-password-label"
+        >Vault password</label
+      >
+      <input
+        id="vault-password"
+        type="password"
+        autocomplete="current-password"
+        minlength="12"
+        required
+      />
+      <div id="vault-account-fields" hidden>
+        <label for="vault-address">Account address</label>
+        <input
+          id="vault-address"
+          type="text"
+          inputmode="latin"
+          placeholder="0x…"
+          pattern="0x[0-9a-fA-F]{40}"
+        />
+        <label for="vault-connector">Signer</label>
+        <select id="vault-connector">
+          <option value="hardware">Hardware wallet</option>
+          <option value="walletconnect">WalletConnect</option>
+        </select>
+      </div>
+      <button id="vault-submit" type="submit">Unlock coordinator</button>
+      <p id="vault-error" role="alert" hidden></p>
+    </form>
 
     <h2>This site</h2>
     <p id="site">Reading the active tab…</p>

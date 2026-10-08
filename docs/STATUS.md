@@ -1,5 +1,51 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-08 Four review findings on the wallet provider
+
+Evidence only. No status value, count, gate or row changes.
+
+Review on PR #150 found four defects in the page-provider increment recorded below. All four were
+real and all four are fixed. The first invalidated that entry's own claim, and the correction is
+recorded here rather than by editing it.
+
+**The connection could never actually complete (P1).** `vault.create` and `vault.unlock` had no
+caller anywhere in the package — only their handlers in `background.ts` — so `unlockedPayload` was
+never assigned, `grantedAccounts` always returned nothing, and every `eth_requestAccounts` failed
+however the provider and the site grant were configured. The entry below claimed connection worked;
+it did not. This is the fault `docs/ACCEPTANCE.md` §3 names, a surface that renders but cannot
+execute its function, and delivering the provider is what made the missing unlock path
+load-bearing. The popup now creates and unlocks the vault, with the decision extracted to
+`vault-form.ts` and tested: an existing vault is only ever opened, never recreated over its stored
+descriptors; a password shorter than the vault's own minimum is refused before the worker is asked;
+and creation requires a well-formed account address. No key material is involved — a descriptor
+records which address an approved external signer holds.
+
+**The provider never reached the tab that was already open (P1).**
+`scripting.registerContentScripts` applies to later document loads only, so a person enabled the
+site and nothing happened until a reload nothing had asked for. `enableSite` now also injects both
+worlds into the tab the popup names, after verifying that tab is still on the granted origin, since
+injection is per tab and a tab may have navigated away. A failed injection leaves the registration
+and the grant in place rather than undoing them.
+
+**Grant restoration was not awaited (P2).** Chrome restarts the MV3 worker to deliver an event, so
+a provider request could reach `routeProviderRequest` before the storage read finished: the first
+call from an enabled site would be refused as unauthorized and a retry would succeed, which is the
+worst shape a permission check can take. The restoration promise is now held and awaited by every
+handler that reads a grant.
+
+**An expired grant kept its host permission (P2).** Expiry dropped the grant and unregistered its
+scripts but left the optional host permission in place, so an origin absent from the popup's list
+stayed authorized in the browser indefinitely. `restoreSiteAccess` now hands back the host access of
+every origin whose grants have all expired, as an explicit disable already did, while keeping access
+for an origin that was expired and granted again.
+
+Each structural fix was checked by mutation: removing the open-tab injection fails only
+`runs the provider in the tab that is already open`, and removing the expired-grant revocation fails
+only `hands back the host permission of a grant that expired`. wallet-extension tests go from 24 to
+34 across 6 files. The awaited restoration and the popup's DOM wiring are verified by inspection
+rather than by a unit test, since neither has a test harness in this package; browser-loaded
+execution against a live page remains **NOT RUN** and required.
+
 ## 2026-10-08 Two hardcoded port defaults removed
 
 Evidence only. No status value, count, gate or row changes.

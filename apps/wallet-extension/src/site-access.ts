@@ -54,6 +54,11 @@ export interface SiteAccessDeps {
     registerContentScripts(scripts: RegisteredScript[]): Promise<void>;
     unregisterContentScripts(filter: { ids: string[] }): Promise<void>;
     getRegisteredContentScripts(): Promise<RegisteredScript[]>;
+    executeScript(injection: {
+      target: { tabId: number };
+      files: string[];
+      world?: "MAIN" | "ISOLATED";
+    }): Promise<unknown>;
   };
   readonly hostPermissions: {
     request(request: {
@@ -61,6 +66,9 @@ export interface SiteAccessDeps {
       origins?: string[];
     }): Promise<boolean>;
     remove(request: { origins?: string[] }): Promise<boolean>;
+  };
+  readonly tabs: {
+    get(tabId: number): Promise<{ url?: string }>;
   };
   readonly now?: () => number;
 }
@@ -77,21 +85,40 @@ function scriptIds(origin: string): { provider: string; bridge: string } {
   };
 }
 
-export async function loadGrants(deps: SiteAccessDeps): Promise<StoredGrant[]> {
+function wellFormed(entry: unknown): entry is StoredGrant {
+  if (typeof entry !== "object" || entry === null) return false;
+  const candidate = entry as Partial<StoredGrant>;
+  return (
+    typeof candidate.origin === "string" &&
+    Array.isArray(candidate.methods) &&
+    typeof candidate.expiresAt === "number"
+  );
+}
+
+/**
+ * Reads stored grants and separates the live from the expired.
+ *
+ * The expired ones are returned rather than simply dropped, because an expired grant still has a
+ * host permission attached to it that has to be handed back.
+ */
+export async function partitionGrants(
+  deps: SiteAccessDeps,
+): Promise<{ live: StoredGrant[]; expired: StoredGrant[] }> {
   const stored = await deps.storage.get(SITE_GRANT_KEY);
   const raw = stored[SITE_GRANT_KEY];
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) return { live: [], expired: [] };
   const now = deps.now?.() ?? Date.now();
-  return raw.filter((entry): entry is StoredGrant => {
-    if (typeof entry !== "object" || entry === null) return false;
-    const candidate = entry as Partial<StoredGrant>;
-    return (
-      typeof candidate.origin === "string" &&
-      Array.isArray(candidate.methods) &&
-      typeof candidate.expiresAt === "number" &&
-      candidate.expiresAt > now
-    );
-  });
+  const live: StoredGrant[] = [];
+  const expired: StoredGrant[] = [];
+  for (const entry of raw) {
+    if (!wellFormed(entry)) continue;
+    (entry.expiresAt > now ? live : expired).push(entry);
+  }
+  return { live, expired };
+}
+
+export async function loadGrants(deps: SiteAccessDeps): Promise<StoredGrant[]> {
+  return (await partitionGrants(deps)).live;
 }
 
 async function persistGrants(
@@ -102,8 +129,45 @@ async function persistGrants(
 }
 
 /**
+ * Runs the page scripts in a tab that is already open.
+ *
+ * `registerContentScripts` only applies to later document loads, so without this the person
+ * enables the site, nothing happens, and the provider appears only if they happen to reload.
+ * Injection is per tab, so the tab is verified to be on the granted origin first: the tab id comes
+ * from the popup, and a tab that has navigated elsewhere in the meantime must not receive it.
+ *
+ * Failure here is not fatal. The registration still stands and the next load will carry the
+ * provider, so the caller reports whether a reload is needed rather than undoing the grant.
+ */
+async function injectIntoOpenTab(
+  origin: string,
+  tabId: number,
+  deps: SiteAccessDeps,
+): Promise<boolean> {
+  try {
+    const tab = await deps.tabs.get(tabId);
+    if (!tab.url) return false;
+    if (new URL(tab.url).origin !== origin) return false;
+    // Same order and worlds as the registration, so an injected tab behaves like a loaded one.
+    await deps.scripting.executeScript({
+      target: { tabId },
+      files: ["provider.js"],
+      world: "MAIN",
+    });
+    await deps.scripting.executeScript({
+      target: { tabId },
+      files: ["bridge.js"],
+      world: "ISOLATED",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Enables one origin: asks for the optional permissions, registers the page scripts, records
- * the grant.
+ * the grant, and runs the scripts in the tab that is already open.
  *
  * The permission request comes first. If the person declines it, nothing is registered and
  * nothing is recorded, so a refusal leaves no half-enabled site behind.
@@ -112,7 +176,8 @@ export async function enableSite(
   originValue: string,
   controller: PermissionController,
   deps: SiteAccessDeps,
-): Promise<StoredGrant> {
+  tabId?: number,
+): Promise<StoredGrant & { injected: boolean }> {
   const origin = assertSafeOrigin(originValue);
   const granted = await deps.hostPermissions.request({
     permissions: ["scripting"],
@@ -162,7 +227,16 @@ export async function enableSite(
     expiresAt: record.expiresAt,
   });
   await persistGrants(deps, grants);
-  return grants[grants.length - 1] as StoredGrant;
+
+  // After the grant exists, not before: an injected provider whose first request would be refused
+  // is worse than one that arrives a moment later.
+  const injected =
+    tabId === undefined ? false : await injectIntoOpenTab(origin, tabId, deps);
+
+  return {
+    ...(grants[grants.length - 1] as StoredGrant),
+    injected,
+  };
 }
 
 /** Disables one origin and leaves nothing of it behind. */
@@ -190,18 +264,23 @@ export async function disableSite(
 }
 
 /**
- * Rebuilds in-memory grants after a service-worker restart, and unregisters scripts whose grant
- * has expired or gone.
+ * Rebuilds in-memory grants after a service-worker restart, unregisters scripts whose grant has
+ * expired or gone, and hands back the host permission of every grant that expired.
  *
- * Without this the two states drift apart in the dangerous direction: scripts persist, grants do
- * not, so a page would keep a provider that answers every request with "not enabled".
+ * Without the rehydration the two states drift apart in the dangerous direction: scripts persist,
+ * grants do not, so a page would keep a provider that answers every request with "not enabled".
+ *
+ * The permission revocation closes the opposite drift. Expiry used to drop a grant from storage
+ * and unregister its scripts while leaving the optional host permission in place, so an origin
+ * that had disappeared from the popup's list stayed authorized in the browser indefinitely. An
+ * expired grant now gives its host access back, exactly as an explicit disable does.
  */
 export async function restoreSiteAccess(
   controller: PermissionController,
   deps: SiteAccessDeps,
 ): Promise<StoredGrant[]> {
   const now = deps.now?.() ?? Date.now();
-  const grants = await loadGrants(deps);
+  const { live: grants, expired } = await partitionGrants(deps);
   const live = new Set<string>();
   for (const grant of grants) {
     try {
@@ -229,6 +308,27 @@ export async function restoreSiteAccess(
   if (stale.length > 0) {
     await deps.scripting.unregisterContentScripts({ ids: stale });
   }
+
+  // Only origins that have no surviving grant: a re-enabled origin may appear in both lists, and
+  // revoking its host access would break the grant that is still live.
+  const stillGranted = new Set(grants.map((grant) => grant.origin));
+  const abandoned = [
+    ...new Set(
+      expired
+        .map((grant) => grant.origin)
+        .filter((origin) => !stillGranted.has(origin)),
+    ),
+  ];
+  for (const origin of abandoned) {
+    try {
+      await deps.hostPermissions.remove({
+        origins: [originMatchPattern(origin)],
+      });
+    } catch {
+      // A revocation the browser refuses must not abort the restoration of the live grants.
+    }
+  }
+
   await persistGrants(deps, grants);
   return grants;
 }

@@ -23,7 +23,19 @@ const siteAccess: SiteAccessDeps = {
   storage: chrome.storage.local,
   scripting: chrome.scripting,
   hostPermissions: chrome.permissions,
+  tabs: chrome.tabs,
 };
+
+/**
+ * Registered content scripts outlive the service worker; in-memory grants do not. Chrome restarts
+ * this worker to deliver an event, so a provider request can arrive while storage is still being
+ * read — and an unawaited restoration would let that first request be refused as unauthorized and
+ * a retry succeed, which is the worst shape a permission check can have. Every handler that reads
+ * a grant awaits this promise, and it is started once here rather than per message.
+ */
+const siteAccessRestored = restoreSiteAccess(permissions, siteAccess).catch(
+  () => [],
+);
 
 type WalletMessage =
   | { type: "vault.status" }
@@ -31,7 +43,7 @@ type WalletMessage =
   | { type: "vault.unlock"; password: string }
   | { type: "vault.lock" }
   | { type: "provider.request"; method: string; params?: unknown }
-  | { type: "site.enable"; origin: string }
+  | { type: "site.enable"; origin: string; tabId?: number }
   | { type: "site.disable"; origin: string }
   | { type: "site.list" };
 
@@ -53,6 +65,8 @@ async function handleMessage(
   if (message.type === "provider.request") {
     // The origin is the browser's account of who is asking, never the page's.
     if (!senderOrigin) throw new Error("the requesting origin is unknown");
+    // Grants must be back in memory before the first request is judged.
+    await siteAccessRestored;
     return routeProviderRequest(senderOrigin, message.method, message.params, {
       permissions,
       payload: () => unlockedPayload,
@@ -67,8 +81,14 @@ async function handleMessage(
     if (!isExtensionOrigin(senderOrigin)) {
       throw new Error("site access is administered from the extension only");
     }
+    await siteAccessRestored;
     if (message.type === "site.enable") {
-      const grant = await enableSite(message.origin, permissions, siteAccess);
+      const grant = await enableSite(
+        message.origin,
+        permissions,
+        siteAccess,
+        message.tabId,
+      );
       return { grants: await loadGrants(siteAccess), granted: grant };
     }
     if (message.type === "site.disable") {
@@ -119,7 +139,3 @@ chrome.runtime.onMessage.addListener(
     return true;
   },
 );
-
-// Registered content scripts outlive the service worker; in-memory grants do not. Rehydrate one
-// from the other at every startup so a page never meets a provider that disowns its grant.
-void restoreSiteAccess(permissions, siteAccess);
