@@ -1,5 +1,50 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-08 Two hardcoded port defaults removed
+
+Evidence only. No status value, count, gate or row changes.
+
+`AGENTS.md`, "Current deployment execution and port allocation", already states that port
+allocations belong to the deployment configuration rather than the product, that a free unreserved
+port is selected under existing deployment authority, that a port must not be hardcoded in product
+behaviour, and that configured public URLs carry scheme, domain, port and entry path. Two places in
+the code contradicted the last two clauses, so this change implements the existing rule rather than
+adding one.
+
+**`apps/web/src/app/api/orders/route.ts`** supplied the default HTTPS port when `ARTFI_WEB_URL`
+named none, accepting the bare host together with that implied port and rejecting every other. A
+deployment serving on a selected port therefore answered 403 on order publication with nothing
+naming the cause, and a port-less configuration silently pinned the deployment to the default port.
+The configured authority is now compared exactly as configured.
+
+**`apps/api/internal/httpapi/handler.go`** substituted `http://localhost:3000` for an unset
+`ARTFI_WEB_ORIGIN`, which in a deployment allowed a loopback origin nobody uses and blocked the
+configured one while the service still looked healthy: every browser call failed CORS with no error
+naming the cause. An unset origin now sends no `Access-Control-Allow-Origin` header at all, since an
+empty header is still a header and reads as deliberate.
+
+Both are exact-match origin checks, and two further ones share the same configured value — the
+session origin binding in `apps/api/internal/httpapi/user_auth.go` and
+`apps/web/src/lib/user-auth.ts` with `operator-auth.ts`. A port mismatch in either blocks every
+signed-in request, so `ARTFI_WEB_URL` and `ARTFI_WEB_ORIGIN` must match the browser-visible origin
+including its port. No port value is written in the repository.
+
+Port 443 examples were removed from `native-order-route.test.ts` and `xiongan-wallet.test.ts`, with
+regressions in both directions: a configured authority that names a port accepts only that port, and
+one that names none matches no ported Host. A port whose digits merely contain `443`, such as
+`18443`, is a different port and was left alone.
+
+**Deployment observation, not an application fault.** At 2026-10-04T06:02:55Z
+`https://io.artcch.com` presented a certificate for a different host
+(`subject: CN=dress.abcdyi.com`, `subjectAltName does not match`), and TLS verification failed for
+the root, `/api/health` and the public metadata path alike; the same origin served ArtFi on
+2026-10-03T19:44Z with a one-year `Strict-Transport-Security` header, so an affected browser cannot
+be clicked through. No change in this repository clears that, and whether other ports are reachable
+could not be determined from the audit environment, whose egress proxy may itself restrict ports.
+Minted metadata URIs under `release/mint-batches/ye-yongrun-unit-a01-a38/` and
+`apps/web/public/nft/metadata/` are port-less immutable mint evidence under `AGENTS.md` §5 and were
+not rewritten.
+
 ## 2026-10-07 PR #125 dependency source refresh
 
 Based on main `0574d8dfef70dd6ea8e3a903cb47ed5d8441221a`, this candidate
@@ -48,7 +93,7 @@ Evidence only. No status value, count, gate or row changes.
 The client reported that ArtFi and the wallet could not connect in production. The web deployment
 was reachable when this was investigated: at 2026-10-03T19:44Z `https://io.artcch.com` served the
 application and `/api/health` reported `status: ok` on chain `560048` at build `033dba4`. (That
-origin stopped serving ArtFi within the following day; see the 2026-10-04 entry.) The connection
+origin stopped serving ArtFi within the following day; see the 2026-10-08 entry.) The connection
 cause was a missing protocol, not the deployment. ArtFi's web app registers exactly one connector,
 RainbowKit's `injectedWallet`
 (`apps/web/src/lib/wallet-config.ts`, with no WalletConnect connector and an empty `projectId`),

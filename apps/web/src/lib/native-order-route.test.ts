@@ -111,8 +111,8 @@ describe("native order HTTP boundary", () => {
     expect(verification).toHaveBeenCalledWith(order);
     expect(fetcher).toHaveBeenCalledOnce();
   });
-  it.each(["io.artcch.com", "io.artcch.com:443", "IO.ARTCCH.COM"])(
-    "accepts the exact configured public Host and effective port (%s)",
+  it.each(["io.artcch.com", "IO.ARTCCH.COM"])(
+    "accepts exactly the configured public Host (%s)",
     async (host) => {
       const incoming = request();
       incoming.headers.set("host", host);
@@ -121,6 +121,29 @@ describe("native order HTTP boundary", () => {
       expect((await POST(incoming)).status).toBe(201);
     },
   );
+  it("accepts a configured authority that names its port, and only that port", async () => {
+    // No port is defaulted or implied. A deployment on any port works by naming it here; the
+    // fixture port below is an arbitrary test value, not a deployment allocation.
+    vi.stubEnv("ARTFI_WEB_URL", "https://io.artcch.com:18080");
+    const accepted = request(undefined, "https://io.artcch.com:18080");
+    accepted.headers.set("host", "io.artcch.com:18080");
+    expect((await POST(accepted)).status).toBe(201);
+
+    for (const host of ["io.artcch.com", "io.artcch.com:18081"]) {
+      const rejected = request(undefined, "https://io.artcch.com:18080");
+      rejected.headers.set("host", host);
+      expect((await POST(rejected)).status).toBe(403);
+    }
+  });
+  it("implies no port for a configured authority that names none", async () => {
+    // The previous implementation supplied the default HTTPS port for an authority that named
+    // none, and accepted the bare host together with that implied port, which pinned the
+    // deployment to a port the host may well reserve for something else. A Host carrying a port
+    // must not match a port-less configuration; the mismatch has to stay visible.
+    const incoming = request();
+    incoming.headers.set("host", "io.artcch.com:18080");
+    expect((await POST(incoming)).status).toBe(403);
+  });
   it.each([
     { origin: undefined },
     { origin: "null" },

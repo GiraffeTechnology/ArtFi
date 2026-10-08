@@ -19,7 +19,7 @@ const urls = [
 describe("deployment wallet URL validation", () => {
   it.each([
     ...urls,
-    "https://example.test:443/custom/path",
+    "https://example.test:18080/custom/path",
     "https://example.test/a",
     "https://[::1]:19444/entry",
     "HTTPS://Wallet.Example:25443/custom",

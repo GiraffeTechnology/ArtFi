@@ -80,16 +80,23 @@ export async function POST(request: Request) {
     const authority = new URL(configured);
     const origin = authority.origin;
     const host = request.headers.get("host");
-    const effectivePort =
-      authority.port || (authority.protocol === "https:" ? "443" : "80");
+    // `authority.host` is the configured authority exactly as configured: it carries the port when
+    // the configured URL names one and carries none when it does not. No default port is assumed.
+    //
+    // This used to fall back to the default HTTPS port when the configured URL named none: a
+    // port-less configuration then accepted the bare host and that implied port and rejected every
+    // other, so a deployment serving on any other port answered 403 here with nothing naming the
+    // cause. Where the deployment host reserves that default port for something else, the fallback
+    // also pinned the deployment to a port it could never use. A deployment that serves on a port
+    // now names it in the configuration, and a mismatch is a visible configuration fault rather
+    // than a fallback that quietly accepts the wrong authority.
+    //
     // NextRequest normalizes loopback URLs, and a reverse proxy may use an internal URL.
     // The proxy must preserve the public Host. Forwarded headers are not trusted here.
     const publicHostMatches =
       host === null
         ? new URL(request.url).origin === origin
-        : [authority.host, `${authority.hostname}:${effectivePort}`].includes(
-            host.toLowerCase(),
-          );
+        : host.toLowerCase() === authority.host.toLowerCase();
     if (
       !publicHostMatches ||
       request.headers.get("origin") !== origin ||

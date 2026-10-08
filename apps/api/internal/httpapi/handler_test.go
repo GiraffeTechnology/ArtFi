@@ -486,7 +486,19 @@ func TestPreflight(t *testing.T) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", recorder.Code)
 	}
-	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:3000" {
+	// Unconfigured means no allowed origin, not a default one. The previous default pinned an
+	// origin and a port nobody deploys on, and hid a missing ARTFI_WEB_ORIGIN behind it.
+	if got := recorder.Header().Values("Access-Control-Allow-Origin"); len(got) != 0 {
+		t.Fatalf("an unconfigured origin must send no allow-origin header, got %v", got)
+	}
+}
+
+func TestPreflightEchoesTheConfiguredOriginWithItsPort(t *testing.T) {
+	// The configured origin is used exactly as configured, port included, so a deployment on any
+	// port works without the service assuming one.
+	t.Setenv("ARTFI_WEB_ORIGIN", "https://web.example:18080")
+	recorder := request(t, http.MethodOptions, "/v1/assets")
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "https://web.example:18080" {
 		t.Fatalf("unexpected origin: %s", got)
 	}
 }
