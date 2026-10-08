@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "ArtFi Wallet Alpha",
   "version": "0.1.0",
-  "description": "Non-custodial Sepolia signing coordinator for reviewed ArtFi testnet flows.",
-  "permissions": ["storage", "alarms"],
+  "description": "Non-custodial Hoodi signing coordinator and EIP-6963 page provider for reviewed ArtFi testnet flows.",
+  "permissions": ["storage", "alarms", "activeTab"],
   "optional_permissions": ["scripting"],
   "optional_host_permissions": ["https://*/*", "http://localhost/*"],
   "background": {

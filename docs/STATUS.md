@@ -1,5 +1,96 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-08 Four review findings on the wallet provider
+
+Evidence only. No status value, count, gate or row changes.
+
+Review on PR #150 found four defects in the page-provider increment recorded below. All four were
+real and all four are fixed. The first invalidated that entry's own claim, and the correction is
+recorded here rather than by editing it.
+
+**The connection could never actually complete (P1).** `vault.create` and `vault.unlock` had no
+caller anywhere in the package — only their handlers in `background.ts` — so `unlockedPayload` was
+never assigned, `grantedAccounts` always returned nothing, and every `eth_requestAccounts` failed
+however the provider and the site grant were configured. The entry below claimed connection worked;
+it did not. This is the fault `docs/ACCEPTANCE.md` §3 names, a surface that renders but cannot
+execute its function, and delivering the provider is what made the missing unlock path
+load-bearing. The popup now creates and unlocks the vault, with the decision extracted to
+`vault-form.ts` and tested: an existing vault is only ever opened, never recreated over its stored
+descriptors; a password shorter than the vault's own minimum is refused before the worker is asked;
+and creation requires a well-formed account address. No key material is involved — a descriptor
+records which address an approved external signer holds.
+
+**The provider never reached the tab that was already open (P1).**
+`scripting.registerContentScripts` applies to later document loads only, so a person enabled the
+site and nothing happened until a reload nothing had asked for. `enableSite` now also injects both
+worlds into the tab the popup names, after verifying that tab is still on the granted origin, since
+injection is per tab and a tab may have navigated away. A failed injection leaves the registration
+and the grant in place rather than undoing them.
+
+**Grant restoration was not awaited (P2).** Chrome restarts the MV3 worker to deliver an event, so
+a provider request could reach `routeProviderRequest` before the storage read finished: the first
+call from an enabled site would be refused as unauthorized and a retry would succeed, which is the
+worst shape a permission check can take. The restoration promise is now held and awaited by every
+handler that reads a grant.
+
+**An expired grant kept its host permission (P2).** Expiry dropped the grant and unregistered its
+scripts but left the optional host permission in place, so an origin absent from the popup's list
+stayed authorized in the browser indefinitely. `restoreSiteAccess` now hands back the host access of
+every origin whose grants have all expired, as an explicit disable already did, while keeping access
+for an origin that was expired and granted again.
+
+Each structural fix was checked by mutation: removing the open-tab injection fails only
+`runs the provider in the tab that is already open`, and removing the expired-grant revocation fails
+only `hands back the host permission of a grant that expired`. wallet-extension tests go from 24 to
+34 across 6 files. The awaited restoration and the popup's DOM wiring are verified by inspection
+rather than by a unit test, since neither has a test harness in this package; browser-loaded
+execution against a live page remains **NOT RUN** and required.
+
+## 2026-10-08 Two hardcoded port defaults removed
+
+Evidence only. No status value, count, gate or row changes.
+
+`AGENTS.md`, "Current deployment execution and port allocation", already states that port
+allocations belong to the deployment configuration rather than the product, that a free unreserved
+port is selected under existing deployment authority, that a port must not be hardcoded in product
+behaviour, and that configured public URLs carry scheme, domain, port and entry path. Two places in
+the code contradicted the last two clauses, so this change implements the existing rule rather than
+adding one.
+
+**`apps/web/src/app/api/orders/route.ts`** supplied the default HTTPS port when `ARTFI_WEB_URL`
+named none, accepting the bare host together with that implied port and rejecting every other. A
+deployment serving on a selected port therefore answered 403 on order publication with nothing
+naming the cause, and a port-less configuration silently pinned the deployment to the default port.
+The configured authority is now compared exactly as configured.
+
+**`apps/api/internal/httpapi/handler.go`** substituted `http://localhost:3000` for an unset
+`ARTFI_WEB_ORIGIN`, which in a deployment allowed a loopback origin nobody uses and blocked the
+configured one while the service still looked healthy: every browser call failed CORS with no error
+naming the cause. An unset origin now sends no `Access-Control-Allow-Origin` header at all, since an
+empty header is still a header and reads as deliberate.
+
+Both are exact-match origin checks, and two further ones share the same configured value — the
+session origin binding in `apps/api/internal/httpapi/user_auth.go` and
+`apps/web/src/lib/user-auth.ts` with `operator-auth.ts`. A port mismatch in either blocks every
+signed-in request, so `ARTFI_WEB_URL` and `ARTFI_WEB_ORIGIN` must match the browser-visible origin
+including its port. No port value is written in the repository.
+
+Port 443 examples were removed from `native-order-route.test.ts` and `xiongan-wallet.test.ts`, with
+regressions in both directions: a configured authority that names a port accepts only that port, and
+one that names none matches no ported Host. A port whose digits merely contain `443`, such as
+`18443`, is a different port and was left alone.
+
+**Deployment observation, not an application fault.** At 2026-10-04T06:02:55Z
+`https://io.artcch.com` presented a certificate for a different host
+(`subject: CN=dress.abcdyi.com`, `subjectAltName does not match`), and TLS verification failed for
+the root, `/api/health` and the public metadata path alike; the same origin served ArtFi on
+2026-10-03T19:44Z with a one-year `Strict-Transport-Security` header, so an affected browser cannot
+be clicked through. No change in this repository clears that, and whether other ports are reachable
+could not be determined from the audit environment, whose egress proxy may itself restrict ports.
+Minted metadata URIs under `release/mint-batches/ye-yongrun-unit-a01-a38/` and
+`apps/web/public/nft/metadata/` are port-less immutable mint evidence under `AGENTS.md` §5 and were
+not rewritten.
+
 ## 2026-10-07 PR #125 dependency source refresh
 
 Based on main `0574d8dfef70dd6ea8e3a903cb47ed5d8441221a`, this candidate
@@ -40,6 +131,44 @@ an unavailable state without an old URL fallback. Browser Wallet and authenticat
 are unchanged. [Validation, isolated tests and deployment contract](XIONGAN_WALLET_ENTRY.md)
 record the bounded change. Exact-head CI and actual deployed endpoint checks remain
 separate evidence; no server, bridge, port binding or transaction was changed.
+
+## 2026-10-03 Wallet page provider increment
+
+Evidence only. No status value, count, gate or row changes.
+
+The client reported that ArtFi and the wallet could not connect in production. The web deployment
+was reachable when this was investigated: at 2026-10-03T19:44Z `https://io.artcch.com` served the
+application and `/api/health` reported `status: ok` on chain `560048` at build `033dba4`. (That
+origin stopped serving ArtFi within the following day; see the 2026-10-08 entry.) The connection
+cause was a missing protocol, not the deployment. ArtFi's web app registers exactly one connector,
+RainbowKit's `injectedWallet`
+(`apps/web/src/lib/wallet-config.ts`, with no WalletConnect connector and an empty `projectId`),
+which requires an EIP-6963 announcement inside ArtFi's own origin. No wallet in the ecosystem made
+one: the Xiongan DApp is a separate web origin that exposes no cross-origin provider
+([XIONGAN_WALLET_ENTRY.md](XIONGAN_WALLET_ENTRY.md)), and this repository's own extension declared
+only `background` and `action` — no content script, no dynamic injection, no page-facing surface at
+all — so `permissions.ts` and `transactions.ts` were unreachable from any page.
+
+On client instruction of 2026-10-03, the extension now announces an EIP-6963 provider per enabled
+origin: `provider.ts` in the page world, `bridge.ts` in the isolated world, and a router in
+`rpc.ts` reached through the service worker. The requesting origin is taken from the browser's
+`sender.origin`, never from the page. `eth_chainId`, `eth_accounts` and `eth_requestAccounts` are
+answered; **every signing method is refused by name**, because the vault holds account descriptors
+and no key material and no `ExternalSigner` is configured. Connection is delivered; signing is not,
+and is not implied. `window.ethereum` is left untouched.
+
+Host access stays per-origin and opt-in, as the extension's design already required: the page
+scripts are registered at run time for one origin after the person enables it in the popup, a page
+cannot enable itself, and the service worker refuses `site.*` messages that do not originate from an
+extension page.
+
+Local checks on this tree: wallet-extension 24 tests (previously 6) across 5 files, extension
+typecheck and build, repository `format:check`, `lint`, `typecheck`, `security:secrets` across 550
+files, and `agent:test`. The built `provider.js` and `bridge.js` were confirmed to contain no module
+syntax, which a script registered through `chrome.scripting` requires. Browser-loaded extension
+execution against a live page was **not run** here and remains required evidence, together with
+current-head CI. A stale `Sepolia` claim in the manifest description, popup and README was corrected
+to Hoodi `560048`, which `transactions.ts` already enforced.
 
 ## 2026-10-03 Xiongan navigation increment
 

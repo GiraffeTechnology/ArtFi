@@ -128,10 +128,13 @@ func newHandler(rwa *rwaService) http.Handler {
 }
 
 func middleware(next http.Handler, service *rwaService) http.Handler {
-	allowedOrigin := os.Getenv("ARTFI_WEB_ORIGIN")
-	if allowedOrigin == "" {
-		allowedOrigin = "http://localhost:3000"
-	}
+	// No default origin, and therefore no default port. This used to fall back to
+	// http://localhost:3000, which in a real deployment allowed a loopback origin nobody uses and
+	// blocked the configured one, with no error naming the cause: every browser call failed CORS
+	// while the service looked healthy. An unset origin now sends no
+	// Access-Control-Allow-Origin header at all, so the browser reports a plain CORS failure and
+	// the missing configuration stays visible instead of being replaced by a guess.
+	allowedOrigin := strings.TrimSpace(os.Getenv("ARTFI_WEB_ORIGIN"))
 
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		started := time.Now()
@@ -140,7 +143,11 @@ func middleware(next http.Handler, service *rwaService) http.Handler {
 			requestID = newRequestID()
 		}
 		writer.Header().Set("X-Request-ID", requestID)
-		writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		// Omitted rather than sent empty when unconfigured: an empty value is still a header, and
+		// a browser reads it as an origin that matches nothing while looking deliberate.
+		if allowedOrigin != "" {
+			writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		}
 		writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Content-SHA256, Idempotency-Key, X-Indexer-Key, X-Request-ID")
 		writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		writer.Header().Set("Vary", "Origin")
