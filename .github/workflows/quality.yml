@@ -202,3 +202,34 @@ jobs:
       - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:session
       - if: always()
         run: docker compose -p artfi-session-e2e down -v
+
+  installed-extension-prepermission:
+    name: Installed extension (prepermission only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-wallet-extension build
+      - name: Install full bundled Chromium (not headless-shell)
+        run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --with-deps chromium
+      - name: Verify actual installed extension before optional site permission
+        run: pnpm --filter @giraffetechnology/artfi-web exec playwright test --config=playwright.extension.config.ts --project=prepermission
+      - name: Record limited acceptance scope
+        if: always()
+        run: |
+          echo '### Installed extension: prepermission only' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This job does not approve optional permissions or verify page-provider injection/lifecycle. Full acceptance remains permission-gated; see apps/web/e2e-extension/README.md.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: installed-extension-prepermission-results
+          path: apps/web/test-results/
+          if-no-files-found: warn
