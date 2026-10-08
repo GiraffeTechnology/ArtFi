@@ -14,6 +14,15 @@
  * The channel names are the wire protocol shared with `provider.ts`.
  */
 (() => {
+  // Chrome keeps this marker in the extension's isolated world. Re-enabling a site
+  // must not make one page request dispatch twice to the service worker.
+  const installationKey = Symbol.for("artfi.wallet.isolated-bridge.v1");
+  if ((window as unknown as Record<symbol, unknown>)[installationKey]) return;
+  Object.defineProperty(window, installationKey, {
+    value: true,
+    configurable: false,
+    writable: false,
+  });
   const CHANNEL_REQUEST = "artfi-wallet:request";
   const CHANNEL_RESPONSE = "artfi-wallet:response";
 
