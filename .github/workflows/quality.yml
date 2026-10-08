@@ -205,7 +205,9 @@ jobs:
 
   installed-extension-prepermission:
     name: Installed extension (prepermission only)
-    runs-on: ubuntu-latest
+    # Keep Chromium sandbox enabled on a compatible hosted image; do not alter host policy.
+    # This image retires on 2027-04-17: https://github.com/actions/runner-images/issues/14254
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
