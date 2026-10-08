@@ -55,9 +55,13 @@ export const test = base.extend<{
         throw new Error("Missing ephemeral localhost port");
       await provide(`http://localhost:${address.port}`);
     } finally {
-      await new Promise<void>((resolve, reject) =>
+      const closed = new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
       );
+      // Only this disposable fixture's connections are closed. Browser keep-alives
+      // must not block teardown before the browser-context fixture is closed.
+      server.closeAllConnections();
+      await closed;
     }
   },
   installed: async ({}, provide, testInfo) => {

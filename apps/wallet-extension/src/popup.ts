@@ -192,11 +192,9 @@ vaultForm?.addEventListener("submit", (event) => {
       if (vaultAddress) vaultAddress.value = "";
       return refresh();
     })
-    .catch((error: unknown) => {
+    .catch(() => {
       showVaultError(
-        error instanceof Error
-          ? error.message
-          : "the vault could not be opened",
+        "The vault could not be opened. Check the password and try again.",
       );
     })
     .finally(() => {
