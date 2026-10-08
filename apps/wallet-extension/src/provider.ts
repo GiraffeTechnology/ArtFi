@@ -26,6 +26,7 @@
   }
   const CHANNEL_REQUEST = "artfi-wallet:request";
   const CHANNEL_RESPONSE = "artfi-wallet:response";
+  const CHANNEL_ACCOUNTS = "artfi-wallet:accounts-changed";
   const REQUEST_TIMEOUT_MS = 60_000;
 
   interface RequestArguments {
@@ -44,6 +45,7 @@
     { resolve: (value: unknown) => void; reject: (reason: unknown) => void }
   >();
   const listeners = new Map<string, Set<Listener>>();
+  let visibleAccounts: string[] | undefined;
 
   window.addEventListener("message", (event: MessageEvent) => {
     // Only this page, only this window: a message from a frame or another origin is not an
@@ -55,9 +57,40 @@
       channel?: unknown;
       id?: unknown;
       result?: unknown;
+      accounts?: unknown;
       error?: { message?: unknown; code?: unknown };
     } | null;
-    if (!data || data.channel !== CHANNEL_RESPONSE) return;
+    if (!data) return;
+    if (data.channel === CHANNEL_ACCOUNTS) {
+      if (
+        !Array.isArray(data.accounts) ||
+        !data.accounts.every(
+          (account: unknown) =>
+            typeof account === "string" && /^0x[0-9a-fA-F]{40}$/.test(account),
+        )
+      )
+        return;
+      const accounts = [...data.accounts] as string[];
+      if (
+        visibleAccounts &&
+        accounts.length === visibleAccounts.length &&
+        accounts.every(
+          (account, index) =>
+            account.toLowerCase() === visibleAccounts![index]!.toLowerCase(),
+        )
+      )
+        return;
+      visibleAccounts = accounts;
+      for (const listener of [...(listeners.get("accountsChanged") ?? [])]) {
+        try {
+          listener([...accounts]);
+        } catch {
+          // One consumer must not prevent others from observing permission loss.
+        }
+      }
+      return;
+    }
+    if (data.channel !== CHANNEL_RESPONSE) return;
     if (typeof data.id !== "string") return;
     const entry = pending.get(data.id);
     if (!entry) return;

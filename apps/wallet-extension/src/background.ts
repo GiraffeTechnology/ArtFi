@@ -1,3 +1,4 @@
+import { ProviderStateRelay } from "./provider-state.js";
 import { PermissionController } from "./permissions.js";
 import { routeProviderRequest, type ProviderError } from "./rpc.js";
 import {
@@ -36,6 +37,12 @@ const siteAccess: SiteAccessDeps = {
 const siteAccessRestored = restoreSiteAccess(permissions, siteAccess).catch(
   () => [],
 );
+
+const providerState = new ProviderStateRelay(
+  { permissions, payload: () => unlockedPayload },
+  siteAccessRestored,
+);
+chrome.runtime.onConnect.addListener((port) => providerState.connect(port));
 
 type WalletMessage =
   | { type: "vault.status" }
@@ -83,17 +90,26 @@ async function handleMessage(
     }
     await siteAccessRestored;
     if (message.type === "site.enable") {
-      const grant = await enableSite(
-        message.origin,
-        permissions,
-        siteAccess,
-        message.tabId,
-      );
-      return { grants: await loadGrants(siteAccess), granted: grant };
+      try {
+        const grant = await enableSite(
+          message.origin,
+          permissions,
+          siteAccess,
+          message.tabId,
+        );
+        return { grants: await loadGrants(siteAccess), granted: grant };
+      } finally {
+        // Grant mutation may precede a storage/injection failure.
+        providerState.refresh();
+      }
     }
     if (message.type === "site.disable") {
-      await disableSite(message.origin, permissions, siteAccess);
-      return { grants: await loadGrants(siteAccess) };
+      try {
+        await disableSite(message.origin, permissions, siteAccess);
+        return { grants: await loadGrants(siteAccess) };
+      } finally {
+        providerState.refresh();
+      }
     }
     return { grants: await loadGrants(siteAccess) };
   }
@@ -109,6 +125,7 @@ async function handleMessage(
     const encrypted = await sealVault(message.payload, message.password);
     await chrome.storage.local.set({ [vaultKey]: encrypted });
     unlockedPayload = null;
+    providerState.refresh();
     return { configured: true, locked: true };
   }
   if (message.type === "vault.unlock") {
@@ -117,9 +134,11 @@ async function handleMessage(
     if (!encrypted) throw new Error("encrypted vault is not configured");
     const payload = await openVault(encrypted, message.password);
     unlockedPayload = payload;
+    providerState.refresh();
     return { configured: true, locked: false, accounts: payload.accounts };
   }
   unlockedPayload = null;
+  providerState.refresh();
   return { configured: true, locked: true };
 }
 

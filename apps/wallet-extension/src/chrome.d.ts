@@ -9,7 +9,26 @@ interface ChromeRuntimeMessageSender {
   origin?: string;
 }
 
+interface ChromeRuntimePort {
+  name: string;
+  sender?: ChromeRuntimeMessageSender;
+  postMessage(message: unknown): void;
+  disconnect(): void;
+  onMessage: {
+    addListener(
+      listener: (message: unknown, port: ChromeRuntimePort) => void,
+    ): void;
+  };
+  onDisconnect: {
+    addListener(listener: (port: ChromeRuntimePort) => void): void;
+  };
+}
+
 interface ChromeRuntime {
+  connect(options: { name: string }): ChromeRuntimePort;
+  onConnect: {
+    addListener(listener: (port: ChromeRuntimePort) => void): void;
+  };
   onMessage: {
     addListener(
       listener: (

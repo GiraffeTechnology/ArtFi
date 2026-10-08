@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { routeProviderRequest } from "./rpc.js";
 import { PermissionController } from "./permissions.js";
 import {
   disableSite,
@@ -168,6 +169,114 @@ describe("per-origin page access", () => {
     expect(() => afterRestart.assert(site, "eth_accounts", 1_000)).toThrow();
     await restoreSiteAccess(afterRestart, deps);
     expect(afterRestart.assert(site, "eth_accounts", 1_000).origin).toBe(site);
+  });
+
+  it("restores a grant with less than 60 seconds remaining without extending its expiry", async () => {
+    const { deps, store } = harness({ now: 60_500 });
+    store[SITE_GRANT_KEY] = [
+      {
+        origin: site,
+        methods: ["eth_accounts"],
+        approvedAt: 1_000,
+        expiresAt: 61_000,
+      },
+    ];
+    const permissions = new PermissionController();
+    await restoreSiteAccess(permissions, deps);
+    expect(permissions.assert(site, "eth_accounts", 60_999)).toMatchObject({
+      approvedAt: 1_000,
+      expiresAt: 61_000,
+    });
+    const payload = () => ({
+      accounts: [
+        {
+          address: "0x00112233445566778899aabbccddeeff00112233" as const,
+          connector: "hardware" as const,
+          label: "Ledger",
+        },
+      ],
+      sessions: [],
+      revision: 1,
+    });
+    await expect(
+      routeProviderRequest(site, "eth_accounts", [], {
+        permissions,
+        payload,
+        now: () => 60_999,
+      }),
+    ).resolves.toEqual([payload().accounts[0]!.address]);
+    await expect(
+      routeProviderRequest(site, "eth_accounts", [], {
+        permissions,
+        payload,
+        now: () => 61_000,
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("does not restore missing/nonfinite approval dates or invalid original lifetimes", async () => {
+    for (const fields of [
+      { expiresAt: 61_000 },
+      { approvedAt: Number.NaN, expiresAt: 61_000 },
+      { approvedAt: 0, expiresAt: Number.POSITIVE_INFINITY },
+      { approvedAt: 0, expiresAt: 30 * 24 * 60 * 60 * 1_000 + 1 },
+      { approvedAt: 0, expiresAt: 59_999 },
+      { approvedAt: 2_000, expiresAt: 62_000 },
+    ]) {
+      const { deps, store } = harness();
+      store[SITE_GRANT_KEY] = [
+        { origin: site, methods: ["eth_accounts"], ...fields },
+      ];
+      const permissions = new PermissionController();
+      await restoreSiteAccess(permissions, deps);
+      expect(() => permissions.assert(site, "eth_accounts", 1_000)).toThrow();
+    }
+  });
+
+  it("removes rejected live grants from storage, scripts and host permissions", async () => {
+    for (const fields of [
+      { approvedAt: 0, expiresAt: 59_999 },
+      { approvedAt: 0, expiresAt: 30 * 24 * 60 * 60 * 1_000 + 1 },
+      { approvedAt: 2_000, expiresAt: 62_000 },
+    ]) {
+      const { deps, store, registered, removals } = harness();
+      await enableSite(site, new PermissionController(), deps);
+      store[SITE_GRANT_KEY] = [
+        { origin: site, methods: ["eth_accounts"], ...fields },
+      ];
+      const permissions = new PermissionController();
+      expect(await restoreSiteAccess(permissions, deps)).toEqual([]);
+      expect(store[SITE_GRANT_KEY]).toEqual([]);
+      expect(await loadGrants(deps)).toEqual([]);
+      expect(registered.size).toBe(0);
+      expect(removals).toEqual([{ origins: [`${site}/*`] }]);
+      expect(() => permissions.assert(site, "eth_accounts", 1_000)).toThrow();
+    }
+  });
+
+  it("preserves a valid grant and host access when the same origin also has rejected grants", async () => {
+    const valid = {
+      origin: site,
+      methods: ["eth_accounts"],
+      approvedAt: 0,
+      expiresAt: 60_000,
+    };
+    const rejected = { ...valid, approvedAt: 2_000, expiresAt: 62_000 };
+    for (const entries of [
+      [valid, rejected],
+      [rejected, valid],
+    ]) {
+      const { deps, store, registered, removals } = harness();
+      await enableSite(site, new PermissionController(), deps);
+      store[SITE_GRANT_KEY] = entries;
+      const permissions = new PermissionController();
+      expect(await restoreSiteAccess(permissions, deps)).toEqual([valid]);
+      expect(store[SITE_GRANT_KEY]).toEqual([valid]);
+      expect(await loadGrants(deps)).toEqual([valid]);
+      expect(registered.size).toBe(2);
+      expect(removals).toEqual([]);
+      expect(permissions.assert(site, "eth_accounts", 1_000)).toEqual(valid);
+    }
   });
 
   it("runs the provider in the tab that is already open", async () => {
