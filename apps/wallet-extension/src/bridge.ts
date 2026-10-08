@@ -25,6 +25,76 @@
   });
   const CHANNEL_REQUEST = "artfi-wallet:request";
   const CHANNEL_RESPONSE = "artfi-wallet:response";
+  const CHANNEL_ACCOUNTS = "artfi-wallet:accounts-changed";
+
+  let statePort: ChromeRuntimePort | null = null;
+  let reconnectTimer: number | undefined;
+  let active = true;
+  let reconnectDelay = 250;
+
+  function publishAccounts(accounts: unknown): void {
+    if (
+      !Array.isArray(accounts) ||
+      !accounts.every(
+        (account: unknown) =>
+          typeof account === "string" && /^0x[0-9a-fA-F]{40}$/.test(account),
+      )
+    )
+      return;
+    window.postMessage(
+      { channel: CHANNEL_ACCOUNTS, accounts },
+      window.location.origin,
+    );
+  }
+
+  function reconnect(): void {
+    if (!active || reconnectTimer !== undefined) return;
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = undefined;
+      connectState();
+    }, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+  }
+
+  function connectState(): void {
+    if (!active || statePort) return;
+    try {
+      const port = chrome.runtime.connect({ name: "artfi-provider-state" });
+      statePort = port;
+      port.onMessage.addListener((message: unknown) => {
+        if (statePort !== port || !active) return;
+        const update = message as { type?: unknown; accounts?: unknown } | null;
+        if (update?.type !== "provider.accountsChanged") return;
+        publishAccounts(update.accounts);
+        reconnectDelay = 250;
+      });
+      port.onDisconnect.addListener(() => {
+        if (statePort !== port) return;
+        statePort = null;
+        // A restarted worker has no unlocked vault payload until it is unlocked again.
+        publishAccounts([]);
+        reconnect();
+      });
+    } catch {
+      statePort = null;
+      publishAccounts([]);
+      reconnect();
+    }
+  }
+
+  window.addEventListener("pagehide", () => {
+    active = false;
+    if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
+    const port = statePort;
+    statePort = null;
+    port?.disconnect();
+  });
+  window.addEventListener("pageshow", () => {
+    active = true;
+    connectState();
+  });
+  connectState();
 
   function respond(id: string, payload: Record<string, unknown>): void {
     window.postMessage(

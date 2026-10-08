@@ -91,7 +91,10 @@ function wellFormed(entry: unknown): entry is StoredGrant {
   return (
     typeof candidate.origin === "string" &&
     Array.isArray(candidate.methods) &&
-    typeof candidate.expiresAt === "number"
+    typeof candidate.approvedAt === "number" &&
+    Number.isFinite(candidate.approvedAt) &&
+    typeof candidate.expiresAt === "number" &&
+    Number.isFinite(candidate.expiresAt)
   );
 }
 
@@ -282,18 +285,26 @@ export async function restoreSiteAccess(
   const now = deps.now?.() ?? Date.now();
   const { live: grants, expired } = await partitionGrants(deps);
   const live = new Set<string>();
+  const restored: StoredGrant[] = [];
+  const rejected: StoredGrant[] = [];
   for (const grant of grants) {
     try {
+      if (grant.approvedAt > now)
+        throw new Error("grant approval is in the future");
+      // Restore the original approval and lifetime. Treating startup as a new approval
+      // would extend a nearly-expired grant to the controller's minimum 60-second TTL.
       controller.grant(
         grant.origin,
         grant.methods,
-        now,
-        Math.max(grant.expiresAt - now, 60_000),
+        grant.approvedAt,
+        grant.expiresAt - grant.approvedAt,
       );
       live.add(scriptIds(grant.origin).provider);
       live.add(scriptIds(grant.origin).bridge);
+      restored.push(grant);
     } catch {
       // A grant that no longer validates is dropped rather than repaired.
+      rejected.push(grant);
     }
   }
   const registered = await deps.scripting.getRegisteredContentScripts();
@@ -311,10 +322,10 @@ export async function restoreSiteAccess(
 
   // Only origins that have no surviving grant: a re-enabled origin may appear in both lists, and
   // revoking its host access would break the grant that is still live.
-  const stillGranted = new Set(grants.map((grant) => grant.origin));
+  const stillGranted = new Set(restored.map((grant) => grant.origin));
   const abandoned = [
     ...new Set(
-      expired
+      [...expired, ...rejected]
         .map((grant) => grant.origin)
         .filter((origin) => !stillGranted.has(origin)),
     ),
@@ -329,6 +340,6 @@ export async function restoreSiteAccess(
     }
   }
 
-  await persistGrants(deps, grants);
-  return grants;
+  await persistGrants(deps, restored);
+  return restored;
 }
