@@ -14,6 +14,16 @@
  * The two channel names below are the whole wire protocol and are repeated in `bridge.ts`.
  */
 (() => {
+  // A renewed site grant can inject into a document that already has this provider.
+  // Reannounce the same identity instead of registering another provider/listener set.
+  const installationKey = Symbol.for("artfi.wallet.page-provider.v1");
+  const installed = (
+    window as unknown as Record<symbol, { announce: () => void } | undefined>
+  )[installationKey];
+  if (installed) {
+    installed.announce();
+    return;
+  }
   const CHANNEL_REQUEST = "artfi-wallet:request";
   const CHANNEL_RESPONSE = "artfi-wallet:response";
   const REQUEST_TIMEOUT_MS = 60_000;
@@ -148,6 +158,11 @@
 
   // Announce once now, and again whenever a page asks. A page that loaded its connector before
   // this script ran would otherwise never learn the wallet exists.
+  Object.defineProperty(window, installationKey, {
+    value: Object.freeze({ announce }),
+    configurable: false,
+    writable: false,
+  });
   window.addEventListener("eip6963:requestProvider", announce);
   announce();
 })();
