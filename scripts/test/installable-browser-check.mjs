@@ -4,6 +4,14 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
+export function installedBrowserLaunchOptions(chromiumExecutable) {
+  return {
+    ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {}),
+    headless: true,
+    chromiumSandbox: true,
+  };
+}
+
 /** Read-only browser checks against an already installed artifact. */
 export async function checkInstalledBrowser({
   baseURL,
@@ -15,11 +23,9 @@ export async function checkInstalledBrowser({
   label,
 }) {
   const { chromium } = await import(pathToFileURL(playwrightModule).href);
-  const browser = await chromium.launch({
-    ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {}),
-    headless: true,
-    args: ["--no-sandbox"],
-  });
+  const browser = await chromium.launch(
+    installedBrowserLaunchOptions(chromiumExecutable),
+  );
   const results = [];
   await mkdir(outputDirectory, { recursive: true });
   try {

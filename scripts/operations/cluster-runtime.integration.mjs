@@ -150,9 +150,22 @@ test(
       1,
       "a dispatched write must not be resent to another node",
     );
-    // Let the deliberately failed POST node complete its passive recovery window before a distinct outage.
-    await delay(2200);
-    for (let i = 0; i < 4; i++) assert.equal((await fetch(base)).status, 200);
+    // Observe both peers after the failed POST before creating a distinct outage.
+    // Nginx tracks fail_timeout in whole seconds, so a fixed 2.2s sleep can end
+    // while the failed peer is still excluded from this two-node pool.
+    const postRecovered = new Set();
+    const postRecoveryDeadline = Date.now() + 10000;
+    for (
+      let i = 0;
+      (i < 4 || postRecovered.size < 2) && Date.now() < postRecoveryDeadline;
+      i++
+    ) {
+      const r = await fetch(base);
+      assert.equal(r.status, 200);
+      postRecovered.add((await r.json()).node);
+      await delay(100);
+    }
+    assert.deepEqual([...postRecovered].sort(), ["web-a", "web-b"]);
     await stop(a);
     for (let i = 0; i < 6; i++) {
       const r = await fetch(base);

@@ -226,7 +226,9 @@ jobs:
         run: docker compose -p artfi-session-e2e down -v
 
   installable-bundle:
-    runs-on: ubuntu-latest
+    # As in the installed-extension job, use a runner supporting Chromium's
+    # sandbox without modifying host security policy.
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
       NODE_OPTIONS: --max-old-space-size=1536
@@ -249,6 +251,8 @@ jobs:
       - uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+      - name: Verify installable acceptance harness
+        run: node --test scripts/test/installable-acceptance.test.mjs
       - name: Build reusable native Linux package
         run: node scripts/install/build-bundle.mjs --output "$RUNNER_TEMP/artfi-bundles"
       - name: Retain package and checksum for this exact source
@@ -260,6 +264,71 @@ jobs:
             ${{ runner.temp }}/artfi-bundles/*.sha256
           if-no-files-found: error
           compression-level: 0
+          retention-days: 30
+      - name: Install sandboxed browser and isolated MySQL test runtime
+        run: |
+          pnpm --filter @giraffetechnology/artfi-web exec playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends libaio1 libnuma1 libncurses6
+          mkdir -p "$RUNNER_TEMP/artfi-mysql-runtime"
+          cd "$RUNNER_TEMP/artfi-mysql-runtime"
+          curl --fail --location --proto '=https' --tlsv1.2 https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.11-linux-glibc2.28-x86_64-minimal.tar.xz -o mysql.tar.xz
+          echo '383f54e124d5f325d67f0c6912a8f96814eedc761a17ea30112e52fa4cc6b143  mysql.tar.xz' | sha256sum --check
+          tar -xJf mysql.tar.xz
+      - name: Verify installed artifact including default, changed, and reset browser state
+        run: |
+          artifacts=("$RUNNER_TEMP/artfi-bundles/"*.tar.gz)
+          test "${#artifacts[@]}" = 1
+          test -f "${artifacts[0]}"
+          node scripts/test/installable-acceptance.mjs \
+            --artifact "${artifacts[0]}" \
+            --checksum "${artifacts[0]}.sha256" \
+            --mysql-basedir "$RUNNER_TEMP/artfi-mysql-runtime/mysql-8.4.11-linux-glibc2.28-x86_64-minimal" \
+            --playwright-module "$GITHUB_WORKSPACE/apps/web/node_modules/@playwright/test/index.mjs" \
+            --evidence-dir "$RUNNER_TEMP/artfi-installed-acceptance" \
+            --require-browser
+      - name: Prepare public synthetic acceptance summary
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const directory = join(process.env.RUNNER_TEMP, 'artfi-installed-acceptance');
+          const path = join(directory, 'report.json');
+          const report = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+          const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+          const artifact = report?.artifact;
+          const revision = artifact?.source?.revision;
+          const tree = /^[a-f0-9]{40}$/.test(revision ?? '')
+            ? execFileSync('git', ['rev-parse', `${revision}^{tree}`], { encoding: 'utf8' }).trim()
+            : null;
+          const summary = {
+            headCommit: event.pull_request?.head?.sha ?? process.env.GITHUB_SHA,
+            testedCommit: process.env.GITHUB_SHA,
+            testedTree: tree,
+            artifact: artifact ? {
+              filename: artifact.filename,
+              sha256: artifact.sha256,
+              bytes: artifact.bytes,
+              checksumSidecarSha256: artifact.checksumSidecarSha256,
+              manifestSha256: artifact.manifestSha256,
+              source: { revision, dirty: artifact.source?.dirty, fingerprint: artifact.source?.fingerprint },
+            } : null,
+            scope: 'TEST_ONLY installed artifact; sandboxed browser; no production or real-value execution',
+            result: report?.result ?? 'NOT_RUN',
+            checks: (report?.checks ?? []).map(({ name, result, required }) => ({ name, result, required })),
+          };
+          writeFileSync(join(process.env.RUNNER_TEMP, 'artfi-installed-acceptance-summary.json'), JSON.stringify(summary, null, 2) + '\n');
+          JS
+      - name: Retain only public synthetic browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: artfi-installed-browser-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/artfi-installed-acceptance-summary.json
+            ${{ runner.temp }}/artfi-installed-acceptance/screenshots/*.png
+          if-no-files-found: warn
           retention-days: 30
 
   operations-recovery:

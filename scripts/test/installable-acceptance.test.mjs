@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { installedBrowserLaunchOptions } from "./installable-browser-check.mjs";
 import {
   archiveRoot,
   expectedChecksum,
@@ -17,6 +18,18 @@ const input = [
   "--evidence-dir",
   "/private/acceptance-unique",
 ];
+
+test("installed-browser acceptance always retains Chromium sandboxing", () => {
+  assert.deepEqual(installedBrowserLaunchOptions(), {
+    headless: true,
+    chromiumSandbox: true,
+  });
+  assert.deepEqual(installedBrowserLaunchOptions("/test/chromium"), {
+    executablePath: "/test/chromium",
+    headless: true,
+    chromiumSandbox: true,
+  });
+});
 
 test("explicit artifact and MySQL inputs have no machine-specific fallback", () => {
   const options = parseArguments(input);
