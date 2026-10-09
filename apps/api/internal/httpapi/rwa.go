@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -52,24 +53,29 @@ type uploadSession struct {
 }
 
 type mintIntent struct {
-	IntentID           string   `json:"intentId"`
-	RequestID          string   `json:"requestId"`
-	Recipient          string   `json:"recipient"`
-	RegistryAddress    string   `json:"registryAddress"`
-	ChainID            int      `json:"chainId"`
-	MetadataURI        string   `json:"metadataUri"`
-	MetadataSHA256     string   `json:"metadataSha256"`
-	ContractFunction   string   `json:"contractFunction"`
-	ContractArguments  []string `json:"contractArguments"`
-	Status             string   `json:"status"`
-	TransactionHash    string   `json:"transactionHash,omitempty"`
-	CreatedAt          string   `json:"createdAt"`
+	SourceEvidence     *rwaSourceEvidence   `json:"sourceEvidence,omitempty"`
+	ContractEvidence   *rwaContractEvidence `json:"contractEvidence,omitempty"`
+	IntentID           string               `json:"intentId"`
+	RequestID          string               `json:"requestId"`
+	Recipient          string               `json:"recipient"`
+	RegistryAddress    string               `json:"registryAddress"`
+	ChainID            int                  `json:"chainId"`
+	MetadataURI        string               `json:"metadataUri"`
+	MetadataSHA256     string               `json:"metadataSha256"`
+	ContractFunction   string               `json:"contractFunction"`
+	ContractArguments  []string             `json:"contractArguments"`
+	Status             string               `json:"status"`
+	TransactionHash    string               `json:"transactionHash,omitempty"`
+	CreatedAt          string               `json:"createdAt"`
 	payloadHash        string
 	uploadID           string
 	idempotencyKeyHash string
 }
 
 type rwaService struct {
+	grounding rwaGroundingPolicy
+	mintMu    sync.Mutex
+
 	mu                   sync.RWMutex
 	config               rwaConfig
 	store                objectStore
@@ -102,14 +108,15 @@ type uploadIntentRequest struct {
 }
 
 type mintIntentRequest struct {
-	UploadID    string `json:"uploadId"`
-	Recipient   string `json:"recipient"`
-	Name        string `json:"name"`
-	Artist      string `json:"artist"`
-	Year        int    `json:"year"`
-	Medium      string `json:"medium"`
-	Location    string `json:"location"`
-	Description string `json:"description"`
+	Evidence    *rwaSourceEvidence `json:"evidence,omitempty"`
+	UploadID    string             `json:"uploadId"`
+	Recipient   string             `json:"recipient"`
+	Name        string             `json:"name"`
+	Artist      string             `json:"artist"`
+	Year        int                `json:"year"`
+	Medium      string             `json:"medium"`
+	Location    string             `json:"location"`
+	Description string             `json:"description"`
 }
 
 type submissionRequest struct {
@@ -161,6 +168,7 @@ func newRWAServiceFromEnv() *rwaService {
 func newRWAService(config rwaConfig, store objectStore) *rwaService {
 	return &rwaService{
 		config:             config,
+		grounding:          groundingPolicyFromEnv(),
 		store:              store,
 		uploads:            make(map[string]*uploadSession),
 		intents:            make(map[string]*mintIntent),
@@ -195,7 +203,7 @@ func (service *rwaService) storeStatus() error {
 
 func (service *rwaService) createUploadIntent(writer http.ResponseWriter, request *http.Request) {
 	if !service.writeEnabled() {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Write path unavailable", "Sepolia registry and object storage configuration are required.")
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Write path unavailable", "Hoodi source-verifying registry and object storage configuration are required.")
 		return
 	}
 
@@ -243,9 +251,11 @@ func (service *rwaService) createUploadIntent(writer http.ResponseWriter, reques
 }
 
 func (service *rwaService) uploadObject(writer http.ResponseWriter, request *http.Request) {
-	service.mu.RLock()
-	session := service.uploads[request.PathValue("uploadID")]
-	service.mu.RUnlock()
+	session, err := service.readUpload(request.Context(), request.PathValue("uploadID"))
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		writeProblem(writer, request, 503, "Persistence unavailable", "The upload intent could not be read from durable storage.")
+		return
+	}
 	if session == nil {
 		writeProblem(writer, request, http.StatusNotFound, "Upload not found", "The upload intent does not exist.")
 		return
@@ -284,116 +294,86 @@ func (service *rwaService) uploadObject(writer http.ResponseWriter, request *htt
 	}
 	service.mu.Lock()
 	session.Completed = true
+	service.uploads[session.ID] = session
 	service.mu.Unlock()
 	writer.WriteHeader(http.StatusNoContent)
 }
 
 func (service *rwaService) createMintIntent(writer http.ResponseWriter, request *http.Request) {
-	if !service.writeEnabled() {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Write path unavailable", "Sepolia registry and object storage configuration are required.")
+	service.mintMu.Lock()
+	defer service.mintMu.Unlock()
+	input, draft, err := service.prepareRWARequest(request)
+	if err != nil {
+		service.writeRWAError(writer, request, err)
 		return
 	}
-	idempotencyKey := strings.TrimSpace(request.Header.Get("Idempotency-Key"))
-	if len(idempotencyKey) < 16 || len(idempotencyKey) > 128 {
-		writeProblem(writer, request, http.StatusBadRequest, "Invalid idempotency key", "Idempotency-Key must contain 16 to 128 characters.")
+	payloadHash := strings.TrimPrefix(hashJSON(input), "0x")
+	if err := service.checkMintKeyConflict(request.Context(), draft.keyHash, draft.RequestID); err != nil {
+		service.writeRWAError(writer, request, err)
 		return
 	}
-
-	var input mintIntentRequest
-	if err := decodeJSON(request, &input); err != nil {
-		writeProblem(writer, request, http.StatusBadRequest, "Invalid mint intent", err.Error())
+	if input.Evidence == nil {
+		writeProblem(writer, request, 422, "Approved-source evidence required", "Metadata and registrar authorization do not establish real-asset correspondence. Prepare the metadata commitment and supply an approved source's signed evidence.")
 		return
 	}
-	if !addressPattern.MatchString(input.Recipient) || !validMetadataFields(input) {
-		writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid RWA metadata", "Recipient and required metadata fields failed validation.")
+	contextHash := mintEvidenceContext(hoodiChainID, service.config.registryAddress, draft.RequestID, input.Recipient, draft.MetadataSHA256, draft.MetadataURI)
+	if err := service.verifyActiveEvidence(request.Context(), *input.Evidence, contextHash, "fractional"); err != nil {
+		service.writeRWAError(writer, request, err)
 		return
 	}
-
 	service.mu.RLock()
-	upload := service.uploads[input.UploadID]
+	existing := service.intents[service.intentByKey[draft.keyHash]]
 	service.mu.RUnlock()
-	if upload == nil || !upload.Completed {
-		writeProblem(writer, request, http.StatusConflict, "Upload incomplete", "The referenced image must be uploaded and digest-verified first.")
-		return
-	}
-
-	payload, _ := json.Marshal(input)
-	payloadDigest := sha256.Sum256(payload)
-	payloadHash := hex.EncodeToString(payloadDigest[:])
-	keyDigest := sha256.Sum256([]byte(idempotencyKey))
-	keyHash := hex.EncodeToString(keyDigest[:])
-
-	service.mu.RLock()
-	existingID := service.intentByKey[keyHash]
-	existing := service.intents[existingID]
-	service.mu.RUnlock()
-	if existing != nil {
-		if existing.payloadHash != payloadHash {
-			writeProblem(writer, request, http.StatusConflict, "Idempotency conflict", "The key was already used with a different payload.")
+	if existing != nil && service.db == nil {
+		if !strings.EqualFold(existing.RequestID, draft.RequestID) {
+			writeProblem(writer, request, 409, "Idempotency conflict", "This key already binds a different mint request or evidence claim.")
 			return
 		}
-		writeJSON(writer, http.StatusOK, existing)
+		if existing.SourceEvidence == nil || hashJSON(*existing.SourceEvidence) != hashJSON(*input.Evidence) {
+			service.writeRWAError(writer, request, adminError(503, "Durable evidence renewal is unavailable."))
+			return
+		}
+		writeJSON(writer, 200, existing)
 		return
 	}
-
-	imageURL := service.publicURL(upload.ObjectKey)
-	metadata := map[string]any{
-		"name":        input.Name,
-		"description": input.Description,
-		"image":       imageURL,
-		"attributes": []map[string]any{
-			{"trait_type": "Artist", "value": input.Artist},
-			{"trait_type": "Year", "value": input.Year},
-			{"trait_type": "Medium", "value": input.Medium},
-			{"trait_type": "Location", "value": input.Location},
-		},
-		"artfi": map[string]any{"schemaVersion": 1, "imageSha256": upload.SHA256, "chainId": hoodiChainID},
-	}
-	metadataJSON, _ := json.Marshal(metadata)
-	metadataDigest := sha256.Sum256(metadataJSON)
-	metadataSHA := hex.EncodeToString(metadataDigest[:])
-	metadataKey := fmt.Sprintf("rwa/metadata/%s.json", metadataSHA)
-	if err := service.store.Put(request.Context(), metadataKey, metadataJSON, "application/json", metadataSHA); err != nil {
-		writeProblem(writer, request, http.StatusBadGateway, "Object storage failure", "The immutable metadata document could not be persisted.")
-		return
-	}
-
-	requestDigest := sha256.Sum256(append(keyDigest[:], payloadDigest[:]...))
-	requestID := "0x" + hex.EncodeToString(requestDigest[:])
-	intent := &mintIntent{
-		IntentID:           randomID(),
-		RequestID:          requestID,
-		Recipient:          input.Recipient,
-		RegistryAddress:    service.config.registryAddress,
-		ChainID:            hoodiChainID,
-		MetadataURI:        service.publicURL(metadataKey),
-		MetadataSHA256:     "0x" + metadataSHA,
-		ContractFunction:   "createAsset(bytes32,address,string,bytes32)",
-		ContractArguments:  []string{requestID, input.Recipient, service.publicURL(metadataKey), "0x" + metadataSHA},
-		Status:             "prepared",
-		CreatedAt:          service.now().Format(time.RFC3339),
-		payloadHash:        payloadHash,
-		uploadID:           upload.ID,
-		idempotencyKeyHash: keyHash,
-	}
-	if err := service.persistMintIntent(request.Context(), intent); err != nil {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Persistence unavailable", "The mint intent could not be recorded durably.")
+	proof := *input.Evidence
+	contractEvidence := proof.contractEvidence()
+	intent := &mintIntent{IntentID: randomID(), RequestID: draft.RequestID, Recipient: input.Recipient, RegistryAddress: service.config.registryAddress, ChainID: hoodiChainID, MetadataURI: draft.MetadataURI, MetadataSHA256: draft.MetadataSHA256, ContractFunction: "createAssetWithEvidence(bytes32,address,string,bytes32,(bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64,bytes32,bytes32),bytes32,bytes32)", ContractArguments: []string{draft.RequestID, input.Recipient, draft.MetadataURI, draft.MetadataSHA256}, SourceEvidence: &proof, ContractEvidence: &contractEvidence, Status: "prepared", CreatedAt: service.now().Format(time.RFC3339), payloadHash: payloadHash, uploadID: input.UploadID, idempotencyKeyHash: draft.keyHash}
+	stored, created, err := service.persistGroundedMint(request.Context(), request, intent)
+	if err != nil {
+		service.writeRWAError(writer, request, err)
 		return
 	}
 	service.mu.Lock()
-	service.intents[intent.IntentID] = intent
-	service.intentByKey[keyHash] = intent.IntentID
+	service.intents[stored.IntentID] = stored
+	service.intentByKey[draft.keyHash] = stored.IntentID
 	service.mu.Unlock()
-	writeJSON(writer, http.StatusCreated, intent)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(writer, status, stored)
 }
 
 func (service *rwaService) getMintIntent(writer http.ResponseWriter, request *http.Request) {
-	service.mu.RLock()
-	intent := service.intents[request.PathValue("intentID")]
-	service.mu.RUnlock()
-	if intent == nil {
-		writeProblem(writer, request, http.StatusNotFound, "Mint intent not found", "No mint intent matches the requested identifier.")
+	intent, err := service.readGroundedMint(request.Context(), request.PathValue("intentID"))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeProblem(writer, request, 404, "Mint intent not found", "No source-verified mint intent matches the requested identifier.")
+		} else {
+			service.writeRWAError(writer, request, err)
+		}
 		return
+	}
+	if intent.SourceEvidence == nil {
+		writeProblem(writer, request, 409, "Legacy unverified intent", "This metadata-only intent has no approved-source evidence and cannot authorize guarded issuance.")
+		return
+	}
+	if intent.TransactionHash == "" {
+		if err := service.verifyActiveEvidence(request.Context(), *intent.SourceEvidence, mintEvidenceContext(intent.ChainID, intent.RegistryAddress, intent.RequestID, intent.Recipient, intent.MetadataSHA256, intent.MetadataURI), "fractional"); err != nil {
+			service.writeRWAError(writer, request, err)
+			return
+		}
 	}
 	writeJSON(writer, http.StatusOK, intent)
 }
@@ -404,11 +384,13 @@ func (service *rwaService) recordSubmission(writer http.ResponseWriter, request 
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid transaction hash", "Use a 32-byte 0x-prefixed transaction hash.")
 		return
 	}
-	service.mu.Lock()
-	defer service.mu.Unlock()
-	intent := service.intents[request.PathValue("intentID")]
-	if intent == nil {
-		writeProblem(writer, request, http.StatusNotFound, "Mint intent not found", "No mint intent matches the requested identifier.")
+	intent, err := service.readGroundedMint(request.Context(), request.PathValue("intentID"))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeProblem(writer, request, 404, "Mint intent not found", "No source-verified mint intent matches this identifier.")
+		} else {
+			service.writeRWAError(writer, request, err)
+		}
 		return
 	}
 	if intent.TransactionHash != "" && !strings.EqualFold(intent.TransactionHash, input.TransactionHash) {
@@ -419,8 +401,11 @@ func (service *rwaService) recordSubmission(writer http.ResponseWriter, request 
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Persistence unavailable", "The transaction submission could not be recorded durably.")
 		return
 	}
+	service.mu.Lock()
+	defer service.mu.Unlock()
 	intent.TransactionHash = input.TransactionHash
 	intent.Status = "submitted"
+	service.intents[intent.IntentID] = intent
 	writeJSON(writer, http.StatusOK, intent)
 }
 

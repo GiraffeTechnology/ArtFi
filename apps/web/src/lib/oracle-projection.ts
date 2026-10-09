@@ -1,3 +1,5 @@
+import type { RwaAsset } from "./rwa-catalog";
+import { publicSetting } from "@/lib/public-runtime-config";
 import "server-only";
 
 import { isAddress } from "viem";
@@ -59,19 +61,26 @@ const upstreamErrors = new Set<ProjectionReadError>([
   "PROJECTION_SOURCE_MALFORMED",
 ]);
 
-function configuration(slug: string, instant: string) {
-  if (!getArtwork(slug)) fail("UNKNOWN_ASSET");
+function configuration(
+  slug: string,
+  instant: string,
+  catalogBinding?: RwaAsset["binding"],
+) {
+  if (!catalogBinding && !getArtwork(slug)) fail("UNKNOWN_ASSET");
   if (!projectionUint64.safeParse(instant).success) fail("INSTANT_INVALID");
   const contract =
-    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS?.trim();
+    catalogBinding?.collectionAddress ??
+    publicSetting("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS")?.trim();
   const bound = assetDeploymentBinding(
     slug,
-    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG,
+    publicSetting("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG"),
     contract,
   );
-  if (!bound.bound)
+  if (!catalogBinding && !bound.bound)
     fail(bound.boundElsewhere ? "BINDING_ELSEWHERE" : "BINDING_NOT_CONFIGURED");
-  const tokenId = process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID?.trim();
+  const tokenId =
+    catalogBinding?.tokenId ??
+    publicSetting("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID")?.trim();
   if (
     !contract ||
     !isAddress(contract) ||
@@ -101,7 +110,12 @@ function configuration(slug: string, instant: string) {
   } catch {
     fail("ORACLE_CONFIG_INVALID");
   }
-  return { base, tokenId, contract, chainId: String(hoodi.id) };
+  return {
+    base,
+    tokenId,
+    contract,
+    chainId: String(catalogBinding?.chainId ?? hoodi.id),
+  };
 }
 
 /** Bounded GET-only JSON transport. No request body, cookie, URL or credentials
@@ -193,9 +207,10 @@ async function readJson(url: URL): Promise<unknown> {
 export async function readWholeArtworkProjection(
   slug: string,
   instant: string,
+  catalogBinding?: RwaAsset["binding"],
 ): Promise<ProjectionReadResponse> {
   try {
-    const config = configuration(slug, instant);
+    const config = configuration(slug, instant, catalogBinding);
     const path = `v1/oracle/projection/${config.tokenId}`;
     const read = (tail = "") =>
       readJson(new URL(`${path}${tail}`, config.base));

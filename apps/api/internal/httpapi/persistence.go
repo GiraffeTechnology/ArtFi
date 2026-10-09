@@ -162,7 +162,11 @@ func (service *rwaService) hydratePersistence(ctx context.Context) error {
 		service.vaultIntents[intent.IntentID] = intent
 		service.vaultIntentByKey[intent.idempotencyKeyHash] = intent.IntentID
 	}
-	return vaultRows.Err()
+	if err := vaultRows.Err(); err != nil {
+		return err
+	}
+	vaultRows.Close()
+	return service.hydrateMintEvidence(ctx)
 }
 
 func (service *rwaService) persistUpload(ctx context.Context, upload *uploadSession) error {
@@ -247,7 +251,24 @@ func (service *rwaService) persistSubmission(ctx context.Context, intentID, tran
 		return err
 	}
 	if rows != 1 {
-		return errors.New("submission persistence conflict")
+		current, err := service.db.QueryContext(ctx, "SELECT transaction_hash FROM rwa_mint_intents WHERE intent_id=?", intentID)
+		if err != nil {
+			return err
+		}
+		defer current.Close()
+		var stored string
+		if current.Next() {
+			if err = current.Scan(&stored); err != nil {
+				return err
+			}
+			if strings.EqualFold(stored, transactionHash) {
+				return nil
+			}
+		}
+		if err = current.Err(); err != nil {
+			return err
+		}
+		return adminError(409, "A different submission is already bound to this mint intent.")
 	}
 	return nil
 }
@@ -298,7 +319,13 @@ func (service *rwaService) persistVaultSubmission(ctx context.Context, intentID,
 		return err
 	}
 	if rows != 1 {
-		return errors.New("vault submission persistence conflict")
+		current, err := service.readVaultIntent(ctx, intentID)
+		if err != nil {
+			return err
+		}
+		if !strings.EqualFold(current.TransactionHash, transactionHash) {
+			return errVaultSubmissionConflict
+		}
 	}
 	return nil
 }

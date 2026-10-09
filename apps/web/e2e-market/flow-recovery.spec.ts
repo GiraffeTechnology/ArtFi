@@ -103,7 +103,9 @@ async function connect(page: Page) {
     .getByRole("button", { name: /Browser Wallet|MetaMask|Injected/ })
     .first()
     .click();
-  await expect(page.locator(".wallet-button--connected").first()).toBeVisible();
+  await expect(
+    page.locator(".wallet-button--connected").filter({ visible: true }).first(),
+  ).toBeVisible();
 }
 
 async function switchWallet(page: Page, address?: string) {
@@ -250,6 +252,7 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
     });
   });
   let phase: "failed" | "ready" | "hold-wallet-b" = "failed";
+  let notificationStatus: "confirmed" | "removed" = "confirmed";
   const heldWalletB: Array<() => void> = [];
   await page.route("**/api/portfolio/**", async (route) => {
     portfolioReads += 1;
@@ -284,7 +287,43 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
         ],
         transactions: [],
         offers: [],
-        notifications: [],
+        notifications: [
+          {
+            id: `${address}:1`,
+            transactionHash: `0x${"1".repeat(64)}`,
+            logIndex: 1,
+            contractAddress: address,
+            eventName: "BidPlaced",
+            blockNumber: 10,
+            status: notificationStatus,
+            observedAt: "2026-10-05T12:00:00Z",
+            message: `${address.toLowerCase() === walletA.toLowerCase() ? "WALLET_A_NOTICE" : "WALLET_B_NOTICE"}: ${notificationStatus === "removed" ? "Previous confirmation no longer applies." : "Confirmed indexed bid."}`,
+          },
+        ],
+        performance: {
+          status: "known_for_indexed_history",
+          method: "fifo",
+          scope: "confirmed_indexed_fraction_trades",
+          pendingEventCount: 0,
+          unmappedTradeCount: 0,
+          reasons: [],
+          items: [
+            {
+              assetToken: address,
+              paymentToken:
+                address.toLowerCase() === walletA.toLowerCase()
+                  ? walletB
+                  : walletA,
+              confirmedQuantity: "2",
+              costBasis: "900719925474099300000001",
+              realizedPnl: "-1",
+              status: "known",
+              buyCount: 1,
+              sellCount: 1,
+              reasons: [],
+            },
+          ],
+        },
       },
     });
   });
@@ -308,6 +347,32 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
   phase = "ready";
   await page.getByRole("button", { name: "Retry indexed records" }).click();
   await expect(page.getByText("WALLET_A_ONLY", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("900719925474099300000001 payment-token base units", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Realized P&L: -1 payment-token base units", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("WALLET_A_NOTICE: Confirmed indexed bid.", { exact: true }),
+  ).toBeVisible();
+  notificationStatus = "removed";
+  await page
+    .getByRole("button", { name: "Refresh positions, P&L and notifications" })
+    .click();
+  await expect(
+    page.getByText("BidPlaced · removed", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "WALLET_A_NOTICE: Previous confirmation no longer applies.",
+      { exact: true },
+    ),
+  ).toBeVisible();
   phase = "hold-wallet-b";
   await switchWallet(page, walletB);
   await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
@@ -317,6 +382,15 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
       .getByRole("button", { name: "Sign in", exact: true })
       .filter({ visible: true }),
   ).toBeEnabled();
+  await expect(
+    page.getByText(
+      "WALLET_A_NOTICE: Previous confirmation no longer applies.",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Indexed trade P&L", exact: true }),
+  ).toHaveCount(0);
   sessionAddress = walletB;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect.poll(() => heldWalletB.length).toBeGreaterThan(0);

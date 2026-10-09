@@ -12,6 +12,7 @@ import (
 )
 
 func TestMySQLPortfolioConfirmationReplaySurvivesRestart(t *testing.T) {
+	configurePortfolioTestAuth(t)
 	dsn := os.Getenv("ARTFI_INTEGRATION_MYSQL_DSN")
 	if dsn == "" {
 		t.Skip("ARTFI_INTEGRATION_MYSQL_DSN is not set; real MySQL replay/restart is unverified")
@@ -62,7 +63,7 @@ func TestMySQLPortfolioConfirmationReplaySurvivesRestart(t *testing.T) {
 
 	assertPortfolio := func(handler http.Handler, status string, removed bool) {
 		t.Helper()
-		response := requestWithHandler(t, handler, http.MethodGet, "/v1/portfolio/"+owner)
+		response := authenticatedPortfolioRead(t, handler, db, owner)
 		if response.Code != http.StatusOK {
 			t.Fatalf("read portfolio: status=%d body=%s", response.Code, response.Body.String())
 		}

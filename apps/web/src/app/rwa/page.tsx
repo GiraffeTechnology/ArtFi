@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { RwaCatalog } from "@/components/rwa-catalog";
 import { ArtworkCard } from "@/components/artwork-card";
 import { PrototypeDataNotice } from "@/components/prototype-data-notice";
 import { artworks } from "@/lib/catalog";
@@ -44,6 +45,10 @@ export default function WholeRwaPage() {
         The configured collection, token and market identify that separate
         receipt path.
       </p>
+      <Link className="secondary" href="/rwa/activate">
+        Publish approved-source asset evidence
+      </Link>
+      <RwaCatalog section="whole" />
       <p className="product-note">
         Open a sample artwork below to inspect the receipt model, holder
         authority and existing whole-artwork transaction controls. Configured

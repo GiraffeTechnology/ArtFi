@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { RwaCatalog } from "@/components/rwa-catalog";
 import { ArtworkCard } from "@/components/artwork-card";
 import { PrototypeDataNotice } from "@/components/prototype-data-notice";
 import { artworks } from "@/lib/catalog";
@@ -37,7 +38,14 @@ export default function FractionalMarketPage() {
         <Link className="secondary" href="/projects">
           Explore asset projects
         </Link>
+        <Link className="secondary" href="/market/auctions">
+          Open fraction auctions
+        </Link>
       </nav>
+      <Link className="secondary" href="/rwa/activate">
+        Publish approved-source asset evidence
+      </Link>
+      <RwaCatalog section="fractional" />
       <p className="product-note">
         Open a sample position to reach its existing trading controls. The
         sample prices and supply below do not describe a deployed token; trading

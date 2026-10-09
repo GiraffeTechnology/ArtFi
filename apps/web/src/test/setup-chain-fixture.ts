@@ -115,6 +115,7 @@ export function createSetupChainFixture() {
     const call = decode({ data });
     switch (call.functionName) {
       case "createAsset":
+      case "createAssetWithEvidence":
         return "mint";
       case "createVault":
         return "create";
@@ -176,6 +177,15 @@ export function createSetupChainFixture() {
         }),
       });
     }
+    // A guarded mint simulation checks its approved-envelope structure without
+    // broadcasting, changing owner state or pretending it settled.
+    try {
+      const simulated = decodeFunctionData({ abi: rwaRegistryAbi, data });
+      if (simulated.functionName === "createAssetWithEvidence")
+        return encodeAbiParameters([{ type: "uint256" }], [1n]);
+    } catch {
+      /* Ordinary read ABI continues below. */
+    }
     const call = decodeFunctionData({ abi: readAbi, data });
     const create = latest("create");
     const vaultCall = create ? decode(create) : undefined;
@@ -200,7 +210,8 @@ export function createSetupChainFixture() {
           throw new Error("TEST_ONLY UnknownRequest");
         const mint = decode(transaction);
         if (
-          mint.functionName !== "createAsset" ||
+          (mint.functionName !== "createAsset" &&
+            mint.functionName !== "createAssetWithEvidence") ||
           call.args[0] !== mint.args[0]
         )
           throw new Error("TEST_ONLY wrong mint request");
@@ -342,7 +353,10 @@ export function createSetupChainFixture() {
       ["mint", "create"].includes(transaction.action)
     )
       return [];
-    if (call.functionName === "createAsset")
+    if (
+      call.functionName === "createAsset" ||
+      call.functionName === "createAssetWithEvidence"
+    )
       return [
         {
           ...base,

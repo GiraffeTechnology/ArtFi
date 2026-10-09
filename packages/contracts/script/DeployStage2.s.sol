@@ -6,6 +6,7 @@ import {RWARegistry} from "../src/RWARegistry.sol";
 
 interface Vm {
     function envAddress(string calldata name) external view returns (address value);
+    function envBool(string calldata name) external view returns (bool value);
     function startBroadcast() external;
     function stopBroadcast() external;
 }
@@ -18,6 +19,7 @@ contract DeployStage2 {
 
     error UnsupportedChain(uint256 chainId);
     error ZeroAddress();
+    error IndependentSourceAuthorityRequired();
 
     function run() external returns (ArtFiRWA nft, RWARegistry registry) {
         if (block.chainid != HOODI_CHAIN_ID) revert UnsupportedChain(block.chainid);
@@ -26,6 +28,12 @@ contract DeployStage2 {
         address admin = VM.envAddress("ARTFI_ADMIN");
         address registrar = VM.envAddress("ARTFI_REGISTRAR");
         address pauser = VM.envAddress("ARTFI_PAUSER");
+        address sourceAuthority = VM.envAddress("ARTFI_SOURCE_AUTHORITY");
+        bool testOnly = VM.envBool("ARTFI_RWA_TEST_ONLY");
+        if (
+            sourceAuthority == address(0) || sourceAuthority == admin
+                || sourceAuthority == registrar
+        ) revert IndependentSourceAuthorityRequired();
         if (
             deployer == address(0) || admin == address(0) || registrar == address(0)
                 || pauser == address(0)
@@ -33,8 +41,15 @@ contract DeployStage2 {
 
         VM.startBroadcast();
 
-        nft = new ArtFiRWA("ArtFi RWA", "ARWA", deployer, deployer, deployer);
-        registry = new RWARegistry(nft, admin, registrar, pauser);
+        nft = new ArtFiRWA(
+            testOnly ? "ArtFi TESTNET - NO REAL-WORLD VALUE - NO LEGAL EFFECT" : "ArtFi RWA",
+            "ARWA",
+            deployer,
+            deployer,
+            deployer
+        );
+        registry = new RWARegistry(nft, admin, registrar, pauser, sourceAuthority, testOnly);
+        nft.bindMintRegistry(address(registry));
 
         nft.grantRole(nft.MINTER_ROLE(), address(registry));
         nft.revokeRole(nft.MINTER_ROLE(), deployer);

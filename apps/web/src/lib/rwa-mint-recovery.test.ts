@@ -90,6 +90,20 @@ describe("mint preparation recovery", () => {
     expect(args.prepare).toHaveBeenCalledTimes(1);
     expect(retry.intent).toBe(intent);
   });
+  it("keeps the original request and key after a definitively reverted attempt", async () => {
+    const prepared = await prepareMint(prepareArgs());
+    const previous = {
+      ...prepared,
+      lastFailedHash: `0x${"33".repeat(32)}` as const,
+    };
+    const args = prepareArgs({ previous, file: undefined });
+    const retry = await prepareMint(args);
+    expect(retry.intent).toEqual(prepared.intent);
+    expect(retry.idempotencyKey).toBe(prepared.idempotencyKey);
+    expect(retry.lastFailedHash).toBe(previous.lastFailedHash);
+    expect(args.prepare).not.toHaveBeenCalled();
+    expect(args.upload).not.toHaveBeenCalled();
+  });
   it("restores a prepared intent without storing or requiring file bytes", async () => {
     const prepared = await prepareMint(prepareArgs());
     const args = prepareArgs({
@@ -237,6 +251,29 @@ describe("mint on-chain evidence and continuation", () => {
     expect(mintedDaoHref(minted)).toBe(
       `/dao?chainId=560048&collectionAddress=${collection}&tokenId=7`,
     );
+  });
+  it("recovers the safe as execution authority while keeping the original recipient wallet", async () => {
+    const minted = await recoverMintedAsset(
+      chain({ creator: collection }).client,
+      intent,
+      wallet,
+      () => {},
+      100n,
+      collection,
+    );
+    expect(minted.tokenId).toBe("7");
+  });
+  it("still checks the original recipient when a safe executed the mint", async () => {
+    await expect(
+      recoverMintedAsset(
+        chain({ creator: collection, recipient: collection }).client,
+        intent,
+        wallet,
+        () => {},
+        100n,
+        collection,
+      ),
+    ).rejects.toThrow("does not match");
   });
   it.each([
     { creator: collection },

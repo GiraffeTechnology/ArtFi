@@ -3,7 +3,21 @@ pragma solidity 0.8.30;
 
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
-import {ArtFiRWA} from "../src/ArtFiRWA.sol";
+import {
+    ERC721URIStorage
+} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+
+contract TestOnlyVaultNFT is ERC721URIStorage {
+    uint256 private nextId = 1;
+    constructor() ERC721("TEST_ONLY vault mechanics", "TEST") {}
+
+    function safeMint(address recipient, string calldata uri) external returns (uint256 id) {
+        id = nextId++;
+        _safeMint(recipient, id);
+        _setTokenURI(id, uri);
+    }
+}
 import {ArtFiVault} from "../src/ArtFiVault.sol";
 import {FractionalToken} from "../src/FractionalToken.sol";
 import {VaultFactory} from "../src/VaultFactory.sol";
@@ -15,7 +29,7 @@ contract UntrustedFractionalizer {
 }
 
 contract VaultDepositor is IERC721Receiver {
-    function deposit(ArtFiRWA nft, ArtFiVault vault, uint256 tokenId) external {
+    function deposit(TestOnlyVaultNFT nft, ArtFiVault vault, uint256 tokenId) external {
         nft.approve(address(vault), tokenId);
         vault.deposit();
     }
@@ -31,7 +45,7 @@ contract VaultDepositor is IERC721Receiver {
 }
 
 contract VaultFlowTest is IERC721Receiver {
-    ArtFiRWA private nft;
+    TestOnlyVaultNFT private nft;
     VaultFactory private factory;
     ArtFiVault private vault;
     UntrustedFractionalizer private untrusted;
@@ -39,7 +53,7 @@ contract VaultFlowTest is IERC721Receiver {
     bytes32 private constant REQUEST_ID = keccak256("vault-request");
 
     function setUp() public {
-        nft = new ArtFiRWA("ArtFi RWA", "ARWA", address(this), address(this), address(this));
+        nft = new TestOnlyVaultNFT();
         nft.safeMint(address(this), "ipfs://vault-test");
         factory = new VaultFactory(address(this), address(this), address(this));
         vault = ArtFiVault(

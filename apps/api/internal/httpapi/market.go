@@ -34,7 +34,10 @@ type portfolioPosition struct {
 }
 
 type portfolioEntry struct {
+	ID              string `json:"id"`
 	TransactionHash string `json:"transactionHash"`
+	LogIndex        uint32 `json:"logIndex"`
+	ContractAddress string `json:"contractAddress"`
 	EventName       string `json:"eventName"`
 	BlockNumber     uint64 `json:"blockNumber"`
 	Status          string `json:"status"`
@@ -42,13 +45,14 @@ type portfolioEntry struct {
 }
 
 type portfolioResponse struct {
-	Address       string              `json:"address"`
-	ChainID       int                 `json:"chainId"`
-	Network       string              `json:"network"`
-	Positions     []portfolioPosition `json:"positions"`
-	Transactions  []portfolioEntry    `json:"transactions"`
-	Offers        []map[string]any    `json:"offers"`
-	Notifications []map[string]any    `json:"notifications"`
+	Address       string                  `json:"address"`
+	ChainID       int                     `json:"chainId"`
+	Network       string                  `json:"network"`
+	Positions     []portfolioPosition     `json:"positions"`
+	Transactions  []portfolioEntry        `json:"transactions"`
+	Offers        []map[string]any        `json:"offers"`
+	Notifications []portfolioNotification `json:"notifications"`
+	Performance   portfolioPerformance    `json:"performance"`
 }
 
 var errEventConflict = errors.New("the canonical event identity conflicts with stored payload or block state")
@@ -205,22 +209,29 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 	response := portfolioResponse{
 		Address: address, ChainID: hoodiChainID, Network: "hoodi",
 		Positions: []portfolioPosition{}, Transactions: []portfolioEntry{},
-		Offers: []map[string]any{}, Notifications: []map[string]any{},
+		Offers: []map[string]any{}, Notifications: []portfolioNotification{},
 	}
 	if service.db == nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The indexed portfolio is not connected to persistence.")
 		return
 	}
-	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "portfolio:"+address, "", &response)
+	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "portfolio:"+address, "performance-v1", &response)
 	if cacheHit {
 		writeJSON(writer, http.StatusOK, response)
 		return
 	}
-	rows, err := service.db.QueryContext(request.Context(), `
+	// Keep positions, history and performance on the same canonical SQL snapshot.
+	tx, err := service.db.BeginTx(request.Context(), &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio snapshot could not be opened.")
+		return
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(request.Context(), `
 		SELECT asset_token, symbol, direction, amount,
 		       DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%sZ')
-		FROM portfolio_deltas WHERE owner_address = ? AND removed = FALSE
-		ORDER BY observed_at, transaction_hash, log_index`, address)
+		FROM portfolio_deltas WHERE chain_id = ? AND owner_address = ? AND removed = FALSE
+		ORDER BY observed_at, transaction_hash, log_index`, hoodiChainID, address)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio read model could not be queried.")
 		return
@@ -264,21 +275,17 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		position.Balance = balances[token].String()
 		response.Positions = append(response.Positions, *position)
 	}
-	transactionRows, err := service.db.QueryContext(request.Context(), `
-		SELECT LOWER(transaction_hash), event_name, block_number,
+	rows.Close()
+	walletPredicate, walletArgs := portfolioWalletPredicate("", address)
+	transactionRows, err := tx.QueryContext(request.Context(), `
+		SELECT LOWER(transaction_hash), log_index, LOWER(contract_address), event_name, block_number,
 		       CASE WHEN removed THEN 'removed'
 		            WHEN confirmed THEN 'confirmed' ELSE 'pending' END,
 		       DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%sZ')
 		FROM chain_events
-		WHERE chain_id = ? AND (
-		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.from'))) = ? OR
-		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.to'))) = ? OR
-		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.owner'))) = ? OR
-		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.recipient'))) = ? OR
-		  LOWER(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.distributionWallet'))) = ?
-		)
-		ORDER BY block_number DESC, log_index DESC
-		LIMIT 100`, hoodiChainID, address, address, address, address, address)
+		WHERE chain_id = ? AND (`+walletPredicate+`)
+		ORDER BY block_number DESC, log_index DESC, transaction_hash DESC
+		LIMIT 100`, append([]any{hoodiChainID}, walletArgs...)...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio transaction history could not be queried.")
 		return
@@ -288,6 +295,8 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		var entry portfolioEntry
 		if err := transactionRows.Scan(
 			&entry.TransactionHash,
+			&entry.LogIndex,
+			&entry.ContractAddress,
 			&entry.EventName,
 			&entry.BlockNumber,
 			&entry.Status,
@@ -296,10 +305,26 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 			writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio transaction history could not be decoded.")
 			return
 		}
+		entry.ID = portfolioEventID(hoodiChainID, entry.TransactionHash, entry.LogIndex)
 		response.Transactions = append(response.Transactions, entry)
 	}
 	if err := transactionRows.Err(); err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio transaction history was interrupted.")
+		return
+	}
+	transactionRows.Close()
+	response.Notifications, err = readPortfolioNotifications(request.Context(), tx, address)
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The wallet notifications could not be queried.")
+		return
+	}
+	response.Performance, err = readPortfolioPerformance(request.Context(), tx, address)
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio performance evidence could not be queried.")
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio snapshot could not be completed.")
 		return
 	}
 	service.storeCachedJSON(request.Context(), cacheToken, response)

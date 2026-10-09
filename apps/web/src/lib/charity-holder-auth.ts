@@ -1,3 +1,4 @@
+import { publicSetting } from "@/lib/public-runtime-config";
 import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -196,7 +197,7 @@ function publicClient() {
   }
   const rpcURL =
     process.env.ARTFI_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_HOODI_RPC_URL?.trim();
+    publicSetting("NEXT_PUBLIC_HOODI_RPC_URL")?.trim();
   if (!rpcURL)
     throw new Error("Charity holder chain verification is unavailable.");
   return createPublicClient({ chain: hoodi, transport: http(rpcURL) });
@@ -205,7 +206,7 @@ function publicClient() {
 function charityEditionsAddress() {
   const value =
     process.env.ARTFI_CHARITY_EDITIONS_ADDRESS?.trim() ||
-    process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS?.trim() ||
+    publicSetting("NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS")?.trim() ||
     "";
   if (!isAddress(value))
     throw new Error("The charity editions contract is unavailable.");

@@ -1,3 +1,4 @@
+import { publicSetting } from "@/lib/public-runtime-config";
 import "server-only";
 import {
   verifyCanonicalEOASignature,
@@ -27,8 +28,8 @@ export async function verifyNativeOrderSale(order: NativeOrder) {
   const decoded = decodeNativeOrder(order);
   const configured =
     decoded.kind === "whole"
-      ? process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS?.trim()
-      : process.env.NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS?.trim();
+      ? publicSetting("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS")?.trim()
+      : publicSetting("NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS")?.trim();
   if (!configured || !isAddress(configured))
     throw new OrderVerificationUnavailable(
       "This market deployment is not configured.",

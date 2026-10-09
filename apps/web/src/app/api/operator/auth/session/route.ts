@@ -19,6 +19,9 @@ export async function GET() {
     return NextResponse.json({
       authenticated: true,
       address: session.address,
+      chainId: session.chainId,
+      registryAddress: session.registryAddress,
+      safeAddress: session.safeAddress,
       expiresAt: new Date(session.expiresAt).toISOString(),
     });
   } catch {

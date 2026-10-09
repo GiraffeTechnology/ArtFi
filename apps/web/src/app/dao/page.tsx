@@ -1,3 +1,4 @@
+import { publicSetting } from "@/lib/public-runtime-config";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -57,11 +58,14 @@ export default function DaoPage() {
 
       <DaoGovernance
         deployment={{
-          actionRegistryAddress:
-            process.env.NEXT_PUBLIC_ARTFI_DAO_ACTIONS_ADDRESS,
-          governorAddress: process.env.NEXT_PUBLIC_ARTFI_GOVERNOR_ADDRESS,
-          tokenAddress: process.env.NEXT_PUBLIC_ARTFI_GOVERNANCE_TOKEN_ADDRESS,
-          vaultAddress: process.env.NEXT_PUBLIC_ARTFI_RWA_VAULT_ADDRESS,
+          actionRegistryAddress: publicSetting(
+            "NEXT_PUBLIC_ARTFI_DAO_ACTIONS_ADDRESS",
+          ),
+          governorAddress: publicSetting("NEXT_PUBLIC_ARTFI_GOVERNOR_ADDRESS"),
+          tokenAddress: publicSetting(
+            "NEXT_PUBLIC_ARTFI_GOVERNANCE_TOKEN_ADDRESS",
+          ),
+          vaultAddress: publicSetting("NEXT_PUBLIC_ARTFI_RWA_VAULT_ADDRESS"),
         }}
       />
     </main>

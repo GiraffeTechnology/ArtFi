@@ -1,5 +1,7 @@
 "use client";
 
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { formatEther, isAddress, type Address, type Hex } from "viem";
@@ -53,8 +55,9 @@ export function editionAvailability(edition: CharityEdition): string {
 }
 
 export function CharityEditionCatalog() {
-  const configuredAddress =
-    process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS;
+  const configuredAddress = publicSetting(
+    "NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS",
+  );
   const contractAddress = (
     isAddress(configuredAddress ?? "") ? configuredAddress : undefined
   ) as Address | undefined;

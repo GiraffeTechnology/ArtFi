@@ -1,11 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
-import { sessionEnvironment as fixture } from "./e2e-session/environment";
+import { apiRuntimeCommand, webRuntime } from "./e2e-runtime";
+import {
+  sessionEnvironment as fixture,
+  sessionSourceFixture,
+} from "./e2e-session/environment";
 
 // Never retain auth headers, cookies, request bodies, page snapshots or signing artifacts.
 // Playwright 1.62 uses this flag to disable automatic failure-page ARIA snapshots.
 process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
 
 const isolated = {
+  ARTFI_ENV: "test",
+  ARTFI_RWA_EVIDENCE_MODE: "TEST_ONLY",
+  ARTFI_RWA_APPROVED_SOURCES_JSON: JSON.stringify(sessionSourceFixture.sources),
   ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE: "",
   ARTFI_RPC_URL: "",
   ARTFI_ORACLE_READ_API_URL: "",
@@ -46,7 +53,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "go run ./cmd/server",
+      command: apiRuntimeCommand("go run ./cmd/server"),
       cwd: "../api",
       // This endpoint reads SQL, so an API that silently lost persistence is not ready.
       url: `${fixture.apiURL}/v1/orders?chainId=${fixture.chainId}`,
@@ -61,27 +68,31 @@ export default defineConfig({
       },
     },
     {
-      command:
-        "node node_modules/next/dist/bin/next dev --webpack --hostname 127.0.0.1 --port 3003",
-      url: fixture.webURL,
+      url: `${fixture.webURL}/api/health`,
       reuseExistingServer: false,
       timeout: 120_000,
-      env: {
-        ...isolated,
-        ARTFI_WEB_URL: fixture.webURL,
-        ARTFI_API_URL: fixture.apiURL,
-        ARTFI_USER_AUTH_API_URL: fixture.apiURL,
-        NEXT_PUBLIC_API_URL: fixture.apiURL,
-        NEXT_PUBLIC_HOODI_RPC_URL: `${fixture.webURL}/TEST_ONLY-hoodi-rpc`,
-        NEXT_PUBLIC_ETHEREUM_RPC_URL: `${fixture.webURL}/TEST_ONLY-hoodi-rpc`,
-        NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS: fixture.wholeMarket,
-        NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS: fixture.collection,
-        NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID: "1",
-        NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG: fixture.slug,
-        NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS: fixture.fractionMarket,
-        NEXT_PUBLIC_ARTFI_FRACTION_TOKEN_ADDRESS: fixture.fractionToken,
-        NEXT_PUBLIC_ARTFI_FRACTION_SLUG: fixture.slug,
-      },
+      ...webRuntime(
+        `node node_modules/next/dist/bin/next ${process.env.ARTFI_E2E_PRODUCTION ? "start" : "dev --webpack"} --hostname 127.0.0.1 --port 3003`,
+        "127.0.0.1",
+        3003,
+        {
+          ...isolated,
+          ARTFI_WEB_URL: fixture.webURL,
+          ARTFI_API_URL: fixture.apiURL,
+          ARTFI_USER_AUTH_API_URL: fixture.apiURL,
+          NEXT_PUBLIC_API_URL: fixture.apiURL,
+          NEXT_PUBLIC_HOODI_RPC_URL: `${fixture.webURL}/TEST_ONLY-hoodi-rpc`,
+          NEXT_PUBLIC_ETHEREUM_RPC_URL: `${fixture.webURL}/TEST_ONLY-hoodi-rpc`,
+          NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS: fixture.wholeMarket,
+          NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS:
+            fixture.collection,
+          NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID: "1",
+          NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG: fixture.slug,
+          NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS: fixture.fractionMarket,
+          NEXT_PUBLIC_ARTFI_FRACTION_TOKEN_ADDRESS: fixture.fractionToken,
+          NEXT_PUBLIC_ARTFI_FRACTION_SLUG: fixture.slug,
+        },
+      ),
     },
   ],
 });

@@ -1,7 +1,7 @@
 # Real wallet-session and sale-publication integration
 
 This bounded TEST_ONLY suite runs an actual Chromium browser against the actual Next.js BFF,
-Go API, and a disposable MySQL database. It does not mock authentication or order HTTP.
+Go API, and a disposable MySQL database. It does not mock authentication, approved-source catalog publication, or order HTTP.
 It covers the existing wallet-login and native whole-artwork/fractional sale workflows in
 Issue #110 and the client's three-section delivery, without adding a publication-signature gate.
 
@@ -20,16 +20,17 @@ The five cases cover:
 ## Running
 
 Use Node 24+, the repository's pnpm version, Go from `apps/api/go.mod`, Chromium, and a fresh,
-locally bound MySQL 8 instance. The test configuration deliberately uses only the disposable
-DSN `root:local-root-only@tcp(127.0.0.1:3306)/artfi?parseTime=true`.
-Create `artfi` and apply `apps/api/migrations/000001` through `000010` in order before running.
+locally bound MySQL 8 instance. The test configuration defaults to the disposable
+DSN `root:local-root-only@tcp(127.0.0.1:3306)/artfi?parseTime=true`;
+`ARTFI_E2E_MYSQL_DSN` may select another freshly created local test database.
+Create the database and apply every `apps/api/migrations/*.up.sql` file in lexical order before running.
 The CI job owns database creation and teardown. Do not run against an existing or production database.
 
 From `apps/web`:
 
 ```sh
 pnpm exec playwright install chromium
-pnpm exec playwright test --config=playwright.session.config.ts
+pnpm test:e2e:session
 ```
 
 The configuration starts Go on `127.0.0.1:8083` and Next.js on `127.0.0.1:3003` with fixed
@@ -37,6 +38,15 @@ TEST_ONLY internal credentials. Existing listeners are never reused. Go readines
 SQL-backed `/v1/orders` endpoint, so a missing database cannot silently turn this into a mock test.
 When needed, put the chosen Go binary on PATH; `ARTFI_E2E_CHROMIUM_PATH` selects an already
 installed Chromium executable. No production RPC, Oracle, server credentials or real assets are used.
+
+The runner generates an ephemeral P-256 source key in a Go test process, discards the private
+key, and passes only its public trust root and two signed TEST_ONLY catalog envelopes to the
+session environment. Test setup explicitly publishes these records through the ordinary authenticated
+Next-to-Go publication API after sign-in; this is fixture setup, not automatic application behavior
+on login. Whole and fractional records have distinct underlying token identities. The catalog HTTP
+and its MySQL persistence remain real. Production defaults never trust these test sources.
+`GO_BINARY` selects a Go binary when it is not on PATH. `ARTFI_E2E_PRODUCTION=1` uses an already
+built production web output; otherwise the suite starts the development server.
 
 ## Boundaries and diagnostics
 

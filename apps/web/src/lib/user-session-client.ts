@@ -1,7 +1,7 @@
 "use client";
 
 import { isAddress, type Hex } from "viem";
-import { hoodi } from "viem/chains";
+import { isSessionChain } from "./auth-chains";
 import {
   authenticatedSession,
   initialUserSessionState,
@@ -130,7 +130,7 @@ function sessionFrom(value: unknown): UserSession {
     !session ||
     typeof session.id !== "string" ||
     !isAddress(session.address) ||
-    session.chainId !== hoodi.id ||
+    !isSessionChain(session.chainId) ||
     !Number.isSafeInteger(session.expiresAt) ||
     session.expiresAt <= Date.now() ||
     !Number.isSafeInteger(session.accessExpiresAt) ||
@@ -311,11 +311,11 @@ export class ClientSessionController {
     if (
       this.wallet.status !== "connected" ||
       !this.wallet.address ||
-      this.wallet.chainId !== hoodi.id
+      !isSessionChain(this.wallet.chainId)
     )
       throw new ClientSessionError(
         400,
-        "Connect a wallet on Hoodi to sign in.",
+        "Connect a wallet on a supported chain to sign in.",
       );
     const address = this.wallet.address.toLowerCase();
     const chainId = this.wallet.chainId;

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { isAddress, type Address, type Hex } from "viem";
-import { hoodi } from "viem/chains";
+import { enabledSessionChain } from "@/lib/auth-chains";
 import {
   assertUserRequestOrigin,
   readBoundedJSON,
@@ -128,19 +128,20 @@ export async function POST(request: Request, context: Context) {
       if (
         typeof body.address !== "string" ||
         !isAddress(body.address) ||
-        body.chainId !== hoodi.id
+        !enabledSessionChain(body.chainId)
       )
-        throw new UserAuthError(400, "Connect a valid wallet on Hoodi.");
+        throw new UserAuthError(400, "Connect a wallet on an enabled chain.");
       const challenge = await userAuthRequest<UserChallenge>("challenge", {
         address: body.address.toLowerCase(),
-        chainId: hoodi.id,
+        chainId: body.chainId,
         origin,
       });
       const token = sealUserChallenge(challenge);
       const checked = readUserChallenge(token, origin);
       if (
         !checked ||
-        checked.address.toLowerCase() !== body.address.toLowerCase()
+        checked.address.toLowerCase() !== body.address.toLowerCase() ||
+        checked.chainId !== body.chainId
       )
         throw new UserAuthError(
           503,
@@ -181,6 +182,8 @@ export async function POST(request: Request, context: Context) {
           challenge.address as Address,
           challenge.message,
           body.signature as Hex,
+          undefined,
+          challenge.chainId,
         ))
       )
         throw new UserAuthError(
@@ -197,7 +200,9 @@ export async function POST(request: Request, context: Context) {
         }),
       );
       if (
-        tokens.session.address.toLowerCase() !== challenge.address.toLowerCase()
+        tokens.session.address.toLowerCase() !==
+          challenge.address.toLowerCase() ||
+        tokens.session.chainId !== challenge.chainId
       )
         throw new UserAuthError(
           503,

@@ -6,6 +6,654 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /v1/admin/session:
+    get:
+      operationId: administrationSession
+      summary: Check deployment-configured application moderation permission
+      description: Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+      responses:
+        "200":
+          description: Current records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdministrationSession"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+  /v1/admin/moderation/cases:
+    get:
+      operationId: adminModerationCases
+      summary: List private content review and appeal queue
+      description: Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+      responses:
+        "200":
+          description: Current records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationCasePage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000000
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - ""
+              - open
+              - reviewing
+              - resolved
+              - appealed
+  /v1/admin/moderation/cases/{caseID}:
+    get:
+      operationId: adminModerationCase
+      summary: Read a private moderation case
+      description: Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+      responses:
+        "200":
+          description: Current records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationCase"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+      parameters:
+        - name: caseID
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{32}$
+  /v1/admin/moderation/cases/{caseID}/decisions:
+    post:
+      operationId: adminModerationDecision
+      summary: Record a revision-checked moderation or appeal decision
+      description: Requires a configured application moderator wallet. start_review applies to open reports; resolve to open/reviewing; uphold_appeal and reject_appeal to pending appeals. resolve/uphold require no_action with an empty publicNotice or content_warning with a 10–500 character publicNotice. Other actions require empty decision/publicNotice. A warning publishes only target and moderator-authored notice; private report and appeal text are never public. No state, receipt or audit is committed unless all succeed atomically.
+      responses:
+        "200":
+          description: Durably recorded result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationCase"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+      parameters:
+        - name: caseID
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{32}$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,128}$
+          description: Actor-scoped, durable replay key. Reuse only for the identical method, path and payload. A conflicting payload returns 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModerationDecision"
+  /v1/user/moderation/cases:
+    get:
+      operationId: userModerationCases
+      summary: List only the authenticated wallet’s reports and appeals
+      description: Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+      responses:
+        "200":
+          description: Current records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationCasePage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000000
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - ""
+              - open
+              - reviewing
+              - resolved
+              - appealed
+    post:
+      operationId: createModerationReport
+      summary: Submit a private marketplace-content report
+      description: Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+      responses:
+        "201":
+          description: Durably recorded result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationCase"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModerationReport"
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,128}$
+          description: Actor-scoped, durable replay key. Reuse only for the identical method, path and payload. A conflicting payload returns 409.
+  /v1/user/moderation/cases/{caseID}:
+    get:
+      operationId: userModerationCase
+      summary: Read only a case owned by the authenticated wallet
+      description: Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+      responses:
+        "200":
+          description: Current records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationCase"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+      parameters:
+        - name: caseID
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{32}$
+  /v1/user/moderation/cases/{caseID}/appeals:
+    post:
+      operationId: createModerationAppeal
+      summary: Appeal a resolved report from its original reporter wallet
+      description: One private appeal per resolved case. A current case revision is required. Other wallets receive 404 without case details. The existing content decision stays in effect while the appeal is pending. Authenticated ownership, revision, state, durable audit and idempotency are checked together.
+      responses:
+        "200":
+          description: Durably recorded result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationCase"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+      parameters:
+        - name: caseID
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-f0-9]{32}$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,128}$
+          description: Actor-scoped, durable replay key. Reuse only for the identical method, path and payload. A conflicting payload returns 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModerationAppeal"
+  /v1/admin/config:
+    get:
+      operationId: adminPlatformConfiguration
+      summary: Read service-notice configuration including an unpublished draft
+      description: Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+      responses:
+        "200":
+          description: Current records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformConfiguration"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+    put:
+      operationId: updatePlatformConfiguration
+      summary: Update only the audited platform service notice
+      description: Requires a configured moderator wallet, current revision and reason. noticeEnabled=true requires a 10–500 character notice. Security, roles, fees, trading, custody and execution settings are not mutable here. The service notice is applied by the web application on load and refresh.
+      responses:
+        "200":
+          description: Durably recorded result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformConfiguration"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformConfigurationUpdate"
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,128}$
+          description: Actor-scoped, durable replay key. Reuse only for the identical method, path and payload. A conflicting payload returns 409.
+  /v1/admin/audit:
+    get:
+      operationId: administrationAudit
+      summary: Read append-only moderation and configuration audit history
+      description: Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+      responses:
+        "200":
+          description: Current records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdministrationAuditPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      security:
+        - WalletUserSession: []
+      parameters:
+        - name: before
+          in: query
+          schema:
+            type: string
+            pattern: ^[1-9][0-9]*$
+          description: Exclusive audit ID cursor returned as nextCursor. At most 50 records per page.
+  /v1/platform/config:
+    get:
+      operationId: publicPlatformConfiguration
+      summary: Read the current public platform service notice
+      description: No wallet required. Disabled draft text is omitted as an empty noticeText. No secrets or operational authority are returned.
+      responses:
+        "200":
+          description: Current records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformConfiguration"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /v1/moderation/notices:
+    get:
+      operationId: publicModerationNotices
+      summary: Read published content notices without reporter or appeal data
+      description: Only the content reference, moderator-authored notice, case ID and update time are public. A notice remains during appeal and is removed when an upheld appeal replaces the decision with no_action. Notices do not alter orders, balances, settlement or property rights.
+      responses:
+        "200":
+          description: Current records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationNoticePage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000000
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+  /v1/nft/operations/history:
+    post:
+      summary: Read the authenticated wallet's native NFT operation history
+      description: Internal bridge credential and current wallet access token required. Returns paginated unsigned summaries scoped to the session wallet and chain, never wallet signatures or full review payloads.
+      operationId: nftOperationHistory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [accessToken, page]
+              properties:
+                accessToken: { type: string, writeOnly: true, maxLength: 4096 }
+                page: { type: integer, minimum: 1, maximum: 1000000 }
+      responses:
+        "200":
+          description: Current wallet's operation summaries, newest first, 25 per page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, page, pageSize, hasMore, wallet, chainId]
+                properties:
+                  data:
+                    type: array
+                    maxItems: 25
+                    items:
+                      type: object
+                      required:
+                        [
+                          id,
+                          chainId,
+                          status,
+                          action,
+                          collection,
+                          tokenId,
+                          kind,
+                          walletStarted,
+                          updatedAt,
+                        ]
+                      properties:
+                        id: { type: string }
+                        chainId: { type: integer }
+                        status: { type: string }
+                        action: { type: string }
+                        collection: { type: string }
+                        tokenId: { type: string }
+                        kind: { type: string }
+                        walletStarted: { type: boolean }
+                        transactionHash: { type: string }
+                        orderHash: { type: string }
+                        updatedAt: { type: string, format: date-time }
+                  page: { type: integer }
+                  pageSize: { type: integer, const: 25 }
+                  hasMore: { type: boolean }
+                  wallet: { type: string }
+                  chainId: { type: integer }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /v1/nft/operations:
+    post:
+      summary: Read or transition an authenticated native NFT operation
+      description: Internal web-to-API bridge. Stores only unsigned review plans and transaction/order hashes. Server credentials and a current wallet access token are both required. Plans are immutable; updates use revision compare-and-swap. No wallet signature or raw signed transaction may be stored.
+      operationId: nftOperation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action, accessToken, operation]
+              properties:
+                action:
+                  type: string
+                  enum: [get, create, update]
+                accessToken:
+                  type: string
+                  writeOnly: true
+                  maxLength: 4096
+                operation:
+                  type: object
+                  required: [id]
+                  properties:
+                    id:
+                      type: string
+                      pattern: "^[a-zA-Z0-9_-]{16,80}$"
+                    wallet:
+                      type: string
+                    chainId:
+                      type: integer
+                    requestHash:
+                      type: string
+                      pattern: "^[a-f0-9]{64}$"
+                    revision:
+                      type: integer
+                      minimum: 1
+                    status:
+                      type: string
+                      enum:
+                        [
+                          awaiting-wallet,
+                          submitted,
+                          pending,
+                          accepted,
+                          rejected,
+                          confirmed,
+                          failed,
+                          cancelled,
+                        ]
+                    plan:
+                      type: object
+                      description: Unsigned session-bound review plan. Credential and signature fields are rejected recursively.
+                      additionalProperties: true
+                    transactionHash:
+                      type: string
+                    orderHash:
+                      type: string
+      responses:
+        "200":
+          description: The authoritative operation and unsigned review plan
+        "401":
+          description: Missing or expired wallet session or invalid bridge credential
+        "403":
+          description: Operation belongs to another wallet or chain
+        "404":
+          description: Operation was not found
+        "409":
+          description: Idempotency, immutable-plan, or revision conflict
+        "503":
+          description: Durable operation journal is unavailable
   /v1/user/auth/challenge:
     post:
       operationId: walletUserChallenge
@@ -277,6 +925,63 @@ paths:
           $ref: "#/components/responses/Problem"
         "503":
           $ref: "#/components/responses/Problem"
+  /v1/orders/fraction-book:
+    get:
+      operationId: getFractionOrderBook
+      description: Read-only complete candidate snapshot for a fraction/payment pair at a caller-observed chain time. Lowest numeric uint256 price, original server publication time, then intent hash determine priority. Seller identity grants no preference. At most 500 candidates are returned; a larger book is refused instead of silently truncated. Terms do not reserve liquidity. Clients verify signatures, epoch, cumulative fill, shared seller balances/allowances and buyer payment availability at one mined block before constructing a plan.
+      parameters:
+        - {
+            name: chainId,
+            in: query,
+            required: true,
+            schema: { type: integer, const: 560048 },
+          }
+        - {
+            name: marketAddress,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" },
+          }
+        - {
+            name: assetAddress,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" },
+          }
+        - {
+            name: paymentToken,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" },
+          }
+        - {
+            name: at,
+            in: query,
+            required: true,
+            schema: { type: integer, minimum: 0, maximum: 281474976710655 },
+          }
+      responses:
+        "200":
+          description: Immutable price-time candidate log; chain state is not implied
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, at, logHash, priority]
+                properties:
+                  data:
+                    type: array
+                    maxItems: 500
+                    items: { $ref: "#/components/schemas/NativeSignedOrder" }
+                  at: { type: integer }
+                  logHash: { type: string, pattern: "^0x[0-9a-f]{64}$" }
+                  priority: { type: string, const: price-time-hash }
+        "400":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
   /v1/orders/{intentHash}:
     get:
       operationId: getNativeSignedOrder
@@ -496,6 +1201,9 @@ paths:
   /v1/portfolio/{address}:
     get:
       operationId: getPortfolio
+      description: Authenticated owner-only indexed Hoodi portfolio. Positions, event notifications and exact FIFO native fractional trade P&L are read from one canonical SQL snapshot. Unknown basis is null, never zero; this is not a full account, tax statement or current valuation.
+      security:
+        - WalletUserSession: []
       parameters:
         - name: address
           in: path
@@ -505,12 +1213,16 @@ paths:
             pattern: "^0x[0-9a-fA-F]{40}$"
       responses:
         "200":
-          description: Read-only public address portfolio
+          description: Private read-only indexed portfolio for the authenticated wallet
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Portfolio"
         "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
           $ref: "#/components/responses/Problem"
         "503":
           $ref: "#/components/responses/Problem"
@@ -820,6 +1532,9 @@ paths:
   /v1/rwa/intents:
     post:
       operationId: createMintIntent
+      description: Requires current source-signed correspondence for the exact request, recipient, registry, metadata digest and URI. Metadata-only issuance is rejected.
+      security:
+        - OperatorBearer: []
       parameters:
         - name: Idempotency-Key
           in: header
@@ -862,6 +1577,33 @@ paths:
                 $ref: "#/components/schemas/MintIntent"
         "404":
           $ref: "#/components/responses/Problem"
+  /v1/rwa/intents/{intentID}/evidence:
+    post:
+      operationId: renewMintSourceEvidence
+      summary: Renew source evidence on the same immutable issuance request
+      description: Registrar-authenticated import of independently signed source evidence. Preserves request, recipient, metadata, source, underlying asset, model, rights and uniqueness reservations; audits the previous and renewed public proof. Does not submit, cancel or replace a wallet transaction.
+      parameters:
+        - $ref: "#/components/parameters/IntentID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [evidence]
+              properties:
+                evidence: { $ref: "#/components/schemas/RWASourceEvidence" }
+      responses:
+        "200":
+          description: Original issuance request with current source evidence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MintIntent" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /v1/rwa/intents/{intentID}/submission:
     post:
       operationId: recordMintSubmission
@@ -972,8 +1714,503 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VaultIntent"
+  /v1/rwa/assets:
+    get:
+      operationId: listSourceVerifiedRWAAssets
+      description:
+        Persisted public records only, with current independently verified source status. Empty is not
+        substituted for unavailable persistence. Expired and revoked records remain visible with non-tradable status.
+      parameters:
+        - name: section
+          in: query
+          schema:
+            type: string
+            enum:
+              - whole
+              - fractional
+        - name: q
+          in: query
+          schema:
+            type: string
+            maxLength: 200
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum:
+              - title
+              - updated
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: chainId
+          in: query
+          schema:
+            type: integer
+            const: 560048
+        - name: collectionAddress
+          in: query
+          schema:
+            type: string
+            pattern: ^0x[0-9a-fA-F]{40}$
+        - name: tokenId
+          in: query
+          schema:
+            type: string
+            pattern: ^(0|[1-9][0-9]{0,77})$
+        - name: fractionTokenAddress
+          in: query
+          schema:
+            type: string
+            pattern: ^0x[0-9a-fA-F]{40}$
+      responses:
+        "200":
+          description: Verified result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RWACatalogPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /v1/rwa/assets/{slug}:
+    get:
+      operationId: getSourceVerifiedRWAAsset
+      description: Returns the raw asset DTO. Exact-case Oracle identity is preserved; status is recomputed, no-store.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9-]{0,99}$
+      responses:
+        "200":
+          description: Verified result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RWACatalogAsset"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /v1/rwa/sources:
+    get:
+      operationId: listApprovedRWASources
+      description: Public source trust roots only; neither wallet role nor this endpoint can approve a source.
+      parameters: []
+      responses:
+        "200":
+          description: Verified result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - data
+                  - mode
+                  - signatureAlgorithm
+                  - schemaVersion
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApprovedRWASource"
+                  mode:
+                    type: string
+                    enum:
+                      - LIVE
+                      - TEST_ONLY
+                  signatureAlgorithm:
+                    type: string
+                  schemaVersion:
+                    type: integer
+                    const: 1
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /v1/rwa/source-revocations:
+    post:
+      operationId: recordSignedRWASourceRevocation
+      description:
+        Public signature-authenticated source endpoint. Permanent, replay-safe revocation, serialized atomically
+        with activation. No ArtFi role can manufacture the source signature. Application receipt does not itself submit
+        an on-chain revocation.
+      parameters: []
+      responses:
+        "200":
+          description: Verified result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - sourceId
+                  - evidenceId
+                  - status
+                properties:
+                  sourceId:
+                    type: string
+                    pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+                  evidenceId:
+                    type: string
+                    pattern: ^0x[0-9a-fA-F]{64}$
+                  status:
+                    type: string
+                    const: revoked
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RWASourceRevocation"
+  /v1/rwa/metadata-preparations:
+    post:
+      operationId: prepareUnsignedRWAMetadata
+      description:
+        "Operator-gated immutable image/metadata preparation for source review. Explicitly non-executable:
+        no mint function or contract arguments. Whole commercial ERC-8415 receipts continue through their external
+        Oracle integration."
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,128}$
+      responses:
+        "200":
+          description: Verified result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RWAMetadataPreparation"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RWAMetadataPreparationRequest"
+      security:
+        - OperatorBearer: []
+  /v1/user/rwa/catalog-drafts:
+    post:
+      operationId: userReviewRWACatalogDraft
+      description:
+        Unsigned public proposal and exact source-signing context. Ordinary authenticated users have the
+        same source-based publication path as admin convenience routes.
+      parameters: []
+      responses:
+        "200":
+          description: Verified result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RWACatalogDraft"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RWACatalogRecord"
+      security:
+        - WalletUserSession: []
+  /v1/user/rwa/assets/{slug}:
+    put:
+      operationId: userPublishSourceVerifiedRWA
+      description:
+        Source-signed public activation or metadata/validity renewal. Actor-scoped idempotency, optimistic
+        revision, atomic audit, immutable identity and unique model/token/underlying bindings. Source proof confers
+        authenticity; no discretionary ArtFi-admin approval cycle is required.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9-]{0,99}$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,128}$
+      responses:
+        "200":
+          description: Verified result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RWACatalogAsset"
+        "201":
+          description: New source-verified record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RWACatalogAsset"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RWACatalogMutation"
+      security:
+        - WalletUserSession: []
+  /v1/admin/rwa/catalog-drafts:
+    post:
+      operationId: adminReviewRWACatalogDraft
+      description:
+        Unsigned public proposal and exact source-signing context. Ordinary authenticated users have the
+        same source-based publication path as admin convenience routes.
+      parameters: []
+      responses:
+        "200":
+          description: Verified result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RWACatalogDraft"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RWACatalogRecord"
+      security:
+        - WalletUserSession: []
+  /v1/admin/rwa/assets/{slug}:
+    put:
+      operationId: adminPublishSourceVerifiedRWA
+      description:
+        Source-signed public activation or metadata/validity renewal. Actor-scoped idempotency, optimistic
+        revision, atomic audit, immutable identity and unique model/token/underlying bindings. Source proof confers
+        authenticity; no discretionary ArtFi-admin approval cycle is required.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9-]{0,99}$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{16,128}$
+      responses:
+        "200":
+          description: Verified result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RWACatalogAsset"
+        "201":
+          description: New source-verified record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RWACatalogAsset"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RWACatalogMutation"
+      security:
+        - WalletUserSession: []
+  /v1/rwa/underlying-status:
+    get:
+      operationId: checkCurrentRWAUnderlyingGrounding
+      description: No-store current approved-source correspondence check for an exact underlying, before new fraction issuance. Does not block owner exits or imply current registry holdership.
+      parameters:
+        - {
+            name: chainId,
+            in: query,
+            required: true,
+            schema: { type: integer, const: 560048 },
+          }
+        - {
+            name: collectionAddress,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" },
+          }
+        - {
+            name: tokenId,
+            in: query,
+            required: true,
+            schema: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" },
+          }
+      responses:
+        "200":
+          description: Exact underlying currently has active approved-source evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  [chainId, collectionAddress, tokenId, grounded, checkedAt]
+                properties:
+                  chainId: { type: integer, const: 560048 }
+                  collectionAddress: { type: string }
+                  tokenId: { type: string }
+                  grounded: { type: boolean, const: true }
+                  checkedAt: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
 components:
   securitySchemes:
+    OperatorBearer:
+      type: http
+      scheme: bearer
+      description: Server-only operator gateway credential; never browser-visible. Does not establish source authenticity.
     WalletAuthBridge:
       type: http
       scheme: bearer
@@ -996,6 +2233,953 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    ApprovedRWASource:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - kind
+        - publicKeyX
+        - publicKeyY
+        - mode
+        - registryBacked
+        - disabled
+      properties:
+        id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+        name:
+          type: string
+          minLength: 2
+          maxLength: 160
+        kind:
+          type: string
+          enum:
+            - registry
+            - warehouse
+            - custody
+            - certificate
+            - provenance
+        publicKeyX:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        publicKeyY:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        mode:
+          type: string
+          enum:
+            - LIVE
+            - TEST_ONLY
+        registryBacked:
+          type: boolean
+        disabled:
+          type: boolean
+    RWARegistryRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - reference
+        - version
+        - observedAt
+      properties:
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 512
+        version:
+          type: string
+          minLength: 1
+          maxLength: 128
+        observedAt:
+          type: integer
+          minimum: 1
+          description: Source registry observation, Unix seconds. This is a source claim, not a chain ownership assertion.
+    RWASourceEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - sourceId
+        - sourceAssetId
+        - evidenceId
+        - underlyingAssetId
+        - section
+        - mode
+        - sourceReference
+        - evidenceSha256
+        - rights
+        - validFrom
+        - validUntil
+        - contextHash
+        - signatureR
+        - signatureS
+      properties:
+        sourceId:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+        sourceAssetId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        evidenceId:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        underlyingAssetId:
+          type: string
+          minLength: 3
+          maxLength: 256
+        section:
+          type: string
+          enum:
+            - whole
+            - fractional
+        mode:
+          type: string
+          enum:
+            - LIVE
+            - TEST_ONLY
+        sourceReference:
+          type: string
+          minLength: 1
+          maxLength: 512
+        evidenceSha256:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        rights:
+          type: string
+          minLength: 20
+          maxLength: 4000
+        registryRecord:
+          $ref: "#/components/schemas/RWARegistryRecord"
+        validFrom:
+          type: integer
+          minimum: 1
+        validUntil:
+          type: integer
+          minimum: 1
+        contextHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        signatureR:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        signatureS:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+    RWAContractEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - sourceIdHash
+        - sourceAssetHash
+        - assetKey
+        - evidenceId
+        - claimHash
+        - validFrom
+        - validUntil
+        - modeHash
+        - sectionHash
+      properties:
+        sourceIdHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        sourceAssetHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        assetKey:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        evidenceId:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        claimHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        validFrom:
+          type: integer
+          minimum: 1
+        validUntil:
+          type: integer
+          minimum: 1
+        modeHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        sectionHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+    RWACatalogBinding:
+      type: object
+      additionalProperties: false
+      required:
+        - chainId
+        - collectionAddress
+        - tokenId
+        - underlyingAssetId
+      properties:
+        chainId:
+          type: integer
+          const: 560048
+        collectionAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        tokenId:
+          type: string
+          pattern: ^(0|[1-9][0-9]{0,77})$
+        assetId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        underlyingAssetId:
+          type: string
+          minLength: 3
+          maxLength: 256
+        fractionTokenAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        vaultAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        marketAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+    RWACatalogRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - slug
+        - title
+        - artist
+        - year
+        - medium
+        - location
+        - description
+        - section
+        - rights
+        - provenance
+        - binding
+      properties:
+        slug:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,99}$
+        title:
+          type: string
+          minLength: 2
+          maxLength: 120
+        artist:
+          type: string
+          minLength: 2
+          maxLength: 120
+        year:
+          type: integer
+          minimum: 1000
+        medium:
+          type: string
+          minLength: 2
+          maxLength: 160
+        location:
+          type: string
+          minLength: 2
+          maxLength: 160
+        description:
+          type: string
+          minLength: 20
+          maxLength: 2000
+        imageUrl:
+          type: string
+          maxLength: 512
+          description:
+            Optional public HTTPS image URL, or empty. No artwork preview or image prerequisite is created
+            by catalog activation.
+        section:
+          type: string
+          enum:
+            - whole
+            - fractional
+        rights:
+          type: string
+          minLength: 20
+          maxLength: 4000
+        provenance:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+            minLength: 3
+            maxLength: 512
+        binding:
+          $ref: "#/components/schemas/RWACatalogBinding"
+    RWAGrounding:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - mode
+        - sourceId
+        - sourceName
+        - sourceKind
+        - sourceReference
+        - sourceAssetId
+        - evidenceId
+        - evidenceSha256
+        - validFrom
+        - validUntil
+        - verifiedAt
+        - registryBacked
+      properties:
+        status:
+          type: string
+          enum:
+            - verified
+            - expired
+            - revoked
+            - source-unavailable
+            - not-yet-valid
+        mode:
+          type: string
+          enum:
+            - LIVE
+            - TEST_ONLY
+        sourceId:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+        sourceName:
+          type: string
+        sourceKind:
+          type: string
+        sourceReference:
+          type: string
+          minLength: 1
+          maxLength: 512
+        sourceAssetId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        evidenceId:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        evidenceSha256:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        verifiedAt:
+          type: string
+          format: date-time
+        registryBacked:
+          type: boolean
+        registryRecord:
+          $ref: "#/components/schemas/RWARegistryRecord"
+    RWACatalogAsset:
+      type: object
+      additionalProperties: false
+      required:
+        - slug
+        - title
+        - artist
+        - year
+        - medium
+        - location
+        - description
+        - imageUrl
+        - section
+        - rights
+        - provenance
+        - binding
+        - grounding
+        - revision
+        - createdAt
+        - updatedAt
+      properties:
+        slug:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,99}$
+        title:
+          type: string
+          minLength: 2
+          maxLength: 120
+        artist:
+          type: string
+          minLength: 2
+          maxLength: 120
+        year:
+          type: integer
+          minimum: 1000
+        medium:
+          type: string
+          minLength: 2
+          maxLength: 160
+        location:
+          type: string
+          minLength: 2
+          maxLength: 160
+        description:
+          type: string
+          minLength: 20
+          maxLength: 2000
+        imageUrl:
+          type: string
+          maxLength: 512
+          description:
+            Optional public HTTPS image URL, or empty. No artwork preview or image prerequisite is created
+            by catalog activation.
+        section:
+          type: string
+          enum:
+            - whole
+            - fractional
+        rights:
+          type: string
+          minLength: 20
+          maxLength: 4000
+        provenance:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+            minLength: 3
+            maxLength: 512
+        binding:
+          $ref: "#/components/schemas/RWACatalogBinding"
+        grounding:
+          $ref: "#/components/schemas/RWAGrounding"
+        revision:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    RWACatalogPage:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - total
+        - page
+        - pageSize
+        - hasMore
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/RWACatalogAsset"
+        total:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 100
+        hasMore:
+          type: boolean
+    RWACatalogMutation:
+      type: object
+      additionalProperties: false
+      required:
+        - revision
+        - asset
+        - evidence
+      properties:
+        revision:
+          type: integer
+          minimum: 0
+        asset:
+          $ref: "#/components/schemas/RWACatalogRecord"
+        evidence:
+          $ref: "#/components/schemas/RWASourceEvidence"
+    RWACatalogDraft:
+      type: object
+      additionalProperties: false
+      required:
+        - asset
+        - contextHash
+        - executable
+      properties:
+        asset:
+          $ref: "#/components/schemas/RWACatalogRecord"
+        contextHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        executable:
+          type: boolean
+          const: false
+        detail:
+          type: string
+    RWAMetadataPreparationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - uploadId
+        - recipient
+        - name
+        - artist
+        - year
+        - medium
+        - location
+        - description
+      properties:
+        uploadId:
+          type: string
+          pattern: ^[0-9a-f]{32}$
+        recipient:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        artist:
+          type: string
+          minLength: 2
+          maxLength: 120
+        year:
+          type: integer
+          minimum: 1000
+        medium:
+          type: string
+          minLength: 2
+          maxLength: 160
+        location:
+          type: string
+          minLength: 2
+          maxLength: 160
+        description:
+          type: string
+          minLength: 20
+          maxLength: 2000
+    RWAMetadataPreparation:
+      type: object
+      additionalProperties: false
+      required:
+        - requestId
+        - recipient
+        - registryAddress
+        - chainId
+        - metadataUri
+        - metadataSha256
+        - contextHash
+        - executable
+        - status
+      properties:
+        requestId:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        recipient:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        registryAddress:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        chainId:
+          type: integer
+          const: 560048
+        metadataUri:
+          type: string
+          format: uri
+        metadataSha256:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        contextHash:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        executable:
+          type: boolean
+          const: false
+        status:
+          type: string
+          const: awaiting-approved-source-evidence
+    RWASourceRevocation:
+      type: object
+      additionalProperties: false
+      required:
+        - sourceId
+        - evidenceId
+        - revokedAt
+        - reason
+        - mode
+        - signatureR
+        - signatureS
+      properties:
+        sourceId:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9_-]{0,63}$
+        evidenceId:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        revokedAt:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+        mode:
+          type: string
+          enum:
+            - LIVE
+            - TEST_ONLY
+        signatureR:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+        signatureS:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{64}$
+    ModerationCase:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - reporter
+        - target
+        - category
+        - details
+        - status
+        - decision
+        - decisionReason
+        - publicNotice
+        - revision
+        - appealStatus
+        - appealStatement
+        - appealResponse
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          pattern: ^[a-f0-9]{32}$
+        reporter:
+          type: string
+          pattern: ^0x[0-9a-f]{40}$
+        target:
+          type: string
+          minLength: 3
+          maxLength: 256
+        category:
+          type: string
+          enum:
+            - misleading_metadata
+            - inappropriate_content
+            - suspected_fraud
+            - other
+        details:
+          type: string
+          minLength: 10
+          maxLength: 4000
+        status:
+          type: string
+          enum:
+            - open
+            - reviewing
+            - resolved
+            - appealed
+        decision:
+          type: string
+          enum:
+            - none
+            - no_action
+            - content_warning
+        decisionReason:
+          type: string
+          minLength: 0
+          maxLength: 4000
+        publicNotice:
+          type: string
+          minLength: 0
+          maxLength: 500
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        appealStatus:
+          type: string
+          enum:
+            - none
+            - pending
+            - upheld
+            - rejected
+        appealStatement:
+          type: string
+          minLength: 0
+          maxLength: 4000
+        appealResponse:
+          type: string
+          minLength: 0
+          maxLength: 4000
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ModerationCasePage:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - page
+        - pageSize
+        - hasMore
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModerationCase"
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 100
+        hasMore:
+          type: boolean
+    ModerationReport:
+      type: object
+      additionalProperties: false
+      required:
+        - target
+        - category
+        - details
+      properties:
+        target:
+          type: string
+          minLength: 3
+          maxLength: 256
+        category:
+          type: string
+          enum:
+            - misleading_metadata
+            - inappropriate_content
+            - suspected_fraud
+            - other
+        details:
+          type: string
+          minLength: 10
+          maxLength: 4000
+    ModerationAppeal:
+      type: object
+      additionalProperties: false
+      required:
+        - revision
+        - statement
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        statement:
+          type: string
+          minLength: 10
+          maxLength: 4000
+    ModerationDecision:
+      type: object
+      additionalProperties: false
+      required:
+        - revision
+        - action
+        - reason
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        action:
+          type: string
+          enum:
+            - start_review
+            - resolve
+            - uphold_appeal
+            - reject_appeal
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 4000
+        decision:
+          type: string
+          enum:
+            - ""
+            - no_action
+            - content_warning
+        publicNotice:
+          type: string
+          minLength: 0
+          maxLength: 500
+    PlatformConfiguration:
+      type: object
+      additionalProperties: false
+      required:
+        - revision
+        - noticeEnabled
+        - noticeText
+        - updatedAt
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        noticeEnabled:
+          type: boolean
+        noticeText:
+          type: string
+          minLength: 0
+          maxLength: 500
+        updatedAt:
+          type: string
+          format: date-time
+    PlatformConfigurationUpdate:
+      type: object
+      additionalProperties: false
+      required:
+        - revision
+        - noticeEnabled
+        - noticeText
+        - reason
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        noticeEnabled:
+          type: boolean
+        noticeText:
+          type: string
+          minLength: 0
+          maxLength: 500
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 4000
+    ModerationNotice:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - target
+        - notice
+        - updatedAt
+      properties:
+        id:
+          type: string
+          pattern: ^[a-f0-9]{32}$
+        target:
+          type: string
+          minLength: 3
+          maxLength: 256
+        notice:
+          type: string
+          minLength: 10
+          maxLength: 500
+        updatedAt:
+          type: string
+          format: date-time
+    ModerationNoticePage:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - page
+        - pageSize
+        - hasMore
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModerationNotice"
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 100
+        hasMore:
+          type: boolean
+    AdministrationSession:
+      type: object
+      additionalProperties: false
+      required:
+        - address
+        - role
+        - scope
+      properties:
+        address:
+          type: string
+          pattern: ^0x[0-9a-f]{40}$
+        role:
+          const: content_moderator
+        scope:
+          type: string
+          minLength: 1
+          maxLength: 500
+    AdministrationAuditPage:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - nextCursor
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - occurredAt
+              - action
+              - resourceType
+              - requestId
+              - metadata
+            properties:
+              id:
+                type: string
+                pattern: ^[0-9]+$
+              occurredAt:
+                type: string
+                format: date-time
+              action:
+                type: string
+              resourceType:
+                type: string
+                enum:
+                  - moderation_case
+                  - platform_configuration
+              requestId:
+                type: string
+                minLength: 1
+                maxLength: 64
+              metadata:
+                type: object
+                additionalProperties: false
+                required:
+                  - actor
+                  - resourceId
+                  - previousRevision
+                  - snapshot
+                properties:
+                  actor:
+                    type: string
+                    pattern: ^0x[0-9a-f]{40}$
+                  resourceId:
+                    type: string
+                  previousRevision:
+                    type: integer
+                    minimum: 0
+                  snapshot: {}
+        nextCursor:
+          type: string
     WalletUserSession:
       type: object
       required:
@@ -1435,8 +3619,19 @@ components:
       type: object
       additionalProperties: false
       required:
-        [uploadId, recipient, name, artist, year, medium, location, description]
+        [
+          uploadId,
+          recipient,
+          name,
+          artist,
+          year,
+          medium,
+          location,
+          description,
+          evidence,
+        ]
       properties:
+        evidence: { $ref: "#/components/schemas/RWASourceEvidence" }
         uploadId: { type: string, pattern: "^[0-9a-f]{32}$" }
         recipient: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
         name: { type: string, minLength: 2, maxLength: 120 }
@@ -1449,6 +3644,8 @@ components:
       type: object
       required:
         [
+          sourceEvidence,
+          contractEvidence,
           intentId,
           requestId,
           recipient,
@@ -1462,6 +3659,8 @@ components:
           createdAt,
         ]
       properties:
+        sourceEvidence: { $ref: "#/components/schemas/RWASourceEvidence" }
+        contractEvidence: { $ref: "#/components/schemas/RWAContractEvidence" }
         intentId: { type: string, pattern: "^[0-9a-f]{32}$" }
         requestId: { type: string, pattern: "^0x[0-9a-f]{64}$" }
         recipient: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
@@ -1470,8 +3669,12 @@ components:
         metadataUri: { type: string, format: uri, pattern: "^https://" }
         metadataSha256: { type: string, pattern: "^0x[0-9a-f]{64}$" }
         contractFunction:
-          { type: string, const: "createAsset(bytes32,address,string,bytes32)" }
+          {
+            type: string,
+            const: "createAssetWithEvidence(bytes32,address,string,bytes32,(bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64,bytes32,bytes32),bytes32,bytes32)",
+          }
         contractArguments:
+          description: First four scalar arguments; append the verified contractEvidence tuple and sourceEvidence.signatureR/signatureS for the guarded call. Never call the permanently disabled legacy function.
           type: array
           minItems: 4
           maxItems: 4
@@ -1650,6 +3853,101 @@ components:
           type: array
           items: { type: string }
         description: { type: string }
+    PortfolioEvent:
+      type: object
+      required:
+        [
+          id,
+          transactionHash,
+          logIndex,
+          contractAddress,
+          eventName,
+          blockNumber,
+          status,
+          observedAt,
+        ]
+      properties:
+        id:
+          {
+            type: string,
+            description: Stable chain/transaction/log identity; status updates reuse it.,
+          }
+        transactionHash: { type: string }
+        logIndex: { type: integer, minimum: 0 }
+        contractAddress: { type: string }
+        eventName: { type: string }
+        blockNumber: { type: integer, minimum: 0 }
+        status: { type: string, enum: [pending, confirmed, removed] }
+        observedAt: { type: string, format: date-time }
+    PortfolioPerformance:
+      type: object
+      required:
+        [
+          status,
+          method,
+          scope,
+          items,
+          unmappedTradeCount,
+          pendingEventCount,
+          reasons,
+        ]
+      properties:
+        status:
+          {
+            type: string,
+            enum: [no_indexed_history, known_for_indexed_history, unknown],
+          }
+        method: { type: string, const: fifo }
+        scope: { type: string, const: confirmed_indexed_fraction_trades }
+        unmappedTradeCount: { type: integer, minimum: 0 }
+        pendingEventCount: { type: integer, minimum: 0 }
+        reasons:
+          type: array
+          items: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              [
+                assetToken,
+                paymentToken,
+                confirmedQuantity,
+                costBasis,
+                realizedPnl,
+                status,
+                buyCount,
+                sellCount,
+                reasons,
+              ]
+            properties:
+              assetToken: { type: string }
+              paymentToken:
+                {
+                  type: [string, "null"],
+                  description: Payment currency address. No conversion is performed.,
+                }
+              confirmedQuantity:
+                {
+                  type: [string, "null"],
+                  description: Exact unscaled confirmed indexed token quantity; null if invalid.,
+                }
+              costBasis:
+                {
+                  type: [string, "null"],
+                  description: Remaining FIFO basis in payment-token base units; null if incomplete.,
+                }
+              realizedPnl:
+                {
+                  type: [string, "null"],
+                  description: Signed exact payment-token base units; null if incomplete. Gas is excluded.,
+                }
+              status: { type: string, enum: [known, unknown] }
+              buyCount: { type: integer, minimum: 0 }
+              sellCount: { type: integer, minimum: 0 }
+              reasons:
+                type: array
+                items: { type: string }
     Portfolio:
       type: object
       required:
@@ -1661,6 +3959,7 @@ components:
           transactions,
           offers,
           notifications,
+          performance,
         ]
       properties:
         address: { type: string }
@@ -1674,17 +3973,34 @@ components:
             properties:
               assetToken: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
               symbol: { type: string, maxLength: 12 }
-              balance: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+              balance:
+                {
+                  type: string,
+                  pattern: "^-?(0|[1-9][0-9]*)$",
+                  description: Unscaled indexed transfer balance. A negative value indicates incomplete history.,
+                }
               updatedAt: { type: string, format: date-time }
         transactions:
           type: array
-          items: { type: object }
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/PortfolioEvent"
         offers:
           type: array
           items: { type: object }
         notifications:
           type: array
-          items: { type: object }
+          maxItems: 100
+          description: Direct wallet-participant events ordered by latest indexed update, including pending and removed events. No external delivery or subscription.
+          items:
+            allOf:
+              - $ref: "#/components/schemas/PortfolioEvent"
+              - type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        performance:
+          $ref: "#/components/schemas/PortfolioPerformance"
     ChainEventRequest:
       type: object
       additionalProperties: false

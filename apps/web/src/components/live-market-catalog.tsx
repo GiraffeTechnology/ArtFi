@@ -1,6 +1,8 @@
 "use client";
 
 import localFont from "next/font/local";
+import Link from "next/link";
+import { publicSetting } from "@/lib/public-runtime-config";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const recoveryFont = localFont({
@@ -17,7 +19,7 @@ import {
   venueLink,
 } from "@/lib/market-links";
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
 
 type MarketAsset = {
   source: string;
@@ -324,9 +326,10 @@ export function LiveMarketCatalog() {
                   </p>
                 )}
                 <p className="market-gate">
-                  Observed record only. This panel does not submit an order.
-                  Native NFT trading is not yet available in this build.
+                  Observed record only. This panel does not submit an order. Use
+                  the native NFT marketplace for configured collections.
                 </p>
+                <Link href="/nft">Open native NFT trading</Link>
               </div>
             </article>
           );

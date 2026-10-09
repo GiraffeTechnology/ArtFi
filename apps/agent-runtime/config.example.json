@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "mode": "TEST_ONLY_NO_REAL_VALUE",
+  "listen": { "host": "127.0.0.1", "port": 3202 },
+  "webOrigin": "http://127.0.0.1:3000",
+  "authentication": { "apiURL": "http://127.0.0.1:8080" },
+  "database": null,
+  "adapter": { "kind": "unavailable" },
+  "worker": { "intervalMs": 1000 }
+}

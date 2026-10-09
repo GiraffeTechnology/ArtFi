@@ -1,5 +1,7 @@
 "use client";
 
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -19,7 +21,7 @@ import {
 
 /** Read-only source history. Native order operations are a separate application workflow. */
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
 const pageSize = 25;
 
 export function MarketActivityHistory() {

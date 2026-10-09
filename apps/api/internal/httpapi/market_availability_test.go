@@ -9,7 +9,7 @@ import (
 
 func TestIndexedReadOnlyEndpointsRejectMissingPersistence(t *testing.T) {
 	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
-	for _, path := range []string{"/v1/market/assets", "/v1/market/activity", "/v1/nfts", "/v1/portfolio/0x2222222222222222222222222222222222222222"} {
+	for _, path := range []string{"/v1/market/assets", "/v1/market/activity", "/v1/nfts"} {
 		t.Run(path, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			newHandler(service).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))

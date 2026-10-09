@@ -1,5 +1,9 @@
 "use client";
 
+import { operatorErrorText } from "@/lib/operator-error";
+
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import {
   useEffect,
   useLayoutEffect,
@@ -14,7 +18,19 @@ import {
   parseUnits,
   zeroAddress,
   type Address,
+  type Hex,
 } from "viem";
+import {
+  encodeOperatorSafeSubmission,
+  type SafeSubmission,
+} from "@/lib/admin-safe";
+import {
+  assertSameSafeSubmission,
+  configuredAdminSafe,
+  operatorCallRoute,
+  vaultRoleDefaults,
+} from "@/lib/admin-safe-client";
+import { AdminSafeConsole } from "./admin-safe-console";
 import {
   useAccount,
   useChainId,
@@ -27,6 +43,7 @@ import {
   erc721VaultApprovalAbi,
   vaultFactoryAbi,
 } from "@/lib/contracts";
+import { requireCurrentUnderlying } from "@/lib/rwa-underlying";
 import { currentOperation } from "@/lib/current-operation";
 import { isDaoWalletRejection } from "@/lib/dao-action-state";
 import {
@@ -61,7 +78,7 @@ import {
 } from "@/lib/vault-continuation";
 import { supportedChain } from "@/lib/wagmi";
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
 type OperatorStatus =
   "checking" | "unauthenticated" | "verifying" | "authenticated";
 type Selection = { collectionAddress: string; tokenId: string };
@@ -114,6 +131,7 @@ function ConnectedDaoCreation({
   const [operatorStatus, setOperatorStatus] =
     useState<OperatorStatus>("checking");
   const [factoryAddress, setFactoryAddress] = useState<Address>();
+  const [safePrepared, setSafePrepared] = useState<SafeSubmission>();
   const [message, setMessage] = useState(
     "Create the Vault first. Exact-token approval, deposit and fractionalization remain separate wallet confirmations.",
   );
@@ -215,6 +233,7 @@ function ConnectedDaoCreation({
   }, [address, chainId]);
 
   function retireTerms() {
+    setSafePrepared(undefined);
     view.current.retire();
     view.current = currentOperation();
   }
@@ -571,7 +590,18 @@ function ConnectedDaoCreation({
     if (lease === undefined) return;
     const active = beginViewOperation();
     try {
-      const value = readConfiguration(formData, address);
+      const configuredSafe = configuredAdminSafe();
+      const creationAuthority = configuredSafe
+        ? await operatorCallRoute(
+            publicClient,
+            "vault",
+            factoryAddress,
+            address,
+            configuredSafe,
+          )
+        : address;
+      active.assertCurrent();
+      const value = readConfiguration(formData, address, creationAuthority);
       let saved: VaultSetup =
         data &&
         data.stage === "configure" &&
@@ -685,17 +715,34 @@ function ConnectedDaoCreation({
         }),
       ]);
       active.assertCurrent();
+      const safe = configuredAdminSafe();
+      const caller = safe
+        ? await operatorCallRoute(
+            publicClient,
+            "vault",
+            saved.factoryAddress,
+            address,
+            safe,
+          )
+        : address;
       const creator = await publicClient.readContract({
         abi: vaultFactoryAbi,
         address: saved.factoryAddress,
         functionName: "hasRole",
-        args: [role, address],
+        args: [role, caller],
       });
       assertWritable(active, saved, true);
       if (paused || !creator || !same(owner, address))
         throw new Error(
           "The current wallet must own this NFT and hold CREATOR_ROLE on an unpaused factory.",
         );
+      if (safe && same(caller, safe)) {
+        setSafePrepared(vaultSafeSubmission(saved));
+        setMessage(
+          "The exact VaultFactory creation call is ready for multisignature review. NFT approval, custody deposit and fraction issuance remain separate existing steps.",
+        );
+        return;
+      }
       session.awaitWallet(lease, "create");
       setMessage(
         "Confirm one VaultFactory createVault call. No ETH or NFT approval is included.",
@@ -727,7 +774,33 @@ function ConnectedDaoCreation({
       }
     } catch (error) {
       if (isDaoWalletRejection(error)) session.rejected(lease);
-      if (active.isCurrent()) session.fail(lease, error);
+      if (active.isCurrent())
+        session.fail(lease, new Error(operatorErrorText(error)));
+    } finally {
+      session.finish(lease);
+    }
+  }
+
+  async function recoverSafeVault(hash: Hex, submission: SafeSubmission) {
+    const saved = session.getSnapshot().record?.data;
+    if (!saved?.intent)
+      throw new Error(
+        "Return to the original Vault preparation to recover this creation.",
+      );
+    assertSameSafeSubmission(vaultSafeSubmission(saved), submission);
+    if (saved.stage !== "configure") return;
+    const lease = session.begin();
+    if (lease === undefined)
+      throw new Error("Finish the existing Vault operation before recovery.");
+    const active = beginViewOperation();
+    try {
+      session.awaitWallet(lease, "create");
+      session.broadcast(lease, hash);
+      await reconcile(lease, active);
+      await logCreation(lease, active);
+      setMessage(
+        "Vault creation through the safe is confirmed. Continue with exact-token approval and custody.",
+      );
     } finally {
       session.finish(lease);
     }
@@ -789,6 +862,16 @@ function ConnectedDaoCreation({
             "The Vault must hold this NFT, have no issued fractions, and authorize the current fractionalizer.",
           );
       }
+      if (step === "fractionalize") {
+        await requireCurrentUnderlying(
+          {
+            chainId: supportedChain.id,
+            collectionAddress: c.collectionAddress,
+            tokenId: c.tokenId,
+          },
+          active.assertCurrent,
+        );
+      }
       assertWritable(active, data);
       assertVaultParticipantsReady(sessionStorage, data, address);
       session.awaitWallet(lease, step);
@@ -829,7 +912,8 @@ function ConnectedDaoCreation({
         );
     } catch (error) {
       if (isDaoWalletRejection(error)) session.rejected(lease);
-      if (active.isCurrent()) session.fail(lease, error);
+      if (active.isCurrent())
+        session.fail(lease, new Error(operatorErrorText(error)));
     } finally {
       session.finish(lease);
     }
@@ -848,7 +932,8 @@ function ConnectedDaoCreation({
         await logCreation(lease, active);
       }
     } catch (error) {
-      if (active.isCurrent()) session.fail(lease, error);
+      if (active.isCurrent())
+        session.fail(lease, new Error(operatorErrorText(error)));
     } finally {
       session.finish(lease);
     }
@@ -929,7 +1014,8 @@ function ConnectedDaoCreation({
           : "Vault custody and this wallet's FRACTIONALIZER_ROLE were independently verified. Review the saved fraction terms before signing.",
       );
     } catch (error) {
-      if (active.isCurrent()) session.fail(lease, error);
+      if (active.isCurrent())
+        session.fail(lease, new Error(operatorErrorText(error)));
     } finally {
       session.finish(lease);
     }
@@ -981,7 +1067,11 @@ function ConnectedDaoCreation({
     );
 
   return (
-    <section className="dao-create" aria-labelledby="dao-create-title">
+    <section
+      className="dao-create"
+      aria-labelledby="dao-create-title"
+      data-no-translate
+    >
       <div className="section-heading">
         <p className="approved-eyebrow">Existing NFT → custody → fractions</p>
         <h2 id="dao-create-title">
@@ -1250,7 +1340,9 @@ function ConnectedDaoCreation({
                 ] as const
               ).map((name) => (
                 <label key={name}>
-                  {name.replace("Address", " role (blank = wallet)")}
+                  {name === "fractionalizerAddress"
+                    ? "fractionalizer role (blank = wallet)"
+                    : `${name.replace("Address", "")} role (blank = role-holding safe, otherwise wallet)`}
                   <input
                     name={name}
                     defaultValue={formConfiguration?.[name]}
@@ -1286,6 +1378,14 @@ function ConnectedDaoCreation({
               : stageLabel(stage)}
           </h3>
           <p>{message}</p>
+          {configuration ? (
+            <p>
+              Reviewed creation roles: admin {configuration.adminAddress};
+              pauser {configuration.pauserAddress}; fractionalizer{" "}
+              {configuration.fractionalizerAddress}. Recipient:{" "}
+              {configuration.recipient}.
+            </p>
+          ) : null}
           {snapshot.error ? <p role="alert">{snapshot.error}</p> : null}
           {snapshot.record?.pending ? (
             <>
@@ -1393,6 +1493,13 @@ function ConnectedDaoCreation({
           ) : null}
         </aside>
       </div>
+      <AdminSafeConsole
+        kind="vault"
+        target={factoryAddress}
+        prepared={safePrepared}
+        authenticated={operatorStatus === "authenticated"}
+        onExecuted={recoverSafeVault}
+      />
     </section>
   );
 }
@@ -1400,7 +1507,9 @@ function ConnectedDaoCreation({
 function readConfiguration(
   form: FormData,
   address: Address,
+  executionAuthority: Address = address,
 ): VaultConfiguration {
+  const defaults = vaultRoleDefaults(address, executionAuthority);
   const requiredAddress = (name: string, fallback?: Address) => {
     const candidate = String(form.get(name) || fallback || "").trim();
     if (!isAddress(candidate) || same(candidate, zeroAddress))
@@ -1428,13 +1537,16 @@ function readConfiguration(
     collectionAddress: requiredAddress("collectionAddress"),
     tokenId,
     vaultName: text("vaultName", 80),
-    adminAddress: requiredAddress("adminAddress", address),
-    pauserAddress: requiredAddress("pauserAddress", address),
-    fractionalizerAddress: requiredAddress("fractionalizerAddress", address),
+    adminAddress: requiredAddress("adminAddress", defaults.adminAddress),
+    pauserAddress: requiredAddress("pauserAddress", defaults.pauserAddress),
+    fractionalizerAddress: requiredAddress(
+      "fractionalizerAddress",
+      defaults.fractionalizerAddress,
+    ),
     tokenName: text("tokenName", 80),
     tokenSymbol: text("tokenSymbol", 12),
     tokenSupply: parseUnits(rawSupply, 18).toString(),
-    recipient: requiredAddress("recipient", address),
+    recipient: requiredAddress("recipient", defaults.recipient),
   };
 }
 function stageLabel(stage: VaultStage) {
@@ -1447,9 +1559,7 @@ function stageLabel(stage: VaultStage) {
   }[stage];
 }
 function errorMessage(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : "The Vault setup could not be completed.";
+  return operatorErrorText(error, "The Vault setup could not be completed.");
 }
 async function fetchJSON<T = unknown>(
   path: string,
@@ -1472,4 +1582,24 @@ async function fetchJSON<T = unknown>(
     throw Object.assign(new Error(detail), { status: response.status });
   }
   return (await response.json()) as T;
+}
+
+function vaultSafeSubmission(saved: VaultSetup) {
+  if (!saved.intent) throw new Error("The reviewed Vault intent is missing.");
+  const value = saved.configuration;
+  return encodeOperatorSafeSubmission({
+    requestId: saved.intent.requestId,
+    target: saved.factoryAddress,
+    abi: vaultFactoryAbi,
+    functionName: "createVault",
+    args: [
+      saved.intent.requestId,
+      value.vaultName,
+      value.collectionAddress,
+      BigInt(value.tokenId),
+      value.adminAddress,
+      value.pauserAddress,
+      value.fractionalizerAddress,
+    ],
+  });
 }

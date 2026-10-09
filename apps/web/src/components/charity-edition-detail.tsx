@@ -1,5 +1,7 @@
 "use client";
 
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { formatEther, isAddress, type Address, type Hex } from "viem";
@@ -55,8 +57,9 @@ function timestamp(value: number): string {
 }
 
 export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
-  const configuredAddress =
-    process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS;
+  const configuredAddress = publicSetting(
+    "NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS",
+  );
   const contractAddress = (
     isAddress(configuredAddress ?? "") ? configuredAddress : undefined
   ) as Address | undefined;
@@ -204,8 +207,9 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
           </section>
 
           <p className="charity-detail__settlement">
-            Native NFT trading is not yet available in this build. Primary
-            proceeds are designated for CCHS.
+            Use the native NFT marketplace for configured supported collections.
+            Hoodi charity editions are not represented as live OpenSea orders.
+            Primary proceeds are designated for CCHS.
           </p>
 
           <CharityVenueLink tokenId={edition.tokenId} />

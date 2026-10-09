@@ -60,7 +60,12 @@ test("a mirrored record retains attribution without an outbound trading link", a
   await expect(card).toContainText("0xcdcdcdcd…cdcdcd");
   await expect(card).toContainText("14 minutes ago");
 
-  await expect(card.locator("a")).toHaveCount(0);
+  await expect(
+    card.locator('a[href^="https://"], a[href^="http://"]'),
+  ).toHaveCount(0);
+  await expect(
+    card.getByRole("link", { name: "Open native NFT trading" }),
+  ).toHaveAttribute("href", "/nft");
   await card.getByText("Source reference", { exact: true }).click();
   await expect(card).toContainText(
     "https://opensea.io/assets/ethereum/0xabc/42",
@@ -78,7 +83,7 @@ test("the mirror states that execution completes on the venue", async ({
   await serveCatalog(page, "https://opensea.io/assets/ethereum/0xabc/42");
   await page.goto("/market/rwa");
   await expect(page.locator(".market-mirror-card").first()).toContainText(
-    "Native NFT trading is not yet available in this build",
+    "Use the native NFT marketplace for configured collections",
   );
   // Mirror-only means no trading control on this surface.
   await expect(
@@ -93,7 +98,12 @@ test("a record with no attributed link gets no link, not a constructed one", asy
   await page.goto("/market/rwa");
   const card = page.locator(".market-mirror-card").first();
   await expect(card).toContainText("No venue link was attributed");
-  await expect(card.locator("a")).toHaveCount(0);
+  await expect(
+    card.locator('a[href^="https://"], a[href^="http://"]'),
+  ).toHaveCount(0);
+  await expect(
+    card.getByRole("link", { name: "Open native NFT trading" }),
+  ).toHaveAttribute("href", "/nft");
 });
 
 test("an off-host or non-HTTPS link is refused at the page, not rendered", async ({
@@ -103,5 +113,10 @@ test("an off-host or non-HTTPS link is refused at the page, not rendered", async
   await page.goto("/market/rwa");
   const card = page.locator(".market-mirror-card").first();
   await expect(card).toContainText("No venue link was attributed");
-  await expect(card.locator("a")).toHaveCount(0);
+  await expect(
+    card.locator('a[href^="https://"], a[href^="http://"]'),
+  ).toHaveCount(0);
+  await expect(
+    card.getByRole("link", { name: "Open native NFT trading" }),
+  ).toHaveAttribute("href", "/nft");
 });

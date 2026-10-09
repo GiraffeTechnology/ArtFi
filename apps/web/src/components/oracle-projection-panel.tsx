@@ -156,10 +156,11 @@ async function loadProjection(
   slug: string,
   instant: string,
   signal: AbortSignal,
+  sourceCatalog = false,
 ): Promise<ProjectionReadResponse> {
   try {
     const response = await fetch(
-      `/api/assets/${encodeURIComponent(slug)}/projection?instant=${encodeURIComponent(instant)}`,
+      `/api/${sourceCatalog ? "rwa/assets" : "assets"}/${encodeURIComponent(slug)}/projection?instant=${encodeURIComponent(instant)}`,
       { cache: "no-store", signal },
     );
     const result = projectionReadResponseSchema.safeParse(
@@ -175,17 +176,29 @@ async function loadProjection(
 }
 
 /** Reads Oracle's application API only; never requests a wallet or a write. */
-export function OracleProjectionPanel({ slug }: { slug: string }) {
+export function OracleProjectionPanel({
+  slug,
+  sourceCatalog = false,
+}: {
+  slug: string;
+  sourceCatalog?: boolean;
+}) {
   const [instant, setInstant] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [invalid, setInvalid] = useState(false);
   const query = useQuery({
-    queryKey: ["whole-artwork-projection", slug, instant],
+    queryKey: [
+      "whole-artwork-projection",
+      sourceCatalog ? "source" : "sample",
+      slug,
+      instant,
+    ],
     queryFn: ({ signal }) =>
       loadProjection(
         slug,
         instant ?? Math.floor(Date.now() / 1000).toString(),
         signal,
+        sourceCatalog,
       ),
     retry: false,
     staleTime: 0,

@@ -135,3 +135,58 @@ describe("portfolio wallet context and retry", () => {
     expect(update).not.toHaveBeenCalled();
   });
 });
+
+describe("portfolio performance evidence validation", () => {
+  const performance = {
+    status: "known_for_indexed_history",
+    method: "fifo",
+    scope: "confirmed_indexed_fraction_trades",
+    unmappedTradeCount: 0,
+    pendingEventCount: 0,
+    reasons: [],
+    items: [
+      {
+        assetToken: address,
+        paymentToken: other,
+        confirmedQuantity: "2",
+        costBasis: "4",
+        realizedPnl: "-1",
+        status: "known",
+        buyCount: 1,
+        sellCount: 1,
+        reasons: [],
+      },
+    ],
+  };
+  it("keeps exact integer strings for valid performance", async () => {
+    const update = vi.fn();
+    const value = { ...records(), performance };
+    await load(vi.fn().mockResolvedValue(Response.json(value)), update);
+    expect(update).toHaveBeenLastCalledWith({
+      loading: false,
+      portfolio: value,
+    });
+  });
+  it.each([
+    { ...performance, method: "estimate" },
+    { ...performance, items: [{ ...performance.items[0], realizedPnl: 0 }] },
+    { ...performance, items: [{ ...performance.items[0], costBasis: null }] },
+    {
+      ...performance,
+      items: [{ ...performance.items[0], realizedPnl: "1.5" }],
+    },
+    null,
+  ])("rejects malformed or falsely known performance", async (value) => {
+    const update = vi.fn();
+    await load(
+      vi
+        .fn()
+        .mockResolvedValue(Response.json({ ...records(), performance: value })),
+      update,
+    );
+    expect(update).toHaveBeenLastCalledWith({
+      loading: false,
+      error: expect.any(String),
+    });
+  });
+});

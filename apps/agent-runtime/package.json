@@ -1,0 +1,21 @@
+{
+  "name": "@giraffetechnology/artfi-agent-runtime",
+  "version": "0.1.0-test-only",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "node --check src/server.mjs",
+    "start": "node src/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:mysql": "node --test --test-concurrency=1 test/mysql.integration.mjs test/action-mysql.integration.mjs test/http-mysql.integration.mjs",
+    "lint": "node scripts/check-syntax.mjs",
+    "typecheck": "node scripts/check-syntax.mjs"
+  },
+  "dependencies": {
+    "ethers": "6.17.0",
+    "mysql2": "3.24.4"
+  }
+}

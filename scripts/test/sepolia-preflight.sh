@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$repo_root/scripts/lib/require-sin-public-chain.sh"
+source "$repo_root/scripts/lib/require-rwa-source-config.sh"
 
 required=(
   ARTFI_RPC_URL

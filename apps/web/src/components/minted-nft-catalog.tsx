@@ -1,8 +1,10 @@
 "use client";
 
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import { useCallback, useEffect, useState } from "react";
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
 
 type MintedNFT = {
   standard: "ERC-721" | "ERC-1155";

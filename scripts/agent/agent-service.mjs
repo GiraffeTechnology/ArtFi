@@ -221,6 +221,20 @@ export function createAgentService({
     return { ...proof, transactionHash: normalizedHash };
   }
   return Object.freeze({
+    async getHistory(session, operationId, page = {}) {
+      const wallet = identity(session);
+      await owned(operationId, wallet);
+      if (typeof store.listEvents !== "function")
+        fail("AUDIT_DEPENDENCY_UNAVAILABLE");
+      const events = await store.listEvents(operationId, page);
+      recheck(session, wallet);
+      return {
+        id: operationId,
+        mode,
+        events,
+        nextAfter: events.at(-1)?.id ?? page.after ?? "0",
+      };
+    },
     async prepareIntent(session, input) {
       const wallet = identity(session),
         requested = structuredClone(input);

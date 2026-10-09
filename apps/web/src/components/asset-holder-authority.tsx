@@ -168,10 +168,11 @@ function OracleFacts({ projection }: { projection: OracleProjection }) {
 async function loadOracle(
   slug: string,
   signal: AbortSignal,
+  sourceCatalog = false,
 ): Promise<OracleReadResponse> {
   try {
     const response = await fetch(
-      `/api/assets/${encodeURIComponent(slug)}/oracle`,
+      `/api/${sourceCatalog ? "rwa/assets" : "assets"}/${encodeURIComponent(slug)}/oracle`,
       {
         cache: "no-store",
         signal,
@@ -190,13 +191,19 @@ async function loadOracle(
 export function AssetHolderAuthority({
   slug,
   className,
+  sourceCatalog = false,
 }: {
   slug: string;
   className?: string;
+  sourceCatalog?: boolean;
 }) {
   const query = useQuery({
-    queryKey: ["whole-artwork-oracle", slug],
-    queryFn: ({ signal }) => loadOracle(slug, signal),
+    queryKey: [
+      "whole-artwork-oracle",
+      sourceCatalog ? "source" : "sample",
+      slug,
+    ],
+    queryFn: ({ signal }) => loadOracle(slug, signal, sourceCatalog),
     retry: false,
     staleTime: 0,
     refetchOnWindowFocus: false,
@@ -294,7 +301,11 @@ export function AssetHolderAuthority({
           </p>
         )}
       </section>
-      <OracleProjectionPanel key={slug} slug={slug} />
+      <OracleProjectionPanel
+        key={`${sourceCatalog}:${slug}`}
+        slug={slug}
+        sourceCatalog={sourceCatalog}
+      />
       <p className="market-gate">
         Where the registry and the chain disagree, ArtFi reports the divergence.
         It never resolves one by asserting its own projection.

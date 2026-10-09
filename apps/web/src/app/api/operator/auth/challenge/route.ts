@@ -17,6 +17,9 @@ export async function POST(request: Request) {
     );
     const response = NextResponse.json({
       address: challenge.address,
+      chainId: challenge.chainId,
+      registryAddress: challenge.registryAddress,
+      safeAddress: challenge.safeAddress,
       message: challenge.message,
       expiresAt: new Date(challenge.expiresAt).toISOString(),
     });

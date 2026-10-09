@@ -362,3 +362,18 @@ describe("Oracle-owned temporal projection consumption", () => {
     expect((await result.json()).ok).toBe(true);
   });
 });
+
+it("uses a signed catalog token binding independently of sample-page configuration", async () => {
+  vi.stubEnv("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS", "");
+  const result = await readWholeArtworkProjection("new-source-record", "1500", {
+    chainId: 560048,
+    collectionAddress: projectionSourceFixture.contract,
+    tokenId: "2",
+  });
+  expect(result.ok).toBe(true);
+  expect(
+    fetchMock.mock.calls.every(([url]) =>
+      String(url).includes("/projection/2"),
+    ),
+  ).toBe(true);
+});

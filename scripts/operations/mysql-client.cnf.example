@@ -1,0 +1,11 @@
+# Copy outside source/public directories, set mode 0600, and fill privately.
+# These placeholders are not working credentials. Do not put secrets in argv,
+# environment variables, screenshots, CI artifacts, source or public storage.
+[client]
+host=OPERATOR_PROVISIONED_PRIVATE_DATABASE_HOST
+port=ALLOCATED_MYSQL_PORT
+user=OPERATOR_PROVISIONED_BACKUP_OR_RESTORE_ACCOUNT
+password=FILL_PRIVATELY
+protocol=TCP
+ssl-mode=VERIFY_IDENTITY
+ssl-ca=/OPERATOR_PROVISIONED/tls/ca.pem

@@ -9,14 +9,19 @@ import {
 } from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 
 /// @title ArtFi RWA NFT
-/// @notice Sepolia-first ERC-721 representation of an approved real-world-asset record.
-/// @dev Metadata validation and idempotency live in RWARegistry. This contract deliberately
+/// @notice Source-authenticated ERC-721 representation for a fractional underlying asset.
+/// @dev Source evidence, metadata validation and idempotency live in the sealed RWARegistry. This contract deliberately
 ///      has no upgrade or arbitrary metadata mutation path in Stage 2.
 contract ArtFiRWA is ERC721URIStorage, AccessControl, Pausable {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     error ZeroAddress();
+    error MintRegistryRequired();
+    error MintRegistryAlreadyBound();
+    address public immutable mintInitializer;
+    address public mintRegistry;
+    event MintRegistryBound(address indexed registry);
 
     uint256 private _nextTokenId = 1;
 
@@ -31,9 +36,25 @@ contract ArtFiRWA is ERC721URIStorage, AccessControl, Pausable {
             revert ZeroAddress();
         }
 
+        mintInitializer = admin;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(MINTER_ROLE, minter);
         _grantRole(PAUSER_ROLE, pauser);
+    }
+
+    /// @notice Irreversibly seal issuance to the source-verifying registry during deployment.
+    /// Subsequent administrator MINTER_ROLE grants cannot bypass this boundary.
+    function bindMintRegistry(address registry) external {
+        if (msg.sender != mintInitializer || registry.code.length == 0) {
+            revert MintRegistryRequired();
+        }
+        if (mintRegistry != address(0)) revert MintRegistryAlreadyBound();
+        (bool ok, bytes memory result) = registry.staticcall(abi.encodeWithSignature("nft()"));
+        if (!ok || result.length != 32 || abi.decode(result, (address)) != address(this)) {
+            revert MintRegistryRequired();
+        }
+        mintRegistry = registry;
+        emit MintRegistryBound(registry);
     }
 
     function safeMint(address recipient, string calldata metadataURI)
@@ -42,6 +63,9 @@ contract ArtFiRWA is ERC721URIStorage, AccessControl, Pausable {
         whenNotPaused
         returns (uint256 tokenId)
     {
+        if (mintRegistry == address(0) || msg.sender != mintRegistry) {
+            revert MintRegistryRequired();
+        }
         if (recipient == address(0)) revert ZeroAddress();
 
         tokenId = _nextTokenId++;

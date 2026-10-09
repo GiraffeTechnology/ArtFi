@@ -1,3 +1,4 @@
+import { publicSetting } from "@/lib/public-runtime-config";
 import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -12,19 +13,26 @@ import {
   type Hex,
 } from "viem";
 import { hoodi } from "viem/chains";
+import { artFiAdminSafeAbi } from "./contracts";
 
 export const operatorChallengeCookie = "artfi_operator_challenge";
 export const operatorSessionCookie = "artfi_operator_session";
 export const operatorCookiePath = "/api/operator";
 
-type Challenge = {
+type OperatorBinding = {
+  chainId: number;
+  registryAddress: Address;
+  safeAddress?: Address;
+};
+
+type Challenge = OperatorBinding & {
   type: "challenge";
   address: Address;
   message: string;
   expiresAt: number;
 };
 
-export type OperatorSession = {
+export type OperatorSession = OperatorBinding & {
   type: "session";
   address: Address;
   expiresAt: number;
@@ -89,7 +97,8 @@ function decode<T extends Challenge | OperatorSession>(
       decoded.type !== type ||
       !isAddress(decoded.address) ||
       !Number.isSafeInteger(decoded.expiresAt) ||
-      decoded.expiresAt <= Date.now()
+      decoded.expiresAt <= Date.now() ||
+      !bindingMatches(decoded)
     ) {
       return undefined;
     }
@@ -103,6 +112,7 @@ export function createOperatorChallenge(address: string, origin: string) {
   if (!isAddress(address))
     throw new Error("A valid wallet address is required.");
   const canonicalAddress = address.toLowerCase() as Address;
+  const binding = deploymentBinding();
   const expiresAt = Date.now() + 5 * 60_000;
   const issuedAt = new Date().toISOString();
   const expirationTime = new Date(expiresAt).toISOString();
@@ -115,12 +125,15 @@ Verify an ArtCCH:ArtFi administrator wallet. This signature creates no transacti
 
 URI: ${authority.origin}/create/rwa
 Version: 1
-Chain ID: ${hoodi.id}
+Chain ID: ${binding.chainId}
+Registry: ${binding.registryAddress}
+Administration Safe: ${binding.safeAddress ?? "not configured (direct role)"}
 Nonce: ${nonce}
 Issued At: ${issuedAt}
 Expiration Time: ${expirationTime}`;
   const challenge: Challenge = {
     type: "challenge",
+    ...binding,
     address: canonicalAddress,
     message,
     expiresAt,
@@ -135,6 +148,7 @@ export function readOperatorChallenge(token: string | undefined) {
 export function createOperatorSession(address: Address) {
   const session: OperatorSession = {
     type: "session",
+    ...deploymentBinding(),
     address: address.toLowerCase() as Address,
     expiresAt: Date.now() + 10 * 60_000,
   };
@@ -153,7 +167,7 @@ function publicClient() {
   }
   const rpcURL =
     process.env.ARTFI_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_HOODI_RPC_URL?.trim();
+    publicSetting("NEXT_PUBLIC_HOODI_RPC_URL")?.trim();
   if (!rpcURL) throw new Error("Operator chain verification is unavailable.");
   return createPublicClient({ chain: hoodi, transport: http(rpcURL) });
 }
@@ -165,30 +179,83 @@ function registryAddress() {
   return value;
 }
 
-export async function verifyOperatorWallet(
+function deploymentBinding(): OperatorBinding {
+  const registry = registryAddress().toLowerCase() as Address;
+  const rawSafe = process.env.ARTFI_ADMIN_SAFE_ADDRESS?.trim();
+  const publicSafe = publicSetting(
+    "NEXT_PUBLIC_ARTFI_ADMIN_SAFE_ADDRESS",
+  )?.trim();
+  if (
+    (rawSafe || publicSafe) &&
+    rawSafe?.toLowerCase() !== publicSafe?.toLowerCase()
+  )
+    throw new Error(
+      "Server and public administration safe configuration must match.",
+    );
+  if (rawSafe && (!isAddress(rawSafe) || /^0x0{40}$/i.test(rawSafe)))
+    throw new Error("The reviewed administration safe is unavailable.");
+  return {
+    chainId: hoodi.id,
+    registryAddress: registry,
+    ...(rawSafe ? { safeAddress: rawSafe.toLowerCase() as Address } : {}),
+  };
+}
+
+function bindingMatches(value: OperatorBinding) {
+  const current = deploymentBinding();
+  return (
+    value.chainId === current.chainId &&
+    value.registryAddress === current.registryAddress &&
+    value.safeAddress === current.safeAddress
+  );
+}
+
+async function hasRegistrarAuthority(
   address: Address,
-  message: string,
-  signature: Hex,
+  binding: OperatorBinding,
 ) {
   const client = publicClient();
-  const valid = await client.verifyMessage({ address, message, signature });
-  if (!valid) return false;
+  if ((await client.getChainId()) !== binding.chainId)
+    throw new Error(
+      "Operator RPC chain does not match the reviewed deployment.",
+    );
+  if (binding.safeAddress) {
+    const safeHoldsRole = await client.readContract({
+      address: binding.registryAddress,
+      abi: hasRoleAbi,
+      functionName: "hasRole",
+      args: [registrarRole, binding.safeAddress],
+    });
+    if (safeHoldsRole)
+      return client.readContract({
+        address: binding.safeAddress,
+        abi: artFiAdminSafeAbi,
+        functionName: "isOwner",
+        args: [address],
+      });
+  }
   return client.readContract({
-    address: registryAddress(),
+    address: binding.registryAddress,
     abi: hasRoleAbi,
     functionName: "hasRole",
     args: [registrarRole, address],
   });
 }
 
-export async function sessionStillAuthorized(session: OperatorSession) {
+export async function verifyOperatorWallet(
+  address: Address,
+  message: string,
+  signature: Hex,
+) {
   const client = publicClient();
-  return client.readContract({
-    address: registryAddress(),
-    abi: hasRoleAbi,
-    functionName: "hasRole",
-    args: [registrarRole, session.address],
-  });
+  if (!(await client.verifyMessage({ address, message, signature })))
+    return false;
+  return hasRegistrarAuthority(address, deploymentBinding());
+}
+
+export async function sessionStillAuthorized(session: OperatorSession) {
+  if (!bindingMatches(session)) return false;
+  return hasRegistrarAuthority(session.address, session);
 }
 
 export function configuredOrigin(requestOrigin: string) {

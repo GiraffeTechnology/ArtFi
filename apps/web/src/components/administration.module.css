@@ -1,0 +1,135 @@
+.workspace {
+  display: grid;
+  gap: 1.4rem;
+  margin-block: 1.5rem;
+}
+.panel {
+  border: 1px solid var(--border, #d6d6d6);
+  border-radius: 12px;
+  padding: 1.25rem;
+  background: var(--surface, #fff);
+  min-width: 0;
+}
+.columns {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+  gap: 1.25rem;
+}
+.form {
+  display: grid;
+  gap: 1rem;
+}
+.form label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+}
+.form input:not([type="checkbox"]),
+.form textarea,
+.form select,
+.filters select {
+  width: 100%;
+  border: 1px solid #b8b8b8;
+  padding: 0.65rem;
+  border-radius: 6px;
+  font: inherit;
+  background: white;
+  color: #191919;
+}
+.form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.form input[type="checkbox"] {
+  margin-right: 0.6rem;
+}
+.form label.check {
+  display: block;
+}
+.actions,
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+.list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+.list button {
+  text-align: left;
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+}
+.list button[aria-pressed="true"] {
+  border: 2px solid #226a52;
+  background: #f1f8f4;
+}
+.list strong,
+.list span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.muted {
+  color: #565656;
+  font-size: 0.9rem;
+}
+.status {
+  padding: 0.8rem 1rem;
+  background: #f4f4f0;
+  border-left: 3px solid #697867;
+  overflow-wrap: anywhere;
+}
+.warning {
+  padding: 1rem;
+  border: 1px solid #b69a4c;
+  background: #fffbec;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.detail {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.record {
+  border-block-start: 1px solid #ddd;
+  padding-block: 1rem;
+}
+.record pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.notice {
+  padding: 0.8rem max(1rem, calc((100vw - 1280px) / 2));
+  background: #fff4ce;
+  color: #30280f;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.notice a {
+  text-decoration: underline;
+  margin-left: 1rem;
+}
+@media (max-width: 720px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+  .panel {
+    padding: 1rem;
+  }
+}
