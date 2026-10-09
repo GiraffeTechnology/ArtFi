@@ -1,5 +1,7 @@
 "use client";
 
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import { useCallback, useEffect, useState } from "react";
 import { isAddress, type Address } from "viem";
 import { usePublicClient } from "wagmi";
@@ -35,7 +37,7 @@ import { supportedChain } from "@/lib/wagmi";
  * outcomes only — "the API", not where it is.
  */
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
 
 type Row = {
   id: string;
@@ -46,8 +48,9 @@ type Row = {
 
 export function OperationsStatus() {
   const publicClient = usePublicClient({ chainId: supportedChain.id });
-  const configuredAddress =
-    process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS;
+  const configuredAddress = publicSetting(
+    "NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS",
+  );
   const editionsAddress = (
     isAddress(configuredAddress ?? "") ? configuredAddress : undefined
   ) as Address | undefined;

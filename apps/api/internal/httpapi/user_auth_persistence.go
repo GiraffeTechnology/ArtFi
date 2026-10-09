@@ -172,7 +172,7 @@ func (service *userAuthService) rotateRefresh(ctx context.Context, token string)
 		return nil, err
 	}
 	now := service.now().UTC().Truncate(time.Second)
-	if session.revoked || session.ExpiresAt <= now.UnixMilli() || session.origin != service.origin || session.ChainID != hoodiChainID {
+	if session.revoked || session.ExpiresAt <= now.UnixMilli() || session.origin != service.origin || !userAuthChainEnabled(session.ChainID) {
 		return nil, errUserUnauthorized
 	}
 	var consumedAt sql.NullTime
@@ -238,7 +238,7 @@ func (service *userAuthService) revokeUserSession(ctx context.Context, accessSes
 	if err != nil {
 		return err
 	}
-	if session.origin != service.origin || session.ChainID != hoodiChainID {
+	if session.origin != service.origin || !userAuthChainEnabled(session.ChainID) {
 		return errUserUnauthorized
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE wallet_user_sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE session_id = ?`, service.now().UTC(), sessionID); err != nil {

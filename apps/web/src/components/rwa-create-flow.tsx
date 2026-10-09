@@ -1,5 +1,9 @@
 "use client";
 
+import { operatorErrorText } from "@/lib/operator-error";
+
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import {
   useEffect,
   useLayoutEffect,
@@ -8,7 +12,17 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { type Address, type Hex } from "viem";
+import { isAddress, type Address, type Hex } from "viem";
+import {
+  encodeOperatorSafeSubmission,
+  type SafeSubmission,
+} from "@/lib/admin-safe";
+import {
+  assertSameSafeSubmission,
+  configuredAdminSafe,
+  operatorCallRoute,
+} from "@/lib/admin-safe-client";
+import { AdminSafeConsole } from "./admin-safe-console";
 import {
   useAccount,
   useChainId,
@@ -16,6 +30,14 @@ import {
   useSignMessage,
   useWriteContract,
 } from "wagmi";
+import {
+  assertMintPreparation,
+  assertSourceBoundMint,
+  contractEvidenceArguments,
+  isRWASourceEvidence,
+  type RWASourceEvidence,
+  type RWAMetadataPreparation,
+} from "@/lib/rwa-source-evidence";
 import { rwaRegistryAbi } from "@/lib/contracts";
 import { currentOperation } from "@/lib/current-operation";
 import { isDaoWalletRejection } from "@/lib/dao-action-state";
@@ -42,6 +64,7 @@ type FlowStatus =
   | "hashing"
   | "uploading"
   | "preparing"
+  | "awaiting-source"
   | "awaiting-wallet"
   | "confirming"
   | "confirmed"
@@ -61,12 +84,15 @@ const labels: Record<FlowStatus, string> = {
   hashing: "Verifying file digest",
   uploading: "Uploading immutable image",
   preparing: "Preparing metadata commitment",
+  "awaiting-source": "Approved-source evidence required",
   "awaiting-wallet": "Waiting for wallet confirmation",
   confirming: "Waiting for Hoodi confirmation",
   confirmed: "Mint confirmed on Hoodi",
   error: "Action needs attention",
 };
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
+
+class SourceReviewPending extends Error {}
 
 export function RwaCreateFlow() {
   const { address, isConnected } = useAccount();
@@ -119,8 +145,17 @@ function RwaCreateForm() {
   const [logging, setLogging] = useState(false);
   const [newMint, setNewMint] = useState(false);
   const [logMessage, setLogMessage] = useState("");
+  const [sourceInput, setSourceEvidenceText] = useState<string>();
+  const [draftChanged, setDraftChanged] = useState(false);
+  const [safePrepared, setSafePrepared] = useState<SafeSubmission>();
+  const [safeTarget, setSafeTarget] = useState<Address>();
   const data = snapshot.record?.data;
   const pending = snapshot.record?.pending;
+  const sourceEvidenceText =
+    sourceInput ??
+    (data?.intent?.sourceEvidence
+      ? JSON.stringify(data.intent.sourceEvidence, null, 2)
+      : "");
   const mintedAsset = data?.minted;
   const transactionHash = pending?.hash ?? data?.hash;
   const status: FlowStatus = mintedAsset
@@ -179,6 +214,27 @@ function RwaCreateForm() {
     };
   }, [address, chainId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (publicSetting("NEXT_PUBLIC_ARTFI_ADMIN_SAFE_ADDRESS")) {
+      void deployment()
+        .then((config) => {
+          if (
+            !cancelled &&
+            config.chainId === supportedChain.id &&
+            isAddress(config.registryAddress)
+          )
+            setSafeTarget(config.registryAddress);
+        })
+        .catch(() => {
+          /* The safe console remains unavailable without the deployment target. */
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const authorized =
     isConnected &&
     chainId === supportedChain.id &&
@@ -197,8 +253,8 @@ function RwaCreateForm() {
       : operatorStatus === "checking"
         ? "Checking the current administrator-wallet session."
         : !authorized
-          ? "Verify that this wallet currently holds REGISTRAR_ROLE on the reviewed registry contract."
-          : "REGISTRAR_ROLE is verified on Hoodi. The browser never receives the operator API credential.";
+          ? "Verify this registrar wallet or an owner of the configured registrar safe."
+          : "Registrar authority is verified on Hoodi. Safe ownership does not grant the wallet the target role.";
 
   function operation() {
     active.current?.retire();
@@ -326,12 +382,21 @@ function RwaCreateForm() {
       confirmedHash = receipt.transactionHash;
       blockNumber = receipt.blockNumber;
     }
+    const executionAuthority = saved.executionAuthority ?? saved.wallet;
+    if (
+      executionAuthority.toLowerCase() !== saved.wallet.toLowerCase() &&
+      executionAuthority.toLowerCase() !== configuredAdminSafe()?.toLowerCase()
+    )
+      throw new Error(
+        "The saved mint execution authority no longer matches the configured safe.",
+      );
     const minted = await recoverMintedAsset(
       publicClient,
       saved.intent,
       saved.wallet,
       op.assertCurrent,
       blockNumber,
+      executionAuthority,
     );
     op.assertCurrent();
     session.resolved(lease, { ...saved, hash: confirmedHash, minted });
@@ -355,7 +420,7 @@ function RwaCreateForm() {
     }
   }
 
-  async function submit(formData: FormData) {
+  async function submit(formData: FormData, metadataOnly = false) {
     if (!address || !canSubmit || !publicClient) return;
     const lease = session.begin();
     if (lease === undefined) return;
@@ -383,6 +448,23 @@ function RwaCreateForm() {
         location: String(formData.get("location") ?? ""),
         description: String(formData.get("description") ?? ""),
       };
+      const sourceText = String(formData.get("sourceEvidence") ?? "").trim();
+      let sourceEvidence: RWASourceEvidence | undefined;
+      if (sourceText && !metadataOnly) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(sourceText);
+        } catch {
+          throw new Error(
+            "Import the approved source's evidence as a valid JSON object.",
+          );
+        }
+        if (!isRWASourceEvidence(parsed))
+          throw new Error(
+            "The source evidence envelope is incomplete or malformed.",
+          );
+        sourceEvidence = parsed;
+      }
       saved = await prepareMint({
         previous: session.getSnapshot().record?.data,
         draft,
@@ -424,6 +506,27 @@ function RwaCreateForm() {
         prepare: async (value) => {
           const config = await deployment();
           op.assertCurrent();
+          if (metadataOnly || !sourceEvidence) {
+            const preparation = await fetchJSON<RWAMetadataPreparation>(
+              "/api/operator/v1/rwa/metadata-preparations",
+              {
+                method: "POST",
+                headers: { "Idempotency-Key": value.idempotencyKey },
+                body: JSON.stringify({
+                  uploadId: value.uploadId,
+                  recipient: address,
+                  ...value.draft,
+                }),
+              },
+            );
+            op.assertCurrent();
+            assertMintPreparation(preparation, address, config.registryAddress);
+            session.save(lease, { ...value, metadataPreparation: preparation });
+            setSourceEvidenceText("");
+            throw new SourceReviewPending(
+              "The metadata commitment is ready for an approved source to review. Import that source's signed correspondence evidence below before minting. No wallet transaction was requested.",
+            );
+          }
           const intent = await fetchJSON<MintIntent>(
             "/api/operator/v1/rwa/intents",
             {
@@ -433,6 +536,7 @@ function RwaCreateForm() {
                 uploadId: value.uploadId,
                 recipient: address,
                 ...value.draft,
+                evidence: sourceEvidence,
               }),
             },
           );
@@ -442,8 +546,27 @@ function RwaCreateForm() {
         },
       });
       op.assertCurrent();
+      setDraftChanged(false);
       const config = await deployment();
       op.assertCurrent();
+      assertMintIntent(saved.intent, address, config);
+      if (
+        sourceEvidence &&
+        JSON.stringify(sourceEvidence) !==
+          JSON.stringify(saved.intent.sourceEvidence)
+      ) {
+        const renewed = await fetchJSON<MintIntent>(
+          `/api/operator/v1/rwa/intents/${saved.intent.intentId}/evidence`,
+          {
+            method: "POST",
+            body: JSON.stringify({ evidence: sourceEvidence }),
+          },
+        );
+        op.assertCurrent();
+        assertMintIntent(renewed, address, config, saved.intent);
+        saved = { ...saved, intent: renewed };
+        session.save(lease, saved);
+      }
       assertMintIntent(saved.intent, address, config);
       const intent = await fetchJSON<MintIntent>(
         `/api/operator/v1/rwa/intents/${saved.intent.intentId}`,
@@ -451,28 +574,75 @@ function RwaCreateForm() {
       );
       op.assertCurrent();
       assertMintIntent(intent, address, config, saved.intent);
-      session.awaitWallet(lease, "mint");
       if (intent.transactionHash) {
+        session.awaitWallet(lease, "mint");
         session.broadcast(lease, intent.transactionHash);
         await confirm(lease, saved, intent.transactionHash, op);
         return;
       }
-      setStatus("awaiting-wallet");
-      setMessage(
-        `Confirm one call to ${shortAddress(intent.registryAddress)}. No ETH value or approval is requested.`,
-      );
+      assertSourceBoundMint(intent);
+      const evidenceArgs = contractEvidenceArguments(intent.contractEvidence);
+      const safe = configuredAdminSafe();
+      const caller = safe
+        ? await operatorCallRoute(
+            publicClient,
+            "rwa",
+            intent.registryAddress,
+            address,
+            safe,
+          )
+        : address;
       op.assertCurrent();
-      walletRequested = true;
-      const hash = await writeContractAsync({
+      await publicClient.simulateContract({
         abi: rwaRegistryAbi,
         address: intent.registryAddress,
-        chainId: supportedChain.id,
-        functionName: "createAsset",
+        account: caller,
+        functionName: "createAssetWithEvidence",
         args: [
           intent.requestId,
           intent.recipient,
           intent.metadataUri,
           intent.metadataSha256,
+          evidenceArgs,
+          intent.sourceEvidence.signatureR,
+          intent.sourceEvidence.signatureS,
+        ],
+      });
+      op.assertCurrent();
+      if (safe && caller.toLowerCase() === safe.toLowerCase()) {
+        saved = { ...saved, executionAuthority: safe };
+        session.save(lease, saved);
+        setSafeTarget(intent.registryAddress);
+        setSafePrepared(mintSafeSubmission(intent));
+        setStatus("preparing");
+        setMessage(
+          "The exact zero-value RWA call is ready in the multisignature console. Review it before submitting a proposal. Source evidence must remain valid at execution.",
+        );
+        return;
+      }
+      saved = { ...saved, executionAuthority: address };
+      session.save(lease, saved);
+      setSafePrepared(undefined);
+      setStatus("awaiting-wallet");
+      setMessage(
+        `Confirm one call to ${shortAddress(intent.registryAddress)}. No ETH value or approval is requested.`,
+      );
+      op.assertCurrent();
+      session.awaitWallet(lease, "mint");
+      walletRequested = true;
+      const hash = await writeContractAsync({
+        abi: rwaRegistryAbi,
+        address: intent.registryAddress,
+        chainId: supportedChain.id,
+        functionName: "createAssetWithEvidence",
+        args: [
+          intent.requestId,
+          intent.recipient,
+          intent.metadataUri,
+          intent.metadataSha256,
+          evidenceArgs,
+          intent.sourceEvidence.signatureR,
+          intent.sourceEvidence.signatureS,
         ],
       });
       // A late wallet result is still the original operation's public evidence.
@@ -486,6 +656,13 @@ function RwaCreateForm() {
       );
       await confirm(lease, saved, hash, op);
     } catch (error) {
+      if (error instanceof SourceReviewPending) {
+        if (op.isCurrent()) {
+          setStatus("awaiting-source");
+          setMessage(error.message);
+        }
+        return;
+      }
       if (walletRequested && isDaoWalletRejection(error))
         session.rejected(lease);
       if (op.isCurrent()) {
@@ -494,14 +671,40 @@ function RwaCreateForm() {
             ...saved,
             lastFailedHash:
               session.getSnapshot().record?.pending?.hash ?? saved.hash,
-            intent: undefined,
             hash: undefined,
-            idempotencyKey: crypto.randomUUID(),
+            loggedHash: undefined,
           });
-        session.fail(lease, error);
+        session.fail(lease, new Error(operatorErrorText(error)));
         setStatus("error");
         setMessage(errorText(error));
       }
+    } finally {
+      session.finish(lease);
+    }
+  }
+
+  async function recoverSafeMint(hash: Hex, submission: SafeSubmission) {
+    const saved = session.getSnapshot().record?.data;
+    if (!saved?.intent)
+      throw new Error(
+        "Return to the original mint preparation to recover this asset.",
+      );
+    assertSameSafeSubmission(mintSafeSubmission(saved.intent), submission);
+    const lease = session.begin();
+    if (lease === undefined)
+      throw new Error("Finish the existing mint operation before recovery.");
+    const op = operation();
+    try {
+      const safe = configuredAdminSafe();
+      if (!safe)
+        throw new Error(
+          "The original safe configuration is required to recover this mint.",
+        );
+      const recovered = { ...saved, executionAuthority: safe };
+      session.save(lease, recovered);
+      session.awaitWallet(lease, "mint");
+      session.broadcast(lease, hash);
+      await confirm(lease, recovered, hash, op);
     } finally {
       session.finish(lease);
     }
@@ -543,11 +746,10 @@ function RwaCreateForm() {
             ...saved,
             lastFailedHash:
               session.getSnapshot().record?.pending?.hash ?? saved.hash,
-            intent: undefined,
             hash: undefined,
-            idempotencyKey: crypto.randomUUID(),
+            loggedHash: undefined,
           });
-        session.fail(lease, error);
+        session.fail(lease, new Error(operatorErrorText(error)));
         setStatus("error");
         setMessage(errorText(error));
       }
@@ -583,11 +785,21 @@ function RwaCreateForm() {
   }
 
   return (
-    <div className="create-layout">
+    <div
+      className="create-layout"
+      data-no-translate="true"
+      data-translation-skip="true"
+    >
       <form
         className="rwa-form"
         ref={form}
-        onChange={() => {
+        onChange={(event) => {
+          if (
+            (event.target as unknown as HTMLInputElement).name !==
+            "sourceEvidence"
+          )
+            setDraftChanged(true);
+          setSafePrepared(undefined);
           active.current?.retire();
           setLogging(false);
           setDiscoveryPending(false);
@@ -681,6 +893,57 @@ function RwaCreateForm() {
             </label>
           </div>
         </fieldset>
+        <fieldset disabled={!canSubmit}>
+          <legend>Approved-source correspondence</legend>
+          <p>
+            A registrar role and an image hash do not establish real-asset
+            authenticity. An approved custody, warehouse, registry, certificate
+            or provenance source must sign this exact underlying-asset mint
+            commitment.
+          </p>
+          <button
+            type="button"
+            className="secondary"
+            disabled={
+              !canSubmit || Boolean(data?.intent && !draftChanged && !newMint)
+            }
+            onClick={() => {
+              if (form.current?.reportValidity())
+                void submit(new FormData(form.current), true);
+            }}
+          >
+            Prepare source-review commitment
+          </button>
+          {data?.metadataPreparation ? (
+            <label>
+              Unsigned source-review commitment
+              <textarea
+                readOnly
+                rows={9}
+                value={JSON.stringify(data.metadataPreparation, null, 2)}
+              />
+            </label>
+          ) : null}
+          <label>
+            Signed source evidence (JSON)
+            <textarea
+              name="sourceEvidence"
+              rows={9}
+              maxLength={16000}
+              value={sourceEvidenceText}
+              onChange={(event) => setSourceEvidenceText(event.target.value)}
+              readOnly={Boolean(pending || (mintedAsset && !newMint))}
+              spellCheck={false}
+            />
+          </label>
+          <small>
+            For an expired prepared request, import renewed evidence signed for
+            the same commitment, source, asset and rights. Retrying preserves
+            the original issuance request. The source’s private signing key
+            never enters ArtFi. TEST_ONLY means TESTNET · NO REAL-WORLD VALUE ·
+            NO LEGAL EFFECT.
+          </small>
+        </fieldset>
         <div className="form-boundary" role="note">
           <strong>Authorization boundary</strong>
           <span>{boundary}</span>
@@ -717,6 +980,9 @@ function RwaCreateForm() {
             disabled={!authorized || snapshot.busy}
             onClick={() => {
               setNewMint(true);
+              setSourceEvidenceText("");
+              setDraftChanged(true);
+              setSafePrepared(undefined);
               setMessage(
                 "Review a new asset record before asking the wallet to mint again.",
               );
@@ -776,7 +1042,8 @@ function RwaCreateForm() {
         <ol>
           <li>Hash and validate upload</li>
           <li>Persist immutable metadata</li>
-          <li>Review wallet call</li>
+          <li>Verify approved-source correspondence</li>
+          <li>Review source-guarded wallet call</li>
           <li>Confirm on Hoodi</li>
         </ol>
         {transactionHash ? (
@@ -837,14 +1104,19 @@ function RwaCreateForm() {
           </>
         ) : null}
       </aside>
+      <AdminSafeConsole
+        kind="rwa"
+        target={safeTarget}
+        prepared={safePrepared}
+        authenticated={authorized}
+        onExecuted={recoverSafeMint}
+      />
     </div>
   );
 }
 
 function errorText(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : "The mint flow could not be completed.";
+  return operatorErrorText(error, "The mint flow could not be completed.");
 }
 
 async function fetchJSON<T>(path: string, init: RequestInit): Promise<T> {
@@ -866,4 +1138,23 @@ async function responseError(response: Response) {
 }
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function mintSafeSubmission(intent: MintIntent) {
+  assertSourceBoundMint(intent);
+  return encodeOperatorSafeSubmission({
+    requestId: intent.requestId,
+    target: intent.registryAddress,
+    abi: rwaRegistryAbi,
+    functionName: "createAssetWithEvidence",
+    args: [
+      intent.requestId,
+      intent.recipient,
+      intent.metadataUri,
+      intent.metadataSha256,
+      contractEvidenceArguments(intent.contractEvidence),
+      intent.sourceEvidence.signatureR,
+      intent.sourceEvidence.signatureS,
+    ],
+  });
 }

@@ -1,6 +1,35 @@
 export const rwaRegistryAbi = [
   {
     type: "function",
+    name: "createAssetWithEvidence",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "requestId", type: "bytes32" },
+      { name: "recipient", type: "address" },
+      { name: "metadataURI", type: "string" },
+      { name: "metadataHash", type: "bytes32" },
+      {
+        name: "evidence",
+        type: "tuple",
+        components: [
+          { name: "sourceIdHash", type: "bytes32" },
+          { name: "sourceAssetHash", type: "bytes32" },
+          { name: "assetKey", type: "bytes32" },
+          { name: "evidenceId", type: "bytes32" },
+          { name: "claimHash", type: "bytes32" },
+          { name: "validFrom", type: "uint64" },
+          { name: "validUntil", type: "uint64" },
+          { name: "modeHash", type: "bytes32" },
+          { name: "sectionHash", type: "bytes32" },
+        ],
+      },
+      { name: "signatureR", type: "bytes32" },
+      { name: "signatureS", type: "bytes32" },
+    ],
+    outputs: [{ name: "tokenId", type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "createAsset",
     stateMutability: "nonpayable",
     inputs: [
@@ -275,6 +304,61 @@ export const artFiVaultAbi = [
 export const artFiAdminSafeAbi = [
   {
     type: "function",
+    name: "owners",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+  },
+  {
+    type: "function",
+    name: "transactionCount",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "confirmedBy",
+    stateMutability: "view",
+    inputs: [
+      { name: "transactionId", type: "uint256" },
+      { name: "owner", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "revoke",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "transactionId", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "event",
+    name: "TransactionSubmitted",
+    anonymous: false,
+    inputs: [
+      { name: "transactionId", type: "uint256", indexed: true },
+      { name: "requestId", type: "bytes32", indexed: true },
+      { name: "proposer", type: "address", indexed: true },
+      { name: "target", type: "address", indexed: false },
+      { name: "value", type: "uint256", indexed: false },
+      { name: "dataHash", type: "bytes32", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "TransactionExecuted",
+    anonymous: false,
+    inputs: [
+      { name: "transactionId", type: "uint256", indexed: true },
+      { name: "executor", type: "address", indexed: true },
+      { name: "returndataHash", type: "bytes32", indexed: false },
+    ],
+  },
+
+  {
+    type: "function",
     name: "isOwner",
     stateMutability: "view",
     inputs: [{ name: "account", type: "address" }],
@@ -351,6 +435,30 @@ export const artFiAdminSafeAbi = [
  * both suites assert the same fixed digest so a reorder fails a test rather than a fill.
  */
 export const wholeArtworkMarketAbi = [
+  {
+    type: "function",
+    name: "revokeIntent",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "intent",
+        type: "tuple",
+        components: [
+          { name: "seller", type: "address" },
+          { name: "collection", type: "address" },
+          { name: "tokenId", type: "uint256" },
+          { name: "paymentToken", type: "address" },
+          { name: "price", type: "uint256" },
+          { name: "buyer", type: "address" },
+          { name: "salt", type: "uint256" },
+          { name: "startsAt", type: "uint48" },
+          { name: "endsAt", type: "uint48" },
+          { name: "epoch", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
   {
     type: "function",
     name: "fillIntent",

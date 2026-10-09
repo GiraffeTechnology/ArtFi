@@ -5,8 +5,16 @@ import type { ReactNode } from "react";
 import "@rainbow-me/rainbowkit/styles.css";
 import "./globals.css";
 
+import {
+  publicRuntimeConfig,
+  publicRuntimeScript,
+} from "@/lib/public-runtime-config";
+
 import { Providers } from "@/components/providers";
 import { SiteHeader } from "@/components/site-header";
+import { PlatformNotice } from "@/components/platform-notice";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
@@ -22,9 +30,18 @@ export default function RootLayout({
 }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          id="artfi-public-config"
+          dangerouslySetInnerHTML={{
+            __html: publicRuntimeScript(publicRuntimeConfig()),
+          }}
+        />
+      </head>
       <body data-translation-root>
         <Providers>
           <SiteHeader />
+          <PlatformNotice />
           {children}
           <footer className="site-footer">
             <p>

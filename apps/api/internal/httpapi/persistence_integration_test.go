@@ -103,6 +103,7 @@ func TestMySQLPersistenceSurvivesServiceRestart(t *testing.T) {
 }
 
 func TestMySQLChainEventDedupeConflictAndReorg(t *testing.T) {
+	configurePortfolioTestAuth(t)
 	dsn := os.Getenv("ARTFI_INTEGRATION_MYSQL_DSN")
 	if dsn == "" {
 		t.Skip("ARTFI_INTEGRATION_MYSQL_DSN is not set")
@@ -137,7 +138,7 @@ func TestMySQLChainEventDedupeConflictAndReorg(t *testing.T) {
 	if _, err := db.Exec("DELETE FROM portfolio_deltas WHERE owner_address=?", emptyOwner); err != nil {
 		t.Fatal(err)
 	}
-	emptyPortfolio := requestWithHandler(t, handler, http.MethodGet, "/v1/portfolio/"+emptyOwner)
+	emptyPortfolio := authenticatedPortfolioRead(t, handler, db, emptyOwner)
 	var emptyPositions portfolioResponse
 	decode(t, emptyPortfolio, &emptyPositions)
 	if emptyPortfolio.Code != http.StatusOK || emptyPositions.Address != emptyOwner || len(emptyPositions.Positions) != 0 || len(emptyPositions.Transactions) != 0 {
@@ -169,7 +170,7 @@ func TestMySQLChainEventDedupeConflictAndReorg(t *testing.T) {
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create event: status=%d body=%s", created.Code, created.Body.String())
 	}
-	portfolio := requestWithHandler(t, handler, http.MethodGet, "/v1/portfolio/0x2222222222222222222222222222222222222222")
+	portfolio := authenticatedPortfolioRead(t, handler, db, "0x2222222222222222222222222222222222222222")
 	var projected portfolioResponse
 	decode(t, portfolio, &projected)
 	if len(projected.Positions) != 1 || projected.Positions[0].Balance != "7" {
@@ -223,7 +224,7 @@ func TestMySQLChainEventDedupeConflictAndReorg(t *testing.T) {
 	if removed.Code != http.StatusOK {
 		t.Fatalf("remove event: status=%d body=%s", removed.Code, removed.Body.String())
 	}
-	portfolio = requestWithHandler(t, handler, http.MethodGet, "/v1/portfolio/0x2222222222222222222222222222222222222222")
+	portfolio = authenticatedPortfolioRead(t, handler, db, "0x2222222222222222222222222222222222222222")
 	decode(t, portfolio, &projected)
 	if len(projected.Positions) != 0 {
 		t.Fatalf("removed transfer still projected: %+v", projected.Positions)
@@ -649,6 +650,7 @@ func cleanupPersistenceTables(t *testing.T, ctx context.Context, db *sql.DB) {
 		"DELETE FROM chain_events",
 		"DELETE FROM fractionalizations",
 		"DELETE FROM vaults",
+		"DELETE FROM rwa_mint_evidence",
 		"DELETE FROM rwa_mint_intents",
 		"DELETE FROM rwa_uploads",
 	} {

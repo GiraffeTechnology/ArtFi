@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { assertRwaTradingEvidence } from "@/lib/rwa-catalog";
 import type { Address, PublicClient } from "viem";
 import { currentOperation } from "@/lib/current-operation";
 import { useUserSession } from "@/components/user-session-provider";
@@ -28,6 +29,8 @@ import {
 
 /** Public immutable sale terms, with a separate seller-session publication action. */
 export function NativeOrderPanel({
+  catalogSlug,
+  catalogIdentity,
   kind,
   market,
   asset,
@@ -36,7 +39,12 @@ export function NativeOrderPanel({
   operationContext,
   onSelect,
   publicClient,
+  sellerAddress,
+  onAmend,
+  disabled = false,
 }: {
+  catalogSlug?: string;
+  catalogIdentity?: string;
   kind: NativeOrderKind;
   market: Address;
   asset: Address;
@@ -45,6 +53,9 @@ export function NativeOrderPanel({
   operationContext: string;
   onSelect: (authorization: string) => void;
   publicClient?: PublicClient;
+  sellerAddress?: Address;
+  onAmend?: (order: NativeOrder, remaining?: string) => void;
+  disabled?: boolean;
 }) {
   const { authenticated, revision } = useUserSession();
   const [orders, setOrders] = useState<NativeOrder[]>([]);
@@ -248,6 +259,17 @@ export function NativeOrderPanel({
       );
       await assertTradingSession(String(order.intent.seller), order.chainId);
       assertCurrent();
+      await assertRwaTradingEvidence({
+        section: kind === "whole" ? "whole" : "fractional",
+        chainId: order.chainId,
+        marketAddress: market,
+        ...(kind === "whole"
+          ? { collectionAddress: asset, tokenId: String(tokenId) }
+          : { fractionTokenAddress: asset }),
+        slug: catalogSlug,
+        identity: catalogIdentity,
+      });
+      assertCurrent();
       const response = await fetch("/api/orders", {
         method: "POST",
         credentials: "same-origin",
@@ -296,7 +318,7 @@ export function NativeOrderPanel({
           <button
             type="button"
             className="primary"
-            disabled={!authenticated || publishing}
+            disabled={!authenticated || publishing || disabled}
             onClick={publish}
           >
             {publishing ? "Publishing sale terms" : "Publish sale terms"}
@@ -375,10 +397,26 @@ export function NativeOrderPanel({
           <button
             type="button"
             className="secondary"
+            disabled={disabled}
             onClick={() => choose(order)}
           >
             Load order
           </button>
+          {onAmend &&
+            sellerAddress &&
+            String(order.intent.seller).toLowerCase() ===
+              sellerAddress.toLowerCase() && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={disabled || !authenticated}
+                onClick={() =>
+                  onAmend(order, states[order.intentHash]?.remaining)
+                }
+              >
+                Amend this order
+              </button>
+            )}
         </article>
       ))}
       {!loading && !detail && orders.length === 0 && (

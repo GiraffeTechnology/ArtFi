@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { NftMarket } from "@/components/nft-market";
 import { CharityEditionCatalog } from "@/components/charity-edition-catalog";
 import { CharityTestAssetMarkers } from "@/components/charity-test-asset-markers";
 
@@ -24,8 +25,8 @@ export default function NftPage() {
         </p>
       </header>
       <nav className="product-actions" aria-label="NFT actions">
-        <a className="primary" href="#nft-editions">
-          Browse NFT editions
+        <a className="primary" href="#native-nft-title">
+          Browse native NFT marketplace
         </a>
         <a
           className="secondary"
@@ -39,12 +40,7 @@ export default function NftPage() {
           View observed marketplace records
         </Link>
       </nav>
-      <p className="product-note" data-testid="nft-trading-availability">
-        Native OpenSea listing, buying, offers and cancellation are not yet
-        available in this build. Edition browsing and holder-access checks
-        remain available below. Observed marketplace records do not establish
-        that an NFT is currently available to buy.
-      </p>
+      <NftMarket />
 
       <section
         className="product-tools"

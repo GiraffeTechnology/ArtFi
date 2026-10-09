@@ -19,10 +19,11 @@ export async function GET(
       { status: 400, headers },
     );
   try {
-    await requireUserSession(address);
+    const { accessToken } = await requireUserSession(address);
     const response = await fetch(
       nativeOrderAPIURL(`/v1/portfolio/${address.toLowerCase()}`),
       {
+        headers: { Authorization: `Bearer ${accessToken}` },
         cache: "no-store",
         redirect: "error",
         signal: AbortSignal.timeout(5000),

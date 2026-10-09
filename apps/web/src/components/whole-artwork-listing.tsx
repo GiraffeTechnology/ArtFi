@@ -1,5 +1,8 @@
 "use client";
 
+import { assertRwaTradingEvidence } from "@/lib/rwa-catalog";
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import { reconcileCurrentView } from "@/lib/current-operation";
 
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -86,7 +89,7 @@ function configuredAddress(value: string | undefined): Address | undefined {
 
 function marketAddress(): Address | undefined {
   return configuredAddress(
-    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS,
+    publicSetting("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS"),
   );
 }
 
@@ -130,7 +133,14 @@ function decodeAuthorization(
 }
 
 export function WholeArtworkListing(
-  props: Readonly<{ slug?: string; collection?: string; tokenId?: string }>,
+  props: Readonly<{
+    slug?: string;
+    collection?: string;
+    tokenId?: string;
+    marketAddress?: string;
+    catalogSlug?: string;
+    catalogIdentity?: string;
+  }>,
 ) {
   const { address, chainId } = useAccount();
   const { revision, authenticated } = useUserSession();
@@ -146,7 +156,17 @@ function WholeArtworkListingScreen({
   slug,
   collection,
   tokenId,
-}: Readonly<{ slug?: string; collection?: string; tokenId?: string }>) {
+  marketAddress: boundMarket,
+  catalogSlug,
+  catalogIdentity,
+}: Readonly<{
+  slug?: string;
+  collection?: string;
+  tokenId?: string;
+  marketAddress?: string;
+  catalogSlug?: string;
+  catalogIdentity?: string;
+}>) {
   const { address, chainId, isConnected } = useAccount();
   const { authenticated, revision } = useUserSession();
   const { signTypedDataAsync } = useSignTypedData();
@@ -177,7 +197,10 @@ function WholeArtworkListingScreen({
   const [namedBuyer, setNamedBuyer] = useState("");
   const [durationHours, setDurationHours] = useState("24");
 
-  const market = marketAddress();
+  const market =
+    boundMarket === undefined
+      ? marketAddress()
+      : configuredAddress(boundMarket);
 
   /**
    * **The deployment artwork belongs to one route, not to every page that renders this.**
@@ -191,11 +214,12 @@ function WholeArtworkListingScreen({
    * names. Every other route stays inert and says why. Without a fallback of some kind the surface
    * could never be switched on at all — nothing passes a collection — so the fallback stays, bound.
    */
-  const configuredCollection =
-    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS;
+  const configuredCollection = publicSetting(
+    "NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS",
+  );
   const binding = assetDeploymentBinding(
     slug,
-    process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG,
+    publicSetting("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG"),
     configuredCollection,
   );
   const collectionAddress =
@@ -204,7 +228,7 @@ function WholeArtworkListingScreen({
   const configuredTokenId = (
     tokenId ??
     (binding.bound
-      ? process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID
+      ? publicSetting("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID")
       : undefined)
   )?.trim();
   // Told apart from "nothing is deployed at all", so the page can say which of the two it is.
@@ -212,6 +236,20 @@ function WholeArtworkListingScreen({
   const artworkId = /^[0-9]+$/.test(configuredTokenId ?? "")
     ? BigInt(configuredTokenId!)
     : undefined;
+
+  const grounding = useCallback(async () => {
+    if (!market || !collectionAddress || artworkId === undefined)
+      throw new Error("The artwork binding is unavailable.");
+    await assertRwaTradingEvidence({
+      section: "whole",
+      chainId: supportedChain.id,
+      marketAddress: market,
+      collectionAddress,
+      tokenId: String(artworkId),
+      slug: catalogSlug,
+      identity: catalogIdentity,
+    });
+  }, [market, collectionAddress, artworkId, catalogSlug, catalogIdentity]);
 
   const { data: holder, refetch: refetchHolder } = useReadContract({
     abi: wholeArtworkCollectionAbi,
@@ -396,6 +434,8 @@ function WholeArtworkListingScreen({
     let operation: ReturnType<typeof begin> | undefined;
     try {
       operation = begin();
+      await grounding();
+      operation.assertCurrent();
       setStage("awaiting-signature");
       if ((await publicClient.getChainId()) !== supportedChain.id)
         throw new Error("The market reader is on a different chain.");
@@ -418,6 +458,8 @@ function WholeArtworkListingScreen({
       const domain = { chainId: supportedChain.id, verifyingContract: market };
       // Throws on terms that would be refused, so the wallet is never asked to sign them.
       const hash = saleIntentHash(draft, domain, supportedChain.id);
+      await grounding();
+      operation.assertCurrent();
       const signature = await operation.authorize(() =>
         signTypedDataAsync({
           ...saleIntentTypedData(draft, domain),
@@ -440,6 +482,7 @@ function WholeArtworkListingScreen({
       actionPending.current = false;
     }
   }, [
+    grounding,
     pending,
     begin,
     address,
@@ -465,6 +508,8 @@ function WholeArtworkListingScreen({
     let operation: ReturnType<typeof begin> | undefined;
     try {
       operation = begin();
+      await grounding();
+      operation.assertCurrent();
       setStage("approving");
       await operation.write("approval", () =>
         writeContractAsync({
@@ -489,6 +534,7 @@ function WholeArtworkListingScreen({
       actionPending.current = false;
     }
   }, [
+    grounding,
     pending,
     begin,
     address,
@@ -498,6 +544,64 @@ function WholeArtworkListingScreen({
     collectionAddress,
     market,
     refetchApproval,
+    writeContractAsync,
+  ]);
+
+  const revokeOne = useCallback(async () => {
+    if (
+      !market ||
+      !visibleAuthorization ||
+      "error" in visibleAuthorization ||
+      !ownsAuthorization
+    )
+      return;
+    if (
+      !canTransact ||
+      !address ||
+      !publicClient ||
+      actionPending.current ||
+      pending
+    )
+      return;
+    const intent = visibleAuthorization.intent;
+    setDetail(undefined);
+    actionPending.current = true;
+    let operation: ReturnType<typeof begin> | undefined;
+    try {
+      operation = begin();
+      setStage("revoking");
+      await operation.write("withdrawal", () =>
+        writeContractAsync({
+          abi: wholeArtworkMarketAbi,
+          address: market,
+          functionName: "revokeIntent",
+          args: [intent],
+          chainId: supportedChain.id,
+          account: address,
+        }),
+      );
+      operation.assertCurrent();
+      setAuthorization(undefined);
+      setDigest(undefined);
+      setStage("idle");
+    } catch (error) {
+      if (operation && !operation.isCurrent()) return;
+      setDetail(
+        error instanceof Error ? error.message : "The withdrawal was not sent.",
+      );
+      setStage("error");
+    } finally {
+      actionPending.current = false;
+    }
+  }, [
+    market,
+    visibleAuthorization,
+    ownsAuthorization,
+    canTransact,
+    address,
+    publicClient,
+    pending,
+    begin,
     writeContractAsync,
   ]);
 
@@ -611,6 +715,8 @@ function WholeArtworkListingScreen({
           supportedChain.id,
         ),
       );
+      await grounding();
+      operation.assertCurrent();
       setStage("approving");
       await verifyWholeArtworkSale({
         client: publicClient,
@@ -632,15 +738,18 @@ function WholeArtworkListingScreen({
             chainId: supportedChain.id,
             account: address,
           }),
-        settle: () =>
-          writeContractAsync({
+        settle: async () => {
+          await grounding();
+          operation!.assertCurrent();
+          return writeContractAsync({
             abi: wholeArtworkMarketAbi,
             address: market,
             functionName: "fillIntent",
             args: [intent, signature],
             chainId: supportedChain.id,
             account: address,
-          }),
+          });
+        },
       });
       await refetchHolder();
       operation.assertCurrent();
@@ -655,6 +764,7 @@ function WholeArtworkListingScreen({
       actionPending.current = false;
     }
   }, [
+    grounding,
     pending,
     begin,
     address,
@@ -715,6 +825,8 @@ function WholeArtworkListingScreen({
       </p>
 
       <NativeOrderPanel
+        catalogSlug={catalogSlug}
+        catalogIdentity={catalogIdentity}
         kind="whole"
         market={market}
         asset={collectionAddress}
@@ -852,6 +964,16 @@ function WholeArtworkListingScreen({
               }
             >
               Sign the sale terms
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={revokeOne}
+              disabled={
+                !canTransact || busy || Boolean(pending) || !ownsAuthorization
+              }
+            >
+              Withdraw this authorization
             </button>
             <button
               type="button"

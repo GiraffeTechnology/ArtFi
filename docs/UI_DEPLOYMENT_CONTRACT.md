@@ -38,12 +38,14 @@ docker build -f apps/web/Dockerfile -t artfi-web:<commit> --build-arg ARTFI_BUIL
 docker build -f apps/api/Dockerfile -t artfi-api:<commit> apps/api
 ```
 
-Supply the existing public browser settings through the build arguments declared in
-`apps/web/Dockerfile`. Next.js embeds `NEXT_PUBLIC_*` values during the build; runtime
-environment changes cannot rewrite them. These settings include the API/RPC routes and the
+Supply the existing public browser settings through runtime environment variables. The public
+configuration bootstrap reads an explicit `NEXT_PUBLIC_*` allowlist for each request; the same
+artifact can run with different deployment settings without rebuilding. Existing Docker build
+arguments remain supported as image defaults. These settings include the API/RPC routes and the
 specific charity, whole-artwork, fractional and governance deployment addresses. Keep each
 market bound to its correct collection/token and catalogue route. Never put a credential in
-a public build argument.
+a public setting or build argument. The native package and commands are documented in
+`INSTALLATION.md`.
 
 The Web image is an unprivileged Next.js standalone runtime on container port `3000`.
 `ARTFI_BUILD_SHA` must be the full deployed commit SHA. The API image uses its existing

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import ts from "typescript";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 type HarnessPort = {
   onMessage: { addListener: (fn: (value: unknown) => void) => void };
@@ -33,6 +33,22 @@ type LifecycleHarness = {
 
 // Exercise the real page-provider/relay code against a synthetic service worker.
 // This does not claim installed-extension permission or production signer acceptance.
+async function openProviderContractPage(page: Page) {
+  // Keep a real same-origin document, but exclude the application's independent
+  // wallet-discovery requests from this strictly controlled dispatch contract.
+  // Application hydration remains covered by the core/session/browser suites.
+  await page.route("**/__test_only_provider_contract__", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: '<!doctype html><html lang="en"><head><title>TEST_ONLY provider contract</title></head><body><h1>TEST_ONLY provider contract</h1></body></html>',
+    }),
+  );
+  await page.goto("/__test_only_provider_contract__");
+  await expect(
+    page.getByRole("heading", { name: "TEST_ONLY provider contract" }),
+  ).toBeVisible();
+}
+
 function extensionScript(name: string) {
   return ts.transpile(
     readFileSync(
@@ -45,7 +61,7 @@ function extensionScript(name: string) {
 test("reinjecting the provider and bridge keeps one wallet identity and one dispatch", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openProviderContractPage(page);
   await page.evaluate(() => {
     const w = window as unknown as {
       announcements: {
@@ -140,7 +156,7 @@ test("reinjecting the provider and bridge keeps one wallet identity and one disp
 test("provider account events clear stale accounts on lock, unlock, revoke and reconnect", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openProviderContractPage(page);
   await page.evaluate(() => {
     const w = window as unknown as LifecycleHarness;
     w.accountEvents = [];

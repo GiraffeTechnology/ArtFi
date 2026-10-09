@@ -1,4 +1,11 @@
-import { encodeFunctionData, type Abi, type Address, type Hex } from "viem";
+import {
+  encodeAbiParameters,
+  keccak256,
+  encodeFunctionData,
+  type Abi,
+  type Address,
+  type Hex,
+} from "viem";
 
 import { artFiAdminSafeAbi } from "./contracts";
 
@@ -116,4 +123,32 @@ export function ownerCheck(safeAddress: Address, account: Address) {
     functionName: "isOwner",
     args: [account],
   } as const;
+}
+
+/** Keep the target's operation identity intact while binding a safe proposal to exact call bytes. */
+export function safeProposalRequestId(
+  operationId: Hex,
+  target: Address,
+  data: Hex,
+): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: "bytes32" }, { type: "address" }, { type: "bytes32" }],
+      [operationId, target, keccak256(data)],
+    ),
+  );
+}
+
+export function encodeOperatorSafeSubmission(
+  call: PrivilegedCall,
+): SafeSubmission {
+  const submission = encodeSafeSubmission(call);
+  return {
+    ...submission,
+    requestId: safeProposalRequestId(
+      call.requestId,
+      call.target,
+      submission.data,
+    ),
+  };
 }

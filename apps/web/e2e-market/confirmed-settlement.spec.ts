@@ -1,3 +1,4 @@
+import { isolatedSourceCatalog } from "./rwa-catalog-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import {
   decodeFunctionData,
@@ -8,6 +9,7 @@ import {
 } from "viem";
 import {
   nativeOrderFromAuthorization,
+  decodeNativeOrder,
   type NativeOrder,
 } from "../src/lib/native-order";
 import {
@@ -27,7 +29,11 @@ const blockHash = `0x${"33".repeat(32)}`;
 
 type Submitted = { to: string; data: `0x${string}` };
 async function fixture(page: Page, wallet = buyer) {
+  const sourceCatalog = await isolatedSourceCatalog(page);
   const state = {
+    sourceCatalog,
+    bookMode: false,
+    fractionFilled: {} as Record<string, bigint>,
     approve: "pending",
     fill: "pending",
     requests: [] as Submitted[],
@@ -163,6 +169,17 @@ async function fixture(page: Page, wallet = buyer) {
       await route.fulfill({ status: 201, json: order });
       return;
     }
+    if (url.pathname === "/api/orders/fraction-book") {
+      await route.fulfill({
+        json: {
+          data: state.orders.filter((order) => order.kind === "fraction"),
+          at: Number(url.searchParams.get("at")),
+          priority: "price-time-hash",
+          logHash: `0x${"44".repeat(32)}`,
+        },
+      });
+      return;
+    }
     if (url.pathname !== "/api/orders") {
       const order = state.orders.find(
         (item) => item.intentHash === url.pathname.split("/").at(-1),
@@ -256,8 +273,15 @@ async function fixture(page: Page, wallet = buyer) {
           [
             data.toLowerCase().endsWith(seller.slice(2).toLowerCase())
               ? 10n
-              : 0n,
+              : state.bookMode
+                ? 100000n
+                : 0n,
           ],
+        );
+      if (signature === "intentFilled(bytes32)")
+        return encodeAbiParameters(
+          [{ type: "uint256" }],
+          [state.fractionFilled[`0x${data.slice(10, 74)}`] ?? 0n],
         );
       if (signature === "allowance(address,address)")
         return encodeAbiParameters([{ type: "uint256" }], [10n]);
@@ -324,6 +348,26 @@ async function fixture(page: Page, wallet = buyer) {
       } else if (method === "eth_getTransactionReceipt") {
         const index = hashes.indexOf(String(params[0]));
         const outcome = index === 0 ? state.approve : state.fill;
+        if (outcome === "success" && state.requests[index]) {
+          try {
+            const call = decodeFunctionData({
+              abi: artFiFractionMarketAbi,
+              data: state.requests[index].data,
+            });
+            if (call.functionName === "revokeIntent") {
+              const original = state.orders.find(
+                (order) =>
+                  order.kind === "fraction" &&
+                  String(order.intent.salt) === String(call.args[0].salt),
+              );
+              if (original)
+                state.fractionFilled[original.intentHash] =
+                  call.args[0].maxAmount;
+            }
+          } catch {
+            /* A payment approval is a different ABI. */
+          }
+        }
         value =
           outcome === "pending"
             ? null
@@ -828,4 +872,165 @@ test("logout during approval retires fill and retains read-only transaction chec
   await expect(page.getByText("Settled on chain", { exact: true })).toHaveCount(
     0,
   );
+});
+
+test("fraction book previews price-time priority and settles only the reviewed partial quantity", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.bookMode = true;
+  state.approve = "success";
+  state.fill = "success";
+  const original = JSON.parse(authorization("fraction", "11"));
+  original.intent.unitPrice = "20";
+  original.intent.maxAmount = "4";
+  const cheap = nativeOrderFromAuthorization(
+    "fraction",
+    JSON.stringify(original),
+    "0x1000000000000000000000000000000000000003",
+  );
+  cheap.createdAt = "2026-10-01T00:00:01.000000Z";
+  const expensive = nativeOrder("fraction", "12");
+  expensive.createdAt = "2026-10-01T00:00:00.000000Z";
+  state.orders = [expensive, cheap];
+  await page.goto("/market/fractionals/blue-hour-archive");
+  await connect(page);
+  const book = page.getByRole("region", {
+    name: "Fraction price-time matching",
+  });
+  await book.getByLabel("Payment token", { exact: true }).fill(paymentToken);
+  await book.getByLabel("Fractions to buy", { exact: true }).fill("3");
+  await book.getByLabel("Maximum total payment, smallest units").fill("100");
+  await book
+    .getByRole("button", { name: "Preview price-time matches" })
+    .click();
+  await expect(
+    book.getByText("Matched: 3 / 3. Total payment: 60. Unfilled: 0."),
+  ).toBeVisible();
+  await expect(
+    book.getByText(`Intent: ${cheap.intentHash}`, { exact: false }),
+  ).toBeVisible();
+  expect(state.requests).toHaveLength(0);
+  await book.getByRole("button", { name: "Settle reviewed matches" }).click();
+  await expect(
+    book.getByText(
+      "1 fills confirmed. Bought 3 fractions for 60 payment units. Unfilled: 0.",
+    ),
+  ).toBeVisible({ timeout: 20000 });
+  expect(state.requests).toHaveLength(2);
+  const fill = decodeFunctionData({
+    abi: artFiFractionMarketAbi,
+    data: state.requests[1].data,
+  });
+  expect(fill.functionName).toBe("fillIntent");
+  if (fill.functionName === "fillIntent") {
+    expect(fill.args[2]).toBe(3n);
+    expect(fill.args[0].unitPrice).toBe(20n);
+    expect(fill.args[0].salt).toBe(11n);
+  }
+});
+
+test("fraction amendment retires old authority before signing a fresh replacement", async ({
+  page,
+}) => {
+  const state = await fixture(page, seller);
+  const original = nativeOrder("fraction", "19");
+  original.createdAt = "2026-10-01T00:00:00.000000Z";
+  state.orders = [original];
+  await page.goto("/market/fractionals/blue-hour-archive");
+  await connect(page);
+  await page
+    .getByRole("button", { name: "Amend this order", exact: true })
+    .click();
+  await page
+    .getByLabel("Price per fraction, in the payment token's smallest unit", {
+      exact: true,
+    })
+    .fill("42");
+  await page
+    .getByRole("button", { name: "Retire old order and sign replacement" })
+    .click();
+  await expect.poll(() => state.requests.length).toBe(1);
+  expect(state.signatures).toHaveLength(0);
+  expect(
+    decodeFunctionData({
+      abi: artFiFractionMarketAbi,
+      data: state.requests[0].data,
+    }).functionName,
+  ).toBe("revokeIntent");
+  state.approve = "success";
+  await expect.poll(() => state.signatures.length, { timeout: 20000 }).toBe(1);
+  expect(state.fractionFilled[original.intentHash]).toBe(10n);
+  await page
+    .getByRole("button", { name: "Publish sale terms", exact: true })
+    .click();
+  await expect.poll(() => state.publications.length).toBe(1);
+  const replacement = (state.publications[0] as { order: NativeOrder }).order;
+  expect(replacement.intentHash).not.toBe(original.intentHash);
+  const decoded = decodeNativeOrder(replacement);
+  expect(decoded.kind).toBe("fraction");
+  if (decoded.kind === "fraction") expect(decoded.intent.unitPrice).toBe(42n);
+  expect(state.requests).toHaveLength(1);
+});
+
+test("source-bound real catalog replaces sample identity and revocation blocks new authority", async ({
+  page,
+}) => {
+  const state = await fixture(page, seller);
+  await page.goto("/rwa/assets/test-whole-record");
+  await expect(
+    page.getByRole("heading", {
+      name: "TEST ONLY source-bound receipt",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("These figures are fixture data", { exact: true }),
+  ).toHaveCount(0);
+  await connect(page);
+  await page
+    .getByLabel("Price, in the payment token's smallest unit")
+    .fill("123");
+  await page.getByLabel("Payment token", { exact: true }).fill(paymentToken);
+  state.sourceCatalog.assets[0].grounding.status = "revoked";
+  await page
+    .getByRole("button", { name: "Sign the sale terms", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      /Current approved-source correspondence evidence is unavailable or inactive/,
+    ),
+  ).toBeVisible();
+  expect(state.signatures).toHaveLength(0);
+  expect(state.requests).toHaveLength(0);
+});
+
+test("source outage cannot freeze a holder's existing authorization revocation", async ({
+  page,
+}) => {
+  const state = await fixture(page, seller);
+  state.approve = "success";
+  await page.goto("/rwa/assets/test-whole-record");
+  await connect(page);
+  await page
+    .getByLabel("Price, in the payment token's smallest unit")
+    .fill("123");
+  await page.getByLabel("Payment token", { exact: true }).fill(paymentToken);
+  await page
+    .getByRole("button", { name: "Sign the sale terms", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Publish sale terms", exact: true }),
+  ).toBeVisible();
+  state.sourceCatalog.status = 503;
+  await page
+    .getByRole("button", { name: "Withdraw this authorization", exact: true })
+    .click();
+  await expect.poll(() => state.requests.length, { timeout: 10000 }).toBe(1);
+  expect(
+    decodeFunctionData({
+      abi: wholeArtworkMarketAbi,
+      data: state.requests[0].data,
+    }).functionName,
+  ).toBe("revokeIntent");
 });

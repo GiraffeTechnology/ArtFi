@@ -346,7 +346,15 @@ for (const kind of ["whole", "fraction"] as const) {
         )
         .fill("41");
     }
-    await page
+    const saleFields = page.locator(".field-grid").filter({
+      has: page.getByLabel(
+        kind === "whole"
+          ? "Price, in the payment token's smallest unit"
+          : "Price per fraction, in the payment token's smallest unit",
+        { exact: true },
+      ),
+    });
+    await saleFields
       .getByLabel("Payment token", { exact: true })
       .fill(fixture.paymentToken);
     await expect(visibleButton(page, "Sign the sale terms")).toBeEnabled();

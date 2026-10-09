@@ -6,6 +6,11 @@ import {
   type Hash,
   type PublicClient,
 } from "viem";
+import {
+  type RWASourceEvidence,
+  type RWAContractEvidence,
+  type RWAMetadataPreparation,
+} from "./rwa-source-evidence";
 import { rwaRegistryAbi } from "./contracts";
 
 export type MintDraft = {
@@ -17,6 +22,8 @@ export type MintDraft = {
   description: string;
 };
 export type MintIntent = {
+  sourceEvidence?: RWASourceEvidence;
+  contractEvidence?: RWAContractEvidence;
   intentId: string;
   requestId: Hash;
   recipient: Address;
@@ -34,12 +41,15 @@ export type MintedAsset = {
 };
 export type MintRecovery = {
   wallet: Address;
+  /** Actual on-chain caller, separately bound from the mint recipient. */
+  executionAuthority?: Address;
   chainId: number;
   draft: MintDraft;
   digest: string;
   idempotencyKey: string;
   uploadId?: string;
   intent?: MintIntent;
+  metadataPreparation?: RWAMetadataPreparation;
   hash?: Hash;
   lastFailedHash?: Hash;
   loggedHash?: Hash;
@@ -48,7 +58,9 @@ export type MintRecovery = {
 const hashPattern = /^0x[0-9a-fA-F]{64}$/;
 const identifier = /^[a-zA-Z0-9-]{1,128}$/;
 const nonzeroAddress = (value: unknown): value is Address =>
-  typeof value === "string" && isAddress(value) && !/^0x0{40}$/i.test(value);
+  typeof value === "string" &&
+  isAddress(value, { strict: false }) &&
+  !/^0x0{40}$/i.test(value);
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object";
 
@@ -79,6 +91,8 @@ export function isMintRecovery(value: unknown): value is MintRecovery {
   const draft = value.draft;
   return (
     nonzeroAddress(value.wallet) &&
+    (value.executionAuthority === undefined ||
+      nonzeroAddress(value.executionAuthority)) &&
     value.chainId === 560048 &&
     ["name", "artist", "medium", "location", "description"].every(
       (key) =>
@@ -180,6 +194,7 @@ export async function recoverMintedAsset(
   wallet: Address,
   assertCurrent: () => void,
   blockNumber?: bigint,
+  executionAuthority: Address = wallet,
 ): Promise<MintedAsset> {
   assertCurrent();
   const asset = await client.readContract({
@@ -198,7 +213,7 @@ export async function recoverMintedAsset(
   );
   if (
     asset.tokenId <= 0n ||
-    asset.creator.toLowerCase() !== wallet.toLowerCase() ||
+    asset.creator.toLowerCase() !== executionAuthority.toLowerCase() ||
     asset.recipient.toLowerCase() !== intent.recipient.toLowerCase() ||
     asset.metadataHash.toLowerCase() !== intent.metadataSha256.toLowerCase() ||
     asset.metadataURI !== intent.metadataUri ||

@@ -83,11 +83,15 @@ func NewHandler() http.Handler {
 func newHandler(rwa *rwaService) http.Handler {
 	mux := http.NewServeMux()
 	userAuth := registerUserAuthRoutes(mux, rwa)
+	registerNFTOperations(mux, userAuth)
+	registerAdministration(mux, userAuth)
+	registerRWACatalog(mux, rwa, userAuth)
 	mux.HandleFunc("GET /v1/orders", rwa.getSignedOrders)
+	mux.HandleFunc("GET /v1/orders/fraction-book", rwa.getFractionBook)
 	mux.HandleFunc("GET /v1/orders/{intentHash}", rwa.getSignedOrder)
 	mux.HandleFunc("POST /v1/indexer/signed-orders", func(w http.ResponseWriter, r *http.Request) { rwa.ingestSignedOrder(w, r, userAuth) })
 	mux.HandleFunc("GET /healthz", status("ok"))
-	mux.HandleFunc("GET /readyz", status("ready"))
+	mux.HandleFunc("GET /readyz", rwa.readiness)
 	mux.HandleFunc("GET /v1/config", func(writer http.ResponseWriter, _ *http.Request) {
 		writeJSON(writer, http.StatusOK, configResponse{
 			API:                 "v1",
@@ -104,11 +108,13 @@ func newHandler(rwa *rwaService) http.Handler {
 	mux.HandleFunc("GET /v1/assets/{slug}", getAsset)
 	mux.HandleFunc("GET /v1/nfts", rwa.getMintedNFTs)
 	mux.HandleFunc("GET /v1/projects", getProjects)
-	mux.HandleFunc("GET /v1/portfolio/{address}", rwa.getPortfolio)
+	mux.HandleFunc("GET /v1/portfolio/{address}", protectedPortfolio(rwa, userAuth))
 	mux.HandleFunc("POST /v1/uploads/intents", rwa.createUploadIntent)
 	mux.HandleFunc("PUT /v1/uploads/{uploadID}", rwa.uploadObject)
+	mux.HandleFunc("POST /v1/rwa/metadata-preparations", rwa.prepareRWAMetadata)
 	mux.HandleFunc("POST /v1/rwa/intents", rwa.createMintIntent)
 	mux.HandleFunc("GET /v1/rwa/intents/{intentID}", rwa.getMintIntent)
+	mux.HandleFunc("POST /v1/rwa/intents/{intentID}/evidence", rwa.renewMintEvidence)
 	mux.HandleFunc("POST /v1/rwa/intents/{intentID}/submission", rwa.recordSubmission)
 	mux.HandleFunc("POST /v1/rwa/discovery-checks", rwa.checkOpenSeaDiscovery)
 	mux.HandleFunc("POST /v1/vault/intents", rwa.createVaultIntent)

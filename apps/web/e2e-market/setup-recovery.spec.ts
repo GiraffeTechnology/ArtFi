@@ -1,6 +1,15 @@
+import { sourceMintFixture } from "../src/test/rwa-source-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import { decodeFunctionData, type Address, type Hex } from "viem";
-import { erc721VaultApprovalAbi, vaultFactoryAbi } from "../src/lib/contracts";
+import {
+  erc721VaultApprovalAbi,
+  rwaRegistryAbi,
+  vaultFactoryAbi,
+} from "../src/lib/contracts";
+import {
+  mintSourceContext,
+  sourceContractEvidence,
+} from "../src/lib/rwa-source-evidence";
 import {
   createSetupChainFixture,
   setupAddresses as addresses,
@@ -13,10 +22,29 @@ type Boundary =
   "upload" | "mint-intent" | "vault-intent" | "wallet" | "submission";
 type WalletResult = "accept" | "reject" | "unknown";
 
-async function setupFixture(page: Page) {
+async function setupFixture(page: Page, shortEvidence = false) {
   const chain = createSetupChainFixture();
+  const mintCommitment = {
+    requestId: setupRequestIds.mint,
+    recipient: addresses.wallet,
+    registryAddress: addresses.registry,
+    chainId: 560048,
+    metadataUri: setupMetadataUri,
+    metadataSha256: setupMetadataHash,
+  };
+  const sourceFixture = sourceMintFixture(
+    mintCommitment,
+    shortEvidence ? { validUntil: Math.floor(Date.now() / 1000) + 15 } : {},
+  );
+
   const state = {
     chain,
+    sourceFixture,
+    metadataPreparations: [] as Array<{
+      key: string | undefined;
+      body: Record<string, unknown>;
+    }>,
+    evidenceRenewals: [] as Array<Record<string, unknown>>,
     account: addresses.wallet as Address,
     walletResults: [] as WalletResult[],
     walletRequests: [] as Array<{ to: Address; data: Hex; from: Address }>,
@@ -245,6 +273,21 @@ async function setupFixture(page: Page) {
       await route.fulfill({ json: { completed: true } });
     },
   );
+  await page.route("**/test-only-source-evidence", (route) =>
+    route.fulfill({ json: sourceFixture.sourceEvidence }),
+  );
+  await page.route("**/api/rwa/underlying-status?*", (route) => {
+    const query = new URL(route.request().url()).searchParams;
+    return route.fulfill({
+      json: {
+        chainId: 560048,
+        collectionAddress: query.get("collectionAddress"),
+        tokenId: query.get("tokenId"),
+        grounded: true,
+        checkedAt: new Date().toISOString(),
+      },
+    });
+  });
   const mintIntent = () => ({
     intentId: "TEST-ONLY-mint-intent",
     requestId: setupRequestIds.mint,
@@ -254,8 +297,40 @@ async function setupFixture(page: Page) {
     metadataUri: setupMetadataUri,
     metadataSha256: setupMetadataHash,
     status: "prepared",
+    sourceEvidence: sourceFixture.sourceEvidence,
+    contractEvidence: sourceFixture.contractEvidence,
     ...state.mintOverrides,
   });
+  await page.route(
+    "**/api/operator/v1/rwa/metadata-preparations",
+    async (route) => {
+      state.metadataPreparations.push({
+        key: route.request().headers()["idempotency-key"],
+        body: route.request().postDataJSON(),
+      });
+      await route.fulfill({
+        json: {
+          ...mintCommitment,
+          contextHash: mintSourceContext(mintCommitment),
+          executable: false,
+          status: "awaiting-approved-source-evidence",
+        },
+      });
+    },
+  );
+  await page.route(
+    "**/api/operator/v1/rwa/intents/TEST-ONLY-mint-intent/evidence",
+    async (route) => {
+      const body = route.request().postDataJSON();
+      state.evidenceRenewals.push(body);
+      state.mintOverrides = {
+        ...state.mintOverrides,
+        sourceEvidence: body.evidence,
+        contractEvidence: sourceContractEvidence(body.evidence),
+      };
+      await route.fulfill({ json: mintIntent() });
+    },
+  );
   const vaultIntent = () => ({
     intentId: "TEST-ONLY-vault-intent",
     requestId: setupRequestIds.vault,
@@ -379,6 +454,15 @@ async function openMint(page: Page) {
       "base64",
     ),
   });
+  const evidence = await page.evaluate(
+    async () => await (await fetch("/test-only-source-evidence")).json(),
+  );
+  await page
+    .getByRole("textbox", {
+      name: "Signed source evidence (JSON)",
+      exact: true,
+    })
+    .fill(JSON.stringify(evidence));
 }
 async function openVault(page: Page, continuation = false) {
   await page.goto(
@@ -1030,4 +1114,190 @@ test("first operator session 401 keeps public config and verification unlocks cr
   await vaultButton(page).click();
   await expect(approveButton(page)).toBeEnabled();
   expect(state.walletRequests).toHaveLength(1);
+});
+
+async function savedMint(page: Page) {
+  return page.evaluate(
+    (key) => JSON.parse(sessionStorage.getItem(key) || "null"),
+    `artfi:setup:mint:560048:${addresses.wallet}`,
+  );
+}
+
+test("source-review preparation restores its original metadata, upload and key before importing evidence", async ({
+  page,
+}) => {
+  const state = await setupFixture(page);
+  await openMint(page);
+  await page
+    .getByRole("textbox", {
+      name: "Signed source evidence (JSON)",
+      exact: true,
+    })
+    .fill("");
+  await page
+    .getByRole("button", {
+      name: "Prepare source-review commitment",
+      exact: true,
+    })
+    .click();
+  const unsigned = page.getByRole("textbox", {
+    name: "Unsigned source-review commitment",
+    exact: true,
+  });
+  await expect(unsigned).toBeVisible();
+  const preparation = JSON.parse(await unsigned.inputValue());
+  expect(preparation).toMatchObject({
+    requestId: setupRequestIds.mint,
+    metadataUri: setupMetadataUri,
+    metadataSha256: setupMetadataHash,
+    contextHash: state.sourceFixture.sourceEvidence.contextHash,
+    executable: false,
+    status: "awaiting-approved-source-evidence",
+  });
+  expect(state.walletRequests).toHaveLength(0);
+  expect(state.mintIntents).toHaveLength(0);
+  expect(state.uploads).toHaveLength(1);
+  const saved = await savedMint(page);
+  expect(saved.data.idempotencyKey).toBe(state.metadataPreparations[0].key);
+  await page.reload();
+  await expect(unsigned).toHaveValue(JSON.stringify(preparation, null, 2));
+  await page
+    .getByRole("textbox", {
+      name: "Signed source evidence (JSON)",
+      exact: true,
+    })
+    .fill(JSON.stringify(state.sourceFixture.sourceEvidence));
+  await mintButton(page).click();
+  await expect(
+    page.getByRole("heading", { name: "Mint confirmed on Hoodi" }),
+  ).toBeVisible();
+  expect(state.mintIntents).toHaveLength(1);
+  expect(state.mintIntents[0].key).toBe(saved.data.idempotencyKey);
+  expect(state.mintIntents[0].body.evidence).toEqual(
+    state.sourceFixture.sourceEvidence,
+  );
+  expect(state.uploads).toHaveLength(1);
+  expect(state.uploadBodies).toBe(1);
+  expect(state.walletRequests).toHaveLength(1);
+  expect(state.chain.state.unknownCalls).toEqual([]);
+});
+
+test("expired prepared mint imports renewed evidence while preserving its original intent and key", async ({
+  page,
+}) => {
+  const state = await setupFixture(page, true);
+  state.walletResults = ["reject", "accept"];
+  await openMint(page);
+  await mintButton(page).click();
+  const retry = page.getByRole("button", {
+    name: "Retry prepared mint",
+    exact: true,
+  });
+  await expect(retry).toBeEnabled();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBeLessThanOrEqual(2);
+  const original = await savedMint(page);
+  // Let the short-lived synthetic proof expire naturally without changing
+  // browser animation or timer behavior.
+  await expect
+    .poll(() => Date.now(), { timeout: 20_000 })
+    .toBeGreaterThanOrEqual(
+      state.sourceFixture.sourceEvidence.validUntil * 1000,
+    );
+  await retry.scrollIntoViewIfNeeded();
+  await expect(retry).toBeInViewport();
+  await page.screenshot({
+    path: test.info().outputPath("expired-retry-before-click.png"),
+  });
+  await retry.click();
+  await expect(page.locator(".transaction-panel")).toContainText(
+    "Current approved-source evidence for this exact mint is required",
+  );
+  expect(state.walletRequests).toHaveLength(1);
+  expect(state.mintIntents).toHaveLength(1);
+  const renewed = state.sourceFixture.renew();
+  await page
+    .getByRole("textbox", {
+      name: "Signed source evidence (JSON)",
+      exact: true,
+    })
+    .fill(JSON.stringify(renewed.sourceEvidence));
+  await retry.click();
+  await expect(
+    page.getByRole("heading", { name: "Mint confirmed on Hoodi" }),
+  ).toBeVisible();
+  expect(state.evidenceRenewals).toEqual([
+    { evidence: renewed.sourceEvidence },
+  ]);
+  expect(state.mintIntents).toHaveLength(1);
+  expect(state.uploads).toHaveLength(1);
+  expect(state.walletRequests).toHaveLength(2);
+  const recovered = await savedMint(page);
+  expect(recovered.data.idempotencyKey).toBe(original.data.idempotencyKey);
+  expect(recovered.data.intent).toMatchObject({
+    intentId: original.data.intent.intentId,
+    requestId: original.data.intent.requestId,
+    metadataUri: original.data.intent.metadataUri,
+    metadataSha256: original.data.intent.metadataSha256,
+    sourceEvidence: renewed.sourceEvidence,
+  });
+  const guarded = decodeFunctionData({
+    abi: rwaRegistryAbi,
+    data: state.walletRequests[1].data,
+  });
+  expect(guarded.functionName).toBe("createAssetWithEvidence");
+  if (guarded.functionName === "createAssetWithEvidence") {
+    expect(guarded.args[0]).toBe(original.data.intent.requestId);
+    expect(guarded.args[4].evidenceId).toBe(renewed.sourceEvidence.evidenceId);
+  }
+  expect(state.chain.state.unknownCalls).toEqual([]);
+});
+
+test("definitively reverted mint retains its failed hash and retries the original issuance request", async ({
+  page,
+}) => {
+  const state = await setupFixture(page);
+  state.chain.state.outcomes.mint = "reverted";
+  await openMint(page);
+  await mintButton(page).click();
+  const retry = page.getByRole("button", {
+    name: "Retry prepared mint",
+    exact: true,
+  });
+  await expect(retry).toBeEnabled();
+  await expect(page.locator(".transaction-panel")).toContainText(
+    "reverted on chain",
+  );
+  expect(state.chain.state.transactions).toHaveLength(1);
+  const original = await savedMint(page);
+  const failedHash = state.chain.state.transactions[0].hash;
+  expect(original.data.lastFailedHash).toBe(failedHash);
+  expect(original.data.hash).toBeUndefined();
+  expect(original.pending).toBeUndefined();
+  await page.reload();
+  await expect(retry).toBeEnabled();
+  state.chain.state.outcomes.mint = "success";
+  await retry.click();
+  await expect(
+    page.getByRole("heading", { name: "Mint confirmed on Hoodi" }),
+  ).toBeVisible();
+  expect(state.mintIntents).toHaveLength(1);
+  expect(state.uploads).toHaveLength(1);
+  expect(state.uploadBodies).toBe(1);
+  expect(state.walletRequests).toHaveLength(2);
+  expect(state.walletRequests[1]).toEqual(state.walletRequests[0]);
+  expect(state.submissions).toHaveLength(1);
+  const recovered = await savedMint(page);
+  expect(recovered.data.lastFailedHash).toBe(failedHash);
+  expect(recovered.data.hash).toBe(state.chain.state.transactions[1].hash);
+  expect(recovered.data.idempotencyKey).toBe(original.data.idempotencyKey);
+  expect(recovered.data.intent).toEqual(original.data.intent);
+  expect(state.chain.state.unknownCalls).toEqual([]);
 });

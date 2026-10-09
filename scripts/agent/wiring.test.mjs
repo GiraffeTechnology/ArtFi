@@ -119,6 +119,8 @@ function fixture(
     release: () => {},
     destroy: () => {},
     execute: async (sql, p = []) => {
+      if (sql.startsWith("INSERT INTO agent_slice_events"))
+        return [{ affectedRows: 1 }];
       if (sql.startsWith("SELECT FLOOR")) return [[{ now_ms: Date.now() }]];
       if (sql.startsWith("SELECT *") && sql.includes("operation_id >"))
         return [

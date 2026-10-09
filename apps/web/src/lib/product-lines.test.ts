@@ -43,6 +43,9 @@ describe("three product entry points", () => {
       "/dao",
       "/projects",
       "/operations",
+      "/agent",
+      "/support",
+      "/admin",
     ]);
   });
 });

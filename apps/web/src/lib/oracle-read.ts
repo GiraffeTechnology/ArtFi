@@ -1,3 +1,5 @@
+import type { RwaAsset } from "./rwa-catalog";
+import { publicSetting } from "@/lib/public-runtime-config";
 import "server-only";
 
 import { isAddress } from "viem";
@@ -125,23 +127,29 @@ async function readJson(
 /** Existing public Oracle reads only; not a verification gate or transaction authority. */
 export async function readWholeArtworkOracle(
   slug: string,
+  catalogBinding?: RwaAsset["binding"],
 ): Promise<OracleReadResponse> {
   try {
-    if (!getArtwork(slug)) throw new ReadError("UNKNOWN_ASSET");
+    if (!catalogBinding && !getArtwork(slug))
+      throw new ReadError("UNKNOWN_ASSET");
     const contract =
-      process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS?.trim();
+      catalogBinding?.collectionAddress ??
+      publicSetting(
+        "NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS",
+      )?.trim();
     const binding = assetDeploymentBinding(
       slug,
-      process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG,
+      publicSetting("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_SLUG"),
       contract,
     );
-    if (!binding.bound) {
+    if (!catalogBinding && !binding.bound) {
       throw new ReadError(
         binding.boundElsewhere ? "BINDING_ELSEWHERE" : "BINDING_NOT_CONFIGURED",
       );
     }
     const tokenId =
-      process.env.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID?.trim();
+      catalogBinding?.tokenId ??
+      publicSetting("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID")?.trim();
     if (
       !contract ||
       !isAddress(contract) ||
@@ -155,7 +163,7 @@ export async function readWholeArtworkOracle(
     const base = upstreamBase();
     // The whole-artwork screen currently uses Hoodi. Do not choose another chain
     // or normalize Oracle's case-sensitive contract key independently of it.
-    const chainId = String(hoodi.id);
+    const chainId = String(catalogBinding?.chainId ?? hoodi.id);
     const tokenResult = oracleTokenReadSchema.safeParse(
       await readJson(
         new URL(`v1/rwa/tokens/${chainId}/${contract}/${tokenId}`, base),
@@ -168,6 +176,8 @@ export async function readWholeArtworkOracle(
       token.binding.chainId !== chainId ||
       token.binding.contract !== contract ||
       token.binding.tokenId !== tokenId ||
+      (catalogBinding?.assetId !== undefined &&
+        token.binding.assetId !== catalogBinding.assetId) ||
       (token.currentCertificate &&
         (token.currentCertificate.assetId !== token.binding.assetId ||
           token.currentCertificate.tokenId !== tokenId))

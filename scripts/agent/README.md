@@ -1,4 +1,12 @@
-# Deterministic Agent integration slice
+# Stage 2 bounded application runtime
+
+The extended application runtime is in `apps/agent-runtime`; see its README for configuration, authenticated endpoints and reproducible tests, and `STAGE2_SCOPE.md` for the exact A1–A10/A0–A6 map.
+
+The current Wallet still requires owner confirmation per operation and supplies no autonomous delegation/broadcast/write endpoint. `/agent` makes this explicit and links to the existing owner-confirmed market workflows. Complete NO-HIL is not claimed. Fixed production adapters and the real acceptance campaigns remain missing; an isolated fixture is never promoted to them.
+
+The original first-BUY modules below remain compatibility code. They now have a real pinned MySQL driver, migration `000014_agent_runtime`, authenticated transport, private UI, append-only history and reproducible MySQL crash/restart tests. Statements in the historical first-slice notes about no driver/listener or fake-SQL-only evidence describe that earlier checkpoint, not the new runtime. A9 proof composition remains unavailable; paused source-authority work is untouched.
+
+## Historical first-BUY scope and dependency provenance
 
 Status: IMPLEMENTED-NOT-VERIFIED. This is not a DELIVERY_CANDIDATE.
 

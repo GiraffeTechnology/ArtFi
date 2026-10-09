@@ -128,16 +128,15 @@ func (service *rwaService) bumpCacheNamespace(ctx context.Context, namespace str
 }
 
 func (service *rwaService) invalidatePortfolioCache(ctx context.Context, input chainEventRequest) {
-	if input.EventName != "Transfer" {
-		return
-	}
-	for _, field := range []string{"from", "to"} {
+	seen := make(map[string]bool)
+	for _, field := range portfolioWalletFields {
 		address, ok := input.Payload[field].(string)
 		if !ok || !addressPattern.MatchString(address) {
 			continue
 		}
 		address = strings.ToLower(address)
-		if address != "0x0000000000000000000000000000000000000000" {
+		if address != "0x0000000000000000000000000000000000000000" && !seen[address] {
+			seen[address] = true
 			service.bumpCacheNamespace(ctx, "portfolio:"+address)
 		}
 	}

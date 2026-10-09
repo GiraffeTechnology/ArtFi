@@ -44,3 +44,6 @@ __MACOSX/
 
 # Local databases and caches
 .data/
+
+# Disposable private integration fixtures
+.artfi-test-cache/

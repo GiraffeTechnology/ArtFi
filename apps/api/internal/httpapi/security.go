@@ -8,6 +8,9 @@ import (
 )
 
 func (service *rwaService) operatorProtected(request *http.Request) bool {
+	if request.URL.Path == "/v1/rwa/source-revocations" {
+		return false
+	}
 	if !service.requireOperator || request.Method == http.MethodGet || request.Method == http.MethodOptions {
 		return false
 	}

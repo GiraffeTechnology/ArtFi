@@ -24,7 +24,10 @@ import {
   sessionRPCResult,
   type SessionRPCRequest,
 } from "../src/test/session-chain-fixture";
-import { sessionEnvironment as fixture } from "./environment";
+import {
+  sessionEnvironment as fixture,
+  sessionSourceFixture,
+} from "./environment";
 
 /** Key material stays in this Node closure and is never serialized to the browser or disk. */
 export function ephemeralSigner() {
@@ -348,6 +351,7 @@ export async function signInSessionWallet(page: Page) {
       .getByText("Signed in", { exact: true })
       .first(),
   ).toBeVisible();
+  await seedSessionSourceCatalog(page);
 }
 
 export function assertReadOnlyWallet(
@@ -359,4 +363,56 @@ export function assertReadOnlyWallet(
     state.unsupportedRPC,
     `Unsupported TEST_ONLY RPC identifiers: ${[...state.unsupportedRPCIdentifiers].join(", ")}`,
   ).toBe(0);
+}
+
+/** Only public TEST_ONLY proof crosses the actual authenticated Next→Go boundary. */
+async function seedSessionSourceCatalog(page: Page) {
+  const statuses = await page.evaluate(async (publications) => {
+    const sessionResponse = await fetch("/api/user/auth/session", {
+      cache: "no-store",
+    });
+    const { session } = await sessionResponse.json();
+    if (!sessionResponse.ok || !session)
+      throw new Error(
+        `The isolated source publisher has no session (HTTP ${sessionResponse.status}).`,
+      );
+    const statuses: number[] = [];
+    for (const publication of publications) {
+      const existing = await fetch(
+        `/api/rwa/assets/${publication.asset.slug}`,
+        { cache: "no-store" },
+      );
+      if (existing.status === 200) {
+        const item = await existing.json();
+        if (
+          item.grounding?.mode !== "TEST_ONLY" ||
+          item.grounding?.status !== "verified"
+        )
+          throw new Error("The isolated source fixture is not active.");
+        statuses.push(200);
+        continue;
+      }
+      if (existing.status !== 404)
+        throw new Error("The isolated source catalog is unavailable.");
+      const result = await fetch(
+        `/api/rwa/publication/assets/${publication.asset.slug}`,
+        {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+            "x-artfi-wallet": session.address,
+            "x-artfi-chain": String(session.chainId),
+            "idempotency-key": `TEST_ONLY_source_${publication.asset.slug}`,
+          },
+          body: JSON.stringify(publication),
+        },
+      );
+      statuses.push(result.status);
+    }
+    return statuses;
+  }, sessionSourceFixture.publications);
+  expect(statuses).toHaveLength(2);
+  expect(statuses.every((status) => status === 200 || status === 201)).toBe(
+    true,
+  );
 }

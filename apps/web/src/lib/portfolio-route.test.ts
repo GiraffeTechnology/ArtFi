@@ -54,6 +54,7 @@ describe("authenticated portfolio route", () => {
       `https://api.example/v1/portfolio/${address}`,
     );
     expect(upstream.mock.calls[0][1]).toMatchObject({
+      headers: { Authorization: "Bearer unused-test-token" },
       cache: "no-store",
       redirect: "error",
     });

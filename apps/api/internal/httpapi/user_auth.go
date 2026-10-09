@@ -163,8 +163,8 @@ func readUserAuthJSON(request *http.Request, target any) error {
 
 func (service *userAuthService) challenge(writer http.ResponseWriter, request *http.Request) {
 	var input userChallengeInput
-	if err := readUserAuthJSON(request, &input); err != nil || !addressPattern.MatchString(input.Address) || input.ChainID != hoodiChainID || input.Origin != service.origin {
-		writeProblem(writer, request, http.StatusBadRequest, "Invalid wallet challenge", "A wallet address, Hoodi chain, and configured web origin are required.")
+	if err := readUserAuthJSON(request, &input); err != nil || !addressPattern.MatchString(input.Address) || !userAuthChainEnabled(input.ChainID) || input.Origin != service.origin {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid wallet challenge", "A wallet address, enabled chain, and configured web origin are required.")
 		return
 	}
 	challenge, err := service.createChallenge(request.Context(), input)
@@ -200,7 +200,7 @@ func userChallengeMessage(challenge *userAuthChallenge) string {
 
 func (service *userAuthService) verify(writer http.ResponseWriter, request *http.Request) {
 	var input userVerifyInput
-	if err := readUserAuthJSON(request, &input); err != nil || !addressPattern.MatchString(input.Address) || input.Origin != service.origin || input.ChainID != hoodiChainID {
+	if err := readUserAuthJSON(request, &input); err != nil || !addressPattern.MatchString(input.Address) || input.Origin != service.origin || !userAuthChainEnabled(input.ChainID) {
 		service.writeError(writer, request, errUserUnauthorized)
 		return
 	}
@@ -355,7 +355,7 @@ func (service *userAuthService) parseAccess(token string, allowExpired bool) (*u
 		return nil, errUserUnauthorized
 	}
 	now := service.now().Unix()
-	if claims.Issuer != userJWTIssuer || claims.Audience != userJWTAudience || !addressPattern.MatchString(claims.Subject) || claims.Subject != strings.ToLower(claims.Subject) || len(claims.SessionID) != 32 || claims.ChainID != hoodiChainID || claims.Origin != service.origin || claims.IssuedAt > now || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt || claims.ExpiresAt-claims.IssuedAt > int64(userAccessLifetime/time.Second) || (!allowExpired && claims.ExpiresAt <= now) {
+	if claims.Issuer != userJWTIssuer || claims.Audience != userJWTAudience || !addressPattern.MatchString(claims.Subject) || claims.Subject != strings.ToLower(claims.Subject) || len(claims.SessionID) != 32 || !userAuthChainEnabled(claims.ChainID) || claims.Origin != service.origin || claims.IssuedAt > now || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt || claims.ExpiresAt-claims.IssuedAt > int64(userAccessLifetime/time.Second) || (!allowExpired && claims.ExpiresAt <= now) {
 		return nil, errUserUnauthorized
 	}
 	return &claims, nil
@@ -394,3 +394,20 @@ func validUserRefreshToken(token string) bool {
 }
 
 func userTokenHash(token string) []byte { hash := sha256.Sum256([]byte(token)); return hash[:] }
+
+// Chain enablement only permits authentication. Market execution has separate policy.
+func userAuthChainEnabled(chainID int) bool {
+	if chainID != hoodiChainID && chainID != 1 && chainID != 8453 {
+		return false
+	}
+	configured := strings.TrimSpace(os.Getenv("ARTFI_USER_AUTH_CHAIN_IDS"))
+	if configured == "" {
+		return chainID == hoodiChainID
+	}
+	for _, item := range strings.Split(configured, ",") {
+		if strings.TrimSpace(item) == fmt.Sprint(chainID) {
+			return true
+		}
+	}
+	return false
+}

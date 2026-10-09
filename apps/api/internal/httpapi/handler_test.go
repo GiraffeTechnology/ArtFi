@@ -539,14 +539,23 @@ func TestRWAUploadMintAndSubmissionLifecycle(t *testing.T) {
 	mintBody := map[string]any{
 		"uploadId":    upload.UploadID,
 		"recipient":   "0x2222222222222222222222222222222222222222",
-		"name":        "Proof of Light",
-		"artist":      "Mina Okafor",
+		"name":        "TEST_ONLY sample artwork",
+		"artist":      "Example maker",
 		"year":        2024,
-		"medium":      "Pigment on linen",
-		"location":    "Lagos",
-		"description": "A rights-cleared testnet record used to validate the Stage 2 mint flow.",
+		"medium":      "Example test pigment",
+		"location":    "Example test custody",
+		"description": "TESTNET. NO REAL-WORLD VALUE. NO LEGAL EFFECT. Isolated mint-flow record.",
 	}
 	headers := map[string]string{"Idempotency-Key": "stage2-test-idempotency-key"}
+	key, source := syntheticRWASource(t, service)
+	preparation := jsonRequest(t, handler, http.MethodPost, "/v1/rwa/metadata-preparations", mintBody, headers)
+	if preparation.Code != 200 {
+		t.Fatalf("metadata preparation: %d %s", preparation.Code, preparation.Body)
+	}
+	var draft rwaMetadataPreparation
+	decode(t, preparation, &draft)
+	evidence := syntheticEvidence(t, service, key, source, draft.ContextHash, "fractional")
+	mintBody["evidence"] = evidence
 	mintRecorder := jsonRequest(t, handler, http.MethodPost, "/v1/rwa/intents", mintBody, headers)
 	if mintRecorder.Code != http.StatusCreated {
 		t.Fatalf("create mint: status=%d body=%s", mintRecorder.Code, mintRecorder.Body.String())
@@ -611,20 +620,22 @@ func TestUploadRejectsDigestMismatch(t *testing.T) {
 	}
 }
 
-func TestVaultIntentIsIdempotentAndSubmissionBound(t *testing.T) {
-	service := newRWAService(rwaConfig{
-		vaultFactoryAddress: "0x3333333333333333333333333333333333333333",
-	}, newMemoryObjectStore())
+func TestMySQLGroundedVaultIntentIsIdempotentAndSubmissionBound(t *testing.T) {
+	f, service, input, _, _ := catalogIntegrationFixture(t)
+	_ = f
+	_ = input
+	/* service supplied by signed catalog fixture */
+	service.config.vaultFactoryAddress = "0x3333333333333333333333333333333333333333"
 	handler := newHandler(service)
 	body := map[string]any{
-		"collectionAddress":     "0x1111111111111111111111111111111111111111",
-		"tokenId":               "340282366920938463463374607431768211455",
+		"collectionAddress":     input.Asset.Binding.CollectionAddress,
+		"tokenId":               input.Asset.Binding.TokenID,
 		"vaultName":             "Material Memory Vault",
 		"adminAddress":          "0x2222222222222222222222222222222222222222",
 		"pauserAddress":         "0x4444444444444444444444444444444444444444",
 		"fractionalizerAddress": "0x5555555555555555555555555555555555555555",
 	}
-	headers := map[string]string{"Idempotency-Key": "stage3-vault-idempotency"}
+	headers := map[string]string{"Idempotency-Key": "vault-" + randomID()}
 	created := jsonRequest(t, handler, http.MethodPost, "/v1/vault/intents", body, headers)
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create vault intent: status=%d body=%s", created.Code, created.Body.String())

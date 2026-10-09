@@ -416,9 +416,64 @@ export function createDurableStore({
     );
     return rows.length === 0 ? null : hydrateOperation(rows[0]);
   }
+  async function audit(c, row, kind, details) {
+    const event = {
+      mode,
+      ...details,
+    };
+    await c.execute(
+      "INSERT INTO agent_slice_events (operation_id, operation_version, kind, observed_at_ms, event_json) VALUES (?, ?, ?, ?, ?)",
+      [row.id, row.version, kind, await now(c), JSON.stringify(event)],
+    );
+  }
   return Object.freeze({
+    // Trusted backend composition only. Never exposed by the HTTP service.
+    withTransaction: transaction,
     leaseDurationMs: leaseMs,
     operationTimeoutMs,
+    async listEvents(operationId, { after = "0", limit = 50 } = {}) {
+      if (
+        !id(operationId) ||
+        !uint(after) ||
+        BigInt(after) > 18446744073709551615n ||
+        !Number.isSafeInteger(limit) ||
+        limit < 1 ||
+        limit > 100
+      )
+        fail("AUDIT_PAGE_INVALID");
+      return transaction(async (c) => {
+        const [rows] = await c.execute(
+          "SELECT event_id, operation_id, operation_version, kind, observed_at_ms, event_json FROM agent_slice_events WHERE operation_id = ? AND event_id > ? ORDER BY event_id ASC LIMIT ?",
+          [operationId, after, limit],
+        );
+        let previous = BigInt(after);
+        return rows.map((row) => {
+          const eventId = String(row.event_id),
+            version = Number(row.operation_version),
+            observedAt = Number(row.observed_at_ms);
+          if (
+            !uint(eventId) ||
+            BigInt(eventId) <= previous ||
+            row.operation_id !== operationId ||
+            !Number.isSafeInteger(version) ||
+            version < 1 ||
+            !Number.isSafeInteger(observedAt) ||
+            observedAt < 0 ||
+            !["PREPARED", "TRANSITION", "REVOCATION"].includes(row.kind)
+          )
+            fail("AUDIT_RECORD_INVALID");
+          previous = BigInt(eventId);
+          return {
+            id: eventId,
+            operationId,
+            version,
+            kind: row.kind,
+            observedAt,
+            ...decode(row.event_json),
+          };
+        });
+      });
+    },
     async listRecoverable({ after = "", limit = 32 } = {}) {
       if (
         (after !== "" && !id(after)) ||
@@ -507,7 +562,12 @@ export function createDurableStore({
             operationId,
           ],
         );
-        return { ...row, revocation: proof, version: version + 1 };
+        const next = { ...row, revocation: proof, version: version + 1 };
+        await audit(c, next, "REVOCATION", {
+          state: proof.state,
+          transactionHash: proof.transactionHash,
+        });
+        return next;
       });
     },
     async prepare(input) {
@@ -517,7 +577,7 @@ export function createDurableStore({
       return transaction(async (c) => {
         // INSERT's unique PK serializes concurrent first preparation. Do not
         // use INSERT IGNORE: truncated/invalid data must remain a hard error.
-        await c.execute(
+        const [inserted] = await c.execute(
           "INSERT INTO agent_slice_operations (operation_id, request_digest, request_json, record_json, version) VALUES (?, ?, ?, ?, 1) ON DUPLICATE KEY UPDATE operation_id = operation_id",
           [
             request.operationId,
@@ -529,6 +589,20 @@ export function createDurableStore({
         const row = await load(c, request.operationId);
         if (row.requestDigest !== requestDigest)
           fail("IMMUTABLE_REQUEST_CONFLICT");
+        if (row.version === 1 && inserted.affectedRows === 1) {
+          // The unique event key also makes a duplicate create harmless when
+          // the driver's CLIENT_FOUND_ROWS reports an unchanged row as found.
+          await c.execute(
+            "INSERT INTO agent_slice_events (operation_id, operation_version, kind, observed_at_ms, event_json) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE event_id = event_id",
+            [
+              row.id,
+              row.version,
+              "PREPARED",
+              await now(c),
+              JSON.stringify({ mode, state: "PREPARED" }),
+            ],
+          );
+        }
         return row;
       });
     },
@@ -740,7 +814,19 @@ export function createDurableStore({
           "UPDATE agent_slice_operations SET record_json = ?, version = ? WHERE operation_id = ?",
           [JSON.stringify({ ...body, ...patch }), nextVersion, operationId],
         );
-        return { ...row, ...patch, version: nextVersion };
+        const next = { ...row, ...patch, version: nextVersion };
+        await audit(c, next, "TRANSITION", {
+          from: row.state,
+          state: patch.state,
+          ...(typeof patch.reason === "string" &&
+          /^[A-Z][A-Z0-9_]{0,63}$/.test(patch.reason)
+            ? { reason: patch.reason }
+            : {}),
+          ...(Number.isSafeInteger(patch.recoveryAttempts)
+            ? { recoveryAttempts: patch.recoveryAttempts }
+            : {}),
+        });
+        return next;
       });
     },
     async release(operationId, token) {

@@ -47,4 +47,7 @@ export const toolNavigation = [
   ["DAO", "/dao"],
   ["Projects", "/projects"],
   ["Operations", "/operations"],
+  ["Bounded agent", "/agent"],
+  ["Reports & appeals", "/support"],
+  ["Administration", "/admin"],
 ] as const;

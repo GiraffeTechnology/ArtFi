@@ -1,5 +1,8 @@
 "use client";
 
+import { assertRwaTradingEvidence } from "@/lib/rwa-catalog";
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import { reconcileCurrentView } from "@/lib/current-operation";
 
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -12,6 +15,11 @@ import {
   useWriteContract,
 } from "wagmi";
 
+import { FractionOrderBook } from "./fraction-order-book";
+import {
+  freshFractionSalt,
+  retireFractionForAmendment,
+} from "@/lib/fraction-amendment";
 import { NativeOrderPanel } from "./native-order-panel";
 import { useUserSession } from "./user-session-provider";
 import {
@@ -21,6 +29,7 @@ import {
 import {
   decodeNativeOrder,
   nativeOrderFromAuthorization,
+  type NativeOrder,
 } from "@/lib/native-order";
 import { verifyFractionSale } from "@/lib/signed-market-preflight";
 import { assetDeploymentBinding } from "@/lib/asset-binding";
@@ -135,12 +144,19 @@ function decodeAuthorization(
 
 function parseAmount(value: string): bigint | undefined {
   const trimmed = value.trim();
-  if (!/^[0-9]+$/.test(trimmed)) return undefined;
+  if (!/^[0-9]{1,78}$/.test(trimmed)) return undefined;
+  if (BigInt(trimmed) >= 1n << 256n) return undefined;
   return BigInt(trimmed);
 }
 
 export function FractionListing(
-  props: Readonly<{ slug?: string; assetToken?: string }>,
+  props: Readonly<{
+    slug?: string;
+    assetToken?: string;
+    marketAddress?: string;
+    catalogSlug?: string;
+    catalogIdentity?: string;
+  }>,
 ) {
   const { address, chainId } = useAccount();
   const { revision, authenticated } = useUserSession();
@@ -155,7 +171,16 @@ export function FractionListing(
 function FractionListingScreen({
   slug,
   assetToken,
-}: Readonly<{ slug?: string; assetToken?: string }>) {
+  marketAddress: boundMarket,
+  catalogSlug,
+  catalogIdentity,
+}: Readonly<{
+  slug?: string;
+  assetToken?: string;
+  marketAddress?: string;
+  catalogSlug?: string;
+  catalogIdentity?: string;
+}>) {
   const { address, chainId, isConnected } = useAccount();
   const { authenticated, revision } = useUserSession();
   const { signTypedDataAsync } = useSignTypedData();
@@ -164,13 +189,12 @@ function FractionListingScreen({
   const actionPending = useRef(false);
   const [transactionHash, setTransactionHash] = useState<Hex>();
 
+  const [bookBusy, setBookBusy] = useState(false);
+  const [amending, setAmending] = useState<NativeOrder>();
   const [stage, setStage] = useState<Stage>("idle");
-  const busy = [
-    "awaiting-signature",
-    "approving",
-    "filling",
-    "revoking",
-  ].includes(stage);
+  const busy =
+    bookBusy ||
+    ["awaiting-signature", "approving", "filling", "revoking"].includes(stage);
   const canTransact =
     authenticated &&
     isConnected &&
@@ -190,7 +214,9 @@ function FractionListingScreen({
   const [durationHours, setDurationHours] = useState("24");
 
   const market = configuredAddress(
-    process.env.NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS,
+    boundMarket === undefined
+      ? publicSetting("NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS")
+      : boundMarket,
   );
 
   /**
@@ -205,10 +231,12 @@ function FractionListingScreen({
    * So an address passed in wins, and the environment's address applies only to the one slug the
    * environment names. Every other route stays inert and says why.
    */
-  const configuredToken = process.env.NEXT_PUBLIC_ARTFI_FRACTION_TOKEN_ADDRESS;
+  const configuredToken = publicSetting(
+    "NEXT_PUBLIC_ARTFI_FRACTION_TOKEN_ADDRESS",
+  );
   const binding = assetDeploymentBinding(
     slug,
-    process.env.NEXT_PUBLIC_ARTFI_FRACTION_SLUG,
+    publicSetting("NEXT_PUBLIC_ARTFI_FRACTION_SLUG"),
     configuredToken,
   );
   const token =
@@ -216,6 +244,19 @@ function FractionListingScreen({
     (binding.bound ? configuredAddress(configuredToken) : undefined);
   // Told apart from "nothing is deployed at all", so the page can say which of the two it is.
   const boundElsewhere = !token && binding.boundElsewhere;
+
+  const grounding = useCallback(async () => {
+    if (!market || !token)
+      throw new Error("The fraction binding is unavailable.");
+    await assertRwaTradingEvidence({
+      section: "fractional",
+      chainId: supportedChain.id,
+      marketAddress: market,
+      fractionTokenAddress: token,
+      slug: catalogSlug,
+      identity: catalogIdentity,
+    });
+  }, [market, token, catalogSlug, catalogIdentity]);
 
   const beforeWrite = useCallback(async () => {
     if (!address || chainId !== supportedChain.id)
@@ -233,6 +274,7 @@ function FractionListingScreen({
       setTransactionHash,
       {
         operationContext: JSON.stringify([
+          amending?.intentHash,
           pasted,
           fillAmount,
           maxAmount,
@@ -425,10 +467,8 @@ function FractionListingScreen({
         maxAmount: authorized,
         unitPrice: price,
         buyer: (namedBuyer.trim() || anyFractionBuyer) as Address,
-        // Distinguishes otherwise identical terms, so a holder can keep two live authorizations
-        // over the same fractions — which the settlement path allows, since neither moves them and
-        // the cumulative counter is per signature.
-        salt: BigInt(startsAt),
+        // Replaced with cryptographic randomness only when signing. Probes remain deterministic.
+        salt: 0n,
         startsAt,
         endsAt:
           startsAt + (Number.isFinite(hours) ? Math.round(hours * 3600) : 0),
@@ -470,6 +510,7 @@ function FractionListingScreen({
       !address ||
       !publicClient ||
       actionPending.current ||
+      bookBusy ||
       pending
     )
       return;
@@ -478,11 +519,58 @@ function FractionListingScreen({
     actionPending.current = true;
     let operation: ReturnType<typeof begin> | undefined;
     try {
-      operation = begin();
+      // Validate replacement fields before an irreversible withdrawal request.
+      const probe = buildIntent(1_000_000_000);
+      if (!probe)
+        throw new Error(
+          "Enter valid sale terms before withdrawing an existing order.",
+        );
+      fractionIntentHash(
+        probe,
+        { chainId: supportedChain.id, verifyingContract: market },
+        supportedChain.id,
+      );
+      operation = begin(amending?.intentHash);
+      await grounding();
+      operation.assertCurrent();
+      let amendmentSnapshot:
+        Awaited<ReturnType<typeof retireFractionForAmendment>> | undefined;
+      if (amending) {
+        const original = decodeNativeOrder(amending);
+        if (
+          original.kind !== "fraction" ||
+          original.intent.assetToken.toLowerCase() !== token?.toLowerCase()
+        )
+          throw new Error(
+            "The original order belongs to a different fraction token.",
+          );
+        setStage("revoking");
+        amendmentSnapshot = await retireFractionForAmendment({
+          client: publicClient,
+          market,
+          original: original.intent,
+          seller: address,
+          assertCurrent: operation.assertCurrent,
+          revoke: () =>
+            operation!.write("withdrawal", () =>
+              writeContractAsync({
+                abi: artFiFractionMarketAbi,
+                address: market,
+                functionName: "revokeIntent",
+                args: [original.intent],
+                chainId: supportedChain.id,
+                account: address,
+              }),
+            ),
+        });
+        operation.assertCurrent();
+      }
       setStage("awaiting-signature");
       if ((await publicClient.getChainId()) !== supportedChain.id)
         throw new Error("The market reader is on a different chain.");
-      const block = await publicClient.getBlock({ blockTag: "latest" });
+      const block =
+        amendmentSnapshot?.block ??
+        (await publicClient.getBlock({ blockTag: "latest" }));
       if (
         block.number === null ||
         block.timestamp > BigInt(Number.MAX_SAFE_INTEGER)
@@ -490,6 +578,7 @@ function FractionListingScreen({
         throw new Error("The current chain time is unavailable.");
       const draft = buildIntent(Number(block.timestamp));
       if (!draft) throw new Error("Enter valid sale terms.");
+      draft.salt = freshFractionSalt();
       draft.epoch = await publicClient.readContract({
         abi: artFiFractionMarketAbi,
         address: market,
@@ -501,6 +590,8 @@ function FractionListingScreen({
       const domain = { chainId: supportedChain.id, verifyingContract: market };
       // Throws on terms that would be refused, so the wallet is never asked to sign them.
       const hash = fractionIntentHash(draft, domain, supportedChain.id);
+      await grounding();
+      operation.assertCurrent();
       const signature = await operation.authorize(() =>
         signTypedDataAsync({
           ...fractionIntentTypedData(draft, domain),
@@ -511,6 +602,7 @@ function FractionListingScreen({
       setDigest(hash);
       setSigned(draft);
       setAuthorization(encodeAuthorization(draft, signature));
+      setAmending(undefined);
       setStage("signed");
     } catch (error) {
       if (operation && !operation.isCurrent()) return;
@@ -524,7 +616,9 @@ function FractionListingScreen({
       actionPending.current = false;
     }
   }, [
+    grounding,
     pending,
+    bookBusy,
     begin,
     address,
     buildIntent,
@@ -532,6 +626,9 @@ function FractionListingScreen({
     market,
     publicClient,
     signTypedDataAsync,
+    amending,
+    token,
+    writeContractAsync,
   ]);
 
   /** Approves exactly the authorized maximum. Never unlimited. */
@@ -543,6 +640,7 @@ function FractionListingScreen({
       !address ||
       !publicClient ||
       actionPending.current ||
+      bookBusy ||
       pending
     )
       return;
@@ -551,6 +649,8 @@ function FractionListingScreen({
     let operation: ReturnType<typeof begin> | undefined;
     try {
       operation = begin();
+      await grounding();
+      operation.assertCurrent();
       setStage("approving");
       await operation.write("approval", () =>
         writeContractAsync({
@@ -575,7 +675,9 @@ function FractionListingScreen({
       actionPending.current = false;
     }
   }, [
+    grounding,
     pending,
+    bookBusy,
     begin,
     address,
     authorization,
@@ -595,6 +697,7 @@ function FractionListingScreen({
       !address ||
       !publicClient ||
       actionPending.current ||
+      bookBusy ||
       pending
     )
       return;
@@ -630,6 +733,7 @@ function FractionListingScreen({
   }, [
     ownsAuthorization,
     pending,
+    bookBusy,
     begin,
     address,
     canTransact,
@@ -646,6 +750,7 @@ function FractionListingScreen({
       !address ||
       !publicClient ||
       actionPending.current ||
+      bookBusy ||
       pending
     )
       return;
@@ -681,6 +786,7 @@ function FractionListingScreen({
     }
   }, [
     pending,
+    bookBusy,
     begin,
     address,
     canTransact,
@@ -697,6 +803,7 @@ function FractionListingScreen({
       !address ||
       !publicClient ||
       actionPending.current ||
+      bookBusy ||
       pending
     )
       return;
@@ -750,6 +857,8 @@ function FractionListingScreen({
           supportedChain.id,
         ),
       );
+      await grounding();
+      operation.assertCurrent();
       setStage("approving");
       await verifyFractionSale({
         client: publicClient,
@@ -772,15 +881,18 @@ function FractionListingScreen({
             chainId: supportedChain.id,
             account: address,
           }),
-        settle: () =>
-          writeContractAsync({
+        settle: async () => {
+          await grounding();
+          operation!.assertCurrent();
+          return writeContractAsync({
             abi: artFiFractionMarketAbi,
             address: market,
             functionName: "fillIntent",
             args: [intent, signature, amount],
             chainId: supportedChain.id,
             account: address,
-          }),
+          });
+        },
       });
       await Promise.all([
         refetchFilled(),
@@ -800,7 +912,9 @@ function FractionListingScreen({
       actionPending.current = false;
     }
   }, [
+    grounding,
     pending,
+    bookBusy,
     begin,
     address,
     canTransact,
@@ -860,11 +974,14 @@ function FractionListingScreen({
       </p>
 
       <NativeOrderPanel
+        catalogSlug={catalogSlug}
+        catalogIdentity={catalogIdentity}
         kind="fraction"
         market={market}
         asset={token}
         authorization={ownsAuthorization ? authorization : undefined}
         operationContext={JSON.stringify([
+          amending?.intentHash,
           pasted,
           fillAmount,
           maxAmount,
@@ -874,12 +991,88 @@ function FractionListingScreen({
           durationHours,
         ])}
         publicClient={publicClient}
+        sellerAddress={address}
+        disabled={busy || Boolean(pending)}
+        onAmend={(order, remaining) => {
+          const decoded = decodeNativeOrder(order);
+          if (
+            decoded.kind !== "fraction" ||
+            decoded.intent.seller.toLowerCase() !== address?.toLowerCase()
+          )
+            return;
+          setAmending(order);
+          setPasted("");
+          setAuthorization(undefined);
+          setSigned(decoded.intent);
+          setDigest(order.intentHash);
+          setMaxAmount(
+            remaining && remaining !== "0"
+              ? remaining
+              : String(decoded.intent.maxAmount),
+          );
+          setUnitPrice(String(decoded.intent.unitPrice));
+          setPaymentToken(decoded.intent.paymentToken);
+          setNamedBuyer(
+            decoded.intent.buyer === anyFractionBuyer
+              ? ""
+              : decoded.intent.buyer,
+          );
+          setStage("idle");
+          setDetail(undefined);
+        }}
         onSelect={(value) => {
           setPasted(value);
+          if (value && !actionPending.current && !bookBusy) {
+            setAmending(undefined);
+            const restored = decodeAuthorization(value, market);
+            if (
+              !("error" in restored) &&
+              restored.intent.seller.toLowerCase() === address?.toLowerCase()
+            ) {
+              setSigned(restored.intent);
+              setDigest(
+                fractionIntentHash(
+                  restored.intent,
+                  { chainId: supportedChain.id, verifyingContract: market },
+                  supportedChain.id,
+                ),
+              );
+              setAuthorization(value);
+            }
+          }
           setStage("idle");
           setDetail(undefined);
           setTransactionHash(undefined);
         }}
+      />
+      <FractionOrderBook
+        catalogSlug={catalogSlug}
+        catalogIdentity={catalogIdentity}
+        market={market}
+        asset={token}
+        buyer={address}
+        chainId={chainId}
+        client={publicClient}
+        disabled={busy && !bookBusy}
+        onBusy={setBookBusy}
+        operationContext={JSON.stringify([
+          pasted,
+          fillAmount,
+          maxAmount,
+          unitPrice,
+          paymentToken,
+          namedBuyer,
+          durationHours,
+          amending?.intentHash,
+        ])}
+        onSettled={() =>
+          Promise.all([
+            refetchFilled(),
+            refetchHolding(),
+            refetchAllowance(),
+            refetchPilotUsed(),
+          ])
+        }
       />
       {isConnected && !authenticated && (
         <p className="dao-alert dao-alert--warning">
@@ -944,8 +1137,31 @@ function FractionListingScreen({
         </p>
       )}
 
-      {isConnected && holdsFractions && (
+      {isConnected && (holdsFractions || ownsAuthorization || amending) && (
         <div className="dao-composer">
+          {amending && (
+            <div className="dao-alert dao-alert--warning">
+              <p>
+                Amending {amending.intentHash}. Review the new maximum and price
+                below. The original authorization is retired on chain before you
+                sign replacement terms. Confirmed earlier fills remain
+                unchanged; the replacement gets a new publication time.
+              </p>
+              <p>
+                If replacement signing is interrupted, the old authorization
+                remains retired. Retry to sign new terms after checking its
+                chain state.
+              </p>
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy || Boolean(pending)}
+                onClick={() => setAmending(undefined)}
+              >
+                Leave amendment
+              </button>
+            </div>
+          )}
           <div className="field-grid">
             <label>
               Fractions to authorize, at most
@@ -1037,7 +1253,9 @@ function FractionListingScreen({
                 problems.length > 0
               }
             >
-              Sign the sale terms
+              {amending
+                ? "Retire old order and sign replacement"
+                : "Sign the sale terms"}
             </button>
             <button
               type="button"

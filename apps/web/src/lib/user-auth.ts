@@ -1,3 +1,4 @@
+import { publicSetting } from "@/lib/public-runtime-config";
 import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -10,7 +11,8 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { hoodi } from "viem/chains";
+import { hoodi, mainnet, base } from "viem/chains";
+import { enabledSessionChain } from "./auth-chains";
 
 export const userAccessCookie = "artfi_user_access";
 export const userRefreshCookie = "artfi_user_refresh";
@@ -197,7 +199,7 @@ export function validUserSession(value: unknown): value is UserSession {
     candidate.id.length <= 128 &&
     typeof candidate.address === "string" &&
     isAddress(candidate.address) &&
-    candidate.chainId === hoodi.id &&
+    enabledSessionChain(candidate.chainId) &&
     Number.isSafeInteger(candidate.expiresAt) &&
     candidate.expiresAt > Date.now() &&
     Number.isSafeInteger(candidate.accessExpiresAt) &&
@@ -251,7 +253,7 @@ export function readUserChallenge(token: string | undefined, origin: string) {
       typeof challenge.id !== "string" ||
       !/^[a-zA-Z0-9_-]{16,128}$/.test(challenge.id) ||
       !isAddress(challenge.address) ||
-      challenge.chainId !== hoodi.id ||
+      !enabledSessionChain(challenge.chainId) ||
       challenge.origin !== origin ||
       typeof challenge.message !== "string" ||
       challenge.message.length > 4_096 ||
@@ -272,6 +274,7 @@ export type UserSignatureVerifier = (input: {
   address: Address;
   message: string;
   signature: Hex;
+  chainId?: number;
 }) => Promise<boolean>;
 
 async function verifyContractSignature(
@@ -282,26 +285,37 @@ async function verifyContractSignature(
       503,
       "Contract-wallet verification is unavailable.",
     );
+  const chain = [hoodi, mainnet, base].find(
+    (candidate) => candidate.id === (input.chainId ?? hoodi.id),
+  );
+  if (!chain || !enabledSessionChain(chain.id))
+    throw new UserAuthError(403, "Unsupported wallet chain.");
   const url =
-    process.env.ARTFI_RPC_URL?.trim() ||
-    process.env.NEXT_PUBLIC_HOODI_RPC_URL?.trim();
+    chain.id === hoodi.id
+      ? process.env.ARTFI_RPC_URL?.trim() ||
+        publicSetting("NEXT_PUBLIC_HOODI_RPC_URL")?.trim()
+      : process.env[`ARTFI_NFT_RPC_${chain.id}`]?.trim();
   if (!url)
     throw new UserAuthError(
       503,
       "Contract-wallet verification is unavailable.",
     );
   const client = createPublicClient({
-    chain: hoodi,
+    chain,
     transport: http(url, { timeout: 8_000, retryCount: 0 }),
   });
-  if ((await client.getChainId()) !== hoodi.id)
+  if ((await client.getChainId()) !== chain.id)
     throw new UserAuthError(
       503,
       "Contract-wallet verification is on the wrong network.",
     );
   const code = await client.getCode({ address: input.address });
   if (!code || code === "0x") return false;
-  return client.verifyMessage(input);
+  return client.verifyMessage({
+    address: input.address,
+    message: input.message,
+    signature: input.signature,
+  });
 }
 
 export async function verifyUserSignature(
@@ -309,6 +323,7 @@ export async function verifyUserSignature(
   message: string,
   signature: Hex,
   contractVerifier: UserSignatureVerifier = verifyContractSignature,
+  chainId: number = hoodi.id,
 ) {
   if (
     !isAddress(address) ||
@@ -328,10 +343,13 @@ export async function verifyUserSignature(
     /* Contract wallets may use a non-ECDSA signature format. */
   }
   // An EOA success never calls RPC. A contract-wallet fallback must validate against Hoodi.
-  return contractVerifier({ address, message, signature });
+  return contractVerifier({ address, message, signature, chainId });
 }
 
-export async function requireUserSession(seller: string) {
+export async function requireUserSession(
+  seller: string,
+  chainId: number = hoodi.id,
+) {
   if (!isAddress(seller))
     throw new UserAuthError(400, "A valid seller wallet is required.");
   const accessToken = (await cookies()).get(userAccessCookie)?.value;
@@ -342,7 +360,10 @@ export async function requireUserSession(seller: string) {
   });
   if (!validUserSession(response.session))
     throw new UserAuthError(401, "Sign in with the seller wallet.");
-  if (response.session.address.toLowerCase() !== seller.toLowerCase())
+  if (
+    response.session.address.toLowerCase() !== seller.toLowerCase() ||
+    response.session.chainId !== chainId
+  )
     throw new UserAuthError(403, "Sign in with the seller wallet.");
   return { session: response.session, accessToken };
 }

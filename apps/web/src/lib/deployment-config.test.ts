@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { publicRuntimeKeys } from "./public-runtime-config";
+
 import { GET } from "../app/api/health/route";
 
 const webRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -22,22 +24,26 @@ function sources(directory: string): string[] {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("deployment configuration", () => {
-  it("can embed every public setting the web app actually reads", () => {
+  it("allowlists every runtime public setting and retains Docker build defaults", () => {
     const names = [
       ...new Set(
         sources(sourceRoot).flatMap((source) =>
-          [...source.matchAll(/process\.env\.(NEXT_PUBLIC_[A-Z0-9_]+)/g)].map(
-            (match) => match[1],
-          ),
+          [
+            ...source.matchAll(/publicSetting\("(NEXT_PUBLIC_[A-Z0-9_]+)"\)/g),
+          ].map((match) => match[1]),
         ),
       ),
     ];
     expect(names).toContain("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS");
     expect(names).toContain("NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS");
     for (const name of names) {
+      expect(publicRuntimeKeys).toContain(name);
       expect(dockerfile).toContain(`ARG ${name}=""`);
       expect(dockerfile).toContain(`${name}=$${name}`);
     }
+    expect(sources(sourceRoot).join("\n")).not.toMatch(
+      /process\.env\.NEXT_PUBLIC_/,
+    );
     expect(dockerfile).not.toMatch(
       /ARG\s+(?:ARTFI_OPERATOR_SESSION_SECRET|ARTFI_OPERATOR_BEARER_TOKEN|R2_SECRET_ACCESS_KEY)/,
     );

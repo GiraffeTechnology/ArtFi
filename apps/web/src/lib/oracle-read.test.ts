@@ -338,3 +338,32 @@ describe("same-origin Oracle route", () => {
     );
   });
 });
+
+describe("source catalog Oracle identity", () => {
+  it("reads a source-bound real slug without a sample or global token fallback", async () => {
+    const { token, asset } = oracleReadFixtures();
+    respond(token, asset);
+    vi.stubEnv("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_COLLECTION_ADDRESS", "");
+    const result = await readWholeArtworkOracle("new-source-record", {
+      chainId: 560048,
+      collectionAddress: oracleFixtureContract,
+      tokenId: "1",
+      assetId: "test_artwork_1",
+    });
+    expect(result.ok).toBe(true);
+    expect(String(fetchMock.mock.calls[0][0])).toContain(oracleFixtureContract);
+  });
+  it("rejects a source catalog physical identity that disagrees with Oracle", async () => {
+    const { token } = oracleReadFixtures();
+    fetchMock.mockResolvedValue(Response.json(token));
+    expect(
+      await readWholeArtworkOracle("new-source-record", {
+        chainId: 560048,
+        collectionAddress: oracleFixtureContract,
+        tokenId: "1",
+        assetId: "different-real-asset",
+      }),
+    ).toEqual({ ok: false, code: "BINDING_MISMATCH" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

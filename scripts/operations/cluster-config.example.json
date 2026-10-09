@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "purpose": "isolated-test",
+  "hostClass": "generic",
+  "runtimeDirectory": "/tmp/artfi-cluster-test",
+  "web": {
+    "listen": "127.0.0.1:34000",
+    "backends": ["127.0.0.1:34001", "127.0.0.1:34002"]
+  },
+  "api": {
+    "listen": "127.0.0.1:34010",
+    "backends": ["127.0.0.1:34011", "127.0.0.1:34012"]
+  }
+}

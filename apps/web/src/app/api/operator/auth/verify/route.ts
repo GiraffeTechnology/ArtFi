@@ -43,7 +43,10 @@ export async function POST(request: Request) {
     );
     if (!authorized) {
       return NextResponse.json(
-        { detail: "The wallet does not hold the reviewed registrar role." },
+        {
+          detail:
+            "The wallet is neither the reviewed registrar nor an owner of its configured role-holding safe.",
+        },
         { status: 403 },
       );
     }
@@ -51,6 +54,9 @@ export async function POST(request: Request) {
     const response = NextResponse.json({
       authenticated: true,
       address: session.address,
+      chainId: session.chainId,
+      registryAddress: session.registryAddress,
+      safeAddress: session.safeAddress,
       expiresAt: new Date(session.expiresAt).toISOString(),
     });
     response.cookies.set(operatorSessionCookie, token, {

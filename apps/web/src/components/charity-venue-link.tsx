@@ -1,5 +1,7 @@
 "use client";
 
+import { publicSetting } from "@/lib/public-runtime-config";
+
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -12,7 +14,7 @@ import { freshness } from "@/lib/market-links";
 
 /** Observed edition activity and source evidence. External navigation belongs in the footer. */
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
 
 type MarketCatalogResponse = {
   data: CharityVenueRecord[];
@@ -21,8 +23,9 @@ type MarketCatalogResponse = {
 };
 
 function collectionAddress(): string | undefined {
-  const configured =
-    process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS?.trim();
+  const configured = publicSetting(
+    "NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS",
+  )?.trim();
   return configured && /^0x[0-9a-fA-F]{40}$/.test(configured)
     ? configured
     : undefined;
@@ -151,8 +154,8 @@ export function CharityVenueLink({ tokenId }: Readonly<{ tokenId: string }>) {
       <p className="eyebrow">Where this edition trades</p>
       <p>
         Activity for this edition was observed on {state.venue}. This does not
-        establish a current executable listing. Native NFT trading is not yet
-        available in this build.
+        establish a current executable listing. Native NFT trading is available
+        for configured supported collections in the NFT marketplace.
       </p>
       <dl className="contract-facts">
         <div>

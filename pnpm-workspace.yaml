@@ -3,6 +3,7 @@ packages:
   - packages/*
 
 allowBuilds:
+  "@opensea/seaport-js": false
   bufferutil: true
   keccak: true
   unrs-resolver: true

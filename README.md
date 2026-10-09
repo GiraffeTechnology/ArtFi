@@ -1,11 +1,27 @@
 # ArtCCH ArtFi
 
 ArtCCH:ArtFi is a commercial digital art and Real-World Asset application built on an existing
-RWA, vault, fractional trading, and DAO product. The current delivery brings its three distinct
-sections together at [io.artcch.com](https://io.artcch.com).
+RWA, vault, fractional trading, and DAO product. The requested delivery destination for its
+three distinct sections is [io.artcch.com](https://io.artcch.com).
 
 This repository contains the ArtFi application. It consumes ERC-8415 capabilities through Oracle
 and does not implement the separate ERC8415-Kit, Oracle, or independent wallet product.
+
+## Install the reusable delivery
+
+Use the precompiled Linux package and its checksum; production installation does
+not require npm, Go, Solidity compilation, or assembling source code onsite.
+[Installation](docs/INSTALLATION.md) covers configuration, database migrations,
+service templates, verification, upgrade and application rollback. The artifact
+also includes optional bounded-runtime and monitoring services, MySQL recovery
+tools, and source-bound contract ABI/bytecode. External service and deployment
+bindings remain private operator inputs.
+
+[Artifact-first acceptance](docs/INSTALLABLE_ACCEPTANCE.md) runs from the package
+itself against fresh isolated MySQL, with optional desktop/mobile browser checks.
+[Candidate status](docs/DELIVERY_CANDIDATE_2026-10-06.md) distinguishes verified
+features, synthetic evidence and incomplete capabilities. Installing or testing a
+package does not authorize contract deployment or a real-value operation.
 
 ## Three product sections
 
