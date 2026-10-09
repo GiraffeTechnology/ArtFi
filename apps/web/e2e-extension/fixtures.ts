@@ -25,8 +25,15 @@ export type ExtensionAPI = {
   storage: { local: { get(keys: string[]): Promise<Record<string, unknown>> } };
 };
 
+export interface InstalledExtension {
+  context: BrowserContext;
+  worker: Worker;
+  extensionId: string;
+  restartBrowser(): Promise<InstalledExtension>;
+}
+
 export const test = base.extend<{
-  installed: { context: BrowserContext; worker: Worker; extensionId: string };
+  installed: InstalledExtension;
   origin: string;
 }>({
   origin: async ({}, provide) => {
@@ -89,7 +96,9 @@ export const test = base.extend<{
       path.join(tmpdir(), "artfi-installed-extension-"),
     );
     let context: BrowserContext | undefined;
-    try {
+    const launch = async (
+      wakeExtensionId?: string,
+    ): Promise<InstalledExtension> => {
       context = await chromium.launchPersistentContext(profile, {
         channel: "chromium", // Full Playwright-bundled Chromium, never headless-shell.
         headless: true,
@@ -111,6 +120,12 @@ export const test = base.extend<{
           await route.abort("blockedbyclient");
         }
       });
+      if (wakeExtensionId) {
+        // A previously registered MV3 worker may start lazily. Wake it through
+        // the actual popup's runtime messages, not a mocked worker invocation.
+        const popup = await context.newPage();
+        await popup.goto(`chrome-extension://${wakeExtensionId}/popup.html`);
+      }
       const worker =
         context
           .serviceWorkers()
@@ -144,7 +159,22 @@ export const test = base.extend<{
         ),
         contentType: "application/json",
       });
-      await provide({ context, worker, extensionId });
+      return {
+        context,
+        worker,
+        extensionId,
+        restartBrowser: async () => {
+          // Reuse only this test's temporary profile. No permissions or storage
+          // are seeded, modified, or copied during the browser restart.
+          await context?.close();
+          const restarted = await launch(extensionId);
+          expect(restarted.extensionId).toBe(extensionId);
+          return restarted;
+        },
+      };
+    };
+    try {
+      await provide(await launch());
     } finally {
       try {
         await context?.close();

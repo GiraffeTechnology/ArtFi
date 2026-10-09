@@ -82,3 +82,30 @@ Official references:
 - <https://developer.chrome.com/docs/extensions/reference/api/action#method-openPopup>
 - <https://developer.chrome.com/docs/extensions/reference/api/permissions#method-request>
 - <https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns>
+
+## Restart isolation checks
+
+The same prepermission CI project also includes two synthetic-only restart tests.
+One observes the actual extension worker through Chrome DevTools Protocol,
+selects its exact script URL/version ID, calls `ServiceWorker.stopWorker`, requires
+a subsequent `stopped` event, and wakes it through the real popup. It then requires
+a later `running` event for that version. This exercises forced termination and
+restart, not the timing of idle suspension. Worker transitions are attached to the
+test result. An unavailable CDP target or a missing transition fails the test.
+
+The other closes the entire persistent browser context and relaunches the same
+full sandboxed Chromium against only that test's temporary profile. The profile
+is removed after final teardown. Both tests begin with an unlocked synthetic
+coordinator, send no `vault.lock` message, require the restored popup to show
+locked, compare the complete persisted encrypted record for equality, and verify
+that the correct disposable test passphrase still unlocks it. They assert no
+scripting/host grant and no plaintext synthetic address/passphrase in storage.
+No worker or browser restart is inferred from a popup reload alone.
+
+These tests do not cover granted-site/provider restoration and do not alter the
+existing optional-permission approval boundary. Runtime results must come from
+the new exact-head CI run; static checks or earlier green runs are not proof that
+the new restart tests passed.
+
+References: <https://chromedevtools.github.io/devtools-protocol/tot/ServiceWorker/#method-stopWorker>
+and <https://playwright.dev/docs/chrome-extensions#service-worker-idle-suspension-mv3>.
