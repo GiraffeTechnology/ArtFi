@@ -195,7 +195,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
+      # Exercise immutable production output instead of concurrent dev-manifest writes.
+      - run: pnpm --filter @giraffetechnology/artfi-web build
       - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:oracle
+        env:
+          ARTFI_E2E_PRODUCTION: "1"
 
   session-browser:
     runs-on: ubuntu-latest
