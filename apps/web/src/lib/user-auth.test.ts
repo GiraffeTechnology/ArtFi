@@ -39,14 +39,15 @@ const signature =
 const message = "ArtFi EOA signature fixture";
 const fetcher = vi.fn();
 function challenge(): UserChallenge {
+  const now = Date.now();
   return {
     id: "challenge_public_test_id",
     address: address.toLowerCase() as Address,
     chainId: 560048,
     origin,
     message,
-    issuedAt: Date.now(),
-    expiresAt: Date.now() + 300_000,
+    issuedAt: now,
+    expiresAt: now + 300_000,
   };
 }
 function tokens() {
@@ -144,6 +145,19 @@ describe("ordinary wallet signature verification", () => {
 });
 
 describe("challenge and internal bridge boundary", () => {
+  it("keeps the maximum challenge lifetime valid when the clock advances between reads", () => {
+    let now = 1_800_000_000_000;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now++);
+    try {
+      const value = challenge();
+      expect(value.expiresAt - value.issuedAt).toBe(300_000);
+      expect(readUserChallenge(sealUserChallenge(value), origin)).toEqual(
+        value,
+      );
+    } finally {
+      clock.mockRestore();
+    }
+  });
   it("binds the challenge cookie to its exact content, origin, lifetime, wallet, and chain", () => {
     const value = challenge();
     const sealed = sealUserChallenge(value);
