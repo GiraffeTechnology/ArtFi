@@ -397,6 +397,8 @@ jobs:
           cache: false
       - name: Verify isolated primary, replica, backup and empty-target restore
         run: bash scripts/operations/mysql-ci-test.sh
+      - name: Verify explicit legacy-ledger adoption on isolated MySQL 8.4.11
+        run: bash scripts/operations/mysql-legacy-ci-test.sh
       - name: Build the pinned official Nginx test binary
         run: |
           sudo apt-get update
@@ -420,6 +422,8 @@ jobs:
         with:
           name: artfi-operations-${{ github.sha }}
           path: |
+            ${{ runner.temp }}/mysql-legacy-adoption/ci-*/public-summary.json
+            ${{ runner.temp }}/mysql-legacy-adoption/ci-*/mysql-image-digests.json
             ${{ runner.temp }}/mysql-operations/ci-*/test.log
             ${{ runner.temp }}/mysql-operations/ci-*/mysql-image-digests.json
             ${{ runner.temp }}/mysql-operations/ci-*/m6-mysql-*/summary.json
