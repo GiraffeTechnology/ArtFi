@@ -55,6 +55,61 @@ import {
 } from "./venue";
 import { nftJournal, nftRequestHash, type NftOperation } from "./journal";
 
+/** Internal composition only. No HTTP route accepts these dependencies or authority. */
+export type NftEngineContext = {
+  binding: Pick<NftPlan, "sessionId" | "taskPrincipal">;
+  chainId: number;
+  assertRequest(request: NftRequest, scope: NftScope): void;
+  assertPlan(plan: NftPlan): void;
+  validatePlan?(plan: NftPlan): Promise<void>;
+  beforePublish?(plan: NftPlan, rpc: ReadOnlyNftProvider): Promise<void>;
+  publish?(
+    plan: NftPlan,
+    dispatch: (beforeDispatch?: () => void) => Promise<NftOperation>,
+  ): Promise<NftOperation>;
+  requireTrading(): void;
+  scope(slug: string): NftScope;
+  provider(scope: NftScope): ReadOnlyNftProvider;
+  sdk(recorder: NftPlanRecorder, scope: NftScope): OpenSeaSDK;
+  api: typeof nftAPI;
+  journal(
+    action: "get" | "create" | "update",
+    operation: Partial<NftOperation> & { id: string },
+  ): Promise<NftOperation>;
+};
+function sessionContext(
+  session: UserSession,
+  accessToken: string,
+): NftEngineContext {
+  return {
+    binding: { sessionId: session.id },
+    chainId: session.chainId,
+    assertRequest: (request, scope) => sessionMatches(session, request, scope),
+    assertPlan: (plan) => {
+      sessionMatches(session, plan.request, plan.scope);
+      if (plan.taskPrincipal || plan.sessionId !== session.id)
+        fail(
+          "This wallet review belongs to an earlier sign-in. Prepare a new review.",
+          409,
+        );
+    },
+    requireTrading: requireNftTrading,
+    scope: nftScope,
+    provider,
+    sdk: (recorder, scope) =>
+      new OpenSeaSDK(
+        recorder as unknown as ConstructorParameters<typeof OpenSeaSDK>[0],
+        {
+          chain: sdkChain(scope),
+          apiKey: nftAPIKey(),
+          fetch: venueFetch("prepare"),
+        },
+        () => undefined,
+      ),
+    api: nftAPI,
+    journal: (action, operation) => nftJournal(action, operation, accessToken),
+  };
+}
 const seaportABI = new Interface(SeaportABI);
 const assetABI = [
   "function ownerOf(uint256) view returns(address)",
@@ -233,27 +288,33 @@ export async function prepareNftOperation(
   session: UserSession,
   accessToken: string,
 ): Promise<NftOperation> {
-  requireNftTrading();
-  sessionMatches(session, request, scope);
+  return prepareNftOperationWithContext(
+    operationId,
+    request,
+    scope,
+    sessionContext(session, accessToken),
+  );
+}
+export async function prepareNftOperationWithContext(
+  operationId: string,
+  request: NftRequest,
+  scope: NftScope,
+  context: NftEngineContext,
+): Promise<NftOperation> {
+  context.requireTrading();
+  context.assertRequest(request, scope);
   try {
-    const saved = await nftJournal("get", { id: operationId }, accessToken);
+    const saved = await context.journal("get", { id: operationId });
+    if (context.binding.taskPrincipal) context.assertPlan(saved.plan);
     if (saved.requestHash !== nftRequestHash(request))
       fail("The operation ID belongs to different terms.", 409);
     return saved;
   } catch (error) {
     if (!(error instanceof NftError) || error.status !== 404) throw error;
   }
-  const rpc = provider(scope);
+  const rpc = context.provider(scope);
   const recorder = new NftPlanRecorder(request.account, rpc);
-  const sdk = new OpenSeaSDK(
-    recorder as unknown as ConstructorParameters<typeof OpenSeaSDK>[0],
-    {
-      chain: sdkChain(scope),
-      apiKey: nftAPIKey(),
-      fetch: venueFetch("prepare"),
-    },
-    () => undefined,
-  );
+  const sdk = context.sdk(recorder, scope);
   // Use Seaport's public exact-approval mode. The pinned SDK does not account for
   // existing ERC-721 token-specific approvals, so remove only that redundant action
   // after independently verifying getApproved for this one selected token.
@@ -336,8 +397,8 @@ export async function prepareNftOperation(
     const plan: NftPlan = {
       id: randomUUID(),
       operationId,
-      sessionId: session.id,
-      chainId: session.chainId,
+      ...context.binding,
+      chainId: context.chainId,
       request,
       scope,
       expiresAt: Date.now() + 120000,
@@ -403,7 +464,8 @@ export async function prepareNftOperation(
           : `Confirm ${request.action} of ${request.quantity} token(s) through Seaport. Native value: ${formatEther(BigInt(plan.transaction.value))} ETH, plus wallet-estimated gas.`;
       plan.fees = canonical?.terms.fees || [];
     }
-    return await nftJournal("create", operationRecord(plan), accessToken);
+    await context.validatePlan?.(plan);
+    return await context.journal("create", operationRecord(plan));
   } catch (error) {
     if (error instanceof NftError) throw error;
     throw new NftError(
@@ -415,17 +477,17 @@ export async function prepareNftOperation(
     rpc.destroy();
   }
 }
-function checkCurrentPlan(operation: NftOperation, session: UserSession) {
+function checkCurrentPlan(operation: NftOperation, context: NftEngineContext) {
   const plan = operation.plan;
-  const currentScope = nftScope(plan.request.collection);
+  const currentScope = context.scope(plan.request.collection);
   if (
     (Object.keys(currentScope) as (keyof NftScope)[]).some(
       (key) => currentScope[key] !== plan.scope[key],
     )
   )
     fail("The collection configuration changed. Prepare a new review.", 409);
-  sessionMatches(session, plan.request, plan.scope);
-  if (plan.sessionId !== session.id || plan.expiresAt <= Date.now())
+  context.assertPlan(plan);
+  if (plan.expiresAt <= Date.now())
     fail(
       "This wallet review expired or belongs to an earlier sign-in. Prepare a new review.",
       409,
@@ -438,18 +500,29 @@ export async function submitNftSignature(
   session: UserSession,
   accessToken: string,
 ) {
-  requireNftTrading();
-  const plan = checkCurrentPlan(operation, session);
+  return submitNftSignatureWithContext(
+    operation,
+    signature,
+    sessionContext(session, accessToken),
+  );
+}
+export async function submitNftSignatureWithContext(
+  operation: NftOperation,
+  signature: string,
+  context: NftEngineContext,
+) {
+  context.requireTrading();
+  const plan = checkCurrentPlan(operation, context);
   if (plan.kind !== "signature" || !plan.typedData || !plan.orderHash)
     fail("This operation does not request an order signature.");
   if (operation.status !== "awaiting-wallet")
-    return reconcileNftOperation(operation, accessToken);
+    return reconcileNftOperationWithContext(operation, context);
   if (!operation.walletStarted)
     fail("The wallet request was not durably started.", 409);
   if (!/^0x(?:[a-fA-F0-9]{2}){1,8192}$/.test(signature))
     fail("Invalid wallet signature.", 400);
   const p = validateTypedData(plan.typedData, plan.request, plan.scope);
-  const rpc = provider(plan.scope);
+  const rpc = context.provider(plan.scope);
   try {
     await chainEligibility(rpc, plan.scope, plan.request);
     let verified = false;
@@ -485,50 +558,53 @@ export async function submitNftSignature(
         "The signature does not match the authenticated wallet and reviewed terms.",
         401,
       );
-    // Persist uncertainty before any externally visible order submission. Signature never enters the journal.
-    operation = await nftJournal(
-      "update",
-      { ...operation, status: "submitted", orderHash: plan.orderHash },
-      accessToken,
-    );
-    try {
-      const api = nftAPI(plan.scope, "submit");
-      const signed = {
-        parameters: {
-          ...p,
-          consideration: p.consideration.map((item) => ({
-            ...item,
-            recipient: item.recipient!,
-          })),
-          totalOriginalConsiderationItems: p.consideration.length,
-        },
-        signature,
-      };
-      const result =
-        plan.request.action === "list"
-          ? await api.orders.postListing(signed, SEAPORT)
-          : await api.orders.postOffer(signed, SEAPORT);
-      if (
-        result.orderHash?.toLowerCase() !== plan.orderHash.toLowerCase() ||
-        orderHash(components(result.protocolData?.parameters)) !==
-          plan.orderHash
-      )
-        throw new NftError(503, "The venue response needs reconciliation.");
-      return await nftJournal(
-        "update",
-        { ...operation, status: "accepted" },
-        accessToken,
-      );
-    } catch (error) {
-      return await nftJournal(
-        "update",
-        {
+    await context.beforePublish?.(plan, rpc);
+    const dispatch = async (beforeDispatch?: () => void) => {
+      // Persist uncertainty before any externally visible order submission. Signature never enters the journal.
+      operation = await context.journal("update", {
+        ...operation,
+        status: "submitted",
+        orderHash: plan.orderHash,
+      });
+      try {
+        const api = context.api(plan.scope, "submit");
+        const signed = {
+          parameters: {
+            ...p,
+            consideration: p.consideration.map((item) => ({
+              ...item,
+              recipient: item.recipient!,
+            })),
+            totalOriginalConsiderationItems: p.consideration.length,
+          },
+          signature,
+        };
+        // Final synchronous guard after the submitted journal await, immediately before dispatch.
+        beforeDispatch?.();
+        const result =
+          plan.request.action === "list"
+            ? await api.orders.postListing(signed, SEAPORT)
+            : await api.orders.postOffer(signed, SEAPORT);
+        if (
+          result.orderHash?.toLowerCase() !== plan.orderHash!.toLowerCase() ||
+          orderHash(components(result.protocolData?.parameters)) !==
+            plan.orderHash
+        )
+          throw new NftError(503, "The venue response needs reconciliation.");
+        return await context.journal("update", {
+          ...operation,
+          status: "accepted",
+        });
+      } catch (error) {
+        return await context.journal("update", {
           ...operation,
           status: error instanceof NftVenueRejection ? "rejected" : "pending",
-        },
-        accessToken,
-      );
-    }
+        });
+      }
+    };
+    return context.publish
+      ? await context.publish(plan, dispatch)
+      : await dispatch();
   } finally {
     rpc.destroy();
   }
@@ -603,32 +679,36 @@ export async function reconcileNftOperation(
   operation: NftOperation,
   accessToken: string,
 ): Promise<NftOperation> {
+  return reconcileNftOperationWithContext(operation, {
+    provider,
+    api: nftAPI,
+    journal: (action, record) => nftJournal(action, record, accessToken),
+  });
+}
+export async function reconcileNftOperationWithContext(
+  operation: NftOperation,
+  context: Pick<NftEngineContext, "provider" | "api" | "journal">,
+): Promise<NftOperation> {
   const plan = operation.plan;
   if (plan.kind === "signature") {
     if (!["pending", "submitted"].includes(operation.status)) return operation;
     try {
-      const record = await nftAPI(plan.scope).orders.getOrderByHash(
-        plan.orderHash!,
-        SEAPORT,
-        sdkChain(plan.scope),
-      );
+      const record = await context
+        .api(plan.scope)
+        .orders.getOrderByHash(plan.orderHash!, SEAPORT, sdkChain(plan.scope));
       if (
         record.orderHash?.toLowerCase() === plan.orderHash?.toLowerCase() &&
         orderHash(components(record.protocolData?.parameters)) ===
           plan.orderHash
       )
-        return nftJournal(
-          "update",
-          { ...operation, status: "accepted" },
-          accessToken,
-        );
+        return context.journal("update", { ...operation, status: "accepted" });
     } catch {
       /* An absent response is not proof of rejection. */
     }
     return operation;
   }
   if (!operation.transactionHash || !plan.transaction) return operation;
-  const rpc = provider(plan.scope);
+  const rpc = context.provider(plan.scope);
   try {
     if (Number((await rpc.getNetwork()).chainId) !== plan.chainId)
       fail("The receipt service is on another chain.", 503);
@@ -638,11 +718,7 @@ export async function reconcileNftOperation(
     ]);
     if (!tx || !receipt) {
       if (["confirmed", "failed"].includes(operation.status))
-        return nftJournal(
-          "update",
-          { ...operation, status: "pending" },
-          accessToken,
-        );
+        return context.journal("update", { ...operation, status: "pending" });
       return operation;
     }
     assertTransactionBinding(tx, plan);
@@ -653,26 +729,17 @@ export async function reconcileNftOperation(
       (await rpc.getBlockNumber()) - receipt.blockNumber + 1 < 2
     ) {
       if (["confirmed", "failed"].includes(operation.status))
-        return nftJournal(
-          "update",
-          { ...operation, status: "pending" },
-          accessToken,
-        );
+        return context.journal("update", { ...operation, status: "pending" });
       return operation;
     }
     if (receipt.status !== 1) {
       if (operation.status === "failed") return operation;
       if (operation.status === "confirmed")
-        operation = await nftJournal(
-          "update",
-          { ...operation, status: "pending" },
-          accessToken,
-        );
-      return nftJournal(
-        "update",
-        { ...operation, status: "failed" },
-        accessToken,
-      );
+        operation = await context.journal("update", {
+          ...operation,
+          status: "pending",
+        });
+      return context.journal("update", { ...operation, status: "failed" });
     }
     if (plan.kind === "transaction") {
       const expected =
@@ -700,16 +767,11 @@ export async function reconcileNftOperation(
     }
     if (operation.status === "confirmed") return operation;
     if (operation.status === "failed")
-      operation = await nftJournal(
-        "update",
-        { ...operation, status: "pending" },
-        accessToken,
-      );
-    return nftJournal(
-      "update",
-      { ...operation, status: "confirmed" },
-      accessToken,
-    );
+      operation = await context.journal("update", {
+        ...operation,
+        status: "pending",
+      });
+    return context.journal("update", { ...operation, status: "confirmed" });
   } finally {
     rpc.destroy();
   }
@@ -771,8 +833,14 @@ export async function reviewNftOperation(
   operation: NftOperation,
   session: UserSession,
 ) {
-  requireNftTrading();
-  const plan = checkCurrentPlan(operation, session);
+  return reviewNftOperationWithContext(operation, sessionContext(session, ""));
+}
+export async function reviewNftOperationWithContext(
+  operation: NftOperation,
+  context: NftEngineContext,
+) {
+  context.requireTrading();
+  const plan = checkCurrentPlan(operation, context);
   if (operation.status !== "awaiting-wallet")
     fail(
       "This operation already has a submitted result. Check its status.",
@@ -783,10 +851,10 @@ export async function reviewNftOperation(
       "A wallet request was already started. Reconcile it before another request.",
       409,
     );
-  const rpc = provider(plan.scope);
+  const rpc = context.provider(plan.scope);
   try {
     const canonical = plan.request.orderHash
-      ? await canonicalOrder(nftAPI(plan.scope), plan.request, plan.scope)
+      ? await canonicalOrder(context.api(plan.scope), plan.request, plan.scope)
       : undefined;
     await chainEligibility(rpc, plan.scope, plan.request, canonical?.p);
     if (plan.typedData) {
@@ -799,4 +867,44 @@ export async function reviewNftOperation(
   } finally {
     rpc.destroy();
   }
+}
+
+/** Existing approval only; the task listing port never requests a transaction. */
+export async function requireExistingListingApproval(
+  plan: NftPlan,
+  rpc: ReadOnlyNftProvider,
+) {
+  if (
+    plan.request.action !== "list" ||
+    plan.kind !== "signature" ||
+    !plan.typedData
+  )
+    fail(
+      "Existing NFT approval is required; approval transactions are currently unsupported by the task listing port.",
+      409,
+    );
+  const p = validateTypedData(plan.typedData, plan.request, plan.scope);
+  await chainEligibility(rpc, plan.scope, plan.request, p);
+  const spender =
+    p.conduitKey === `0x${"0".repeat(64)}`
+      ? SEAPORT
+      : getDefaultConduit(sdkChain(plan.scope)).address;
+  const nft = new Contract(
+    plan.scope.contract,
+    [
+      "function isApprovedForAll(address,address) view returns(bool)",
+      "function getApproved(uint256) view returns(address)",
+    ],
+    rpc,
+  );
+  if (await nft.isApprovedForAll(plan.request.account, spender)) return;
+  if (
+    plan.scope.standard === "erc721" &&
+    equalAddress(await nft.getApproved(plan.request.tokenId), spender)
+  )
+    return;
+  fail(
+    "Existing NFT approval is required; approval transactions are currently unsupported by the task listing port.",
+    409,
+  );
 }
