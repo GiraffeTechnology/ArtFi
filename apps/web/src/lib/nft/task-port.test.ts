@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Interface, Network } from "ethers";
 import {
@@ -18,6 +19,7 @@ import { components, orderHash, sdkChain } from "./validation";
 import { kernelRequestDigest } from "../../../../../scripts/agent/agent-kernel.mjs";
 import {
   NftError,
+  readNftRequest,
   type NftRequest,
   type NftScope,
   type NftTaskBinding,
@@ -75,6 +77,7 @@ function fixture() {
     beforeSubmitted: undefined as undefined | (() => Promise<void>),
     gateTask: undefined as VerifiedNftTask | undefined,
     loseReviewResponse: false,
+    reorderJournalJson: false,
   };
   const request: NftRequest = {
     action: "list",
@@ -272,7 +275,22 @@ function fixture() {
       )
         throw new NftError(409, "Synthetic CAS conflict");
       next.revision = current ? current.revision + 1 : 1;
-      store.set(next.id, next);
+      // Model MySQL JSON's length/byte key ordering, including nested objects.
+      const durable = state.reorderJournalJson
+        ? JSON.parse(
+            JSON.stringify(next, (_key, value) =>
+              value && typeof value === "object" && !Array.isArray(value)
+                ? Object.fromEntries(
+                    Object.entries(value).sort(
+                      ([a], [b]) =>
+                        a.length - b.length || (a < b ? -1 : a > b ? 1 : 0),
+                    ),
+                  )
+                : value,
+            ),
+          )
+        : next;
+      store.set(next.id, durable);
       state.writes.push(structuredClone(next));
       if (
         state.loseReviewResponse &&
@@ -443,6 +461,101 @@ describe("internal NativeNftTaskPort using the official SDK and fully synthetic 
       await expect(f.port.publishListing(ref, sig)).rejects.toThrow();
     expect(f.state.posts).toBe(0);
     expect(JSON.stringify(f.state.writes)).not.toContain("0xabcd");
+  });
+  it("preserves normalized request hashes through JSON storage reordering", async () => {
+    const f = fixture();
+    f.state.reorderJournalJson = true;
+    const normalized = readNftRequest(f.request);
+    const legacyHash = createHash("sha256")
+      .update(JSON.stringify(normalized))
+      .digest("hex");
+    const ref = await f.port.prepareListing(taskBinding, f.request);
+    const saved = f.store.get(ref.nativeOperationId)!;
+    expect(saved.requestHash).toBe(legacyHash);
+    expect(Object.keys(saved.plan.request)).not.toEqual(
+      Object.keys(normalized),
+    );
+    expect(
+      createHash("sha256")
+        .update(JSON.stringify(saved.plan.request))
+        .digest("hex"),
+    ).not.toBe(legacyHash);
+    expect(await f.port.prepareListing(taskBinding, f.request)).toEqual(ref);
+    expect((await f.port.reviewListing(ref)).reference).toEqual(ref);
+    expect((await f.port.publishListing(ref, "0x1234")).status).toBe(
+      "accepted",
+    );
+    expect(
+      (await createNativeNftTaskPort(f.deps).readPublication(ref)).reference,
+    ).toEqual(ref);
+    expect(f.state.posts).toBe(1);
+  });
+  it("still rejects an order-selected request for seller listing", async () => {
+    const f = fixture();
+    f.state.reorderJournalJson = true;
+    f.request.orderHash = `0x${"8".repeat(64)}`;
+    await expect(
+      f.port.prepareListing(taskBinding, f.request),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(f.store.size).toBe(0);
+  });
+  it("reads the original JSON-reordered unsigned plan after expiry and revocation", async () => {
+    const f = fixture();
+    f.state.reorderJournalJson = true;
+    const ref = await f.port.prepareListing(taskBinding, f.request);
+    await f.port.reviewListing(ref);
+    const original = structuredClone(f.store.get(ref.nativeOperationId)!.plan);
+    await f.revoke();
+    vi.spyOn(Date, "now").mockReturnValue((f.verified.expiresAt + 1) * 1000);
+    expect(() => readNftRequest(original.request)).toThrow();
+    const result = await createNativeNftTaskPort(f.deps).readPublication(ref);
+    expect(result.recoverySnapshot).toEqual({
+      unsignedPlan: original,
+      walletStarted: true,
+      signingState: "STARTED_OUTCOME_UNKNOWN",
+      authority: "READ_ONLY_NOT_SIGNING_AUTHORIZATION",
+    });
+    expect(kernelRequestDigest(result.recoverySnapshot.unsignedPlan)).toBe(
+      ref.reviewDigest,
+    );
+    expect(f.state.writes).toHaveLength(2);
+    expect(f.state.posts).toBe(0);
+  });
+  it.each([
+    ["action", "offer"],
+    ["collection", "different-collection"],
+    ["tokenId", "8"],
+    ["account", fee],
+    ["quantity", "11"],
+    ["priceWei", "10001"],
+    ["expiresAt", 1],
+    ["orderHash", `0x${"8".repeat(64)}`],
+    ["unexpected", true],
+  ])(
+    "rejects changed request field %s after JSON storage reordering",
+    async (key, value) => {
+      const f = fixture();
+      f.state.reorderJournalJson = true;
+      const ref = await f.port.prepareListing(taskBinding, f.request);
+      const saved = f.store.get(ref.nativeOperationId)!;
+      (saved.plan.request as unknown as Record<string, unknown>)[String(key)] =
+        value;
+      await expect(f.port.readPublication(ref)).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(f.state.posts).toBe(0);
+      expect(f.state.writes).toHaveLength(1);
+    },
+  );
+  it("rejects a changed persisted request hash after JSON storage reordering", async () => {
+    const f = fixture();
+    f.state.reorderJournalJson = true;
+    const ref = await f.port.prepareListing(taskBinding, f.request);
+    f.store.get(ref.nativeOperationId)!.requestHash = "0".repeat(64);
+    await expect(f.port.readPublication(ref)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(f.state.posts).toBe(0);
   });
   it("binds every reference digest and principal to the durable plan", async () => {
     const f = fixture();

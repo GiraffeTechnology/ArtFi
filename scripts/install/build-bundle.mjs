@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { bundleNodePackage } from "./bundle-node-package.mjs";
+import { buildTaskListingRuntime } from "./build-task-listing-runtime.mjs";
 import { collectLicenses, copyProjectNotices } from "./licenses.mjs";
 import { bundleContracts } from "./bundle-contracts.mjs";
 import { createHash } from "node:crypto";
@@ -155,6 +156,19 @@ try {
     ],
     join(root, "apps/api"),
   );
+  // Independent authenticated internal listener; packaging never enables it.
+  run(
+    go,
+    [
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w",
+      "-o",
+      join(bundle, "runtime/bin/artfi-task-journal"),
+      "./cmd/task-journal",
+    ],
+    join(root, "apps/api"),
+  );
   run(
     go,
     [
@@ -218,6 +232,11 @@ try {
     join(bundle, "runtime/agent"),
     ["src", "package.json", "README.md", "config.example.json"],
   );
+  await buildTaskListingRuntime({
+    root,
+    destination: join(bundle, "runtime/task-listing"),
+    node,
+  });
   await cp(join(root, "scripts/agent"), join(bundle, "scripts/agent"), {
     recursive: true,
   });
@@ -261,6 +280,8 @@ try {
   });
   for (const name of [
     "INSTALLATION.md",
+    "TASK_LISTING_RUNTIME.md",
+    "NFT-TASK-JOURNAL.md",
     "DELIVERY_CANDIDATE_2026-10-06.md",
     "ADMIN_MODERATION.md",
     "RWA_SOURCE_GROUNDING.md",

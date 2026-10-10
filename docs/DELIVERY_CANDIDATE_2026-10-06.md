@@ -1,5 +1,24 @@
 # Native application delivery candidate — 2026-10-06
 
+## 2026-10-10 bounded runtime supersession note
+
+Historical entries below retain their original source/date and are not current
+candidate acceptance. The earlier absence of an authenticated task journal and
+installed Wallet composition is superseded for the bounded native seller-listing
+path by `TASK_LISTING_RUNTIME.md`, `NFT-TASK-JOURNAL.md` and the runtime
+integration recorded in the source-bound delivery manifest. ArtFi supplies the
+fixed server package and authenticated Go journal; the paired Wallet candidate
+supplies the grant/capability composition. This does not establish full Stage 2
+operation.
+
+Local evidence exercised installed modules, actual HTTP/mTLS Wallet/Go services,
+persistent MySQL CAS, logout continuation, restart and lost-response recovery.
+Signer, RPC/venue, quote/request and fill responses were synthetic. Deployment,
+production credential provisioning, real signer/venue/chain execution,
+genuine-device journeys and production acceptance remain **NOT_RUN**. Code,
+package, publication, merge, deployment and production acceptance are separate;
+no historical row or requirement count is promoted by this note.
+
 Status: `IMPLEMENTED-NOT-VERIFIED`. This is an integrated engineering candidate,
 not complete-market acceptance, a mainnet release, or authority to operate real
 assets. Product scope remains issue #110, incorporated #84, the later client

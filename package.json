@@ -34,7 +34,9 @@
     "test:e2e": "pnpm --filter @giraffetechnology/artfi-web test:e2e",
     "typecheck": "turbo run typecheck",
     "hoodi-admin-safe:verify-schema": "node scripts/release/verify-hoodi-admin-safe-deployment.mjs release/hoodi-admin-safe-deployment.example.json",
-    "hoodi-admin-safe:verifier:test": "node scripts/test/verify-hoodi-admin-safe-deployment.mjs"
+    "hoodi-admin-safe:verifier:test": "node scripts/test/verify-hoodi-admin-safe-deployment.mjs",
+    "task-runtime:build": "node scripts/install/build-task-listing-runtime.mjs",
+    "task-runtime:test": "node --test scripts/install/task-listing-runtime.test.mjs"
   },
   "devDependencies": {
     "prettier": "3.9.6",

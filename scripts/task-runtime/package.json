@@ -1,0 +1,32 @@
+{
+  "name": "@artfi/task-listing-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "exports": {
+    "./server": "./server.mjs",
+    "./manifest": "./runtime-manifest.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "server.mjs",
+    "runtime-manifest.json",
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSES",
+    "README.md"
+  ],
+  "dependencies": {
+    "@opensea/sdk": "12.11.2",
+    "@opensea/seaport-js": "4.3.0",
+    "ethers": "6.17.0",
+    "server-only": "0.0.1",
+    "viem": "2.56.0"
+  },
+  "license": "SEE LICENSE IN LICENSE"
+}
