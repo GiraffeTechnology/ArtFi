@@ -143,7 +143,7 @@ function binding(value: unknown): NftTaskBinding {
     !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(String(x.operationId)) ||
     !/^0x[0-9a-f]{64}$/.test(String(x.taskDigest)) ||
     !/^0x[0-9a-f]{64}$/.test(String(x.executorDigest)) ||
-    !/^grant:[A-Za-z0-9][A-Za-z0-9._:-]{0,121}$/.test(String(x.grantReference))
+    !/^grant:[A-Za-z0-9_-]{1,122}$/.test(String(x.grantReference))
   )
     fail("Invalid NFT task binding.", 403);
   uint(x.grantPolicyVersion, true);

@@ -111,8 +111,18 @@ EIP-1271 results, no key generation or actual signing. Global network use is den
 the task fixture. Ethereum/Base identifiers represent supported protocol shapes only;
 no API testnet listing support or real marketplace execution is asserted.
 
-Local evidence: 25 task-port tests; 143 unchanged NFT-path tests; all 82 web test files
+Initial isolated evidence: 25 task-port tests; 143 unchanged NFT-path tests; all 82 web test files
 and 1,059 web tests; all 251 agent script tests; TypeScript, ESLint and secret scan.
 Full production build, browser E2E, authenticated task-journal integration, deployment
 and real-value operation were not run. The isolated patch does not modify a current
 PR, an installation package, a live service, or production configuration.
+
+### Grant-reference compatibility follow-up
+
+Wallet's existing server generates `grant:` plus `randomBytes(32).toString("base64url")`.
+The native binding parser accepts the base64url alphabet, including an initial `_`
+or `-` after the prefix, with the existing 128-character total bound. It still
+requires exact authenticated-reference equality and rejects malformed references.
+The focused suite then passed 28 tests, including deterministic 32-byte base64url
+references through prepare/review/publication; TypeScript and changed-file lint also
+passed. The earlier full web suite was not repeated for this bounded correction.

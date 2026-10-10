@@ -1,5 +1,19 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-10 Wallet grant-reference compatibility follow-up
+
+The cross-library synthetic integration found that Wallet's existing 32-byte
+base64url grant identifiers may begin with `_` or `-` after `grant:`. The internal
+NFT task parser now accepts that existing alphabet while retaining the 128-character
+bound, exact reference comparison and fixed authenticated verifier. Other task
+binding fields and the Wallet's stored references are unchanged.
+
+The focused native port suite passed 28 tests, including deterministic 32-byte
+base64url preparation/review/publication and malformed or unapproved references.
+TypeScript and changed-file ESLint passed. The earlier full web evidence below was
+not repeated for this bounded follow-up; current-head CI remains authoritative.
+No production composition, real transaction or deployment was added.
+
 ## 2026-10-10 Internal native NFT seller task port (isolated candidate)
 
 Evidence only; no product stage, deployed capability, or existing status row is changed.

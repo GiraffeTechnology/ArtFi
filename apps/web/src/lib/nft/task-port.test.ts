@@ -703,4 +703,46 @@ describe("internal NativeNftTaskPort using the official SDK and fully synthetic 
     );
     expect(f.state.posts).toBe(0);
   });
+  it.each([0xfc, 0xf8])(
+    "accepts the Wallet's 32-byte base64url grant format with leading special character %s",
+    async (byte) => {
+      const f = fixture();
+      const token = Buffer.alloc(32, byte).toString("base64url");
+      expect(token).toHaveLength(43);
+      expect(["_", "-"]).toContain(token[0]);
+      const claimed = { ...taskBinding, grantReference: `grant:${token}` };
+      f.verified.binding = structuredClone(claimed);
+      const ref = await f.port.prepareListing(claimed, f.request);
+      expect(ref.taskBinding.grantReference).toBe(claimed.grantReference);
+      await f.port.reviewListing(ref);
+      expect(
+        (await f.port.publishListing(ref, "0x1234")).publicationAccepted,
+      ).toBe(true);
+    },
+  );
+  it("rejects malformed grant references and still requires the exact authenticated reference", async () => {
+    const f = fixture();
+    for (const grantReference of [
+      "grant:",
+      "grant:..",
+      "grant::value",
+      "grant:a/b",
+      "grant:a+b",
+      "grant:a=",
+      `grant:${"a".repeat(123)}`,
+      "other:reference",
+      "grant:a\n",
+    ])
+      await expect(
+        f.port.prepareListing({ ...taskBinding, grantReference }, f.request),
+      ).rejects.toThrow("Invalid NFT task binding");
+    await expect(
+      f.port.prepareListing(
+        { ...taskBinding, grantReference: "grant:_valid_but_unapproved" },
+        f.request,
+      ),
+    ).rejects.toThrow("wrong task binding");
+    expect(f.state.rpc).toEqual([]);
+    expect(f.store.size).toBe(0);
+  });
 });
