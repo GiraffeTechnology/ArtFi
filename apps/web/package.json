@@ -13,7 +13,8 @@
     "test:e2e:market": "playwright test --config=playwright.market.config.ts",
     "test:e2e:oracle": "playwright test --config=playwright.oracle.config.ts",
     "test:e2e:session": "node ../../scripts/test/run-session-e2e.mjs",
-    "test:e2e:safe": "playwright test --config=playwright.safe.config.ts"
+    "test:e2e:safe": "playwright test --config=playwright.safe.config.ts",
+    "test:e2e:rwa-oracle": "playwright test --config=playwright.rwa-oracle.config.ts"
   },
   "dependencies": {
     "@giraffetechnology/artfi-api-client": "workspace:*",
@@ -40,5 +41,6 @@
     "eslint-config-next": "16.3.1",
     "typescript": "5.9.3",
     "vitest": "5.0.3"
-  }
+  },
+  "license": "UNLICENSED"
 }

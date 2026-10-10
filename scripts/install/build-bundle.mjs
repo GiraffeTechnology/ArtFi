@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { bundleNodePackage } from "./bundle-node-package.mjs";
-import { collectLicenses } from "./licenses.mjs";
+import { collectLicenses, copyProjectNotices } from "./licenses.mjs";
 import { bundleContracts } from "./bundle-contracts.mjs";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -286,6 +286,7 @@ try {
   await mkdir(join(bundle, "licenses"));
   await writeFile(join(bundle, "licenses/NODE-LICENSE.txt"), license);
   await collectLicenses(root, bundle, go, env);
+  await copyProjectNotices(root, bundle);
   await writeFile(
     join(bundle, "source-manifest.json"),
     JSON.stringify(source, null, 2) + "\n",

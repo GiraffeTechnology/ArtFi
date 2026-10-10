@@ -157,7 +157,10 @@ try {
       join(root, "apps/web/node_modules/@playwright/test/cli.js"),
       "test",
       "e2e/agent-runtime-live.spec.ts",
+      "--config=playwright.fixtures.config.ts",
       "--workers=1",
+      "--retries=0",
+      `--output=${join(data, "agent-browser-artifacts")}`,
       "--reporter=json",
     ],
     {

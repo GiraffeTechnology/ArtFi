@@ -4,7 +4,24 @@ The product boundary is defined in PRD section 4.8. This document separates the 
 implementation from the remaining work. A native discovery page or removal of redirects does
 not complete listing, buying, offers, cancellation, or wallet integration.
 
-## Current source
+## Current delivery evidence — 2026-10-10
+
+The navigation-era implementation sequence below is historical. The native
+application now has catalog/detail routes in `apps/web/src/app/api/nft/[action]/route.ts`,
+SDK-backed listing, offer, buy, acceptance and cancellation handling in
+`apps/web/src/lib/nft/engine.ts`, and the in-app UI in `nft-market.tsx`.
+PR #157's exact candidate passed 32 fixture-backed NFT browser cases. The current
+catalog-provenance follow-up adds per-record source observation times and explicit
+refresh/stale states; its new browser cases require their own exact-candidate result.
+Code presence and fixture results do not establish live venue acceptance.
+
+OpenSea [ended its dedicated testnet environment on July 23, 2025](https://support.opensea.io/en/articles/11833955-farewell-testnets).
+Sepolia wallet/NFT chain tests and synthetic venue tests remain distinct from
+real OpenSea discovery, listing acceptance and settlement. There is no supported
+Sepolia OpenSea acceptance shortcut. Retain truthful unsupported-chain results;
+do not switch to a production chain or submit transactions automatically.
+
+## Historical navigation-increment source
 
 - `/nft` retains in-app edition discovery and rights/holder-access surfaces. External OpenSea
   navigation is footer-only; observed URLs remain non-navigating source evidence.

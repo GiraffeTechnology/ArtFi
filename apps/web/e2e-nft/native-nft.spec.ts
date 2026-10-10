@@ -71,6 +71,10 @@ async function fixture(page: Page) {
     status: "awaiting-wallet",
     operation: null as Record<string, unknown> | null,
     failCatalog: false,
+    catalogObservedAt: "2026-10-10T01:00:00Z",
+    catalogNext: null as string | null,
+    catalogTokens: [token],
+    collections: [scope],
     changeReview: false,
     failPrepare: false,
     loseWalletStartResponse: false,
@@ -207,7 +211,7 @@ async function fixture(page: Page) {
       action = url.pathname.split("/").pop();
     if (action === "config") {
       await route.fulfill({
-        json: { collections: [scope], tradingEnabled: true },
+        json: { collections: state.collections, tradingEnabled: true },
       });
       return;
     }
@@ -220,7 +224,17 @@ async function fixture(page: Page) {
                 detail: "OpenSea is rate-limiting requests. Try again later.",
               },
             }
-          : { json: { data: [token], next: null } },
+          : {
+              json: {
+                data: state.catalogTokens,
+                next: state.catalogNext,
+                scope: state.collections.find(
+                  (item) => item.slug === url.searchParams.get("collection"),
+                ),
+                source: "opensea",
+                observedAt: state.catalogObservedAt,
+              },
+            },
       );
       return;
     }
@@ -918,3 +932,86 @@ for (const change of ["sign-out", "wallet switch"] as const) {
     expect(state.submissions).toBe(0);
   });
 }
+
+test("catalog observations retain per-page time and become visibly stale after a failed refresh", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.catalogNext = "TEST_ONLY-next";
+  await page.goto("/nft");
+  const provenance = page.getByRole("region", {
+    name: "NFT catalog provenance",
+  });
+  await expect(provenance).toContainText("Source: OpenSea");
+  await expect(provenance).toContainText("ethereum");
+  await expect(provenance).toContainText(scope.contract);
+  const first = page
+    .locator(".nft-market-card")
+    .filter({ hasText: token.name });
+  await expect(first.locator("time")).toHaveAttribute(
+    "datetime",
+    "2026-10-10T01:00:00Z",
+  );
+  state.catalogTokens = [
+    { ...token, tokenId: "8", name: "TEST ONLY edition eight" },
+  ];
+  state.catalogObservedAt = "2026-10-10T02:00:00Z";
+  state.catalogNext = null;
+  await page.getByRole("button", { name: "Load more NFTs" }).click();
+  await expect(page.locator(".nft-market-card")).toHaveCount(2);
+  await expect(first.locator("time")).toHaveAttribute(
+    "datetime",
+    "2026-10-10T01:00:00Z",
+  );
+  await expect(
+    page
+      .locator(".nft-market-card")
+      .filter({ hasText: "TEST ONLY edition eight" })
+      .locator("time"),
+  ).toHaveAttribute("datetime", "2026-10-10T02:00:00Z");
+  state.failCatalog = true;
+  await page
+    .getByRole("button", { name: "Refresh collections", exact: true })
+    .click();
+  await expect(provenance).toContainText("may be stale");
+  await expect(first.locator("time")).toHaveAttribute(
+    "datetime",
+    "2026-10-10T01:00:00Z",
+  );
+  state.failCatalog = false;
+  state.catalogObservedAt = "2026-10-10T03:00:00Z";
+  await page
+    .getByRole("button", { name: "Refresh collections", exact: true })
+    .click();
+  await expect(page.locator(".nft-market-card")).toHaveCount(1);
+  await expect(provenance).not.toContainText("may be stale");
+  await expect(provenance).toContainText("not a realtime feed");
+});
+
+test("switching collections never reuses the previous catalog observation", async ({
+  page,
+}) => {
+  const state = await fixture(page);
+  state.collections.push({
+    ...scope,
+    slug: "test-only-second",
+    label: "TEST ONLY second collection",
+  });
+  await page.goto("/nft");
+  await expect(page.locator(".nft-market-card")).toHaveCount(1);
+  state.failCatalog = true;
+  const collection = page
+    .getByRole("region", { name: "NFT marketplace", exact: true })
+    .getByRole("combobox");
+  await expect(collection).toHaveCount(1);
+  await expect(collection).toHaveValue(scope.slug);
+  await collection.selectOption("test-only-second");
+  await expect(collection).toHaveValue("test-only-second");
+  const provenance = page.getByRole("region", {
+    name: "NFT catalog provenance",
+  });
+  await expect(provenance).toContainText("test-only-second");
+  await expect(provenance).toContainText("Catalog refresh unavailable");
+  await expect(provenance.locator("time")).toHaveCount(0);
+  await expect(page.locator(".nft-market-card")).toHaveCount(0);
+});

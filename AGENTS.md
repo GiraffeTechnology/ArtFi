@@ -306,3 +306,11 @@ The client-approved [ArtFi + Oracle Delivery Stage Framework v1.1](https://githu
 ## Current public installation-asset policy
 
 Keep this repository public for investor review. Follow [the installation-asset publication policy](docs/INSTALLATION-ASSET-PUBLICATION.md): publish only verified product artifacts, retain all required notices, exclude private operations and tenant data, and verify uploaded checksums. The designated source/delivery owner maintains licensing documentation; deployment controllers must not create conflicting license terms or change visibility. Merge pull requests only after exact required CI is fully successful.
+
+## Product licensing
+
+[LICENSE](LICENSE) identifies the restricted original-material scope and
+applicable exceptions. Solidity and separately licensed dependencies, fonts,
+and standard/Kit material retain their own terms. Authorized copies of covered
+material require the source attribution described in LICENSE; attribution alone
+grants no copying permission. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
