@@ -251,6 +251,7 @@ export function validateTypedData(
   data: NftTypedData,
   request: NftRequest,
   scope: NftScope,
+  now = Date.now(),
 ) {
   if (
     data.primaryType !== "OrderComponents" ||
@@ -262,7 +263,7 @@ export function validateTypedData(
   )
     fail("Unexpected Seaport signing domain or schema.");
   const p = components(data.message);
-  validateComponents(p, request, scope, true);
+  validateComponents(p, request, scope, true, now);
   return p;
 }
 function fromResult(value: unknown): unknown {
