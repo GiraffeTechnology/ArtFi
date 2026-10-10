@@ -59,7 +59,13 @@ const config = {
     },
   },
 };
-function probe(directory, code = "", conditions = true, credentials = false) {
+function probe(
+  directory,
+  code = "",
+  conditions = true,
+  credentials = false,
+  nodeVersion,
+) {
   const env = { ...process.env };
   for (const name of Object.keys(env))
     if (/^(?:NODE_PATH|NODE_OPTIONS|ARTFI_|OPENSEA_|NEXT_PUBLIC_)/.test(name))
@@ -71,7 +77,7 @@ function probe(directory, code = "", conditions = true, credentials = false) {
       ...(conditions ? ["--conditions=react-server"] : []),
       "--input-type=module",
       "-e",
-      `import assert from 'node:assert/strict'; const runtime = await import('./server.mjs'); ${code}`,
+      `import assert from 'node:assert/strict'; ${nodeVersion ? `Object.defineProperty(process.versions, 'node', { value: ${JSON.stringify(nodeVersion)} });` : ""} const runtime = await import('./server.mjs'); ${code}`,
     ],
     { cwd: directory, env, encoding: "utf8", timeout: 20000 },
   );
@@ -129,6 +135,28 @@ test("real installed listing runtime closure and strict configuration", async (t
   const destination = join(
     consumer,
     "node_modules/@artfi/task-listing-runtime",
+  );
+  await t.test(
+    "package, manifest and entry preserve the Node 22.18 minimum",
+    async () => {
+      const pkg = JSON.parse(
+        await readFile(join(destination, "package.json"), "utf8"),
+      );
+      assert.equal(pkg.engines.node, ">=22.18.0");
+      assert.deepEqual(built.manifest.node, {
+        minimumMajor: 22,
+        minimumVersion: "22.18.0",
+        conditions: ["react-server"],
+      });
+      // These are guard boundary simulations; process.execPath remains the actual test Node.
+      for (const version of ["20.19.0", "21.99.0", "22.17.9"]) {
+        const result = probe(destination, "", true, false, version);
+        assert.notEqual(result.status, 0, version);
+        assert.match(result.stderr, /ARTFI_LISTING_NODE_22_18_REQUIRED/);
+      }
+      for (const version of ["22.18.0", "22.19.0", "23.0.0", "24.0.0"])
+        succeeded(probe(destination, "", true, false, version));
+    },
   );
   await t.test(
     "exact interface imports actual native, journal, terms and observer with no source loader",

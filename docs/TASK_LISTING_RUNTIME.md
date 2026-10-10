@@ -7,7 +7,7 @@ workflow and the bounded authenticated task listing integration.
 
 ## Build and installation contract
 
-Use the repository's existing frozen pnpm installation and Node 24 or later. Run
+Use the repository's existing frozen pnpm installation and Node 22.18.0 or later. Run
 `node scripts/install/build-task-listing-runtime.mjs --output /absolute/output`.
 Add `--archive /absolute/artfi-task-listing-runtime-1.0.0.tgz` to produce the
 closed npm file dependency. Packing disables install scripts, uses offline mode,
@@ -34,6 +34,11 @@ The fixed package is `@artfi/task-listing-runtime@1.0.0`:
 - `./manifest`: `runtime-manifest.json`, schema `artfi-task-listing-runtime/1`.
 - `./package.json`: exact package version and exports.
 - Wallet interface: `8415-task-listing-runtime/1`.
+
+The package, entry guard and manifest use the same minimum Node version,
+22.18.0, preserving the existing Wallet runtime and CI baseline. The full ArtFi
+bundle may supply a newer Node version; that bundled version is not a higher
+minimum for consumers of this internal package.
 
 Consumers pin the artifact and manifest checksum and verify the manifest's file
 hashes and contained relative links before loading. The manifest identifies the

@@ -419,7 +419,7 @@ export async function buildTaskListingRuntime({
     );
     await writeFile(
       join(stage, "server.mjs"),
-      `import 'server-only';\nif (Number(process.versions.node.split('.')[0]) < 24) throw Error('ARTFI_LISTING_NODE_24_REQUIRED');\nimport { readFileSync } from 'node:fs';\nexport * from './dist/scripts/task-runtime/server.mjs';\nexport const runtimeManifest = Object.freeze(JSON.parse(readFileSync(new URL('./runtime-manifest.json', import.meta.url), 'utf8')));\n`,
+      `import 'server-only';\nconst [major, minor] = process.versions.node.split('.').map(Number);\nif (major < 22 || (major === 22 && minor < 18)) throw Error('ARTFI_LISTING_NODE_22_18_REQUIRED');\nimport { readFileSync } from 'node:fs';\nexport * from './dist/scripts/task-runtime/server.mjs';\nexport const runtimeManifest = Object.freeze(JSON.parse(readFileSync(new URL('./runtime-manifest.json', import.meta.url), 'utf8')));\n`,
     );
     for (const name of [
       "LICENSE",
@@ -481,7 +481,11 @@ export async function buildTaskListingRuntime({
       packageVersion: template.version,
       walletInterface: "8415-task-listing-runtime/1",
       entry: "./server.mjs",
-      node: { minimumMajor: 24, conditions: ["react-server"] },
+      node: {
+        minimumMajor: 22,
+        minimumVersion: "22.18.0",
+        conditions: ["react-server"],
+      },
       dependencies,
       normalization,
       packages,

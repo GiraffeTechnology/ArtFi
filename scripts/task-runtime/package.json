@@ -4,7 +4,7 @@
   "private": true,
   "type": "commonjs",
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.18.0"
   },
   "exports": {
     "./server": "./server.mjs",
