@@ -302,3 +302,7 @@ Classification:
 - REMOVE
 
 The client-approved [ArtFi + Oracle Delivery Stage Framework v1.1](https://github.com/GiraffeTechnology/ArtFi/issues/100) separates stage acceptance without lowering engineering standards or expanding product scope. Each stage has independent acceptance. Future-stage capabilities MUST NOT block current-stage delivery.
+
+## Current public installation-asset policy
+
+Keep this repository public for investor review. Follow [the installation-asset publication policy](docs/INSTALLATION-ASSET-PUBLICATION.md): publish only verified product artifacts, retain all required notices, exclude private operations and tenant data, and verify uploaded checksums. The designated source/delivery owner maintains licensing documentation; deployment controllers must not create conflicting license terms or change visibility. Merge pull requests only after exact required CI is fully successful.
