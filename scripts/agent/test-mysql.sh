@@ -2,6 +2,13 @@
 # Starts a new local TEST_ONLY database. Never defaults to an existing database.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+# The default retains every existing SQL case. The focused profile reuses the
+# same disposable lifecycle for two browser cases without replaying SQL cases.
+PROFILE=${ARTFI_AGENT_TEST_PROFILE:-full}
+[[ "$PROFILE" == full || "$PROFILE" == browser ]] || { echo 'INVALID_AGENT_TEST_PROFILE' >&2; exit 1; }
+if [[ "$PROFILE" == browser ]]; then
+  : "${ARTFI_AGENT_TEST_BUNDLE:?The focused browser profile requires the existing verified bundle}"
+fi
 BASE=${ARTFI_TEST_MYSQL_BASE:?Set ARTFI_TEST_MYSQL_BASE to the official MySQL installation}
 CACHE=${ARTFI_AGENT_TEST_CACHE:-"$ROOT/../runtime-cache"}
 mkdir -p "$CACHE"
@@ -29,6 +36,8 @@ MYSQL=("$BASE/bin/mysql" --no-defaults --protocol=TCP -h127.0.0.1 -P"$ARTFI_AGEN
 for migration in "$ROOT/apps/api/migrations/"*.up.sql; do "${MYSQL[@]}" artfi_stage2_isolated_test < "$migration"; done
 "${MYSQL[@]}" -e 'SELECT VERSION() AS actual_mysql_version;'
 cd "$ROOT/apps/agent-runtime"
-node --test --test-concurrency=1 test/mysql.integration.mjs test/action-mysql.integration.mjs test/http-mysql.integration.mjs
+if [[ "$PROFILE" == full ]]; then
+  node --test --test-concurrency=1 test/mysql.integration.mjs test/action-mysql.integration.mjs test/http-mysql.integration.mjs
+fi
 
-if [[ ${ARTFI_AGENT_RUN_BROWSER:-0} == 1 ]]; then node test/browser-runtime-runner.mjs; fi
+if [[ "$PROFILE" == browser || ${ARTFI_AGENT_RUN_BROWSER:-0} == 1 ]]; then node test/browser-runtime-runner.mjs; fi

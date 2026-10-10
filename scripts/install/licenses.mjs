@@ -7,7 +7,27 @@ import {
   readFile,
   writeFile,
 } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+
+export const PROJECT_NOTICE_FILES = Object.freeze([
+  ["LICENSE", "LICENSE"],
+  ["NOTICE", "NOTICE"],
+  ["THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES.md"],
+  ["LICENSES/MIT.txt", "LICENSES/MIT.txt"],
+  ["apps/web/src/fonts/INTER-LICENSE.txt", "licenses/fonts/INTER-LICENSE.txt"],
+]);
+
+/** Copy only the named product and separately licensed notices before sealing. */
+export async function copyProjectNotices(root, bundle) {
+  for (const [source, destination] of PROJECT_NOTICE_FILES) {
+    const input = join(root, source);
+    if (!(await lstat(input)).isFile())
+      throw new Error(`Project notice must be a regular file: ${source}`);
+    const output = join(bundle, destination);
+    await mkdir(dirname(output), { recursive: true });
+    await cp(input, output);
+  }
+}
 
 /** Keep build-dependency notices as well as runtime notices; never copy machine paths into the inventory. */
 export async function collectLicenses(root, bundle, go, env) {

@@ -148,7 +148,8 @@ jobs:
         run: docker compose down -v
 
   browser:
-    runs-on: ubuntu-latest
+    # Match the existing installed-browser jobs: retain Chromium sandbox on a supported image.
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -182,7 +183,8 @@ jobs:
       - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:safe
 
   oracle-browser:
-    runs-on: ubuntu-latest
+    # Match the existing installed-browser jobs: retain Chromium sandbox on a supported image.
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -200,6 +202,7 @@ jobs:
       - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:oracle
         env:
           ARTFI_E2E_PRODUCTION: "1"
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:rwa-oracle
 
   session-browser:
     runs-on: ubuntu-latest
@@ -290,6 +293,49 @@ jobs:
             --playwright-module "$GITHUB_WORKSPACE/apps/web/node_modules/@playwright/test/index.mjs" \
             --evidence-dir "$RUNNER_TEMP/artfi-installed-acceptance" \
             --require-browser
+      - name: Verify existing conditional agent and charity browser cases
+        timeout-minutes: 8
+        env:
+          ARTFI_TEST_MYSQL_BASE: ${{ runner.temp }}/artfi-mysql-runtime/mysql-8.4.11-linux-glibc2.28-x86_64-minimal
+          ARTFI_AGENT_TEST_CACHE: ${{ runner.temp }}/artfi-conditional-browser
+          ARTFI_AGENT_TEST_PROFILE: browser
+          NEXT_PUBLIC_HOODI_RPC_URL: http://127.0.0.1:3000/__test_only_rpc__
+          NEXT_PUBLIC_BASE_RPC_URL: http://127.0.0.1:3000/__test_only_rpc__
+          NEXT_PUBLIC_ETHEREUM_RPC_URL: http://127.0.0.1:3000/__test_only_rpc__
+        run: |
+          node --test scripts/test/conditional-browser-summary.test.mjs
+          manifests=("$RUNNER_TEMP/artfi-installed-acceptance/extracted/"*/manifest.json)
+          test "${#manifests[@]}" = 1
+          test -f "${manifests[0]}"
+          export ARTFI_AGENT_TEST_BUNDLE="${manifests[0]%/manifest.json}"
+          export ARTFI_E2E_BUNDLE_ROOT="$ARTFI_AGENT_TEST_BUNDLE"
+          agent_status=0
+          bash scripts/agent/test-mysql.sh || agent_status=$?
+          charity_status=0
+          NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS=0x1000000000000000000000000000000000000001 \
+          PLAYWRIGHT_JSON_OUTPUT_FILE="$ARTFI_AGENT_TEST_CACHE/charity-browser.json" \
+          pnpm --filter @giraffetechnology/artfi-web exec playwright test \
+            e2e/charity-editions-populated.spec.ts \
+            --config=playwright.fixtures.config.ts --workers=1 --retries=0 \
+            --output="$ARTFI_AGENT_TEST_CACHE/charity-browser-artifacts" \
+            --reporter=json || charity_status=$?
+          test "$agent_status" = 0
+          test "$charity_status" = 0
+      - name: Verify and prepare public conditional-browser summary
+        if: always()
+        run: |
+          node scripts/test/conditional-browser-summary.mjs \
+            "$RUNNER_TEMP/artfi-conditional-browser" \
+            "$RUNNER_TEMP/artfi-installed-acceptance/report.json" \
+            "$RUNNER_TEMP/artfi-public-conditional-browser-summary.json"
+      - name: Retain only public conditional-browser summary
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: artfi-conditional-browser-${{ github.sha }}
+          path: ${{ runner.temp }}/artfi-public-conditional-browser-summary.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Prepare public synthetic acceptance summary
         if: always()
         run: |

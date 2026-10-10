@@ -24,3 +24,12 @@ Changes to smart contracts additionally require unit, fuzz, invariant, integrati
 ## Security
 
 Do not commit secrets, seed phrases, private keys, RPC credentials, production addresses, database dumps, or signed transactions. See [SECURITY.md](SECURITY.md).
+
+## Licensing and provenance
+
+The project contains proprietary and separately licensed material. See
+[LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the applicable scope.
+Contributions must identify their origin and retain existing license,
+copyright, and attribution notices. Submit only material you own or are
+authorized to contribute under the applicable terms. Submission does not by
+itself transfer copyright ownership or replace a third-party license.

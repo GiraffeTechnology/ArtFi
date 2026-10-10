@@ -10,6 +10,12 @@ import {
 import { formatEther, type Hex } from "viem";
 import { useAccount, useWalletClient } from "wagmi";
 import { assertSameNftReview } from "@/lib/nft/client";
+import {
+  observeNftCatalogPage,
+  mergeNftCatalogPage,
+  type NftCatalogPage,
+  type ObservedNft,
+} from "@/lib/nft/catalog";
 import { useUserSession } from "@/components/user-session-provider";
 import {
   NFT_CHAINS,
@@ -90,9 +96,15 @@ function NftMarketSession() {
   const [scopes, setScopes] = useState<NftScope[]>([]),
     [enabled, setEnabled] = useState(false),
     [collection, setCollection] = useState("");
-  const [items, setItems] = useState<NftView[]>([]),
+  const [items, setItems] = useState<ObservedNft[]>([]),
     [cursor, setCursor] = useState<string | null>(null),
     [detail, setDetail] = useState<Detail | null>(null);
+  const [catalogObservedAt, setCatalogObservedAt] = useState<string | null>(
+    null,
+  );
+  const [catalogPhase, setCatalogPhase] = useState<
+    "idle" | "loading" | "observed" | "stale"
+  >("idle");
   const [operation, setOperation] = useState<Operation | null>(null),
     [recovery, setRecovery] = useState<Recovery | null>(null);
   const [history, setHistory] = useState<NftOperationHistory | null>(null);
@@ -214,22 +226,24 @@ function NftMarketSession() {
       const current = ++generation.current;
       const query = new URLSearchParams({ collection });
       if (next) query.set("cursor", next);
-      const response = await api<{ data: NftView[]; next: string | null }>(
+      const response = await api<NftCatalogPage>(
         "catalog",
         undefined,
         query,
-      );
-      if (current !== generation.current) return;
+      ).catch((error) => {
+        if (current !== generation.current) return null;
+        throw error;
+      });
+      if (!response || current !== generation.current) return;
+      const selectedScope = scopes.find((value) => value.slug === collection);
+      if (!selectedScope)
+        throw new Error("The selected collection is unavailable.");
+      const observed = observeNftCatalogPage(response, selectedScope);
       setItems((previous) =>
-        next
-          ? [
-              ...previous,
-              ...response.data.filter(
-                (item) => !previous.some((old) => old.tokenId === item.tokenId),
-              ),
-            ]
-          : response.data,
+        mergeNftCatalogPage(previous, observed, Boolean(next)),
       );
+      setCatalogObservedAt(response.observedAt);
+      setCatalogPhase("observed");
       setCursor(response.next);
       setMessage(
         response.data.length
@@ -237,12 +251,22 @@ function NftMarketSession() {
           : "No NFTs were returned for this configured collection.",
       );
     },
-    [collection],
+    [collection, scopes],
   );
+  function refreshCatalog(next?: string) {
+    setCatalogPhase("loading");
+    return browse(next).catch((error) => {
+      setCatalogPhase("stale");
+      throw error;
+    });
+  }
   useEffect(() => {
     let active = true;
     void browse().catch((error) => {
-      if (active) setMessage(error.message);
+      if (active) {
+        setCatalogPhase("stale");
+        setMessage(error.message);
+      }
     });
     return () => {
       active = false;
@@ -691,7 +715,10 @@ function NftMarketSession() {
               value={collection}
               disabled={busy}
               onChange={(event) => {
+                invalidate();
                 setItems([]);
+                setCatalogObservedAt(null);
+                setCatalogPhase("idle");
                 setDetail(null);
                 setCursor(null);
                 setOwned(null);
@@ -708,7 +735,7 @@ function NftMarketSession() {
           <button
             type="button"
             disabled={busy}
-            onClick={() => void run(() => browse())}
+            onClick={() => void run(() => refreshCatalog())}
           >
             Refresh collections
           </button>
@@ -778,6 +805,27 @@ function NftMarketSession() {
               remains available.
             </p>
           )}
+          <section aria-label="NFT catalog provenance" data-no-translate>
+            <p>
+              Source: OpenSea · Chain: {scope?.chain} · Collection:{" "}
+              {scope?.slug} · Contract: {scope?.contract}
+            </p>
+            <p role="status">
+              {catalogPhase === "loading"
+                ? "Catalog refresh in progress. Previously displayed records are historical observations."
+                : catalogPhase === "stale"
+                  ? "Catalog refresh unavailable. Previously displayed records may be stale; their original observation times are retained."
+                  : catalogPhase === "idle"
+                    ? "Waiting for a catalog observation."
+                    : "Observed catalog snapshot, not a realtime feed or a guarantee of current order availability."}
+            </p>
+            {catalogObservedAt && (
+              <p>
+                Last catalog page observed:{" "}
+                <time dateTime={catalogObservedAt}>{catalogObservedAt}</time>
+              </p>
+            )}
+          </section>
           <div className="nft-market-grid">
             {items.map((item) => (
               <article key={item.tokenId} className="nft-market-card">
@@ -785,6 +833,13 @@ function NftMarketSession() {
                 <p>
                   Token {item.tokenId} · {item.standard.toUpperCase()}
                 </p>
+                <p>
+                  Source: OpenSea · Observed{" "}
+                  <time dateTime={item.observedAt}>{item.observedAt}</time>
+                </p>
+                {item.sourceURL && (
+                  <p>Attributed source (reference only): {item.sourceURL}</p>
+                )}
                 <button
                   type="button"
                   disabled={busy}
@@ -799,7 +854,7 @@ function NftMarketSession() {
             <button
               type="button"
               disabled={busy}
-              onClick={() => void run(() => browse(cursor))}
+              onClick={() => void run(() => refreshCatalog(cursor))}
             >
               Load more NFTs
             </button>

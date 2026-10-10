@@ -14,9 +14,12 @@ export default defineConfig({
     trace: "off",
     screenshot: "off",
     video: "off",
-    launchOptions: process.env.ARTFI_E2E_CHROMIUM_PATH
-      ? { executablePath: process.env.ARTFI_E2E_CHROMIUM_PATH }
-      : undefined,
+    launchOptions: {
+      chromiumSandbox: true,
+      ...(process.env.ARTFI_E2E_CHROMIUM_PATH
+        ? { executablePath: process.env.ARTFI_E2E_CHROMIUM_PATH }
+        : {}),
+    },
   },
   projects: [
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
