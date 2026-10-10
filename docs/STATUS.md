@@ -1,5 +1,30 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-10 Internal native NFT seller task port (isolated candidate)
+
+Evidence only; no product stage, deployed capability, or existing status row is changed.
+The bounded seller-only internal port reuses the native NFT engine, official SDK,
+read-only provider/recorder, canonical validation and signature/publication journal
+transitions. User-session wrappers and web routes retain their existing interface.
+
+The task principal is separate from a user session. A fixed server task verifier and
+its durable grant gate must be supplied by composition. Exact task quantity, review
+and order digests are bound; a missing approval is explicitly unsupported. Existing
+submission uncertainty is retained, and publication acceptance does not claim a sale
+or cancel an order when the grant is revoked.
+
+Local synthetic checks: all 82 web unit-test files / 1,059 tests and all 251 agent
+script tests passed; web typecheck, web lint and repository secret scan passed.
+The new port contributes 25 synthetic tests, including CAS concurrency, late revoke,
+expiry, restart reconciliation and exact ERC-721 token approval. No real RPC, venue
+request, key, signature, trade, deployment, or installation was used for these checks.
+
+**Not configured / not run:** no authenticated cross-service task journal transport or
+production composition is supplied. The existing Go journal still requires a valid
+user access token. No new HTTP task route, fake session, bridge-only task authorization,
+production build, browser E2E, deployment or real-marketplace test is claimed. See
+[the internal contract](NATIVE_NFT_TASK_PORT.md).
+
 ## 2026-10-08 Four review findings on the wallet provider
 
 Evidence only. No status value, count, gate or row changes.

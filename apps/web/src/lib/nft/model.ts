@@ -33,10 +33,21 @@ export type NftTypedData = {
   primaryType: "OrderComponents";
   message: Record<string, unknown>;
 };
+/** Public binding only. This record is never an authentication credential. */
+export type NftTaskBinding = {
+  taskId: string;
+  taskDigest: string;
+  executorDigest: string;
+  grantReference: string;
+  grantPolicyVersion: string;
+  operationId: string;
+};
+export type NftTaskPrincipal = NftTaskBinding & { kind: "task" };
 export type NftPlan = {
   id: string;
   operationId: string;
-  sessionId: string;
+  sessionId?: string;
+  taskPrincipal?: NftTaskPrincipal;
   chainId: number;
   request: NftRequest;
   scope: NftScope;
