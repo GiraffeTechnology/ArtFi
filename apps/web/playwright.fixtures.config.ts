@@ -4,7 +4,10 @@ import { webRuntime } from "./e2e-runtime";
 
 // These existing conditional cases run only in their explicit isolated harness.
 // Use a sandbox-compatible runner; do not change host security policy.
-export default defineConfig(base, {
+// Compose one object: defineConfig(base, overrides) concatenates webServer
+// entries, which would start two servers at the same fixture address.
+export default defineConfig({
+  ...base,
   testMatch: [
     "agent-runtime-live.spec.ts",
     "charity-editions-populated.spec.ts",

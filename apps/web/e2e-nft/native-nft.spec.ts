@@ -1000,9 +1000,13 @@ test("switching collections never reuses the previous catalog observation", asyn
   await page.goto("/nft");
   await expect(page.locator(".nft-market-card")).toHaveCount(1);
   state.failCatalog = true;
-  await page
-    .getByLabel("Collection", { exact: true })
-    .selectOption("test-only-second");
+  const collection = page
+    .getByRole("region", { name: "NFT marketplace", exact: true })
+    .getByRole("combobox");
+  await expect(collection).toHaveCount(1);
+  await expect(collection).toHaveValue(scope.slug);
+  await collection.selectOption("test-only-second");
+  await expect(collection).toHaveValue("test-only-second");
   const provenance = page.getByRole("region", {
     name: "NFT catalog provenance",
   });

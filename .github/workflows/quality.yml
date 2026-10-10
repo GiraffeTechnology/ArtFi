@@ -303,7 +303,7 @@ jobs:
           NEXT_PUBLIC_BASE_RPC_URL: http://127.0.0.1:3000/__test_only_rpc__
           NEXT_PUBLIC_ETHEREUM_RPC_URL: http://127.0.0.1:3000/__test_only_rpc__
         run: |
-          node --test scripts/test/conditional-browser-summary.test.mjs
+          node --test scripts/test/conditional-browser-summary.test.mjs scripts/test/conditional-browser-config.test.mjs
           manifests=("$RUNNER_TEMP/artfi-installed-acceptance/extracted/"*/manifest.json)
           test "${#manifests[@]}" = 1
           test -f "${manifests[0]}"
