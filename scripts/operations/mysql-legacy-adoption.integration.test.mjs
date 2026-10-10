@@ -22,6 +22,101 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = join(root, "scripts/operations/mysql-legacy-adoption.mjs");
 const base = process.env.ARTFI_MYSQL_BASE;
 const sha = (value) => createHash("sha256").update(value).digest("hex");
+// CI diagnostics are exact static classifications, never native error text,
+// command arguments, connection configuration or SQL/schema values.
+const failureMessages = new Map([
+  [
+    "Full business schema differs from official migrations 1–10; private comparison saved, adoption refused.",
+    "SCHEMA_MISMATCH",
+  ],
+  [
+    "MySQL connection ended; verify availability and private client configuration.",
+    "MYSQL_CLIENT_FAILURE",
+  ],
+  ["Unsupported CHECK expression escaping.", "CHECK_EXPRESSION_UNSUPPORTED"],
+  [
+    "Existing data violates a declared CHECK constraint; adoption refused.",
+    "DATA_CONSTRAINT_VIOLATION",
+  ],
+  [
+    "Existing data violates a declared foreign key; adoption refused.",
+    "DATA_CONSTRAINT_VIOLATION",
+  ],
+  [
+    "Existing data violates a declared unique index; adoption refused.",
+    "DATA_CONSTRAINT_VIOLATION",
+  ],
+  ["Reference provenance/checksum mismatch.", "REFERENCE_PROVENANCE_MISMATCH"],
+  [
+    "Reference was built for a different source identity.",
+    "SOURCE_IDENTITY_MISMATCH",
+  ],
+  ["Schema or ledger changed during inspection.", "INSPECTION_DRIFT"],
+  ["Cannot read private adoption evidence.", "EVIDENCE_MISSING"],
+  [
+    "File operation failed; inspect private paths and permissions.",
+    "FILE_IO_FAILURE",
+  ],
+]);
+function classifyFailure(error) {
+  for (const value of [error.stderr, error.actual]) {
+    if (typeof value !== "string") continue;
+    const text = value.trim();
+    for (const [message, code] of failureMessages)
+      if (text === `Legacy adoption error: ${message}`) return code;
+  }
+  return error.code === "ERR_ASSERTION"
+    ? "ASSERTION_FAILED"
+    : "UNCLASSIFIED_FAILURE";
+}
+const schemaComponentNames = [
+  "database",
+  "tables",
+  "columns",
+  "indexes",
+  "constraints",
+  "keys",
+  "foreignKeys",
+  "checks",
+];
+async function safeSchemaDifference(path) {
+  if (!path) return [];
+  try {
+    const report = JSON.parse(await readFile(path, "utf8"));
+    if (report.kind !== "inspection-refused") return [];
+    const original = report.snapshot.schema;
+    const excluded = new Set(
+      original.constraints
+        .filter((row) => row.table === "artfi_deployment_migrations")
+        .map((row) => row.name),
+    );
+    return schemaComponentNames.flatMap((component) => {
+      const source = original[component].filter((row) =>
+        component === "tables"
+          ? row.name !== "artfi_deployment_migrations"
+          : component === "checks"
+            ? !excluded.has(row.name)
+            : row.table !== "artfi_deployment_migrations",
+      );
+      const reference = report.referenceSchema[component];
+      const sourceSha256 = sha(JSON.stringify(source));
+      const referenceSha256 = sha(JSON.stringify(reference));
+      return sourceSha256 === referenceSha256
+        ? []
+        : [
+            {
+              component,
+              sourceCount: source.length,
+              referenceCount: reference.length,
+              sourceSha256,
+              referenceSha256,
+            },
+          ];
+    });
+  } catch {
+    return [];
+  }
+}
 test(
   "official isolated MySQL legacy adoption end-to-end",
   { skip: !base, timeout: 600000 },
@@ -51,6 +146,7 @@ test(
         await command(bin("mysql"), [
           `--defaults-file=${server.client}`,
           "--no-login-paths",
+          "--default-character-set=utf8mb4",
           "--batch",
           "--raw",
           "--skip-column-names",
@@ -87,7 +183,12 @@ test(
           await work();
           results.push({ name, result: "PASSED" });
         } catch (error) {
-          results.push({ name, result: "FAILED" });
+          results.push({
+            name,
+            result: "FAILED",
+            failureCode: classifyFailure(error),
+            schemaDifferences: await safeSchemaDifference(inspection),
+          });
           throw error;
         }
       });
@@ -364,6 +465,17 @@ test(
           "ALTER TABLE assets ALTER CHECK chk_assets_valuation ENFORCED",
           db,
         );
+        // CHECK string literals carry the connection charset into metadata.
+        // A real charset mismatch must remain a refusal, never be normalized away.
+        const checkWithCharset = (charset) =>
+          `ALTER TABLE external_market_intents DROP CHECK chk_external_market_intent_token_id, ADD CONSTRAINT chk_external_market_intent_token_id CHECK (token_id REGEXP _${charset}'^(0|[1-9][0-9]{0,77})$')`;
+        await sql(source, checkWithCharset("latin1"), db);
+        await rejected(
+          "inspect",
+          inspectArgs(join(run, "bad-check-charset.json")),
+          /Full business schema/,
+        );
+        await sql(source, checkWithCharset("utf8mb4"), db);
         await sql(
           source,
           "CREATE VIEW unexpected_view AS SELECT id FROM projects",

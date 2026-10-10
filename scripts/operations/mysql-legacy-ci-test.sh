@@ -64,11 +64,17 @@ const read = (path) => { try { return readFileSync(path, "utf8"); } catch { retu
 const tap = read(join(directory, "test.tap"));
 const counts = Object.fromEntries(["tests", "pass", "fail", "skipped"].map((name) => [name, Number(tap.match(new RegExp(`^# ${name} (\\d+)$`, "m"))?.[1] ?? -1)]));
 const checks = [];
+const allowedFailureCodes = new Set(["SCHEMA_MISMATCH", "MYSQL_CLIENT_FAILURE", "CHECK_EXPRESSION_UNSUPPORTED", "DATA_CONSTRAINT_VIOLATION", "REFERENCE_PROVENANCE_MISMATCH", "SOURCE_IDENTITY_MISMATCH", "INSPECTION_DRIFT", "EVIDENCE_MISSING", "FILE_IO_FAILURE", "ASSERTION_FAILED", "UNCLASSIFIED_FAILURE"]);
+const allowedComponents = new Set(["database", "tables", "columns", "indexes", "constraints", "keys", "foreignKeys", "checks"]);
 for (const name of readdirSync(directory).filter((value) => /^legacy-[A-Za-z0-9]+$/.test(value))) {
   try {
     const report = JSON.parse(read(join(directory, name, "summary.json")));
     for (const item of report.results ?? []) {
-      if (typeof item.name === "string" && item.name.length <= 180 && !/[\r\n]/.test(item.name) && ["PASSED", "FAILED"].includes(item.result)) checks.push({ name: item.name, result: item.result });
+      if (typeof item.name !== "string" || item.name.length > 180 || /[\r\n]/.test(item.name) || !["PASSED", "FAILED"].includes(item.result)) continue;
+      const safe = { name: item.name, result: item.result };
+      if (allowedFailureCodes.has(item.failureCode)) safe.failureCode = item.failureCode;
+      safe.schemaDifferences = (Array.isArray(item.schemaDifferences) ? item.schemaDifferences : []).filter(row => allowedComponents.has(row.component) && Number.isSafeInteger(row.sourceCount) && row.sourceCount >= 0 && Number.isSafeInteger(row.referenceCount) && row.referenceCount >= 0 && /^[a-f0-9]{64}$/.test(row.sourceSha256) && /^[a-f0-9]{64}$/.test(row.referenceSha256)).map(({component, sourceCount, referenceCount, sourceSha256, referenceSha256}) => ({component, sourceCount, referenceCount, sourceSha256, referenceSha256}));
+      checks.push(safe);
     }
   } catch { /* An interrupted fixture is a failure, never a skipped success. */ }
 }
