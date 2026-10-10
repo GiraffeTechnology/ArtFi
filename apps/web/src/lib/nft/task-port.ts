@@ -249,6 +249,22 @@ function referenceFor(plan: NftPlan): NativeListingReference {
     ),
   });
 }
+// JSON storage may reorder object keys. Match readNftRequest's original field
+// projection without re-parsing or revalidating time: expired reviews stay readable.
+function persistedRequestHash(request: NftRequest) {
+  return nftRequestHash({
+    action: request.action,
+    collection: request.collection,
+    tokenId: request.tokenId,
+    account: request.account,
+    quantity: request.quantity,
+    priceWei: request.priceWei,
+    expiresAt: request.expiresAt,
+    ...(request.orderHash !== undefined
+      ? { orderHash: request.orderHash }
+      : {}),
+  });
+}
 function checkReference(
   input: NativeListingReference,
   operation: NftOperation,
@@ -259,7 +275,7 @@ function checkReference(
     Object.keys(input).sort().join() !== Object.keys(actual).sort().join() ||
     operation.id !== input.nativeOperationId ||
     operation.plan.operationId !== operation.id ||
-    operation.requestHash !== nftRequestHash(operation.plan.request) ||
+    operation.requestHash !== persistedRequestHash(operation.plan.request) ||
     operation.chainId !== operation.plan.chainId ||
     (operation.orderHash !== undefined &&
       operation.orderHash !== actual.orderHash) ||
