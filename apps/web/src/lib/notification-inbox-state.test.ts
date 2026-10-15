@@ -297,6 +297,40 @@ describe("notification session and mutation lifecycle", () => {
     expect(f.inbox.getSnapshot().page).toBeNull();
   });
 
+  it("never returns private data from a direct snapshot read after expiry", async () => {
+    const f = fixture();
+    await f.inbox.refresh();
+    expect(f.inbox.getSnapshot().page).not.toBeNull();
+    f.time(identity.expiresAt);
+    expect(f.inbox.getSnapshot()).toMatchObject({
+      status: "expired",
+      page: null,
+      identity: null,
+    });
+  });
+
+  it("notifies subscribers at expiry without a request or identity update", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fixture();
+      await f.inbox.refresh();
+      const listener = vi.fn();
+      const unsubscribe = f.inbox.subscribe(listener);
+      f.time(identity.expiresAt);
+      await vi.advanceTimersByTimeAsync(identity.expiresAt - 1);
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(f.inbox.getSnapshot()).toMatchObject({
+        status: "expired",
+        page: null,
+        identity: null,
+      });
+      unsubscribe();
+      f.inbox.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not accept a response that crosses expiry while in flight", async () => {
     const f = fixture();
     const pending = deferred<unknown>();
