@@ -11,12 +11,16 @@ import {
   agentMode,
   type AgentRuntimeStatus,
   type AgentOperation,
-  type AgentHistory,
   type AgentWorkflow,
   validAgentWorkflow,
   ownerConfirmedMarkets,
   ownerConfirmedMarket,
 } from "@/lib/agent-runtime-client";
+import { AgentOperationHistory } from "./agent-operation-history";
+import {
+  fetchAgentHistoryPage,
+  type AgentHistoryPage,
+} from "@/lib/agent-operation-history";
 import type { UserSession } from "@/lib/user-session-client-state";
 import styles from "./administration.module.css";
 
@@ -41,7 +45,7 @@ function PrivateAgentConsole({ session }: { session: UserSession }) {
   const [operation, setOperation] = useState<AgentOperation>();
   const [workflow, setWorkflow] = useState<AgentWorkflow>();
   const [operationKind, setOperationKind] = useState("actions");
-  const [history, setHistory] = useState<AgentHistory>();
+  const [history, setHistory] = useState<AgentHistoryPage>();
   const [id, setId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -102,21 +106,19 @@ function PrivateAgentConsole({ session }: { session: UserSession }) {
         : validAgentOperation(result, operationId, session))
     )
       throw Error("The saved operation could not be verified.");
-    const events = (await agentRequest(
-      `${operationKind}/${operationId}/history`,
-      session,
+    const events = await fetchAgentHistoryPage(
+      {
+        kind: operationKind,
+        id: operationId,
+        mode:
+          operationKind === "actions"
+            ? (result as AgentWorkflow).mode
+            : agentMode,
+        session,
+      },
+      "0",
       { signal: controller.signal },
-    )) as AgentHistory;
-    if (
-      events?.id !== operationId ||
-      events.mode !==
-        (operationKind === "actions"
-          ? (result as AgentWorkflow).mode
-          : agentMode) ||
-      !Array.isArray(events.events) ||
-      events.events.length > 100
-    )
-      throw Error("The operation history could not be verified.");
+    );
     if (live.current && current === generation.current) {
       if (operationKind === "actions") {
         setWorkflow(result as AgentWorkflow);
@@ -425,23 +427,18 @@ function PrivateAgentConsole({ session }: { session: UserSession }) {
           </article>
         )}
       </section>
-      {history && (
-        <section className={styles.panel}>
-          <h2>Durable operation history</h2>
-          {history.events.length ? (
-            <ol>
-              {history.events.map((event) => (
-                <li key={event.id} className={styles.detail}>
-                  {event.state} · {event.kind}
-                  {event.reason ? ` · ${event.reason}` : ""} ·{" "}
-                  {new Date(event.observedAt).toLocaleString()}
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p>No events in this page.</p>
-          )}
-        </section>
+      {history && (workflow || operation) && (
+        <div className={styles.panel}>
+          <AgentOperationHistory
+            initial={history}
+            scope={{
+              kind: operationKind,
+              id: workflow?.id ?? operation!.id,
+              mode: workflow?.mode ?? agentMode,
+              session,
+            }}
+          />
+        </div>
       )}
     </div>
   );
