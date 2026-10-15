@@ -344,6 +344,59 @@ describe("notification session and mutation lifecycle", () => {
     }
   });
 
+  it("cancels the old identity timer and leaves no notifications after disposal", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fixture();
+      await f.inbox.refresh();
+      const listener = vi.fn();
+      f.inbox.subscribe(listener);
+      f.inbox.setIdentity({
+        ...identity,
+        sessionId: "e".repeat(32),
+        expiresAt: 20000,
+      });
+      const afterSwitch = listener.mock.calls.length;
+      expect(vi.getTimerCount()).toBe(1);
+      f.time(identity.expiresAt);
+      await vi.advanceTimersByTimeAsync(identity.expiresAt - 1);
+      expect(listener).toHaveBeenCalledTimes(afterSwitch);
+      expect(f.inbox.getSnapshot().identity?.expiresAt).toBe(20000);
+      f.inbox.dispose();
+      const afterDispose = listener.mock.calls.length;
+      expect(vi.getTimerCount()).toBe(0);
+      f.time(20000);
+      await vi.advanceTimersByTimeAsync(20000);
+      expect(listener).toHaveBeenCalledTimes(afterDispose);
+      expect(f.inbox.getSnapshot().page).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("redacts an invalid clock without rendering side effects and clears on the timer", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = fixture();
+      await f.inbox.refresh();
+      const listener = vi.fn();
+      f.inbox.subscribe(listener);
+      f.time(NaN);
+      const snapshot = f.inbox.getSnapshot();
+      expect(snapshot.page).toBeNull();
+      expect(snapshot.identity).toBeNull();
+      expect(f.inbox.getSnapshot()).toBe(snapshot);
+      expect(listener).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(identity.expiresAt - 1);
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(f.inbox.getSnapshot()).toBe(snapshot);
+      expect(vi.getTimerCount()).toBe(0);
+      f.inbox.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not accept a response that crosses expiry while in flight", async () => {
     const f = fixture();
     const pending = deferred<unknown>();
