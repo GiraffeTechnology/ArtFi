@@ -77,6 +77,7 @@ export function SiteHeader() {
             <summary>Tools</summary>
             <nav aria-label="Workflow navigation">
               {toolNavigation.map(navigationLink)}
+              {navigationLink(["Notifications", "/notifications"])}
               {xionganLink}
             </nav>
           </details>
@@ -92,6 +93,7 @@ export function SiteHeader() {
             <nav aria-label="Mobile navigation">
               {productNavigation.map(navigationLink)}
               {toolNavigation.map(navigationLink)}
+              {navigationLink(["Notifications", "/notifications"])}
               {xionganLink}
             </nav>
           </details>
