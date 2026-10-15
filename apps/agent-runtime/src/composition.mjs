@@ -17,24 +17,51 @@ import { unavailableCapabilities } from "./capabilities.mjs";
 import { MODE, stableCode, fail } from "./config.mjs";
 
 export function createOfflineReadService(store, clock = Date.now) {
-  async function owned(session, id) {
-    if (session?.authenticated !== true || session.expiresAt <= clock())
+  function principal(session) {
+    const now = clock();
+    if (
+      !Number.isSafeInteger(now) ||
+      session?.authenticated !== true ||
+      typeof session.wallet !== "string" ||
+      !/^0x[0-9a-fA-F]{40}$/.test(session.wallet) ||
+      typeof session.chainId !== "string" ||
+      !/^[1-9][0-9]{0,19}$/.test(session.chainId) ||
+      !Number.isSafeInteger(session.expiresAt) ||
+      session.expiresAt <= now
+    )
       fail("AUTHENTICATED_SESSION_REQUIRED");
+    return { wallet: session.wallet.toLowerCase(), chainId: session.chainId };
+  }
+  function recheck(session, captured) {
+    const current = principal(session);
+    if (
+      current.wallet !== captured.wallet ||
+      current.chainId !== captured.chainId
+    )
+      fail("AUTHENTICATED_SESSION_REQUIRED");
+  }
+  async function owned(session, id) {
+    const captured = principal(session);
     const row = await store.get(id);
+    const storedWallet = row?.request?.intent?.wallet;
     if (
       !row ||
-      row.request.intent.wallet.toLowerCase() !== session.wallet.toLowerCase()
+      row.id !== id ||
+      typeof storedWallet !== "string" ||
+      !/^0x[0-9a-fA-F]{40}$/.test(storedWallet) ||
+      storedWallet.toLowerCase() !== captured.wallet ||
+      row.request?.execution?.chainId !== captured.chainId
     )
       fail("OPERATION_NOT_FOUND");
-    if (session.expiresAt <= clock()) fail("AUTHENTICATED_SESSION_REQUIRED");
-    return row;
+    recheck(session, captured);
+    return { row, principal: captured };
   }
   return Object.freeze({
     prepareIntent: async () => fail("EXECUTION_DEPENDENCY_UNAVAILABLE"),
     createIntent: async () => fail("EXECUTION_DEPENDENCY_UNAVAILABLE"),
     recordRevocation: async () => fail("REVOCATION_DEPENDENCY_UNAVAILABLE"),
     async getIntent(session, id) {
-      const row = await owned(session, id),
+      const { row } = await owned(session, id),
         request = row.request;
       const matched =
         row.reconciliation?.canonical === true &&
@@ -81,9 +108,9 @@ export function createOfflineReadService(store, clock = Date.now) {
       };
     },
     async getHistory(session, id, page) {
-      await owned(session, id);
+      const { principal: captured } = await owned(session, id);
       const events = await store.listEvents(id, page);
-      if (session.expiresAt <= clock()) fail("AUTHENTICATED_SESSION_REQUIRED");
+      recheck(session, captured);
       return {
         id,
         mode: MODE,

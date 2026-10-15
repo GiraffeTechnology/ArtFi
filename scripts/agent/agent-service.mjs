@@ -100,6 +100,8 @@ export function createAgentService({
       !Number.isSafeInteger(time) ||
       session?.authenticated !== true ||
       !e.isAddress(session.wallet) ||
+      typeof session.chainId !== "string" ||
+      session.chainId !== domain.chainId ||
       !Number.isSafeInteger(session.expiresAt) ||
       session.expiresAt <= time
     )
@@ -189,7 +191,8 @@ export function createAgentService({
     if (
       !row ||
       row.id !== operationId ||
-      !same(row.request?.intent?.wallet, wallet)
+      !same(row.request?.intent?.wallet, wallet) ||
+      row.request?.execution?.chainId !== domain.chainId
     )
       fail("OPERATION_NOT_FOUND");
     return row;
