@@ -232,23 +232,64 @@ test("service binds every session to its fixed chain before adapter access", asy
     let plans = 0;
     let observations = 0;
     const fixture = serviceOptions({
-      planFor: async () => { plans++; return structuredClone(plan); },
-      observe: async () => { observations++; return structuredClone(observation); },
+      planFor: async () => {
+        plans++;
+        return structuredClone(plan);
+      },
+      observe: async () => {
+        observations++;
+        return structuredClone(observation);
+      },
       store: {
-        prepare: async () => { writes++; throw Error("UNEXPECTED_WRITE"); },
-        get: async () => { reads++; return null; },
-        noteRevocation: async () => { writes++; throw Error("UNEXPECTED_WRITE"); },
-        listEvents: async () => { reads++; return []; },
+        prepare: async () => {
+          writes++;
+          throw Error("UNEXPECTED_WRITE");
+        },
+        get: async () => {
+          reads++;
+          return null;
+        },
+        noteRevocation: async () => {
+          writes++;
+          throw Error("UNEXPECTED_WRITE");
+        },
+        listEvents: async () => {
+          reads++;
+          return [];
+        },
       },
     });
     const service = createAgentService(fixture.options);
-    const session = { authenticated: true, wallet: buyer, chainId, expiresAt: 2000 };
-    await assert.rejects(service.prepareIntent(session, {}), /AUTHENTICATED_SESSION_REQUIRED/);
-    await assert.rejects(service.createIntent(session, plan), /AUTHENTICATED_SESSION_REQUIRED/);
-    await assert.rejects(service.getIntent(session, "op"), /AUTHENTICATED_SESSION_REQUIRED/);
-    await assert.rejects(service.getHistory(session, "op"), /AUTHENTICATED_SESSION_REQUIRED/);
-    await assert.rejects(service.recordRevocation(session, "op", digest("9")), /AUTHENTICATED_SESSION_REQUIRED/);
-    assert.deepEqual({ reads, writes, plans, observations }, { reads: 0, writes: 0, plans: 0, observations: 0 });
+    const session = {
+      authenticated: true,
+      wallet: buyer,
+      chainId,
+      expiresAt: 2000,
+    };
+    await assert.rejects(
+      service.prepareIntent(session, {}),
+      /AUTHENTICATED_SESSION_REQUIRED/,
+    );
+    await assert.rejects(
+      service.createIntent(session, plan),
+      /AUTHENTICATED_SESSION_REQUIRED/,
+    );
+    await assert.rejects(
+      service.getIntent(session, "op"),
+      /AUTHENTICATED_SESSION_REQUIRED/,
+    );
+    await assert.rejects(
+      service.getHistory(session, "op"),
+      /AUTHENTICATED_SESSION_REQUIRED/,
+    );
+    await assert.rejects(
+      service.recordRevocation(session, "op", digest("9")),
+      /AUTHENTICATED_SESSION_REQUIRED/,
+    );
+    assert.deepEqual(
+      { reads, writes, plans, observations },
+      { reads: 0, writes: 0, plans: 0, observations: 0 },
+    );
   }
 });
 
@@ -263,15 +304,33 @@ test("service rejects a durable row bound to another chain", async () => {
   };
   const fixture = serviceOptions({
     store: {
-      prepare: async () => { throw Error("UNUSED"); },
+      prepare: async () => {
+        throw Error("UNUSED");
+      },
       get: async () => row,
-      noteRevocation: async () => { throw Error("UNUSED"); },
-      listEvents: async () => { eventReads++; return [{ id: "1" }]; },
+      noteRevocation: async () => {
+        throw Error("UNUSED");
+      },
+      listEvents: async () => {
+        eventReads++;
+        return [{ id: "1" }];
+      },
     },
   });
   const service = createAgentService(fixture.options);
-  const session = { authenticated: true, wallet: buyer, chainId: "560048", expiresAt: 2000 };
-  await assert.rejects(service.getIntent(session, "op"), /OPERATION_NOT_FOUND/);
-  await assert.rejects(service.getHistory(session, "op"), /OPERATION_NOT_FOUND/);
+  const session = {
+    authenticated: true,
+    wallet: buyer,
+    chainId: "560048",
+    expiresAt: 2000,
+  };
+  await assert.rejects(
+    service.getIntent(session, "op"),
+    /OPERATION_NOT_FOUND/,
+  );
+  await assert.rejects(
+    service.getHistory(session, "op"),
+    /OPERATION_NOT_FOUND/,
+  );
   assert.equal(eventReads, 0);
 });

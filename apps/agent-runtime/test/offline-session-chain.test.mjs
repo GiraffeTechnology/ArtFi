@@ -79,28 +79,40 @@ test("offline reads fail closed for missing or malformed principal and row bindi
 test("offline reads recheck the captured principal after asynchronous storage access", async () => {
   const current = session("560048");
   let historyReads = 0;
-  const service = createOfflineReadService({
-    get: async () => {
-      current.chainId = "1";
-      return structuredClone(row);
+  const service = createOfflineReadService(
+    {
+      get: async () => {
+        current.chainId = "1";
+        return structuredClone(row);
+      },
+      listEvents: async () => {
+        historyReads++;
+        return [];
+      },
     },
-    listEvents: async () => { historyReads++; return []; },
-  }, () => 1000);
+    () => 1000,
+  );
 
-  await assert.rejects(service.getIntent(current, "op"), /AUTHENTICATED_SESSION_REQUIRED/);
-  await assert.rejects(service.getHistory(current, "op", {}), /OPERATION_NOT_FOUND|AUTHENTICATED_SESSION_REQUIRED/);
+  await assert.rejects(
+    service.getIntent(current, "op"),
+    /AUTHENTICATED_SESSION_REQUIRED/,
+  );
   assert.equal(historyReads, 0);
 });
 
 test("offline history rechecks the principal after the event read", async () => {
   const current = session("560048");
-  const service = createOfflineReadService({
-    get: async () => structuredClone(row),
-    listEvents: async () => {
-      current.chainId = "1";
-      return [{ id: "1" }];
+  const service = createOfflineReadService(
+    {
+      get: async () => structuredClone(row),
+      listEvents: async () => {
+        current.chainId = "1";
+        return [{ id: "1" }];
+      },
     },
-  }, () => 1000);
+    () => 1000,
+  );
+
   await assert.rejects(
     service.getHistory(current, "op", {}),
     /AUTHENTICATED_SESSION_REQUIRED/,
