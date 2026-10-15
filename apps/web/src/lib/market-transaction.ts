@@ -1,7 +1,7 @@
 import type { Hash, PublicClient } from "viem";
 
 type ReceiptClient = Pick<PublicClient, "waitForTransactionReceipt">;
-export type MarketWriteKind = "approval" | "fill" | "withdrawal";
+export type MarketWriteKind = "approval" | "fill" | "withdrawal" | "claim";
 export type PendingMarketWrite = {
   hash: Hash;
   kind: MarketWriteKind;
@@ -126,7 +126,7 @@ export function marketWriteJournal(
         const parsed = JSON.parse(saved) as PendingMarketWrite;
         if (
           /^0x[a-fA-F0-9]{64}$/.test(parsed.hash) &&
-          ["approval", "fill", "withdrawal"].includes(parsed.kind) &&
+          ["approval", "fill", "withdrawal", "claim"].includes(parsed.kind) &&
           (parsed.intentHash === undefined ||
             /^0x[a-fA-F0-9]{64}$/.test(parsed.intentHash))
         )
