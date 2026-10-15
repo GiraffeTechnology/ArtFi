@@ -263,7 +263,7 @@ jobs:
       - name: Build reusable native Linux package
         run: node scripts/install/build-bundle.mjs --output "$RUNNER_TEMP/artfi-bundles"
       - name: Retain package and checksum for this exact source
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: artfi-linux-x64-${{ github.sha }}
           path: |
@@ -330,7 +330,7 @@ jobs:
             "$RUNNER_TEMP/artfi-public-conditional-browser-summary.json"
       - name: Retain only public conditional-browser summary
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: artfi-conditional-browser-${{ github.sha }}
           path: ${{ runner.temp }}/artfi-public-conditional-browser-summary.json
@@ -372,7 +372,7 @@ jobs:
           JS
       - name: Retain only public synthetic browser acceptance evidence
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: artfi-installed-browser-${{ github.sha }}
           path: |
@@ -418,7 +418,7 @@ jobs:
         run: node --test scripts/operations/cluster-runtime.integration.mjs
       - name: Retain synthetic operations test summaries
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: artfi-operations-${{ github.sha }}
           path: |
@@ -476,7 +476,7 @@ jobs:
         run: |
           echo '### Installed extension: prepermission only' >> "$GITHUB_STEP_SUMMARY"
           echo 'This job does not approve optional permissions or verify page-provider injection/lifecycle. Full acceptance remains permission-gated; see apps/web/e2e-extension/README.md.' >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: installed-extension-prepermission-results
