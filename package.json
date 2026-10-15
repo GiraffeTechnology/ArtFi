@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "prettier": "3.9.6",
-    "turbo": "2.10.12"
+    "turbo": "2.11.7"
   },
   "license": "SEE LICENSE IN LICENSE"
 }
