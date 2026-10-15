@@ -265,6 +265,19 @@ export function parseNotificationPage(
   });
 }
 
+function sameNoticeSource(left: InboxNotice, right: InboxNotice): boolean {
+  return (
+    left.id === right.id &&
+    left.sourceKey === right.sourceKey &&
+    left.sourceKind === right.sourceKind &&
+    left.sourceRevision === right.sourceRevision &&
+    left.state === right.state &&
+    left.messageCode === right.messageCode &&
+    left.text === right.text &&
+    JSON.stringify(left.event) === JSON.stringify(right.event)
+  );
+}
+
 export class NotificationRequestError extends Error {
   constructor(public readonly status: number) {
     super("Notification request was rejected.");
@@ -460,10 +473,7 @@ export function createNotificationInbox(
           ),
         (page) =>
           page.notifications.some(
-            (item) =>
-              item.id === id &&
-              item.sourceRevision === expectedSourceRevision &&
-              item.read,
+            (item) => sameNoticeSource(item, notice) && item.read,
           ),
       );
     },

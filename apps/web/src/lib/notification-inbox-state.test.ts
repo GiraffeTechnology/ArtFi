@@ -382,6 +382,32 @@ describe("notification session and mutation lifecycle", () => {
     expect(f.inbox.getSnapshot().page).toBeNull();
   });
 
+  it("rejects an acknowledgement that reuses an ID and revision for different source evidence", async () => {
+    const f = fixture();
+    await f.inbox.refresh();
+    const wrong = readResponse();
+    const differentHash = "0x" + "f".repeat(64);
+    wrong.notifications[0].event.transactionHash = differentHash;
+    wrong.notifications[0].sourceKey = `560048:${differentHash}:4294967295`;
+    vi.mocked(f.transport.markRead).mockResolvedValueOnce(wrong);
+    await f.inbox.markRead(eventNotice().id, eventNotice().sourceRevision);
+    expect(f.inbox.getSnapshot().status).toBe("reconcile");
+    expect(f.inbox.getSnapshot().page).toBeNull();
+    expect(f.transport.markRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects changed confirmation state without a new source revision", async () => {
+    const f = fixture();
+    await f.inbox.refresh();
+    const wrong = readResponse();
+    wrong.notifications[0].state = "confirmed";
+    wrong.notifications[0].messageCode = "event_confirmed";
+    vi.mocked(f.transport.markRead).mockResolvedValueOnce(wrong);
+    await f.inbox.markRead(eventNotice().id, eventNotice().sourceRevision);
+    expect(f.inbox.getSnapshot().status).toBe("reconcile");
+    expect(f.inbox.getSnapshot().page).toBeNull();
+  });
+
   it("clears private data on 401 and ignores late writes after logout", async () => {
     const f = fixture();
     await f.inbox.refresh();
