@@ -35,7 +35,12 @@ const policy = Object.freeze({
   jurisdictionPolicy: hash,
   settlementPolicy: hash,
 });
-const session = { authenticated: true, wallet: address, expiresAt: 2000 };
+const session = {
+  authenticated: true,
+  wallet: address,
+  chainId: "560048",
+  expiresAt: 2000,
+};
 test("source throw/unavailable/stale preserves owned durable read and independently verified revoke", async () => {
   for (const observe of [
     async () => {
@@ -49,6 +54,7 @@ test("source throw/unavailable/stale preserves owned durable read and independen
       id: "test",
       state: "PREPARED",
       request: {
+        execution: { chainId: "560048", executor: address },
         intent: { wallet: address, nonce: "1" },
         sale: { nft: address, tokenId: "1" },
       },

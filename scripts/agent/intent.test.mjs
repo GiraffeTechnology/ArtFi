@@ -154,7 +154,7 @@ test("service injects its fixed TEST_ONLY mode and authorizes the exact signed B
   const fixture = serviceOptions();
   const service = createAgentService(fixture.options);
   const result = await service.createIntent(
-    { authenticated: true, wallet: buyer, expiresAt: 2000 },
+    { authenticated: true, wallet: buyer, chainId: "560048", expiresAt: 2000 },
     plan,
   );
   assert.deepEqual(result, {
@@ -222,4 +222,142 @@ test("authorizer fails closed on missing input and signed requests outside polic
     () => exposed({ intent, signature: buyerSignature, proposal }),
     /EXPOSURE_EXCEEDED/,
   );
+});
+
+const session = () => ({
+  authenticated: true,
+  wallet: buyer,
+  chainId: "560048",
+  expiresAt: 2000,
+});
+const ownedRow = () => ({
+  id: intent.intentId,
+  state: "PREPARED",
+  request: {
+    intent: { ...intent },
+    sale: { ...sale },
+    execution: { chainId: "560048", executor },
+  },
+});
+
+test("invalid session chains stop before adapters", async () => {
+  for (const chainId of ["1", "8453", undefined, 560048, "0560048"]) {
+    let calls = 0;
+    const unexpected = async () => {
+      calls++;
+      throw Error("UNEXPECTED_ADAPTER");
+    };
+    const fixture = serviceOptions({
+      planFor: unexpected,
+      observe: unexpected,
+      inspectRevocation: unexpected,
+      store: {
+        prepare: unexpected,
+        get: unexpected,
+        noteRevocation: unexpected,
+        listEvents: unexpected,
+      },
+    });
+    const service = createAgentService(fixture.options);
+    const invalid = { ...session(), chainId };
+    for (const run of [
+      () => service.prepareIntent(invalid, {}),
+      () => service.createIntent(invalid, plan),
+      () => service.getIntent(invalid, intent.intentId),
+      () => service.getHistory(invalid, intent.intentId),
+      () => service.recordRevocation(invalid, intent.intentId, digest("9")),
+    ])
+      await assert.rejects(run(), /AUTHENTICATED_SESSION_REQUIRED/);
+    assert.equal(calls, 0);
+  }
+});
+
+test("stored intent chain must match the session", async () => {
+  for (const execution of [
+    undefined,
+    { chainId: "1", executor },
+    { chainId: "8453", executor },
+    { chainId: 560048, executor },
+  ]) {
+    let downstream = 0;
+    const unexpected = async () => {
+      downstream++;
+      throw Error("UNEXPECTED_ADAPTER");
+    };
+    const row = ownedRow();
+    row.request.execution = execution;
+    const fixture = serviceOptions({
+      observe: unexpected,
+      inspectRevocation: unexpected,
+      store: {
+        prepare: unexpected,
+        get: async () => row,
+        noteRevocation: unexpected,
+        listEvents: unexpected,
+      },
+    });
+    const service = createAgentService(fixture.options);
+    for (const run of [
+      () => service.getIntent(session(), intent.intentId),
+      () => service.getHistory(session(), intent.intentId),
+      () => service.recordRevocation(session(), intent.intentId, digest("9")),
+    ])
+      await assert.rejects(run(), /OPERATION_NOT_FOUND/);
+    assert.equal(downstream, 0);
+  }
+});
+
+test("matching reads succeed and recheck after awaits", async () => {
+  const row = ownedRow();
+  const current = session();
+  let change = () => {};
+  const fixture = serviceOptions({
+    store: {
+      prepare: async () => {
+        throw Error("UNEXPECTED_WRITE");
+      },
+      get: async () => row,
+      noteRevocation: async () => {
+        throw Error("UNEXPECTED_WRITE");
+      },
+      listEvents: async () => {
+        change();
+        return [{ id: "1", state: "PREPARED" }];
+      },
+    },
+  });
+  const service = createAgentService(fixture.options);
+  assert.equal((await service.getIntent(current, intent.intentId)).id, row.id);
+  assert.equal(
+    (await service.getHistory(current, intent.intentId)).events[0].id,
+    "1",
+  );
+  change = () => {
+    current.chainId = "1";
+  };
+  await assert.rejects(
+    service.getHistory(current, intent.intentId),
+    /AUTHENTICATED_SESSION_REQUIRED/,
+  );
+});
+
+test("plan preparation rechecks the session chain", async () => {
+  const current = session();
+  const fixture = serviceOptions({
+    planFor: async () => {
+      current.chainId = "8453";
+      return structuredClone(plan);
+    },
+  });
+  const service = createAgentService(fixture.options);
+  await assert.rejects(
+    service.prepareIntent(current, {
+      contract: collection,
+      tokenId: "7",
+      maxUnitPrice: "10",
+      validUntil: "100",
+    }),
+    /AUTHENTICATED_SESSION_REQUIRED/,
+  );
+  assert.equal(fixture.prepared(), undefined);
 });
