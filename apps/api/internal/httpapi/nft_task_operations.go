@@ -35,6 +35,7 @@ type NFTTaskCapabilityScope struct {
 }
 type NFTTaskCapability struct {
 	NFTTaskCapabilityScope
+	NFTReceiptCapabilityClaims
 	Principal   NFTTaskPrincipal `json:"principal"`
 	Wallet      string           `json:"wallet"`
 	ChainID     int              `json:"chainId"`
@@ -219,6 +220,17 @@ func newNFTTaskJournalHandler(store *nftOperationStore, peer NFTTaskPeerAuthenti
 		rawPrincipal, _ := json.Marshal(claims.Principal)
 		if claims.NFTTaskCapabilityScope != scope || decodeNFTTaskPrincipal(rawPrincipal, &claims.Principal) != nil || !addressPattern.MatchString(claims.Wallet) || claims.ChainID <= 0 || claims.IssuedAtMs <= 0 || claims.IssuedAtMs > currentMs || claims.ExpiresAtMs <= currentMs || claims.ExpiresAtMs <= claims.IssuedAtMs || claims.ExpiresAtMs > claims.IssuedAtMs+NFTTaskCapabilityMaxLifetime.Milliseconds() {
 			writeUserAuthError(w, r, errUserForbidden)
+			return
+		}
+		receipt, receiptErr := claims.receiptClaimsPresent()
+		if receiptErr != nil {
+			writeUserAuthError(w, r, errUserForbidden)
+			return
+		}
+		if receipt {
+			// Typed claims alone do not establish the authoritative business and
+			// journal association. No receipt may fall back to the listing path.
+			writeUserAuthError(w, r, errUserAuthUnavailable)
 			return
 		}
 		principal := verifiedNFTPrincipal{wallet: claims.Wallet, chainID: claims.ChainID, task: &claims.Principal}
