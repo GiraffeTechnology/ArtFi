@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createNotificationInbox,
   notificationIdentity,
@@ -71,6 +71,12 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+const disposals = new Set<() => void>();
+afterEach(() => {
+  for (const dispose of disposals) dispose();
+  disposals.clear();
+});
+
 function fixture() {
   let now = 1;
   let key = 0;
@@ -92,6 +98,7 @@ function fixture() {
     requestKey,
   });
   inbox.setIdentity(identity);
+  disposals.add(inbox.dispose);
   return {
     inbox,
     transport,
@@ -301,8 +308,14 @@ describe("notification session and mutation lifecycle", () => {
     const f = fixture();
     await f.inbox.refresh();
     expect(f.inbox.getSnapshot().page).not.toBeNull();
+    const listener = vi.fn();
+    const unsubscribe = f.inbox.subscribe(listener);
     f.time(identity.expiresAt);
-    expect(f.inbox.getSnapshot()).toMatchObject({
+    const snapshot = f.inbox.getSnapshot();
+    expect(f.inbox.getSnapshot()).toBe(snapshot);
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+    expect(snapshot).toMatchObject({
       status: "expired",
       page: null,
       identity: null,

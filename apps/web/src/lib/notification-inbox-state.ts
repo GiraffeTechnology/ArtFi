@@ -320,6 +320,13 @@ export function createNotificationInbox(
   let generation = 0;
   let sequence = 0;
   let active: AbortController | null = null;
+  let expiryTimer: ReturnType<typeof setTimeout> | null = null;
+  const expiredSnapshot: NotificationInboxState = Object.freeze({
+    identity: null,
+    status: "expired",
+    page: null,
+    pending: false,
+  });
   let state: NotificationInboxState = Object.freeze({
     identity: null,
     status: "signed_out",
@@ -336,7 +343,33 @@ export function createNotificationInbox(
     sequence++;
     active?.abort();
     active = null;
-    publish({ identity: null, status, page: null, pending: false });
+    if (expiryTimer !== null) clearTimeout(expiryTimer);
+    expiryTimer = null;
+    publish(
+      status === "expired"
+        ? expiredSnapshot
+        : { identity: null, status, page: null, pending: false },
+    );
+  };
+  const scheduleExpiry = (captured: number) => {
+    if (captured !== generation || !state.identity) return;
+    const now = options.now();
+    if (
+      !Number.isSafeInteger(now) ||
+      now < 0 ||
+      state.identity.expiresAt <= now
+    ) {
+      clear("expired");
+      return;
+    }
+    expiryTimer = setTimeout(
+      () => {
+        if (captured !== generation) return;
+        expiryTimer = null;
+        scheduleExpiry(captured);
+      },
+      Math.min(state.identity.expiresAt - now, 2147483647),
+    );
   };
   const current = (captured: number, request: number) => {
     if (captured !== generation || request !== sequence || !state.identity)
@@ -433,7 +466,20 @@ export function createNotificationInbox(
     }
   };
   return {
-    getSnapshot: () => state,
+    // A stable redacted snapshot closes the expiry-to-timer gap without writes,
+    // scheduling or synchronous subscriber notification during React rendering.
+    getSnapshot: () => {
+      if (state.identity) {
+        const now = options.now();
+        if (
+          !Number.isSafeInteger(now) ||
+          now < 0 ||
+          state.identity.expiresAt <= now
+        )
+          return expiredSnapshot;
+      }
+      return state;
+    },
     subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -443,12 +489,14 @@ export function createNotificationInbox(
       if (!identity) return;
       try {
         const validated = notificationIdentity(identity, options.now());
+        const captured = generation;
         publish({
           identity: validated,
           status: "loading",
           page: null,
           pending: false,
         });
+        scheduleExpiry(captured);
       } catch {
         clear("expired");
       }
