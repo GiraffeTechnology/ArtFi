@@ -26,6 +26,9 @@ import {
   useWriteContract,
 } from "wagmi";
 
+import { DaoProposalDraftWorkspace } from "@/components/dao-proposal-draft-workspace";
+import type { DaoDraftForm } from "@/lib/dao-proposal-draft";
+
 import {
   daoActionsAbi,
   daoGovernorAbi,
@@ -47,15 +50,7 @@ export type DaoDeployment = {
   vaultAddress?: string;
 };
 
-type ActionType =
-  | "market"
-  | "warehouse"
-  | "auction"
-  | "sale"
-  | "custodian"
-  | "failure"
-  | "buyout30"
-  | "buyout10";
+type ActionType = DaoDraftForm["actionType"];
 
 const proposalStates = [
   "Pending",
@@ -768,6 +763,41 @@ function DaoGovernanceSession({
           </p>
         </article>
       </div>
+
+      <DaoProposalDraftWorkspace
+        expected={{
+          chainId: String(supportedChain.id),
+          governor: deployment.governorAddress ?? "",
+          token: deployment.tokenAddress ?? "",
+          vault: deployment.vaultAddress ?? "",
+          actionRegistry: deployment.actionRegistryAddress ?? "",
+        }}
+        currentForm={{
+          actionType,
+          description,
+          marketName,
+          evidenceHash,
+          evidenceURI,
+          amountWei,
+          t0,
+          observationStart,
+          tradeCount,
+          dueDate,
+        }}
+        disabled={transactionPending || signaturePending}
+        onApply={(form) => {
+          setActionType(form.actionType);
+          setDescription(form.description);
+          setMarketName(form.marketName);
+          setEvidenceHash(form.evidenceHash);
+          setEvidenceURI(form.evidenceURI);
+          setAmountWei(form.amountWei);
+          setT0(form.t0);
+          setObservationStart(form.observationStart);
+          setTradeCount(form.tradeCount);
+          setDueDate(form.dueDate);
+        }}
+      />
 
       <form className="dao-panel dao-composer" onSubmit={createProposal}>
         <div>
