@@ -16,6 +16,7 @@ import {
 } from "@/lib/rwa-catalog";
 import { publicSetting } from "@/lib/public-runtime-config";
 import { supportedChain } from "@/lib/wagmi";
+import { AuctionLiveObservation } from "./auction-live-observation";
 import { useUserSession } from "./user-session-provider";
 import {
   assertTradingSession,
@@ -58,7 +59,6 @@ function AuctionWorkbench() {
   const [sourceRecord, setSourceRecord] = useState<RwaAsset | null>(null);
   const [id, setID] = useState("1"),
     [snapshot, setSnapshot] = useState<AuctionSnapshot | null>(null),
-    [history, setHistory] = useState<string[]>([]),
     [recent, setRecent] = useState<string[]>([]),
     [credit, setCredit] = useState<bigint | null>(null);
   const [paymentMeta, setPaymentMeta] = useState<Metadata>({
@@ -191,18 +191,6 @@ function AuctionWorkbench() {
       metadata(observed.payment),
       metadata(observed.asset),
     ]);
-    let entries: string[];
-    try {
-      const events = await auctionEvents(client, market, selected);
-      entries = events.logs.map(
-        (log) =>
-          `${log.eventName} · block ${log.blockNumber} · ${log.transactionHash}`,
-      );
-    } catch {
-      entries = [
-        "Bid history is unavailable. Current on-chain auction terms are shown separately.",
-      ];
-    }
     const available = privateReady
       ? await client.readContract({
           address: market,
@@ -219,7 +207,6 @@ function AuctionWorkbench() {
     setPaymentMeta(pm);
     setAssetMeta(am);
     setCredit(available);
-    setHistory(entries);
     setBid(formatUnits(auctionMinimumBid(observed), pm.decimals ?? 0));
     setDetail(`Auction observed at block ${observed.blockNumber}.`);
   }
@@ -615,6 +602,11 @@ function AuctionWorkbench() {
       {snapshot && (
         <article className="nft-market-card">
           <h3>Auction {snapshot.id}</h3>
+          <p>
+            Reviewed terms at block {snapshot.blockNumber.toString()}. The live
+            observation below may show newer bids or an extended end. Reload the
+            auction to review changed terms before acting.
+          </p>
           {sourceRecord ? (
             <p>
               {sourceRecord.grounding.mode} · source-bound asset:{" "}
@@ -696,19 +688,8 @@ function AuctionWorkbench() {
               </button>
             </p>
           )}
-          <h4>Attributed bid and auction history</h4>
-          {history.length ? (
-            <ol>
-              {history.map((entry, index) => (
-                <li key={index} className="nft-market-hash">
-                  {entry}
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p>
-              No auction event was observed in the selected recent block window.
-            </p>
+          {market && (
+            <AuctionLiveObservation market={market} listingId={snapshot.id} />
           )}
         </article>
       )}
