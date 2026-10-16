@@ -1309,7 +1309,12 @@ function ConnectedDaoCreation({
                   required
                 />
               </label>
-              <DaoPresentationFields initial={formConfiguration?.presentation} legacy={Boolean(formConfiguration && !formConfiguration.presentation)} />
+              <DaoPresentationFields
+                initial={formConfiguration?.presentation}
+                legacy={Boolean(
+                  formConfiguration && !formConfiguration.presentation,
+                )}
+              />
               <label>
                 Whole-token supply
                 <input
@@ -1424,7 +1429,13 @@ function ConnectedDaoCreation({
             </li>
           </ol>
           {vaultAddress ? <p>Vault: {vaultAddress}</p> : null}
-          {configuration ? <DaoPresentationCard presentation={configuration.presentation} name={configuration.vaultName} symbol={configuration.tokenSymbol} /> : null}
+          {configuration ? (
+            <DaoPresentationCard
+              presentation={configuration.presentation}
+              name={configuration.vaultName}
+              symbol={configuration.tokenSymbol}
+            />
+          ) : null}
           {configuration && vaultAddress ? (
             <p>
               Reviewed NFT: {configuration.collectionAddress} / #

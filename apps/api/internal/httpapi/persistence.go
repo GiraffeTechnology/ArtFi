@@ -157,7 +157,9 @@ func (service *rwaService) hydratePersistence(ctx context.Context) error {
 			return err
 		}
 		intent.Presentation, err = decodeDAOPresentation(presentationRaw)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		intent.ContractArguments = []string{
 			intent.RequestID, intent.VaultName, intent.CollectionAddress, intent.TokenID,
 			intent.AdminAddress, intent.PauserAddress, intent.FractionalizerAddress,
@@ -279,7 +281,9 @@ func (service *rwaService) persistSubmission(ctx context.Context, intentID, tran
 
 func (service *rwaService) persistVaultIntent(ctx context.Context, intent *vaultIntent) error {
 	profileJSON, err := daoPresentationJSON(intent.Presentation)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	if service.db == nil {
 		return service.persistenceRequirement()
 	}

@@ -78,7 +78,9 @@ func (service *rwaService) readVaultBy(ctx context.Context, column, value string
 		return nil, err
 	}
 	intent.Presentation, err = decodeDAOPresentation(presentationRaw)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	intent.CreatedAt = created.UTC().Format(time.RFC3339)
 	intent.ContractArguments = []string{intent.RequestID, intent.VaultName, intent.CollectionAddress, intent.TokenID, intent.AdminAddress, intent.PauserAddress, intent.FractionalizerAddress}
 	return intent, nil

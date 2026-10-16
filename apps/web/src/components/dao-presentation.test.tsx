@@ -11,9 +11,21 @@ describe("DAO presentation interface", () => {
     expect(html).not.toContain("<img");
   });
   it("renders descriptions as text while keeping the rights boundary visible", () => {
-    const html = renderToStaticMarkup(<DaoPresentationCard name="Example" symbol="TEST" presentation={{ version: 1, description: '<script>TEST_ONLY</script>', avatar: { text: "DAO", palette: "teal" } }} />);
+    const html = renderToStaticMarkup(
+      <DaoPresentationCard
+        name="Example"
+        symbol="TEST"
+        presentation={{
+          version: 1,
+          description: "<script>TEST_ONLY</script>",
+          avatar: { text: "DAO", palette: "teal" },
+        }}
+      />,
+    );
     expect(html).toContain("&lt;script&gt;TEST_ONLY&lt;/script&gt;");
     expect(html).not.toContain("<script>");
-    expect(html).toContain("custody, roles and membership are verified separately");
+    expect(html).toContain(
+      "custody, roles and membership are verified separately",
+    );
   });
 });

@@ -1,4 +1,8 @@
-import { isDaoPresentation, sameDaoPresentation, type DaoPresentation } from "./dao-presentation";
+import {
+  isDaoPresentation,
+  sameDaoPresentation,
+  type DaoPresentation,
+} from "./dao-presentation";
 import {
   encodeAbiParameters,
   isAddress,

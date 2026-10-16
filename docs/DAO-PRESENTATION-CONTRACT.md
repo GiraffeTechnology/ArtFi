@@ -6,7 +6,11 @@ membership, valuation or rights. Name, symbol, contract calls and role checks re
 meanings. This initial interface uses a configurable monogram avatar, not a remote image fetch.
 
 ```json
-{"version":1,"description":"Plain descriptive text","avatar":{"text":"DAO","palette":"teal"}}
+{
+  "version": 1,
+  "description": "Plain descriptive text",
+  "avatar": { "text": "DAO", "palette": "teal" }
+}
 ```
 
 - `version` is exactly 1.

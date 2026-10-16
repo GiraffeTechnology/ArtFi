@@ -15,32 +15,32 @@ import (
 var uint256Pattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,77})$`)
 
 type vaultIntentRequest struct {
-	CollectionAddress     string `json:"collectionAddress"`
-	TokenID               string `json:"tokenId"`
-	VaultName             string `json:"vaultName"`
-	AdminAddress          string `json:"adminAddress"`
-	PauserAddress         string `json:"pauserAddress"`
-	FractionalizerAddress string `json:"fractionalizerAddress"`
-	Presentation *daoPresentation `json:"presentation,omitempty"`
+	CollectionAddress     string           `json:"collectionAddress"`
+	TokenID               string           `json:"tokenId"`
+	VaultName             string           `json:"vaultName"`
+	AdminAddress          string           `json:"adminAddress"`
+	PauserAddress         string           `json:"pauserAddress"`
+	FractionalizerAddress string           `json:"fractionalizerAddress"`
+	Presentation          *daoPresentation `json:"presentation,omitempty"`
 }
 
 type vaultIntent struct {
-	IntentID              string   `json:"intentId"`
-	RequestID             string   `json:"requestId"`
-	FactoryAddress        string   `json:"factoryAddress"`
-	CollectionAddress     string   `json:"collectionAddress"`
-	TokenID               string   `json:"tokenId"`
-	VaultName             string   `json:"vaultName"`
-	AdminAddress          string   `json:"adminAddress"`
-	PauserAddress         string   `json:"pauserAddress"`
-	FractionalizerAddress string   `json:"fractionalizerAddress"`
-	ChainID               int      `json:"chainId"`
-	ContractFunction      string   `json:"contractFunction"`
-	ContractArguments     []string `json:"contractArguments"`
-	Status                string   `json:"status"`
-	TransactionHash       string   `json:"transactionHash,omitempty"`
-	CreatedAt             string   `json:"createdAt"`
-	Presentation *daoPresentation `json:"presentation,omitempty"`
+	IntentID              string           `json:"intentId"`
+	RequestID             string           `json:"requestId"`
+	FactoryAddress        string           `json:"factoryAddress"`
+	CollectionAddress     string           `json:"collectionAddress"`
+	TokenID               string           `json:"tokenId"`
+	VaultName             string           `json:"vaultName"`
+	AdminAddress          string           `json:"adminAddress"`
+	PauserAddress         string           `json:"pauserAddress"`
+	FractionalizerAddress string           `json:"fractionalizerAddress"`
+	ChainID               int              `json:"chainId"`
+	ContractFunction      string           `json:"contractFunction"`
+	ContractArguments     []string         `json:"contractArguments"`
+	Status                string           `json:"status"`
+	TransactionHash       string           `json:"transactionHash,omitempty"`
+	CreatedAt             string           `json:"createdAt"`
+	Presentation          *daoPresentation `json:"presentation,omitempty"`
 	payloadHash           string
 	idempotencyKeyHash    string
 }
