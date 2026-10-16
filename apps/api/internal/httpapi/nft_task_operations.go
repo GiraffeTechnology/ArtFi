@@ -36,15 +36,15 @@ type NFTTaskCapabilityScope struct {
 }
 type NFTTaskCapability struct {
 	NFTTaskCapabilityScope
-	Principal   NFTTaskPrincipal `json:"principal"`
-	Wallet      string           `json:"wallet"`
-	ChainID     int              `json:"chainId"`
-	IssuedAtMs  int64            `json:"issuedAtMs"`
-	ExpiresAtMs int64            `json:"expiresAtMs"`
-	ReceiptPhase string `json:"receiptPhase"`
-	ReceiptNonce string `json:"receiptNonce"`
-	ReceiptPlanDigest string `json:"receiptPlanDigest"`
-	ReceiptJournalBindingHash string `json:"receiptJournalBindingHash"`
+	Principal                 NFTTaskPrincipal `json:"principal"`
+	Wallet                    string           `json:"wallet"`
+	ChainID                   int              `json:"chainId"`
+	IssuedAtMs                int64            `json:"issuedAtMs"`
+	ExpiresAtMs               int64            `json:"expiresAtMs"`
+	ReceiptPhase              string           `json:"receiptPhase"`
+	ReceiptNonce              string           `json:"receiptNonce"`
+	ReceiptPlanDigest         string           `json:"receiptPlanDigest"`
+	ReceiptJournalBindingHash string           `json:"receiptJournalBindingHash"`
 }
 
 // These are server-composition interfaces, never populated from request JSON.
