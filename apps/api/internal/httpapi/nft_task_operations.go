@@ -88,7 +88,8 @@ func decodeNFTTaskPrincipal(raw []byte, target *NFTTaskPrincipal) error {
 // phase and journal digests, nor does it replace the later durable binding checks.
 func validateNFTTaskReceiptClaims(claims NFTTaskCapability) error {
 	if !nftTaskReceiptPhase.MatchString(claims.ReceiptPhase) || !nftTaskReceiptNonce.MatchString(claims.ReceiptNonce) ||
-		!nftTaskDigest.MatchString(claims.ReceiptPlanDigest) || !nftTaskDigest.MatchString(claims.ReceiptJournalBindingHash) {
+		!nftTaskDigest.MatchString(claims.ReceiptPlanDigest) || claims.ReceiptPlanDigest == "0x"+strings.Repeat("0", 64) ||
+		!nftTaskDigest.MatchString(claims.ReceiptJournalBindingHash) || claims.ReceiptJournalBindingHash == "0x"+strings.Repeat("0", 64) {
 		return errUserForbidden
 	}
 	if _, err := strconv.ParseUint(claims.ReceiptNonce, 10, 53); err != nil {

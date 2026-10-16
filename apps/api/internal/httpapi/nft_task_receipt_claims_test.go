@@ -38,6 +38,8 @@ func TestNFTTaskReceiptClaimsRejectMissingOrMalformedFields(t *testing.T) {
 		"missing nonce": func(c *NFTTaskCapability) { c.ReceiptNonce = "" },
 		"missing plan digest": func(c *NFTTaskCapability) { c.ReceiptPlanDigest = "" },
 		"missing journal binding": func(c *NFTTaskCapability) { c.ReceiptJournalBindingHash = "" },
+		"zero plan digest": func(c *NFTTaskCapability) { c.ReceiptPlanDigest = "0x" + strings.Repeat("0", 64) },
+		"zero journal binding": func(c *NFTTaskCapability) { c.ReceiptJournalBindingHash = "0x" + strings.Repeat("0", 64) },
 		"unknown phase": func(c *NFTTaskCapability) { c.ReceiptPhase = "settled" },
 		"phase case changed": func(c *NFTTaskCapability) { c.ReceiptPhase = "Funded" },
 		"leading zero nonce": func(c *NFTTaskCapability) { c.ReceiptNonce = "01" },
