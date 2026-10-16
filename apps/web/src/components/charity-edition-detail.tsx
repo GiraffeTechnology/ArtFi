@@ -216,7 +216,13 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
           <CharityVenueLink tokenId={edition.tokenId} />
 
           <CharityHolderAccess tokenId={edition.tokenId} />
-          <button type="button" className="secondary" onClick={() => void load()}>Refresh edition facts</button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void load()}
+          >
+            Refresh edition facts
+          </button>
           <CharityEvidenceRecorder tokenId={edition.tokenId} />
         </>
       )}
@@ -234,4 +240,3 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
     </section>
   );
 }
-

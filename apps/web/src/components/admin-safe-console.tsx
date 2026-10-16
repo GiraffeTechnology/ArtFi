@@ -98,7 +98,8 @@ function ConnectedSafeConsole({
   account,
   chainId,
 }: Props & { safe: Address; account?: Address; chainId: number }) {
-  const evidenceFlow = kind === "charity-sellout" || kind === "charity-donation";
+  const evidenceFlow =
+    kind === "charity-sellout" || kind === "charity-donation";
   const resultNoun = evidenceFlow ? "evidence record" : "creation result";
   const client = usePublicClient();
   const { writeContractAsync } = useWriteContract();
@@ -107,15 +108,26 @@ function ConnectedSafeConsole({
       setupRecoverySession<SafeRecord>(
         `safe:${chainId}:${safe.toLowerCase()}:${account?.toLowerCase() ?? "disconnected"}:${kind}${expectedTokenId === undefined ? "" : `:${target?.toLowerCase()}:${expectedTokenId}`}`,
         (value): value is SafeRecord => {
-          if (!(isSafeRecord(value) &&
+          if (!(
+            isSafeRecord(value) &&
             value.chainId === chainId &&
             sameSafeValue(value.safe, safe) &&
             Boolean(account && sameSafeValue(value.wallet, account)) &&
-            value.kind === kind)) return false;
+            value.kind === kind
+          ))
+            return false;
           if (expectedTokenId !== undefined) {
             if (!target) return false;
-            try { reviewSafeSubmission(kind, target, recordSubmission(value), expectedTokenId); }
-            catch { return false; }
+            try {
+              reviewSafeSubmission(
+                kind,
+                target,
+                recordSubmission(value),
+                expectedTokenId,
+              );
+            } catch {
+              return false;
+            }
           }
           return true;
         },
@@ -131,7 +143,9 @@ function ConnectedSafeConsole({
   const [proposalInput, setProposalInput] = useState("");
   const [recoveryHash, setRecoveryHash] = useState("");
   const [message, setMessage] = useState(
-    evidenceFlow ? "Review an unsigned evidence call here, or load a proposal ID from another owner." : "Review an unsigned creation call here, or load a proposal ID from another owner.",
+    evidenceFlow
+      ? "Review an unsigned evidence call here, or load a proposal ID from another owner."
+      : "Review an unsigned creation call here, or load a proposal ID from another owner.",
   );
   const [reviewedKey, setReviewedKey] = useState<string>();
   const [loadedWithPreparedId, setLoadedWithPreparedId] = useState<Hex>();
@@ -606,7 +620,12 @@ function ConnectedSafeConsole({
   let reviewError = "";
   if (target && submission) {
     try {
-      callReview = reviewSafeSubmission(kind, target, submission, expectedTokenId);
+      callReview = reviewSafeSubmission(
+        kind,
+        target,
+        submission,
+        expectedTokenId,
+      );
     } catch (error) {
       reviewError =
         error instanceof Error ? error.message : "Call review failed.";
@@ -629,7 +648,8 @@ function ConnectedSafeConsole({
         Configured safe: {safe}. Chain: {chainId}.
       </p>
       <p>
-        Only this section&apos;s existing zero-value {evidenceFlow ? "evidence-recording" : "creation"} call is available.
+        Only this section&apos;s existing zero-value{" "}
+        {evidenceFlow ? "evidence-recording" : "creation"} call is available.
         Submission confirms for its proposing owner; every other owner confirms
         separately.
       </p>
@@ -859,4 +879,3 @@ function ConnectedSafeConsole({
     </section>
   );
 }
-

@@ -188,27 +188,39 @@ export const charityEditionsAbi = [
     type: "function",
     name: "recordSellout",
     stateMutability: "nonpayable",
-    inputs: [{ name: "tokenId", type: "uint256" }, { name: "evidenceHash", type: "bytes32" }],
+    inputs: [
+      { name: "tokenId", type: "uint256" },
+      { name: "evidenceHash", type: "bytes32" },
+    ],
     outputs: [],
   },
   {
     type: "function",
     name: "recordPhysicalDonation",
     stateMutability: "nonpayable",
-    inputs: [{ name: "tokenId", type: "uint256" }, { name: "evidenceHash", type: "bytes32" }],
+    inputs: [
+      { name: "tokenId", type: "uint256" },
+      { name: "evidenceHash", type: "bytes32" },
+    ],
     outputs: [],
   },
   {
     type: "event",
     name: "SelloutRecorded",
     anonymous: false,
-    inputs: [{ indexed: true, name: "tokenId", type: "uint256" }, { indexed: true, name: "evidenceHash", type: "bytes32" }],
+    inputs: [
+      { indexed: true, name: "tokenId", type: "uint256" },
+      { indexed: true, name: "evidenceHash", type: "bytes32" },
+    ],
   },
   {
     type: "event",
     name: "PhysicalDonationRecorded",
     anonymous: false,
-    inputs: [{ indexed: true, name: "tokenId", type: "uint256" }, { indexed: true, name: "evidenceHash", type: "bytes32" }],
+    inputs: [
+      { indexed: true, name: "tokenId", type: "uint256" },
+      { indexed: true, name: "evidenceHash", type: "bytes32" },
+    ],
   },
 ] as const;
 
@@ -763,4 +775,3 @@ export const wholeArtworkCollectionAbi = [
     outputs: [],
   },
 ] as const;
-

@@ -25,7 +25,8 @@ import {
 } from "./admin-safe";
 import { publicSetting } from "./public-runtime-config";
 
-export type SafeFlow = "rwa" | "vault" | "charity" | "charity-sellout" | "charity-donation";
+export type SafeFlow =
+  "rwa" | "vault" | "charity" | "charity-sellout" | "charity-donation";
 export const safeFlowSpec = {
   rwa: {
     name: "RWA creation",
@@ -152,14 +153,29 @@ export function reviewSafeSubmission(
     const tokenId = decoded.args?.[0];
     const evidenceHash = decoded.args?.[1];
     if (
-      typeof tokenId !== "bigint" || tokenId <= 0n ||
-      typeof evidenceHash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(evidenceHash) ||
+      typeof tokenId !== "bigint" ||
+      tokenId <= 0n ||
+      typeof evidenceHash !== "string" ||
+      !/^0x[0-9a-fA-F]{64}$/.test(evidenceHash) ||
       sameSafeValue(evidenceHash, ZERO_REQUEST_ID) ||
-      (expectedTokenId !== undefined && (expectedTokenId <= 0n || tokenId !== expectedTokenId)) ||
-      !sameSafeValue(encodeFunctionData({ abi: spec.abi, functionName: spec.functionName, args: [tokenId, evidenceHash as Hex] }), submission.data)
-    ) throw new Error("The evidence proposal must match the exact reviewed series, nonzero evidence and canonical calldata.");
+      (expectedTokenId !== undefined &&
+        (expectedTokenId <= 0n || tokenId !== expectedTokenId)) ||
+      !sameSafeValue(
+        encodeFunctionData({
+          abi: spec.abi,
+          functionName: spec.functionName,
+          args: [tokenId, evidenceHash as Hex],
+        }),
+        submission.data,
+      )
+    )
+      throw new Error(
+        "The evidence proposal must match the exact reviewed series, nonzero evidence and canonical calldata.",
+      );
   } else if (expectedTokenId !== undefined) {
-    throw new Error("A series-scoped evidence console cannot review a creation call.");
+    throw new Error(
+      "A series-scoped evidence console cannot review a creation call.",
+    );
   }
   const operationId = decoded.args?.[spec.operationIdIndex] as Hex;
   if (
@@ -432,4 +448,3 @@ export async function existingSafeSubmission(
   assertSameSafeSubmission(submission, transaction);
   return true;
 }
-
