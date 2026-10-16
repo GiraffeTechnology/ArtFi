@@ -44,7 +44,7 @@ export async function GET(
   if (!tokenId) {
     return NextResponse.json(
       { detail: "Unknown charity edition." },
-      { status: 404 },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -56,7 +56,7 @@ export async function GET(
         detail:
           "Verify ownership of this charity edition to receive the watermarked file.",
       },
-      { status: 401 },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -66,7 +66,7 @@ export async function GET(
   } catch {
     return NextResponse.json(
       { detail: "Charity holder delivery is unavailable." },
-      { status: 503 },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -74,7 +74,7 @@ export async function GET(
     if (decision.refusal === "unknown-edition") {
       return NextResponse.json(
         { detail: "Unknown charity edition." },
-        { status: 404 },
+        { status: 404, headers: { "Cache-Control": "no-store" } },
       );
     }
     return NextResponse.json(
@@ -83,7 +83,7 @@ export async function GET(
           "The holder file for this edition failed the master boundary and was not served.",
         refusal: decision.refusal,
       },
-      { status: 409 },
+      { status: 409, headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -97,7 +97,7 @@ export async function GET(
             "Watermarked holder delivery is not configured in this environment.",
           refusal: delivery.refusal,
         },
-        { status: 503 },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
       );
     }
     if (delivery.refusal === "unreachable") {
@@ -106,7 +106,7 @@ export async function GET(
           detail: "The holder file could not be read.",
           refusal: "unreachable",
         },
-        { status: 503 },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
       );
     }
     // A digest or size that disagrees with the reviewed descriptor is a content fault. It is
@@ -117,7 +117,7 @@ export async function GET(
           "The stored file did not match its reviewed descriptor and was not served.",
         refusal: delivery.refusal,
       },
-      { status: 409 },
+      { status: 409, headers: { "Cache-Control": "no-store" } },
     );
   }
 

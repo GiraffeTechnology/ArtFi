@@ -38,7 +38,7 @@ export async function GET(
   if (!tokenId) {
     return NextResponse.json(
       { detail: "Unknown charity edition." },
-      { status: 404 },
+      { status: 404, headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -51,7 +51,7 @@ export async function GET(
         detail:
           "Verify ownership of this charity edition to receive the watermarked file.",
       },
-      { status: 401 },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -61,7 +61,7 @@ export async function GET(
   } catch {
     return NextResponse.json(
       { detail: "Charity holder delivery is unavailable." },
-      { status: 503 },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
 
@@ -69,7 +69,7 @@ export async function GET(
     if (decision.refusal === "unknown-edition") {
       return NextResponse.json(
         { detail: "Unknown charity edition." },
-        { status: 404 },
+        { status: 404, headers: { "Cache-Control": "no-store" } },
       );
     }
     // A descriptor that fails the master boundary is a configuration fault, reported as such
@@ -80,7 +80,7 @@ export async function GET(
           "The holder file for this edition failed the master boundary and was not served.",
         refusal: decision.refusal,
       },
-      { status: 409 },
+      { status: 409, headers: { "Cache-Control": "no-store" } },
     );
   }
 

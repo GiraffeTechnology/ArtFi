@@ -17,16 +17,41 @@ import { unavailableCapabilities } from "./capabilities.mjs";
 import { MODE, stableCode, fail } from "./config.mjs";
 
 export function createOfflineReadService(store, clock = Date.now) {
-  async function owned(session, id) {
-    if (session?.authenticated !== true || session.expiresAt <= clock())
+  function principal(session) {
+    const now = clock();
+    if (
+      !Number.isSafeInteger(now) ||
+      session?.authenticated !== true ||
+      !ethers.isAddress(session.wallet) ||
+      typeof session.chainId !== "string" ||
+      !/^[1-9][0-9]*$/.test(session.chainId) ||
+      !Number.isSafeInteger(Number(session.chainId)) ||
+      !Number.isSafeInteger(session.expiresAt) ||
+      session.expiresAt <= now
+    )
       fail("AUTHENTICATED_SESSION_REQUIRED");
+    return { wallet: session.wallet.toLowerCase(), chainId: session.chainId };
+  }
+  function recheck(session, expected) {
+    const current = principal(session);
+    if (
+      current.wallet !== expected.wallet ||
+      current.chainId !== expected.chainId
+    )
+      fail("SESSION_IDENTITY_CHANGED");
+  }
+  async function owned(session, id, expected) {
     const row = await store.get(id);
+    const wallet = row?.request?.intent?.wallet;
     if (
       !row ||
-      row.request.intent.wallet.toLowerCase() !== session.wallet.toLowerCase()
+      row.id !== id ||
+      typeof wallet !== "string" ||
+      wallet.toLowerCase() !== expected.wallet ||
+      row.request?.execution?.chainId !== expected.chainId
     )
       fail("OPERATION_NOT_FOUND");
-    if (session.expiresAt <= clock()) fail("AUTHENTICATED_SESSION_REQUIRED");
+    recheck(session, expected);
     return row;
   }
   return Object.freeze({
@@ -34,7 +59,8 @@ export function createOfflineReadService(store, clock = Date.now) {
     createIntent: async () => fail("EXECUTION_DEPENDENCY_UNAVAILABLE"),
     recordRevocation: async () => fail("REVOCATION_DEPENDENCY_UNAVAILABLE"),
     async getIntent(session, id) {
-      const row = await owned(session, id),
+      const expected = principal(session);
+      const row = await owned(session, id, expected),
         request = row.request;
       const matched =
         row.reconciliation?.canonical === true &&
@@ -81,9 +107,10 @@ export function createOfflineReadService(store, clock = Date.now) {
       };
     },
     async getHistory(session, id, page) {
-      await owned(session, id);
+      const expected = principal(session);
+      await owned(session, id, expected);
       const events = await store.listEvents(id, page);
-      if (session.expiresAt <= clock()) fail("AUTHENTICATED_SESSION_REQUIRED");
+      recheck(session, expected);
       return {
         id,
         mode: MODE,
