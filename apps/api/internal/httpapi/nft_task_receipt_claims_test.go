@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
