@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -40,6 +41,10 @@ type NFTTaskCapability struct {
 	ChainID     int              `json:"chainId"`
 	IssuedAtMs  int64            `json:"issuedAtMs"`
 	ExpiresAtMs int64            `json:"expiresAtMs"`
+	ReceiptPhase string `json:"receiptPhase"`
+	ReceiptNonce string `json:"receiptNonce"`
+	ReceiptPlanDigest string `json:"receiptPlanDigest"`
+	ReceiptJournalBindingHash string `json:"receiptJournalBindingHash"`
 }
 
 // These are server-composition interfaces, never populated from request JSON.
@@ -67,7 +72,231 @@ type nftTaskInput struct {
 var nftTaskIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 var nftTaskDigest = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
 var nftTaskGrant = regexp.MustCompile(`^grant:[A-Za-z0-9_-]{1,122}$`)
-var nftTaskVersion = regexp.MustCompile(`^[1-9][0-9]{0,77}$`)
+var nftTaskVersion = regexp.MustCompile(`^[1-9][0-9]{0,77}package httpapi
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"io"
+	"math"
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const NFTTaskJournalPath = "/internal/v1/nft/operations"
+const NFTTaskCapabilityMaxLifetime = 30 * time.Second
+
+type NFTTaskPrincipal struct {
+	Kind               string `json:"kind"`
+	TaskID             string `json:"taskId"`
+	TaskDigest         string `json:"taskDigest"`
+	ExecutorDigest     string `json:"executorDigest"`
+	GrantReference     string `json:"grantReference"`
+	GrantPolicyVersion string `json:"grantPolicyVersion"`
+	OperationID        string `json:"operationId"`
+}
+type NFTTaskCapabilityScope struct {
+	PeerID            string `json:"peerId"`
+	Action            string `json:"action"`
+	NativeOperationID string `json:"nativeOperationId"`
+	PlanDigest        string `json:"planDigest"`
+	RequestDigest     string `json:"requestDigest"`
+}
+type NFTTaskCapability struct {
+	NFTTaskCapabilityScope
+	Principal   NFTTaskPrincipal `json:"principal"`
+	Wallet      string           `json:"wallet"`
+	ChainID     int              `json:"chainId"`
+	IssuedAtMs  int64            `json:"issuedAtMs"`
+	ExpiresAtMs int64            `json:"expiresAtMs"`
+	ReceiptPhase string `json:"receiptPhase"`
+	ReceiptNonce string `json:"receiptNonce"`
+	ReceiptPlanDigest string `json:"receiptPlanDigest"`
+	ReceiptJournalBindingHash string `json:"receiptJournalBindingHash"`
+}
+
+// These are server-composition interfaces, never populated from request JSON.
+// AuthenticatePeer must authenticate the actual TLS/workload peer, not a header.
+type NFTTaskPeerAuthenticator interface {
+	AuthenticatePeer(*http.Request) (string, error)
+}
+
+// ConsumeCapability must atomically consume the short-lived capability while its
+// existing grant gate is held. It must not reacquire that gate or extend a grant.
+type NFTTaskCapabilityVerifier interface {
+	ConsumeCapability(context.Context, string, NFTTaskCapabilityScope) (NFTTaskCapability, error)
+}
+type NFTTaskJournalConfig struct {
+	DB                 *sql.DB
+	PeerAuthenticator  NFTTaskPeerAuthenticator
+	CapabilityVerifier NFTTaskCapabilityVerifier
+	Now                func() time.Time
+}
+type nftTaskInput struct {
+	Action    string       `json:"action"`
+	Operation nftOperation `json:"operation"`
+}
+
+var nftTaskIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+var nftTaskDigest = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
+var nftTaskGrant = regexp.MustCompile(`^grant:[A-Za-z0-9_-]{1,122}$`)
+)
+var nftTaskReceiptPhase = regexp.MustCompile(`^(funded|registered|paid)package httpapi
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"io"
+	"math"
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const NFTTaskJournalPath = "/internal/v1/nft/operations"
+const NFTTaskCapabilityMaxLifetime = 30 * time.Second
+
+type NFTTaskPrincipal struct {
+	Kind               string `json:"kind"`
+	TaskID             string `json:"taskId"`
+	TaskDigest         string `json:"taskDigest"`
+	ExecutorDigest     string `json:"executorDigest"`
+	GrantReference     string `json:"grantReference"`
+	GrantPolicyVersion string `json:"grantPolicyVersion"`
+	OperationID        string `json:"operationId"`
+}
+type NFTTaskCapabilityScope struct {
+	PeerID            string `json:"peerId"`
+	Action            string `json:"action"`
+	NativeOperationID string `json:"nativeOperationId"`
+	PlanDigest        string `json:"planDigest"`
+	RequestDigest     string `json:"requestDigest"`
+}
+type NFTTaskCapability struct {
+	NFTTaskCapabilityScope
+	Principal   NFTTaskPrincipal `json:"principal"`
+	Wallet      string           `json:"wallet"`
+	ChainID     int              `json:"chainId"`
+	IssuedAtMs  int64            `json:"issuedAtMs"`
+	ExpiresAtMs int64            `json:"expiresAtMs"`
+	ReceiptPhase string `json:"receiptPhase"`
+	ReceiptNonce string `json:"receiptNonce"`
+	ReceiptPlanDigest string `json:"receiptPlanDigest"`
+	ReceiptJournalBindingHash string `json:"receiptJournalBindingHash"`
+}
+
+// These are server-composition interfaces, never populated from request JSON.
+// AuthenticatePeer must authenticate the actual TLS/workload peer, not a header.
+type NFTTaskPeerAuthenticator interface {
+	AuthenticatePeer(*http.Request) (string, error)
+}
+
+// ConsumeCapability must atomically consume the short-lived capability while its
+// existing grant gate is held. It must not reacquire that gate or extend a grant.
+type NFTTaskCapabilityVerifier interface {
+	ConsumeCapability(context.Context, string, NFTTaskCapabilityScope) (NFTTaskCapability, error)
+}
+type NFTTaskJournalConfig struct {
+	DB                 *sql.DB
+	PeerAuthenticator  NFTTaskPeerAuthenticator
+	CapabilityVerifier NFTTaskCapabilityVerifier
+	Now                func() time.Time
+}
+type nftTaskInput struct {
+	Action    string       `json:"action"`
+	Operation nftOperation `json:"operation"`
+}
+
+var nftTaskIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+var nftTaskDigest = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
+var nftTaskGrant = regexp.MustCompile(`^grant:[A-Za-z0-9_-]{1,122}$`)
+)
+var nftTaskReceiptNonce = regexp.MustCompile(`^(0|[1-9][0-9]{0,15})package httpapi
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"io"
+	"math"
+	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const NFTTaskJournalPath = "/internal/v1/nft/operations"
+const NFTTaskCapabilityMaxLifetime = 30 * time.Second
+
+type NFTTaskPrincipal struct {
+	Kind               string `json:"kind"`
+	TaskID             string `json:"taskId"`
+	TaskDigest         string `json:"taskDigest"`
+	ExecutorDigest     string `json:"executorDigest"`
+	GrantReference     string `json:"grantReference"`
+	GrantPolicyVersion string `json:"grantPolicyVersion"`
+	OperationID        string `json:"operationId"`
+}
+type NFTTaskCapabilityScope struct {
+	PeerID            string `json:"peerId"`
+	Action            string `json:"action"`
+	NativeOperationID string `json:"nativeOperationId"`
+	PlanDigest        string `json:"planDigest"`
+	RequestDigest     string `json:"requestDigest"`
+}
+type NFTTaskCapability struct {
+	NFTTaskCapabilityScope
+	Principal   NFTTaskPrincipal `json:"principal"`
+	Wallet      string           `json:"wallet"`
+	ChainID     int              `json:"chainId"`
+	IssuedAtMs  int64            `json:"issuedAtMs"`
+	ExpiresAtMs int64            `json:"expiresAtMs"`
+	ReceiptPhase string `json:"receiptPhase"`
+	ReceiptNonce string `json:"receiptNonce"`
+	ReceiptPlanDigest string `json:"receiptPlanDigest"`
+	ReceiptJournalBindingHash string `json:"receiptJournalBindingHash"`
+}
+
+// These are server-composition interfaces, never populated from request JSON.
+// AuthenticatePeer must authenticate the actual TLS/workload peer, not a header.
+type NFTTaskPeerAuthenticator interface {
+	AuthenticatePeer(*http.Request) (string, error)
+}
+
+// ConsumeCapability must atomically consume the short-lived capability while its
+// existing grant gate is held. It must not reacquire that gate or extend a grant.
+type NFTTaskCapabilityVerifier interface {
+	ConsumeCapability(context.Context, string, NFTTaskCapabilityScope) (NFTTaskCapability, error)
+}
+type NFTTaskJournalConfig struct {
+	DB                 *sql.DB
+	PeerAuthenticator  NFTTaskPeerAuthenticator
+	CapabilityVerifier NFTTaskCapabilityVerifier
+	Now                func() time.Time
+}
+type nftTaskInput struct {
+	Action    string       `json:"action"`
+	Operation nftOperation `json:"operation"`
+}
+
+var nftTaskIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+var nftTaskDigest = regexp.MustCompile(`^0x[0-9a-f]{64}$`)
+var nftTaskGrant = regexp.MustCompile(`^grant:[A-Za-z0-9_-]{1,122}$`)
+)
 
 func decodeNFTTaskPrincipal(raw []byte, target *NFTTaskPrincipal) error {
 	if strictNFTJSON(raw, target) != nil || target.Kind != "task" || !nftTaskIdentifier.MatchString(target.TaskID) || !nftTaskIdentifier.MatchString(target.OperationID) || !nftTaskDigest.MatchString(target.TaskDigest) || !nftTaskDigest.MatchString(target.ExecutorDigest) || !nftTaskGrant.MatchString(target.GrantReference) || !nftTaskVersion.MatchString(target.GrantPolicyVersion) {
@@ -75,6 +304,20 @@ func decodeNFTTaskPrincipal(raw []byte, target *NFTTaskPrincipal) error {
 	}
 	return nil
 }
+// validateNFTTaskReceiptClaims checks the four exact top-level Wallet claims.
+// It intentionally validates representation only: it does not derive or equate
+// phase and journal digests, nor does it replace the later durable binding checks.
+func validateNFTTaskReceiptClaims(claims NFTTaskCapability) error {
+	if !nftTaskReceiptPhase.MatchString(claims.ReceiptPhase) || !nftTaskReceiptNonce.MatchString(claims.ReceiptNonce) ||
+		!nftTaskDigest.MatchString(claims.ReceiptPlanDigest) || !nftTaskDigest.MatchString(claims.ReceiptJournalBindingHash) {
+		return errUserForbidden
+	}
+	if _, err := strconv.ParseUint(claims.ReceiptNonce, 10, 53); err != nil {
+		return errUserForbidden
+	}
+	return nil
+}
+
 func strictNFTJSON(raw []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -212,6 +455,10 @@ func newNFTTaskJournalHandler(store *nftOperationStore, peer NFTTaskPeerAuthenti
 		scope := NFTTaskCapabilityScope{PeerID: peerID, Action: input.Action, NativeOperationID: input.Operation.ID, PlanDigest: planDigest, RequestDigest: requestDigest}
 		claims, err := verifier.ConsumeCapability(r.Context(), capability, scope)
 		if err != nil {
+			writeUserAuthError(w, r, err)
+			return
+		}
+		if err := validateNFTTaskReceiptClaims(claims); err != nil {
 			writeUserAuthError(w, r, err)
 			return
 		}
