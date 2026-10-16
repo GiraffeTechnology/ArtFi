@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import { useUserSession } from "@/components/user-session-provider";
 import { portfolioSessionKey } from "@/lib/portfolio-session";
+import { PortfolioHistory } from "./portfolio-history";
 
 import {
   loadPortfolioRecords,
@@ -113,27 +114,7 @@ export function PortfolioDetails({ portfolio }: { portfolio: Portfolio }) {
         )}
       </article>
       <article>
-        <h3>Transaction history</h3>
-        {portfolio.transactions.length === 0 ? (
-          <p>No indexed transaction is associated with this address.</p>
-        ) : (
-          <ol>
-            {portfolio.transactions.map((transaction) => (
-              <li
-                key={
-                  transaction.id ??
-                  `${transaction.transactionHash}:${transaction.logIndex}:${transaction.eventName}`
-                }
-              >
-                <strong>{transaction.eventName}</strong>
-                <span>
-                  {transaction.status} · block {transaction.blockNumber}
-                </span>
-                <small>{shortHash(transaction.transactionHash)}</small>
-              </li>
-            ))}
-          </ol>
-        )}
+        <PortfolioHistory entries={portfolio.transactions} />
       </article>
       <article>
         <h3>Indexed trade P&L</h3>
@@ -247,3 +228,4 @@ function shortAddress(value: string) {
 function shortHash(value: string) {
   return `${value.slice(0, 10)}…${value.slice(-8)}`;
 }
+
