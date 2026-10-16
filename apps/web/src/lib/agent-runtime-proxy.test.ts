@@ -121,4 +121,28 @@ describe("agent runtime private bridge", () => {
     ).toBe(413);
     expect(upstream).not.toHaveBeenCalled();
   });
+  it("forwards canonical workflow-history cursors and refuses unknown query fields", async () => {
+    const result = await request(
+      "actions/TEST_ONLY_history/history?after=9007199254740993&limit=100",
+    );
+    expect(result.status).toBe(200);
+    const [url, options] = upstream.mock.calls[0];
+    expect(url.toString()).toBe(
+      "https://runtime.test/approved-prefix/v1/agent/actions/TEST_ONLY_history/history?after=9007199254740993&limit=100",
+    );
+    expect(options.method).toBe("GET");
+    expect(options.cache).toBe("no-store");
+    expect(
+      (await request("actions/TEST_ONLY_history/history?after=01")).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(
+          "actions/TEST_ONLY_history/history?after=0&limit=100&wallet=other",
+        )
+      ).status,
+    ).toBe(400);
+    expect(upstream).toHaveBeenCalledExactlyOnce();
+  });
 });
+
