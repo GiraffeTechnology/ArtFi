@@ -10,6 +10,8 @@ import {
 import { formatEther, type Hex } from "viem";
 import { useAccount, useWalletClient } from "wagmi";
 import { assertSameNftReview } from "@/lib/nft/client";
+import { readNftHistoryPage } from "@/lib/nft/history-view";
+import { NftHistoryResults } from "@/components/nft-history-results";
 import {
   observeNftCatalogPage,
   mergeNftCatalogPage,
@@ -281,7 +283,8 @@ function NftMarketSession() {
     )
       throw new Error("Sign in on an NFT chain to view private history.");
     const captured = context;
-    const response = await api<NftOperationHistory>(
+    setHistory(null);
+    const response = await api<unknown>(
       "history",
       undefined,
       new URLSearchParams({
@@ -291,12 +294,13 @@ function NftMarketSession() {
       }),
     );
     if (captured !== liveContext.current) return;
-    if (
-      response.wallet.toLowerCase() !== wallet.address.toLowerCase() ||
-      response.chainId !== wallet.chainId
-    )
-      throw new Error("The private history belongs to another wallet.");
-    setHistory(response);
+    setHistory(
+      readNftHistoryPage(response, {
+        wallet: wallet.address,
+        chainId: wallet.chainId!,
+        page,
+      }),
+    );
   }
   async function recoverHistory(id: string) {
     const captured = context;
@@ -861,7 +865,7 @@ function NftMarketSession() {
           )}
         </>
       )}
-      <section aria-label="My NFT operation history" data-no-translate>
+      <section aria-label="My NFT operation history">
         <h3>My NFT operation history</h3>
         <p>
           Recover an earlier listing, offer or transaction even after changing
@@ -880,44 +884,12 @@ function NftMarketSession() {
           Load my NFT operations
         </button>
         {history && auth.authenticated && (
-          <>
-            <ol>
-              {history.data.map((item) => (
-                <li key={item.id}>
-                  <p>
-                    {item.action} · {item.collection} · token {item.tokenId} ·{" "}
-                    {item.status} · {new Date(item.updatedAt).toLocaleString()}
-                  </p>
-                  {item.orderHash && (
-                    <p className="nft-market-hash">Order {item.orderHash}</p>
-                  )}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void run(() => recoverHistory(item.id))}
-                  >
-                    Recover this NFT operation
-                  </button>
-                </li>
-              ))}
-            </ol>
-            {!history.data.length && (
-              <p>No recorded NFT operation is present on this page.</p>
-            )}
-            <button
-              disabled={busy || history.page === 1}
-              onClick={() => void run(() => loadHistory(history.page - 1))}
-            >
-              Previous NFT operations
-            </button>
-            <span>Page {history.page}</span>
-            <button
-              disabled={busy || !history.hasMore}
-              onClick={() => void run(() => loadHistory(history.page + 1))}
-            >
-              Next NFT operations
-            </button>
-          </>
+          <NftHistoryResults
+            history={history}
+            busy={busy}
+            onRecover={(id) => void run(() => recoverHistory(id))}
+            onPage={(page) => void run(() => loadHistory(page))}
+          />
         )}
       </section>
       {detail && (
