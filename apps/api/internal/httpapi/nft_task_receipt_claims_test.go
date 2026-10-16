@@ -10,9 +10,9 @@ import (
 
 func validNFTTaskReceiptClaims() NFTTaskCapability {
 	return NFTTaskCapability{
-		ReceiptPhase: "funded",
-		ReceiptNonce: "9007199254740991",
-		ReceiptPlanDigest: "0x" + strings.Repeat("a", 64),
+		ReceiptPhase:              "funded",
+		ReceiptNonce:              "9007199254740991",
+		ReceiptPlanDigest:         "0x" + strings.Repeat("a", 64),
 		ReceiptJournalBindingHash: "0x" + strings.Repeat("b", 64),
 	}
 }
@@ -62,7 +62,9 @@ func TestNFTTaskReceiptClaimsRejectMissingOrMalformedFields(t *testing.T) {
 func TestNFTTaskHandlerRejectsInvalidReceiptClaimsBeforeJournalAccess(t *testing.T) {
 	now := time.Now()
 	peer, err := NewNFTMTLSPeerAuthenticator([]string{"spiffe://test-only/wallet"})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := map[string]func(*NFTTaskCapability){
 		"missing nonce": func(c *NFTTaskCapability) { c.ReceiptNonce = "" },
 		"partial claims": func(c *NFTTaskCapability) { c.ReceiptJournalBindingHash = "" },
