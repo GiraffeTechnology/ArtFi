@@ -1,5 +1,18 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-16 market analytics availability UI
+
+Asset detail pages now explicitly identify price history, holder distribution, and
+transaction analytics as unavailable when no attributed runtime dataset is wired.
+The note also identifies the existing catalogue values as prototype data, so they
+cannot be read as current market observations. This implements only the explicit
+unavailable-state branch of the inherited market-analytics acceptance gap; it
+does not add or claim live analytics.
+
+Status: **IMPLEMENTED-NOT-VERIFIED**. Regression source is included in this
+stage PR and is **NOT_RUN** by the source author. Runtime source, browser visuals,
+and full market analytics acceptance remain unverified.
+
 ## 2026-10-10 bounded runtime supersession note
 
 Historical entries below retain their original source/date and are not current
