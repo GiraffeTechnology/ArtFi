@@ -224,7 +224,6 @@ test("authorizer fails closed on missing input and signed requests outside polic
   );
 });
 
-
 test("service binds every session to its fixed chain before adapter access", async () => {
   for (const chainId of [undefined, "1", "8453", 560048, "0560048"]) {
     let reads = 0;
@@ -324,10 +323,7 @@ test("service rejects a durable row bound to another chain", async () => {
     chainId: "560048",
     expiresAt: 2000,
   };
-  await assert.rejects(
-    service.getIntent(session, "op"),
-    /OPERATION_NOT_FOUND/,
-  );
+  await assert.rejects(service.getIntent(session, "op"), /OPERATION_NOT_FOUND/);
   await assert.rejects(
     service.getHistory(session, "op"),
     /OPERATION_NOT_FOUND/,
