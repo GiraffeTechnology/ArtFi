@@ -87,6 +87,84 @@ function runtime(
   };
 }
 
+// Diagnostic reads run only after a strict assertion is already unsatisfied.
+// Never resend or reconcile here, and never log lease tokens or authority bodies.
+const diagnosticCode = (value) =>
+  typeof value === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(value)
+    ? value
+    : null;
+
+async function actionFailureDiagnostics(
+  result,
+  operationId,
+  runtimeStore = store,
+) {
+  const details = {
+    outcome: {
+      state: result.state,
+      reason: diagnosticCode(result.reason),
+      executionAttempted: result.executionAttempted ?? null,
+      storeOutcome: result.storeOutcome ?? null,
+    },
+    checkedAfterTickAtMs: Date.now(),
+    configured: {
+      leaseMs: runtimeStore.leaseDurationMs,
+      operationTimeoutMs: runtimeStore.operationTimeoutMs,
+      adapterTimeoutMs: 150,
+    },
+  };
+  try {
+    const row = await runtimeStore.get(operationId);
+    details.journal = row
+      ? {
+          state: row.state,
+          reason: diagnosticCode(row.reason),
+          cursor: row.cursor,
+          version: row.version,
+          leaseHeldAfterTick: Boolean(row.leaseToken),
+          leaseExpiresAtAfterTick: row.leaseExpiresAt,
+          legs: row.legs.map((leg) => ({ state: leg.state })),
+        }
+      : null;
+  } catch (error) {
+    details.journalReadError =
+      diagnosticCode(error.message) ?? "DIAGNOSTIC_READ_UNAVAILABLE";
+  }
+  try {
+    details.events = (await runtimeStore.history(operationId)).map((event) => ({
+      state: event.state,
+      reason: diagnosticCode(event.reason),
+      observedAtMs: event.observedAt,
+    }));
+  } catch (error) {
+    details.historyReadError =
+      diagnosticCode(error.message) ?? "DIAGNOSTIC_READ_UNAVAILABLE";
+  }
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [rows] = await connection.execute(
+      "SELECT FLOOR(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000) AS now_ms",
+    );
+    details.databaseNowMs = Number(rows[0]?.now_ms);
+  } catch (error) {
+    details.clockReadError =
+      diagnosticCode(error.message) ?? "DIAGNOSTIC_READ_UNAVAILABLE";
+  } finally {
+    connection?.release();
+  }
+  return JSON.stringify(details);
+}
+
+async function assertCompleted(tick, operationId, runtimeStore = store) {
+  const result = await tick(operationId);
+  const diagnostics =
+    result.state === "COMPLETED"
+      ? undefined
+      : await actionFailureDiagnostics(result, operationId, runtimeStore);
+  assert.equal(result.state, "COMPLETED", diagnostics);
+}
+
 test("real MySQL multiple partial fills consume one shared signed intent to exact boundaries", async () => {
   const f = await actionFixture({
       intentPatch: {
@@ -100,7 +178,7 @@ test("real MySQL multiple partial fills consume one shared signed intent to exac
   for (const quantity of ["2", "3", "5"]) {
     const plan = f.compile({ ...quote, quantity });
     await store.prepare(f.verified, plan);
-    assert.equal((await run.tick(plan.operationId)).state, "COMPLETED");
+    await assertCompleted(run.tick, plan.operationId);
   }
   const fourth = f.compile({
     ...(await f.order({ salt: "2" })),
@@ -131,7 +209,23 @@ test("concurrent operations cannot exceed a shared execution or exposure limit",
     run.tick(a.operationId),
     run.tick(b.operationId),
   ]);
-  assert.equal(results.filter((x) => x.state === "COMPLETED").length, 1);
+  const completed = results.filter((x) => x.state === "COMPLETED").length;
+  const diagnostics =
+    completed === 1
+      ? undefined
+      : await Promise.all(
+          results.map((result, index) =>
+            actionFailureDiagnostics(
+              result,
+              [a.operationId, b.operationId][index],
+            ),
+          ),
+        );
+  assert.equal(
+    completed,
+    1,
+    diagnostics ? JSON.stringify(diagnostics) : undefined,
+  );
   assert.equal(run.sends(), 1);
   assert.equal(
     (await store.getBudgets(a.operationId)).wallet.reservedValue,
@@ -205,7 +299,7 @@ test("UNKNOWN keeps all budgets after a fresh pool and reconciles without resend
         run.evidence.get(`${row.id}:${row.cursor}`),
       adapterTimeoutMs: 150,
     });
-    assert.equal((await tick(a.operationId)).state, "COMPLETED");
+    await assertCompleted(tick, a.operationId, restarted);
     assert.equal(resent, 0);
     assert.equal(
       (await restarted.getBudgets(a.operationId)).wallet.reservedValue,
@@ -252,7 +346,7 @@ test("an unconfirmed cancellation holds its open-order slot; canonical proof rel
   );
   const third = f.compile(await f.order({ owner: f.user, salt: "3" }));
   await store.prepare(f.verified, third);
-  assert.equal((await run.tick(third.operationId)).state, "COMPLETED");
+  await assertCompleted(run.tick, third.operationId);
 });
 test("AMEND stops after unknown retirement and only publishes after canonical retirement", async () => {
   const f = await actionFixture({
