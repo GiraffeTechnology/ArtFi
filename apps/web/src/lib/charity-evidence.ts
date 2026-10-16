@@ -115,6 +115,6 @@ export async function verifyCharityEvidenceReceipt(client: Pick<PublicClient, "g
   const timestamp = record.action === "sellout" ? state.soldOutAt : state.physicalDonationRecordedAt;
   const hash = record.action === "sellout" ? state.selloutEvidenceHash : state.physicalDonationEvidenceHash;
   const canonical = await client.getBlock({ blockNumber: receipt.blockNumber });
-  if (timestamp === 0n || !equal(hash, record.evidenceHash) || !canonical.hash || !equal(canonical.hash, receipt.blockHash)) throw new Error("The evidence receipt is not reconciled with the canonical chain state. Check the original transaction; do not resubmit.");
+  if (state.createdAt === 0n || (record.action === "donation" && state.soldOutAt === 0n) || timestamp === 0n || timestamp !== canonical.timestamp || !equal(hash, record.evidenceHash) || !canonical.hash || !equal(canonical.hash, receipt.blockHash)) throw new Error("The evidence receipt is not reconciled with the canonical chain state. Check the original transaction; do not resubmit.");
   return { action: record.action, tokenId: record.tokenId, evidenceHash: record.evidenceHash, recordedAt: timestamp, transactionHash: receipt.transactionHash, blockNumber: receipt.blockNumber };
 }

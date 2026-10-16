@@ -176,6 +176,40 @@ export const charityEditionsAbi = [
       { indexed: false, name: "metadataURI", type: "string" },
     ],
   },
+
+  {
+    type: "function",
+    name: "DONATION_RECORDER_ROLE",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "recordSellout",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "tokenId", type: "uint256" }, { name: "evidenceHash", type: "bytes32" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "recordPhysicalDonation",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "tokenId", type: "uint256" }, { name: "evidenceHash", type: "bytes32" }],
+    outputs: [],
+  },
+  {
+    type: "event",
+    name: "SelloutRecorded",
+    anonymous: false,
+    inputs: [{ indexed: true, name: "tokenId", type: "uint256" }, { indexed: true, name: "evidenceHash", type: "bytes32" }],
+  },
+  {
+    type: "event",
+    name: "PhysicalDonationRecorded",
+    anonymous: false,
+    inputs: [{ indexed: true, name: "tokenId", type: "uint256" }, { indexed: true, name: "evidenceHash", type: "bytes32" }],
+  },
 ] as const;
 
 export const vaultFactoryAbi = [
@@ -729,3 +763,4 @@ export const wholeArtworkCollectionAbi = [
     outputs: [],
   },
 ] as const;
+

@@ -23,7 +23,7 @@ function clientFor(s = state()) {
       default: throw Error("Unexpected call");
     }
   });
-  const mock = { getChainId:vi.fn(async () => 560048),getBlock:vi.fn(async () => ({number:10n,hash:blockHash})),readContract,simulateContract:vi.fn(async () => ({})),getTransaction:vi.fn(async () => ({from:account,to:target,value:0n,input:encodeFunctionData(charityEvidenceCall(record()))})) };
+  const mock = { getChainId:vi.fn(async () => 560048),getBlock:vi.fn(async () => ({number:10n,hash:blockHash,timestamp:s.physicalDonationRecordedAt || s.soldOutAt || 2n})),readContract,simulateContract:vi.fn(async () => ({})),getTransaction:vi.fn(async () => ({from:account,to:target,value:0n,input:encodeFunctionData(charityEvidenceCall(record()))})) };
   return { mock, client:mock as unknown as PublicClient };
 }
 function receiptFor(r = record()): TransactionReceipt {
@@ -111,9 +111,12 @@ describe("original evidence transaction and canonical receipt recovery", () => {
   });
   it("refuses a receipt if the canonical block or stored evidence disagrees", async () => {
     const {client,mock} = clientFor(state({soldOutAt:2n,selloutEvidenceHash:evidenceHash}));
-    mock.getBlock.mockResolvedValue({number:10n,hash:txHash});
+    mock.getBlock.mockResolvedValue({number:10n,hash:txHash,timestamp:2n});
     await expect(verifyCharityEvidenceReceipt(client,record(),receiptFor())).rejects.toThrow(/canonical chain/);
     const wrong = clientFor(state({soldOutAt:2n,selloutEvidenceHash:txHash}));
     await expect(verifyCharityEvidenceReceipt(wrong.client,record(),receiptFor())).rejects.toThrow(/canonical chain/);
+    const wrongTime = clientFor(state({soldOutAt:2n,selloutEvidenceHash:evidenceHash}));
+    wrongTime.mock.getBlock.mockResolvedValue({number:10n,hash:blockHash,timestamp:3n});
+    await expect(verifyCharityEvidenceReceipt(wrongTime.client,record(),receiptFor())).rejects.toThrow(/canonical chain/);
   });
 });

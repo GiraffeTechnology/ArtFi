@@ -55,6 +55,7 @@ type Props = {
   target?: Address;
   prepared?: SafeSubmission;
   authenticated?: boolean;
+  expectedTokenId?: bigint;
   onExecuted?: (hash: Hex, submission: SafeSubmission) => Promise<void>;
 };
 
@@ -77,7 +78,7 @@ export function AdminSafeConsole(props: Props) {
   if (!safe) return null;
   return (
     <ConnectedSafeConsole
-      key={`${chainId}:${address}:${safe}:${props.kind}:${props.target}`}
+      key={`${chainId}:${address}:${safe}:${props.kind}:${props.target}:${props.expectedTokenId ?? "all"}`}
       {...props}
       safe={safe}
       account={address}
@@ -91,25 +92,35 @@ function ConnectedSafeConsole({
   target,
   prepared,
   authenticated = false,
+  expectedTokenId,
   onExecuted,
   safe,
   account,
   chainId,
 }: Props & { safe: Address; account?: Address; chainId: number }) {
+  const evidenceFlow = kind === "charity-sellout" || kind === "charity-donation";
+  const resultNoun = evidenceFlow ? "evidence record" : "creation result";
   const client = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const session = useMemo(
     () =>
       setupRecoverySession<SafeRecord>(
-        `safe:${chainId}:${safe.toLowerCase()}:${account?.toLowerCase() ?? "disconnected"}:${kind}`,
-        (value): value is SafeRecord =>
-          isSafeRecord(value) &&
-          value.chainId === chainId &&
-          sameSafeValue(value.safe, safe) &&
-          Boolean(account && sameSafeValue(value.wallet, account)) &&
-          value.kind === kind,
+        `safe:${chainId}:${safe.toLowerCase()}:${account?.toLowerCase() ?? "disconnected"}:${kind}${expectedTokenId === undefined ? "" : `:${target?.toLowerCase()}:${expectedTokenId}`}`,
+        (value): value is SafeRecord => {
+          if (!(isSafeRecord(value) &&
+            value.chainId === chainId &&
+            sameSafeValue(value.safe, safe) &&
+            Boolean(account && sameSafeValue(value.wallet, account)) &&
+            value.kind === kind)) return false;
+          if (expectedTokenId !== undefined) {
+            if (!target) return false;
+            try { reviewSafeSubmission(kind, target, recordSubmission(value), expectedTokenId); }
+            catch { return false; }
+          }
+          return true;
+        },
       ),
-    [account, chainId, kind, safe],
+    [account, chainId, expectedTokenId, kind, safe, target],
   );
   const snapshot = useSyncExternalStore(
     session.subscribe,
@@ -120,7 +131,7 @@ function ConnectedSafeConsole({
   const [proposalInput, setProposalInput] = useState("");
   const [recoveryHash, setRecoveryHash] = useState("");
   const [message, setMessage] = useState(
-    "Review an unsigned creation call here, or load a proposal ID from another owner.",
+    evidenceFlow ? "Review an unsigned evidence call here, or load a proposal ID from another owner." : "Review an unsigned creation call here, or load a proposal ID from another owner.",
   );
   const [reviewedKey, setReviewedKey] = useState<string>();
   const [loadedWithPreparedId, setLoadedWithPreparedId] = useState<Hex>();
@@ -155,7 +166,7 @@ function ConnectedSafeConsole({
     client &&
     target &&
     chainId === supportedChain.id &&
-    (kind === "charity" || authenticated),
+    (!safeFlowSpec[kind].operatorSessionRequired || authenticated),
   );
   const writable = ready && !snapshot.busy && !snapshot.blocked && !pending;
 
@@ -206,7 +217,7 @@ function ConnectedSafeConsole({
       throw new Error(
         "Connect the reviewed chain and wallet on the current screen.",
       );
-    if (kind !== "charity") {
+    if (safeFlowSpec[kind].operatorSessionRequired) {
       const response = await fetch("/api/operator/auth/session", {
         cache: "no-store",
       });
@@ -250,7 +261,7 @@ function ConnectedSafeConsole({
     );
     current.assertCurrent();
     if (state.transaction) {
-      reviewSafeSubmission(kind, target, state.transaction);
+      reviewSafeSubmission(kind, target, state.transaction, expectedTokenId);
       assertSameSafeSubmission(recordSubmission(record), state.transaction);
     }
     setLive(state);
@@ -302,7 +313,7 @@ function ConnectedSafeConsole({
       action === "submit"
         ? `Proposal ${next.transactionId} is submitted and has this owner's first confirmation. Share the safe address and proposal ID with the other owners.`
         : action === "execute"
-          ? "The safe execution is confirmed. Continue below to recover the creation result."
+          ? `The safe execution is confirmed. Continue below to recover the ${resultNoun}.`
           : action === "revoke"
             ? "Your confirmation was revoked. The on-chain count and timelock have been refreshed."
             : "Your independent owner confirmation is confirmed on chain.",
@@ -318,7 +329,7 @@ function ConnectedSafeConsole({
     try {
       await authorize();
       current.assertCurrent();
-      reviewSafeSubmission(kind, target, submission);
+      reviewSafeSubmission(kind, target, submission, expectedTokenId);
       if (action !== "revoke" && !reviewed)
         throw new Error(
           "Review the exact target and calldata before this wallet action.",
@@ -501,7 +512,7 @@ function ConnectedSafeConsole({
       );
       current.assertCurrent();
       if (!state.transaction) throw new Error("The proposal does not exist.");
-      reviewSafeSubmission(kind, target, state.transaction);
+      reviewSafeSubmission(kind, target, state.transaction, expectedTokenId);
       const {
         requestId,
         target: proposalTarget,
@@ -559,7 +570,7 @@ function ConnectedSafeConsole({
       current.assertCurrent();
       session.save(lease, { ...data, executionHash });
       setMessage(
-        "The execution receipt matches this proposal, including execution by another owner. Recover the creation result below.",
+        `The execution receipt matches this proposal, including execution by another owner. Recover the ${resultNoun} below.`,
       );
     } catch (error) {
       if (current.isCurrent())
@@ -581,7 +592,7 @@ function ConnectedSafeConsole({
       await onExecuted(data.executionHash, recordSubmission(data));
       current.assertCurrent();
       setMessage(
-        "The creation result was handed back to this section's existing confirmation flow.",
+        `The ${resultNoun} was handed back to this section's existing confirmation flow.`,
       );
     } catch (error) {
       if (current.isCurrent())
@@ -595,7 +606,7 @@ function ConnectedSafeConsole({
   let reviewError = "";
   if (target && submission) {
     try {
-      callReview = reviewSafeSubmission(kind, target, submission);
+      callReview = reviewSafeSubmission(kind, target, submission, expectedTokenId);
     } catch (error) {
       reviewError =
         error instanceof Error ? error.message : "Call review failed.";
@@ -618,7 +629,7 @@ function ConnectedSafeConsole({
         Configured safe: {safe}. Chain: {chainId}.
       </p>
       <p>
-        Only this section&apos;s existing zero-value creation call is available.
+        Only this section&apos;s existing zero-value {evidenceFlow ? "evidence-recording" : "creation"} call is available.
         Submission confirms for its proposing owner; every other owner confirms
         separately.
       </p>
@@ -821,7 +832,7 @@ function ConnectedSafeConsole({
           disabled={!writable}
           onClick={() => void continueCreation()}
         >
-          Recover creation result
+          {evidenceFlow ? "Recover evidence result" : "Recover creation result"}
         </button>
       ) : null}
       {stage === "executed" && !data?.executionHash ? (
@@ -848,3 +859,4 @@ function ConnectedSafeConsole({
     </section>
   );
 }
+
