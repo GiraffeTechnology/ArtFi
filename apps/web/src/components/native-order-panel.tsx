@@ -22,10 +22,12 @@ import {
   type NativeOrder,
   type NativeOrderKind,
 } from "@/lib/native-order";
+import type { NativeOrderState } from "@/lib/native-order-state";
 import {
-  readNativeOrderState,
-  type NativeOrderState,
-} from "@/lib/native-order-state";
+  readNativeOrderObservation,
+  type NativeOrderObservation,
+} from "@/lib/native-order-observation";
+import { NativeOrderObservationNote } from "./native-order-observation-note";
 
 /** Public immutable sale terms, with a separate seller-session publication action. */
 export function NativeOrderPanel({
@@ -66,6 +68,8 @@ export function NativeOrderPanel({
   const [detail, setDetail] = useState<string>();
   const [selected, setSelected] = useState<NativeOrder>();
   const [states, setStates] = useState<Record<string, NativeOrderState>>({});
+  const [observation, setObservation] = useState<NativeOrderObservation>();
+  const [observationError, setObservationError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [linked, setLinked] = useState<string | null>(null);
   const [published, setPublished] = useState<string>();
@@ -126,6 +130,8 @@ export function NativeOrderPanel({
     setLoading(true);
     setOrders([]);
     setStates({});
+    setObservation(undefined);
+    setObservationError("");
     const scope = new URLSearchParams({
       chainId: "560048",
       marketAddress: market,
@@ -184,21 +190,26 @@ export function NativeOrderPanel({
         if (!active()) return;
         setOrders(list);
         setTotal(body.total);
-        if (publicClient) {
-          await Promise.all(
-            list.map(async (order) => {
-              try {
-                const state = await readNativeOrderState(publicClient, order);
-                if (active())
-                  setStates((previous) => ({
-                    ...previous,
-                    [order.intentHash]: state,
-                  }));
-              } catch {
-                /* Terms remain public, with no claim of chain availability. */
-              }
-            }),
-          );
+        if (publicClient && list.length) {
+          try {
+            const snapshot = await readNativeOrderObservation(
+              publicClient,
+              list,
+              { signal: controller.signal },
+            );
+            if (active()) {
+              setStates(snapshot.states);
+              setObservation(snapshot);
+            }
+          } catch {
+            if (active()) {
+              setStates({});
+              setObservation(undefined);
+              setObservationError(
+                "Current chain observation is unavailable. Published terms remain visible; refresh orders to read their state again.",
+              );
+            }
+          }
         }
       } catch (error) {
         if (!active()) return;
@@ -372,6 +383,8 @@ export function NativeOrderPanel({
         Page {page}. {total} published orders.
       </p>
       {loading && <p role="status">Loading orders and checking chain state</p>}
+      {observation && <NativeOrderObservationNote observation={observation} />}
+      {observationError && <p role="status">{observationError}</p>}
       {orders.map((order) => (
         <article className="transaction-panel" key={order.intentHash}>
           <p className="charity-digest">{order.intentHash}</p>
@@ -388,6 +401,7 @@ export function NativeOrderPanel({
             payment token&apos;s smallest unit
           </p>
           <p>
+            Observed state:{" "}
             {states[order.intentHash]?.label ??
               "Current chain state is unverified"}
             {states[order.intentHash]?.remaining !== undefined
