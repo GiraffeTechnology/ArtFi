@@ -147,7 +147,7 @@ describe("signed market preflight", () => {
   it.each([
     [{ intentUsed: true }, /settled or withdrawn/],
     [{ sellerEpoch: 1n }, /epoch has changed/],
-    [{ ownerOf: buyer }, /no longer holds/],
+    [{ ownerOf: buyer }, /no longer the token owner/],
     [{ isApprovedForAll: false }, /seller has not approved/],
     [{ allowedCollection: false }, /not currently available/],
     [{ allowedPaymentToken: false }, /not currently available/],
