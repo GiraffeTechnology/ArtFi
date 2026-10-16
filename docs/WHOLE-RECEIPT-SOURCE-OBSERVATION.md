@@ -100,4 +100,3 @@ pnpm --filter @giraffetechnology/artfi-web exec vitest run src/lib/whole-receipt
 Source formatting and byte readback are separate from test, runtime integration
 and full-product acceptance. Submitted changes and ordinary validation belong
 to their assigned independent owner.
-
