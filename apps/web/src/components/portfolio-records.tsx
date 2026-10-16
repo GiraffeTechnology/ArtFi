@@ -228,4 +228,3 @@ function shortAddress(value: string) {
 function shortHash(value: string) {
   return `${value.slice(0, 10)}…${value.slice(-8)}`;
 }
-
