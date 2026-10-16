@@ -13,9 +13,7 @@ export function MarketAnalyticsAvailability() {
     >
       <article>
         <p className="eyebrow">Market analytics</p>
-        <h2 id="market-analytics-title">
-          Runtime analytics are unavailable
-        </h2>
+        <h2 id="market-analytics-title">Runtime analytics are unavailable</h2>
         <p id="market-analytics-description">
           This detail page does not have an attributed runtime price series,
           holder snapshot, or transaction-analytics dataset. Catalogue figures
