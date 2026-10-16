@@ -123,6 +123,8 @@ export async function verifyHoodiCharityAtomicReceipt(input, send) {
   const finalized = await rpc("eth_getBlockByNumber", ["finalized", false]);
   requireThat(finalized && quantity(finalized.number, "finalized height") >= height, "receipt is not finalized");
   hash(finalized.hash, "finalized block");
+  const finalizedCanonical = await rpc("eth_getBlockByNumber", [finalized.number, false]);
+  requireThat(finalizedCanonical && same(finalizedCanonical.hash, finalized.hash) && quantity(finalizedCanonical.number, "finalized canonical height") === quantity(finalized.number, "finalized height"), "finalized block disagrees with the canonical chain");
   const tx = await rpc("eth_getTransactionByHash", [txHash]);
   requireThat(tx && same(tx.hash, txHash) && same(tx.blockHash, receipt.blockHash) && tx.blockNumber === receipt.blockNumber && same(tx.to, m.deployment.safe) && same(receipt.to, m.deployment.safe) && quantity(tx.value, "transaction value") === 0n, "execution transaction binding mismatch");
   const outer = safe.parseTransaction({ data: tx.input, value: 0n });
@@ -146,6 +148,8 @@ export async function verifyHoodiCharityAtomicReceipt(input, send) {
   const inner = charity.parseTransaction({ data: action.data, value: 0n });
   requireThat(inner?.name === "createSeriesBatch", "Safe action is not atomic batch creation");
   assertInputs(inner.args[0], m.series);
+  requireThat(same(charity.encodeFunctionData("createSeriesBatch", [inner.args[0]]), action.data), "batch calldata is not canonical");
+  requireThat(same(safe.encodeFunctionData("execute", [outer.args[0]]), tx.input), "Safe calldata is not canonical");
   const indexes = new Set();
   for (const log of receipt.logs) {
     requireThat(log && log.removed === false && same(log.transactionHash, txHash) && same(log.blockHash, receipt.blockHash) && log.blockNumber === receipt.blockNumber, "removed or mismatched receipt log");

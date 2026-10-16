@@ -45,7 +45,7 @@ function fixture(count = 13) {
     if (method === "eth_chainId") return "0x88bb0";
     if (method === "eth_getTransactionReceipt") { receiptReads++; return structuredClone(receipt); }
     if (method === "eth_getTransactionByHash") return structuredClone(tx);
-    if (method === "eth_getBlockByNumber") return structuredClone(params[0] === "finalized" ? { ...block, number: "0x65", hash: hash(103) } : block);
+    if (method === "eth_getBlockByNumber") return structuredClone(["finalized","0x65"].includes(params[0]) ? { ...block, number: "0x65", hash: hash(103) } : block);
     if (method === "eth_getCode") return params[0] === m.deployment.safe ? safeRuntime : runtime;
     if (method === "eth_call") {
       const target = sameAddress(params[0].to, m.deployment.safe) ? safe : charity;
@@ -208,5 +208,15 @@ test("RPC failures are not retried or converted into a result", async () => {
   const f=fixture(); f.overrides.set("eth_call",()=>{throw new Error("timeout");});
   await assert.rejects(verifyHoodiCharityAtomicReceipt(f.m,f.send),/timeout/);
   assert.equal(f.calls.filter(c=>c.method==="eth_call").length,1);
+});
+test("finalized tag must agree with its canonical height", async () => {
+  const f=fixture(); f.overrides.set("eth_getBlockByNumber",params=>params[0]==="finalized"?{...f.block,number:"0x65",hash:hash(103)}:f.block);
+  await assert.rejects(verifyHoodiCharityAtomicReceipt(f.m,f.send),/finalized block disagrees/);
+});
+test("rejects trailing unbound bytes in inner and outer calldata", async () => {
+  for (const inner of [true,false]) {
+    const f=fixture(); if(inner) f.action[3]+="00"; else f.tx.input+="00";
+    await assert.rejects(verifyHoodiCharityAtomicReceipt(f.m,f.send),/calldata is not canonical/);
+  }
 });
 

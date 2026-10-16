@@ -78,7 +78,7 @@ privacy, deployment description labels, UI labels, marketplace, vault and DAO
 acceptance remain separately required. No mainnet or real-value authorization
 is introduced, and a frozen real release must never be placed in this namespace.
 
-The independent test source registers 29 fixture cases, including 1/13/37
+The independent test source registers 31 fixture cases, including 1/13/37
 success scenarios and malformed, nonfinal, wrong-code, wrong-action, incomplete
 event, supply, commitment, return-data, unsupported-RPC and reorg failures.
 Fixtures are artificial RPC responses, not genuine Hoodi results. The initial
