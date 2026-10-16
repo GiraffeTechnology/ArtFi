@@ -86,8 +86,8 @@ contract ReentrantEditionReceiver is AtomicEditionReceiver {
                 ArtFiCharityEditions.SeriesInput[] memory inputs =
                     new ArtFiCharityEditions.SeriesInput[](1);
                 inputs[0] = input;
-                (reentrySucceeded,) = address(editions)
-                    .call(abi.encodeCall(editions.createSeriesBatch, (inputs)));
+                (reentrySucceeded,) =
+                    address(editions).call(abi.encodeCall(editions.createSeriesBatch, (inputs)));
             } else {
                 (reentrySucceeded,) = address(editions)
                     .call(
@@ -134,8 +134,7 @@ contract ControlChangingEditionReceiver is AtomicEditionReceiver {
 
 contract UnprivilegedBatchCaller {
     function create(ArtFiCharityEditions editions) external {
-        ArtFiCharityEditions.SeriesInput[] memory inputs =
-            new ArtFiCharityEditions.SeriesInput[](1);
+        ArtFiCharityEditions.SeriesInput[] memory inputs = new ArtFiCharityEditions.SeriesInput[](1);
         inputs[0] = isolatedBatchInput(0, address(0xBEEF));
         editions.createSeriesBatch(inputs);
     }
@@ -156,31 +155,46 @@ abstract contract CharityBatchHarness is AtomicEditionReceiver {
         else _single(isolatedBatchInput(0, address(receiver)));
         require(receiver.attempted() && !receiver.reentrySucceeded(), "creation reentry succeeded");
         require(editions.seriesCount() == (outerBatch ? 2 : 1), "reentry consumed extra identity");
-        require(editions.tokenByArtworkId(isolatedBatchInput(9000, address(receiver)).artworkId) == 0, "nested mint persisted");
+        require(
+            editions.tokenByArtworkId(isolatedBatchInput(9000, address(receiver)).artworkId) == 0,
+            "nested mint persisted"
+        );
     }
 
     function _assertCreated(ArtFiCharityEditions.SeriesInput[] memory inputs) internal {
         uint256[] memory ids = editions.createSeriesBatch(inputs);
-        require(ids.length == inputs.length && editions.seriesCount() == inputs.length, "batch count");
+        require(
+            ids.length == inputs.length && editions.seriesCount() == inputs.length, "batch count"
+        );
         require(editions.totalSupply() == inputs.length * 100, "aggregate supply");
         for (uint256 i; i < inputs.length; i++) {
             require(ids[i] == i + 1, "series order");
             require(editions.totalSupply(ids[i]) == 100, "fixed per-series supply");
-            require(editions.balanceOf(inputs[i].distributionWallet, ids[i]) == 100, "recipient quantity");
+            require(
+                editions.balanceOf(inputs[i].distributionWallet, ids[i]) == 100,
+                "recipient quantity"
+            );
             ArtFiCharityEditions.Series memory value = editions.series(ids[i]);
             require(value.artworkId == inputs[i].artworkId, "artwork binding");
             require(value.masterArtworkHash == inputs[i].masterArtworkHash, "master binding");
             require(value.metadataHash == inputs[i].metadataHash, "metadata binding");
             require(value.distributionWallet == inputs[i].distributionWallet, "recipient binding");
-            require(keccak256(bytes(value.metadataURI)) == keccak256(bytes(inputs[i].metadataURI)), "URI binding");
+            require(
+                keccak256(bytes(value.metadataURI)) == keccak256(bytes(inputs[i].metadataURI)),
+                "URI binding"
+            );
             require(editions.tokenByArtworkId(inputs[i].artworkId) == ids[i], "artwork index");
-            require(editions.tokenByMasterArtworkHash(inputs[i].masterArtworkHash) == ids[i], "master index");
+            require(
+                editions.tokenByMasterArtworkHash(inputs[i].masterArtworkHash) == ids[i],
+                "master index"
+            );
         }
     }
 
-    function _requireBatchFailure(ArtFiCharityEditions.SeriesInput[] memory inputs, uint256 previousCount)
-        internal
-    {
+    function _requireBatchFailure(
+        ArtFiCharityEditions.SeriesInput[] memory inputs,
+        uint256 previousCount
+    ) internal {
         (bool ok,) = address(editions).call(abi.encodeCall(editions.createSeriesBatch, (inputs)));
         require(!ok, "invalid batch accepted");
         require(editions.seriesCount() == previousCount, "series prefix survived");
@@ -189,8 +203,19 @@ abstract contract CharityBatchHarness is AtomicEditionReceiver {
         for (uint256 i; i < inputs.length; i++) {
             uint256 artwork = editions.tokenByArtworkId(inputs[i].artworkId);
             uint256 master = editions.tokenByMasterArtworkHash(inputs[i].masterArtworkHash);
-            require(artwork == (previousCount != 0 && inputs[i].artworkId == original.artworkId ? 1 : 0), "new artwork index survived");
-            require(master == (previousCount != 0 && inputs[i].masterArtworkHash == original.masterArtworkHash ? 1 : 0), "new master index survived");
+            require(
+                artwork
+                    == (previousCount != 0 && inputs[i].artworkId == original.artworkId ? 1 : 0),
+                "new artwork index survived"
+            );
+            require(
+                master
+                    == (previousCount != 0
+                            && inputs[i].masterArtworkHash == original.masterArtworkHash
+                            ? 1
+                            : 0),
+                "new master index survived"
+            );
         }
     }
 
@@ -200,17 +225,27 @@ abstract contract CharityBatchHarness is AtomicEditionReceiver {
         returns (ArtFiCharityEditions.SeriesInput[] memory inputs)
     {
         inputs = new ArtFiCharityEditions.SeriesInput[](count);
-        for (uint256 i; i < count; i++) inputs[i] = isolatedBatchInput(i, recipient);
+        for (uint256 i; i < count; i++) {
+            inputs[i] = isolatedBatchInput(i, recipient);
+        }
     }
 
     function _single(ArtFiCharityEditions.SeriesInput memory input) internal returns (uint256) {
-        return editions.createSeries(input.artworkId, input.masterArtworkHash, input.metadataHash, input.distributionWallet, input.metadataURI);
+        return editions.createSeries(
+            input.artworkId,
+            input.masterArtworkHash,
+            input.metadataHash,
+            input.distributionWallet,
+            input.metadataURI
+        );
     }
 
     function _uri(uint256 length) internal pure returns (string memory) {
         bytes memory value = new bytes(length);
         bytes memory prefix = bytes("ipfs://");
-        for (uint256 i; i < length; i++) value[i] = i < prefix.length ? prefix[i] : bytes1("a");
+        for (uint256 i; i < length; i++) {
+            value[i] = i < prefix.length ? prefix[i] : bytes1("a");
+        }
         return string(value);
     }
 }
@@ -252,7 +287,9 @@ contract CharityEditionBatchTest is CharityBatchHarness {
         ArtFiCharityEditions.SeriesInput[] memory inputs = _inputs(3, address(this));
         inputs[2].artworkId = original.artworkId;
         _requireBatchFailure(inputs, 1);
-        require(editions.series(1).metadataHash == original.metadataHash, "existing metadata changed");
+        require(
+            editions.series(1).metadataHash == original.metadataHash, "existing metadata changed"
+        );
         require(editions.balanceOf(address(this), 1) == 100, "existing balance changed");
     }
 
@@ -311,7 +348,9 @@ contract CharityEditionBatchTest is CharityBatchHarness {
         UnprivilegedBatchCaller caller = new UnprivilegedBatchCaller();
         (bool ok,) = address(caller).call(abi.encodeCall(caller.create, (editions)));
         require(!ok, "unprivileged batch accepted");
-        require(editions.seriesCount() == 0 && editions.totalSupply() == 0, "role failure mutated state");
+        require(
+            editions.seriesCount() == 0 && editions.totalSupply() == 0, "role failure mutated state"
+        );
     }
 
     function testPausedContractRejectsWholeBatch() public {
@@ -392,7 +431,10 @@ contract CharityEditionBatchCallbackTest is CharityBatchHarness {
         ArtFiCharityEditions.SeriesInput[] memory inputs = _inputs(2, address(this));
         inputs[1].distributionWallet = address(receiver);
         _requireBatchFailure(inputs, 0);
-        require(editions.hasRole(editions.SERIES_CREATOR_ROLE(), address(this)), "callback revocation survived");
+        require(
+            editions.hasRole(editions.SERIES_CREATOR_ROLE(), address(this)),
+            "callback revocation survived"
+        );
         require(receiver.calls() == 0, "callback count survived");
     }
 

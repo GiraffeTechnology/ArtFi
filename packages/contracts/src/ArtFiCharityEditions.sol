@@ -98,7 +98,10 @@ contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable, Reentra
         address distributionWallet,
         string calldata metadataURI
     ) external onlyRole(SERIES_CREATOR_ROLE) whenNotPaused nonReentrant returns (uint256 tokenId) {
-        return _createSeries(artworkId, masterArtworkHash, metadataHash, distributionWallet, metadataURI);
+        return
+            _createSeries(
+                artworkId, masterArtworkHash, metadataHash, distributionWallet, metadataURI
+            );
     }
 
     /// @notice Creates a bounded list of fixed-supply series in one atomic transaction.
@@ -118,10 +121,17 @@ contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable, Reentra
         // Reject malformed members and intra-batch duplicates before any recipient callback.
         for (uint256 i; i < length; ++i) {
             SeriesInput calldata input = inputs[i];
-            _validateSeries(input.artworkId, input.masterArtworkHash, input.metadataHash,
-                input.distributionWallet, input.metadataURI);
+            _validateSeries(
+                input.artworkId,
+                input.masterArtworkHash,
+                input.metadataHash,
+                input.distributionWallet,
+                input.metadataURI
+            );
             for (uint256 j; j < i; ++j) {
-                if (inputs[j].artworkId == input.artworkId) revert DuplicateArtwork(input.artworkId);
+                if (inputs[j].artworkId == input.artworkId) {
+                    revert DuplicateArtwork(input.artworkId);
+                }
                 if (inputs[j].masterArtworkHash == input.masterArtworkHash) {
                     revert DuplicateMasterArtwork(input.masterArtworkHash);
                 }
@@ -131,8 +141,13 @@ contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable, Reentra
         tokenIds = new uint256[](length);
         for (uint256 i; i < length; ++i) {
             SeriesInput calldata input = inputs[i];
-            tokenIds[i] = _createSeries(input.artworkId, input.masterArtworkHash, input.metadataHash,
-                input.distributionWallet, input.metadataURI);
+            tokenIds[i] = _createSeries(
+                input.artworkId,
+                input.masterArtworkHash,
+                input.metadataHash,
+                input.distributionWallet,
+                input.metadataURI
+            );
             // A role/pauser recipient must not let a partially accepted batch continue or commit.
             _checkRole(SERIES_CREATOR_ROLE);
             _requireNotPaused();
