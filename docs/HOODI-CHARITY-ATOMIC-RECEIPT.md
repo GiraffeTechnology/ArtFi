@@ -93,4 +93,3 @@ node --test scripts/test/hoodi-charity-atomic-receipt.test.mjs
 Compilation/testing, real RPC execution and acceptance belong to their assigned
 independent owners. Source formatting and byte readback do not establish a
 passed suite, valid deployment or completed product delivery.
-
