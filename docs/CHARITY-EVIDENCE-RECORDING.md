@@ -33,6 +33,11 @@ known final cancellation/reversion remain distinct from unknown results.
 Safe recovery retains the existing independently reviewed proposal and may
 verify execution by another owner.
 
+When the original wallet response has no known hash, a user-supplied hash is
+only a candidate. Its failure cannot clear the original unanswered request,
+and it is not persisted as the known original. Only a matching successful
+canonical record can complete that one-time logical evidence action.
+
 Completion requires the exact collection event and token/evidence arguments,
 the recorded hash and timestamp at the receipt block, and a matching canonical
 block hash. An event, receipt, or state mismatch is not completion. Refreshing

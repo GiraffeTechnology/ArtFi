@@ -52,10 +52,12 @@ function ConnectedRecorder({ target, account, chainId, tokenId }: { target: Addr
   function edit() {
     view.current.retire(); view.current = currentOperation(); setPrepared(undefined); setAcknowledged(false);
   }
-  async function finish(lease: number, record: CharityEvidenceRecord, hash: Hex) {
+  async function finish(lease: number, record: CharityEvidenceRecord, hash: Hex, retainRepricedHash = true) {
     if (!client) throw new Error("The reviewed chain client is unavailable.");
     await verifyDirectCharityEvidenceTransaction(client, record, hash);
-    const receipt = await confirmMarketReceipt(client, hash, (next) => session.repriced(lease, next));
+    const receipt = await confirmMarketReceipt(client, hash, (next) => {
+      if (retainRepricedHash) session.repriced(lease, next);
+    });
     await verifyDirectCharityEvidenceTransaction(client, record, receipt.transactionHash);
     const result = await verifyCharityEvidenceReceipt(client, record, receipt);
     session.resolved(lease, record);
@@ -105,12 +107,14 @@ function ConnectedRecorder({ target, account, chainId, tokenId }: { target: Addr
       if (!hash) throw new Error("Check the original wallet activity and supply its transaction hash. Do not submit again.");
       await verifyDirectCharityEvidenceTransaction(client, saved.data, hash);
       current.assertCurrent();
-      if (!saved.pending.hash) session.broadcast(lease, hash);
-      const result = await finish(lease, saved.data, hash);
+      // A user-supplied candidate hash is not proof of the unanswered request's identity.
+      // Only its matching successful canonical record resolves the logical one-time action.
+      // Do not persist a failed candidate as the known original or unlock on its failure.
+      const result = await finish(lease, saved.data, hash, Boolean(saved.pending.hash));
       current.assertCurrent();
       setMessage(`The original evidence call for series ${result.tokenId} is reconciled. Transaction: ${result.transactionHash}. Refresh edition facts for current chain state.`);
     } catch (error) {
-      if (error instanceof MarketReceiptFinalError && saved) session.resolved(lease, saved.data);
+      if (error instanceof MarketReceiptFinalError && saved?.pending?.hash) session.resolved(lease, saved.data);
       if (current.isCurrent()) session.fail(lease, new Error(operatorErrorText(error)));
     } finally { session.finish(lease); }
   }
