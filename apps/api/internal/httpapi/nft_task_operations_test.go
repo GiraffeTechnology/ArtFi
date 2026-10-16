@@ -187,7 +187,7 @@ func syntheticNFTTaskRequest(action string, operation nftOperation) *http.Reques
 	return request
 }
 func syntheticNFTRegistry(now time.Time) *syntheticNFTCapabilityRegistry {
-	return &syntheticNFTCapabilityRegistry{claims: NFTTaskCapability{Principal: syntheticNFTTaskPrincipal(), Wallet: userAuthTestAddress, ChainID: 1, IssuedAtMs: now.UnixMilli(), ExpiresAtMs: now.Add(5 * time.Second).UnixMilli()}}
+	return &syntheticNFTCapabilityRegistry{claims: NFTTaskCapability{Principal: syntheticNFTTaskPrincipal(), Wallet: userAuthTestAddress, ChainID: 1, IssuedAtMs: now.UnixMilli(), ExpiresAtMs: now.Add(5 * time.Second).UnixMilli(), ReceiptPhase: "funded", ReceiptNonce: "0", ReceiptPlanDigest: "0x" + strings.Repeat("4", 64), ReceiptJournalBindingHash: "0x" + strings.Repeat("5", 64)}}
 }
 func TestNFTTaskHandlerDefaultUnavailableAndPublicRouteAbsent(t *testing.T) {
 	w := httptest.NewRecorder()
