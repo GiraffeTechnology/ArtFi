@@ -36,10 +36,10 @@ type NFTTaskCapabilityScope struct {
 }
 type NFTTaskCapability struct {
 	NFTTaskCapabilityScope
-	Principal   NFTTaskPrincipal `json:"principal"`
-	Wallet      string           `json:"wallet"`
-	ChainID     int              `json:"chainId"`
-	IssuedAtMs  int64            `json:"issuedAtMs"`
+	Principal                 NFTTaskPrincipal `json:"principal"`
+	Wallet                    string           `json:"wallet"`
+	ChainID                   int              `json:"chainId"`
+	IssuedAtMs                int64            `json:"issuedAtMs"`
 	ExpiresAtMs               int64            `json:"expiresAtMs"`
 	ReceiptPhase              string           `json:"receiptPhase"`
 	ReceiptNonce              string           `json:"receiptNonce"`
@@ -82,6 +82,7 @@ func decodeNFTTaskPrincipal(raw []byte, target *NFTTaskPrincipal) error {
 	}
 	return nil
 }
+
 // validateNFTTaskReceiptClaims checks the four exact top-level Wallet claims.
 // It intentionally validates representation only: it does not derive or equate
 // phase and journal digests, nor does it replace the later durable binding checks.
