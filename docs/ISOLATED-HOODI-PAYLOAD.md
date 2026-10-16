@@ -105,4 +105,3 @@ assigned validation owner. This stage changes no historical verifier, deployed
 contract, service configuration, credentials, database or production manifest.
 Final accepted artifacts require the existing project Giraffe archival process
 and complete independent byte readback before eligible source release.
-
