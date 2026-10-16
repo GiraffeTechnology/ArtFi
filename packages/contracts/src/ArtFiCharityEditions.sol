@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {ERC1155Supply} from "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 
@@ -10,14 +11,24 @@ import {ERC1155Supply} from "@openzeppelin/contracts/token/ERC1155/extensions/ER
 /// @notice One immutable ERC-1155 series per artwork, with exactly 100 editions minted once.
 /// @dev This contract does not sell tokens, receive proceeds, expose artwork files, or operate an
 ///      exchange. External marketplace listings remain separately authorized actions.
-contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable {
+contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable, ReentrancyGuard {
     bytes32 public constant SERIES_CREATOR_ROLE = keccak256("SERIES_CREATOR_ROLE");
     bytes32 public constant DONATION_RECORDER_ROLE = keccak256("DONATION_RECORDER_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     uint256 public constant EDITIONS_PER_ARTWORK = 100;
     uint256 public constant PRIMARY_PRICE_WEI = 0.01 ether;
+    // Bounds one atomic call; it is not a collection-wide series limit.
+    uint256 public constant MAX_SERIES_PER_BATCH = 37;
     uint256 public constant MAX_URI_LENGTH = 512;
+
+    struct SeriesInput {
+        bytes32 artworkId;
+        bytes32 masterArtworkHash;
+        bytes32 metadataHash;
+        address distributionWallet;
+        string metadataURI;
+    }
 
     struct Series {
         bytes32 artworkId;
@@ -32,6 +43,8 @@ contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable {
         string metadataURI;
     }
 
+    error EmptyBatch();
+    error BatchTooLarge(uint256 provided, uint256 maximum);
     error DuplicateArtwork(bytes32 artworkId);
     error DuplicateMasterArtwork(bytes32 masterArtworkHash);
     error EmptyArtworkId();
@@ -84,17 +97,56 @@ contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable {
         bytes32 metadataHash,
         address distributionWallet,
         string calldata metadataURI
-    ) external onlyRole(SERIES_CREATOR_ROLE) whenNotPaused returns (uint256 tokenId) {
-        if (artworkId == bytes32(0)) revert EmptyArtworkId();
-        if (masterArtworkHash == bytes32(0)) revert InvalidEvidenceHash();
-        if (metadataHash == bytes32(0)) revert InvalidMetadataHash();
-        if (distributionWallet == address(0)) revert ZeroAddress();
-        if (!_validURI(metadataURI)) revert InvalidMetadataURI();
-        if (_tokenByArtworkId[artworkId] != 0) revert DuplicateArtwork(artworkId);
-        if (_tokenByMasterArtworkHash[masterArtworkHash] != 0) {
-            revert DuplicateMasterArtwork(masterArtworkHash);
+    ) external onlyRole(SERIES_CREATOR_ROLE) whenNotPaused nonReentrant returns (uint256 tokenId) {
+        return _createSeries(artworkId, masterArtworkHash, metadataHash, distributionWallet, metadataURI);
+    }
+
+    /// @notice Creates a bounded list of fixed-supply series in one atomic transaction.
+    /// @dev Every record, mint, recipient callback and event reverts if any member fails.
+    ///      This does not replay, migrate or modify a previously deployed release.
+    function createSeriesBatch(SeriesInput[] calldata inputs)
+        external
+        onlyRole(SERIES_CREATOR_ROLE)
+        whenNotPaused
+        nonReentrant
+        returns (uint256[] memory tokenIds)
+    {
+        uint256 length = inputs.length;
+        if (length == 0) revert EmptyBatch();
+        if (length > MAX_SERIES_PER_BATCH) revert BatchTooLarge(length, MAX_SERIES_PER_BATCH);
+
+        // Reject malformed members and intra-batch duplicates before any recipient callback.
+        for (uint256 i; i < length; ++i) {
+            SeriesInput calldata input = inputs[i];
+            _validateSeries(input.artworkId, input.masterArtworkHash, input.metadataHash,
+                input.distributionWallet, input.metadataURI);
+            for (uint256 j; j < i; ++j) {
+                if (inputs[j].artworkId == input.artworkId) revert DuplicateArtwork(input.artworkId);
+                if (inputs[j].masterArtworkHash == input.masterArtworkHash) {
+                    revert DuplicateMasterArtwork(input.masterArtworkHash);
+                }
+            }
         }
 
+        tokenIds = new uint256[](length);
+        for (uint256 i; i < length; ++i) {
+            SeriesInput calldata input = inputs[i];
+            tokenIds[i] = _createSeries(input.artworkId, input.masterArtworkHash, input.metadataHash,
+                input.distributionWallet, input.metadataURI);
+            // A role/pauser recipient must not let a partially accepted batch continue or commit.
+            _checkRole(SERIES_CREATOR_ROLE);
+            _requireNotPaused();
+        }
+    }
+
+    function _createSeries(
+        bytes32 artworkId,
+        bytes32 masterArtworkHash,
+        bytes32 metadataHash,
+        address distributionWallet,
+        string calldata metadataURI
+    ) private returns (uint256 tokenId) {
+        _validateSeries(artworkId, masterArtworkHash, metadataHash, distributionWallet, metadataURI);
         tokenId = ++seriesCount;
         _tokenByArtworkId[artworkId] = tokenId;
         _tokenByMasterArtworkHash[masterArtworkHash] = tokenId;
@@ -116,6 +168,24 @@ contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable {
         emit SeriesCreated(
             tokenId, artworkId, masterArtworkHash, distributionWallet, metadataHash, metadataURI
         );
+    }
+
+    function _validateSeries(
+        bytes32 artworkId,
+        bytes32 masterArtworkHash,
+        bytes32 metadataHash,
+        address distributionWallet,
+        string calldata metadataURI
+    ) private view {
+        if (artworkId == bytes32(0)) revert EmptyArtworkId();
+        if (masterArtworkHash == bytes32(0)) revert InvalidEvidenceHash();
+        if (metadataHash == bytes32(0)) revert InvalidMetadataHash();
+        if (distributionWallet == address(0)) revert ZeroAddress();
+        if (!_validURI(metadataURI)) revert InvalidMetadataURI();
+        if (_tokenByArtworkId[artworkId] != 0) revert DuplicateArtwork(artworkId);
+        if (_tokenByMasterArtworkHash[masterArtworkHash] != 0) {
+            revert DuplicateMasterArtwork(masterArtworkHash);
+        }
     }
 
     /// @notice Records external evidence only after the original distribution wallet is empty.
@@ -219,3 +289,4 @@ contract ArtFiCharityEditions is ERC1155Supply, AccessControl, Pausable {
         return true;
     }
 }
+
