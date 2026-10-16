@@ -135,6 +135,37 @@ that physical delivery or a registry change has completed. Show the relevant cha
 states separately. Preserve the existing lifecycle requirements; this clarification does not add
 a separate logistics platform or a new global delivery prerequisite.
 
+#### Registry-backed receipt settlement clarification (2026-10-16)
+
+The client's registration-boundary correction applies to registry-backed whole receipts:
+
+- Mint terms fix the registration deadline and the format of the offline registration-change
+  document. That document is the receipt; it is not a later independent deliverable.
+- Oracle alone ingests and verifies that offline evidence and writes the authorized holder and
+  receipt record together on chain. ArtFi consumes the authorized chain record. It does not
+  independently verify the offline receipt or wait for a second receipt after holder change.
+- Token owner and registered holder may differ during continuous trading. Owner transfer alone
+  does not establish completed registration or authorize final release of reserved funds.
+- Funds are frozen in the wallet before settlement. Registration completion settles/releases
+  those existing funds; it must not request a fresh buyer payment. Technical failures retain
+  their original operation identity and recover idempotently from authoritative evidence.
+- Registration beyond the mint-defined deadline fails and triggers bounded rollback of the
+  unresolved suffix. Rollback restores token owner to the current valid holder; it never undoes
+  completed holder registrations or the settled prefix. Once owner equals holder and the NFT is
+  not burned, new trading is permitted while previous rollback history and replay protection remain.
+- Receipt data belongs in NFT/mint metadata. EX retains encrypted pickup secrets with only the
+  NFT mapping; no secret belongs in public metadata, ArtFi logs, or an example payload. EX handles
+  document transfer only. Pickup terms remain in the document; this adds no shipping, physical
+  pickup, or burn workflow to ArtFi.
+
+This correction does not remove charity NFTs, fractional trading/DAO, or the existing
+non-registry whole-asset path. A catalog's source-authenticated `registryBacked` classification
+must be preserved across review and action; a caller-supplied flag cannot opt a receipt out.
+The existing ERC-721/ERC-20 direct-payment market cannot provide registration settlement for
+that classified receipt. Its token-transfer confirmation must not be labeled as registration
+completion. [The partial correction record](REGISTRATION_BOUNDARY_CORRECTION.md) separates
+implemented application protections from the remaining on-chain integration work.
+
 ### 1.3 Fractional trading and DAO
 
 This section continues the original RWA and DAO/Vault product: asset creation, ERC-721 minting,

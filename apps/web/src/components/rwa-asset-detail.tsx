@@ -237,6 +237,7 @@ export function RwaAssetDetailView({ asset }: { asset: RwaAsset }) {
             collection={binding.collectionAddress}
             tokenId={binding.tokenId}
             marketAddress={binding.marketAddress}
+            registryBacked={grounding.registryBacked}
           />
         ) : binding.fractionTokenAddress ? (
           <FractionListing

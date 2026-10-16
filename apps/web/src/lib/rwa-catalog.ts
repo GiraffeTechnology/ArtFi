@@ -138,6 +138,9 @@ export function rwaAssetIdentity(asset: RwaAsset) {
     asset.binding.marketAddress?.toLowerCase() ?? "",
     asset.grounding.sourceId,
     asset.grounding.mode,
+    asset.grounding.registryBacked,
+    asset.grounding.registryRecord?.reference ?? "",
+    asset.grounding.registryRecord?.version ?? "",
     asset.rights,
   ]);
 }
@@ -188,6 +191,22 @@ export function assertRwaAssetBinding(
       "Current approved-source correspondence evidence is unavailable or inactive. New trading is unavailable; ownership exits remain available.",
     );
 }
+/** The existing direct ERC-721/ERC-20 fill cannot settle a registry-backed
+ * receipt. This classification comes from the current approved-source catalog,
+ * never from an order, owner/holder equality, or a successful token transfer.
+ * Non-registry whole assets and fractional products keep their existing path. */
+export const registrationSettlementUnavailable =
+  "Registration settlement is not integrated for this registry-backed receipt. The legacy market cannot release already-frozen funds after an Oracle registration record. This action was stopped; any earlier approvals or submitted transactions still need their original recovery path.";
+
+export function assertLegacyWholeSettlement(asset: RwaAsset) {
+  if (
+    asset.section === "whole" &&
+    (asset.grounding.registryBacked ||
+      asset.grounding.registryRecord !== undefined)
+  )
+    throw new RwaCatalogError(409, registrationSettlementUnavailable);
+}
+
 export async function assertRwaTradingEvidence(
   expected: RwaTradeBinding,
   fetcher: typeof fetch = fetch,

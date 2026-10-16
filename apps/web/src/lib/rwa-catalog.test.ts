@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { rwaCatalogFixture } from "../test/rwa-catalog-fixture";
 import {
   assertRwaAssetBinding,
+  assertLegacyWholeSettlement,
   assertRwaTradingEvidence,
   rwaAssetIdentity,
   rwaAssetSchema,
@@ -172,5 +173,82 @@ describe("source-bound RWA catalog contract", () => {
         ),
       ),
     ).rejects.toThrow("No new wallet action");
+  });
+});
+
+describe("registry receipt versus legacy direct settlement", () => {
+  it("preserves non-registry whole assets and registry-backed fractions", () => {
+    expect(() => assertLegacyWholeSettlement(record)).not.toThrow();
+    expect(() =>
+      assertLegacyWholeSettlement({
+        ...record,
+        section: "fractional",
+        grounding: { ...record.grounding, registryBacked: true },
+      }),
+    ).not.toThrow();
+  });
+  it("refuses a registry receipt without consulting owner/holder equality or a second receipt", () => {
+    expect(() =>
+      assertLegacyWholeSettlement({
+        ...record,
+        grounding: { ...record.grounding, registryBacked: true },
+      }),
+    ).toThrow("already-frozen funds");
+  });
+  it("does not allow a contradictory false flag to hide the source registry record", () => {
+    expect(() =>
+      assertLegacyWholeSettlement({
+        ...record,
+        grounding: {
+          ...record.grounding,
+          registryRecord: {
+            reference: "registered",
+            version: "2",
+            observedAt: 1,
+          },
+        },
+      }),
+    ).toThrow("registry-backed receipt");
+  });
+  it("invalidates reviewed identity when the registration classification or reference changes", () => {
+    const registry = {
+      ...record,
+      grounding: {
+        ...record.grounding,
+        registryBacked: true,
+        registryRecord: {
+          reference: "registered",
+          version: "2",
+          observedAt: 1,
+        },
+      },
+    };
+    const expected = { ...binding, identity: rwaAssetIdentity(record) };
+    expect(() => assertRwaAssetBinding(registry, expected)).toThrow("identity");
+    const selected = { ...binding, identity: rwaAssetIdentity(registry) };
+    for (const field of ["reference", "version"] as const) {
+      const changed = structuredClone(registry);
+      changed.grounding.registryRecord[field] = "changed";
+      expect(() => assertRwaAssetBinding(changed, selected)).toThrow(
+        "identity",
+      );
+    }
+  });
+  it("rechecks current source state before any fresh-payment callback", async () => {
+    const action = vi.fn();
+    const current = {
+      ...record,
+      grounding: { ...record.grounding, registryBacked: true },
+    };
+    const run = async () => {
+      const fresh = await assertRwaTradingEvidence(
+        { ...binding, slug: record.slug },
+        async () => Response.json(current),
+      );
+      assertLegacyWholeSettlement(fresh);
+      action();
+    };
+    await expect(run()).rejects.toThrow("already-frozen funds");
+    expect(action).not.toHaveBeenCalled();
   });
 });

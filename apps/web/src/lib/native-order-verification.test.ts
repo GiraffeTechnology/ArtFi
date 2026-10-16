@@ -3,8 +3,11 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { type Hex } from "viem";
 import { nativeOrderFromAuthorization } from "./native-order";
 import { saleIntentTypedData } from "./whole-artwork-intent";
+import { rwaCatalogFixture } from "../test/rwa-catalog-fixture";
 import { verifyNativeOrderSale } from "./native-order-verification";
 
+const catalog = vi.hoisted(() => vi.fn());
+vi.mock("./rwa-catalog-server", () => ({ readRwaCatalog: catalog }));
 const rpc = vi.hoisted(() => ({
   getChainId: vi.fn(),
   getBlock: vi.fn(),
@@ -46,6 +49,12 @@ async function fixture() {
 }
 
 beforeEach(() => {
+  catalog.mockResolvedValue({
+    data: [rwaCatalogFixture()],
+    total: 1,
+    page: 1,
+    pageSize: 2,
+  });
   vi.stubEnv("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS", market);
   vi.stubEnv("ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE", "");
   vi.stubEnv("ARTFI_RPC_URL", "");
@@ -60,6 +69,38 @@ afterEach(() => {
 });
 
 describe("native order sale-signature verification", () => {
+  it("refuses registry-backed receipt publication before signature or RPC verification", async () => {
+    const f = await fixture();
+    const asset = rwaCatalogFixture();
+    asset.grounding.registryBacked = true;
+    catalog.mockResolvedValue({ data: [asset], total: 1 });
+    await expect(verifyNativeOrderSale(f.order)).rejects.toThrow(
+      /legacy whole-artwork market/,
+    );
+    expect(rpc.getChainId).not.toHaveBeenCalled();
+    expect(rpc.call).not.toHaveBeenCalled();
+    expect(catalog.mock.calls[0][0].get("tokenId")).toBe("1");
+  });
+  it.each(["ambiguous", "wrong-binding", "inactive", "unavailable"])(
+    "does not downgrade a %s source binding to the direct-payment path",
+    async (problem) => {
+      const f = await fixture();
+      const asset = rwaCatalogFixture();
+      if (problem === "wrong-binding") asset.binding.tokenId = "2";
+      if (problem === "inactive") asset.grounding.status = "revoked";
+      if (problem === "unavailable")
+        catalog.mockRejectedValueOnce(new Error("Unavailable"));
+      else
+        catalog.mockResolvedValue({
+          data: [asset],
+          total: problem === "ambiguous" ? 2 : 1,
+        });
+      await expect(verifyNativeOrderSale(f.order)).rejects.toThrow(
+        /current source binding/,
+      );
+      expect(rpc.getChainId).not.toHaveBeenCalled();
+    },
+  );
   it("admits an existing canonical EOA sale signature without requiring RPC or SIN", async () => {
     const f = await fixture();
     await expect(verifyNativeOrderSale(f.order)).resolves.toBeUndefined();
