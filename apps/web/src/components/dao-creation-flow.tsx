@@ -1,5 +1,7 @@
 "use client";
 
+import { DaoPresentationFields, DaoPresentationCard } from "./dao-presentation";
+import { readDaoPresentation } from "@/lib/dao-presentation";
 import { operatorErrorText } from "@/lib/operator-error";
 
 import { publicSetting } from "@/lib/public-runtime-config";
@@ -636,6 +638,7 @@ function ConnectedDaoCreation({
               adminAddress: value.adminAddress,
               pauserAddress: value.pauserAddress,
               fractionalizerAddress: value.fractionalizerAddress,
+              presentation: value.presentation,
             }),
           },
         );
@@ -1306,6 +1309,7 @@ function ConnectedDaoCreation({
                   required
                 />
               </label>
+              <DaoPresentationFields initial={formConfiguration?.presentation} legacy={Boolean(formConfiguration && !formConfiguration.presentation)} />
               <label>
                 Whole-token supply
                 <input
@@ -1420,6 +1424,7 @@ function ConnectedDaoCreation({
             </li>
           </ol>
           {vaultAddress ? <p>Vault: {vaultAddress}</p> : null}
+          {configuration ? <DaoPresentationCard presentation={configuration.presentation} name={configuration.vaultName} symbol={configuration.tokenSymbol} /> : null}
           {configuration && vaultAddress ? (
             <p>
               Reviewed NFT: {configuration.collectionAddress} / #
@@ -1537,6 +1542,7 @@ function readConfiguration(
     collectionAddress: requiredAddress("collectionAddress"),
     tokenId,
     vaultName: text("vaultName", 80),
+    presentation: readDaoPresentation(form),
     adminAddress: requiredAddress("adminAddress", defaults.adminAddress),
     pauserAddress: requiredAddress("pauserAddress", defaults.pauserAddress),
     fractionalizerAddress: requiredAddress(

@@ -21,6 +21,7 @@ type vaultIntentRequest struct {
 	AdminAddress          string `json:"adminAddress"`
 	PauserAddress         string `json:"pauserAddress"`
 	FractionalizerAddress string `json:"fractionalizerAddress"`
+	Presentation *daoPresentation `json:"presentation,omitempty"`
 }
 
 type vaultIntent struct {
@@ -39,6 +40,7 @@ type vaultIntent struct {
 	Status                string   `json:"status"`
 	TransactionHash       string   `json:"transactionHash,omitempty"`
 	CreatedAt             string   `json:"createdAt"`
+	Presentation *daoPresentation `json:"presentation,omitempty"`
 	payloadHash           string
 	idempotencyKeyHash    string
 }
@@ -66,7 +68,7 @@ func (service *rwaService) createVaultIntent(writer http.ResponseWriter, request
 		return
 	}
 	if !validVaultIntent(input) {
-		writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid vault configuration", "Addresses, token ID, and vault name failed validation.")
+		writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid vault configuration", "Addresses, token ID, vault name, or descriptive presentation failed validation.")
 		return
 	}
 
@@ -102,6 +104,7 @@ func (service *rwaService) createVaultIntent(writer http.ResponseWriter, request
 		CollectionAddress:     input.CollectionAddress,
 		TokenID:               input.TokenID,
 		VaultName:             input.VaultName,
+		Presentation:          cloneDAOPresentation(input.Presentation),
 		AdminAddress:          input.AdminAddress,
 		PauserAddress:         input.PauserAddress,
 		FractionalizerAddress: input.FractionalizerAddress,
@@ -187,5 +190,5 @@ func validVaultIntent(input vaultIntentRequest) bool {
 		addressPattern.MatchString(input.PauserAddress) &&
 		addressPattern.MatchString(input.FractionalizerAddress) &&
 		uint256Pattern.MatchString(input.TokenID) &&
-		len(strings.TrimSpace(input.VaultName)) >= 2 && len(input.VaultName) <= 80
+		len(strings.TrimSpace(input.VaultName)) >= 2 && len(input.VaultName) <= 80 && validDAOPresentation(input.Presentation)
 }
