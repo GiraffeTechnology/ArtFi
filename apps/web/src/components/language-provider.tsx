@@ -13,6 +13,7 @@ import {
 import {
   htmlLangFor,
   isTranslatableSource,
+  isSafeUiTranslation,
   isUiLocale,
   needsTranslation,
   translationSourceFor,
@@ -169,15 +170,18 @@ function translationCacheKey(locale: UiLocale, source: string): string {
 function cachedTranslation(locale: UiLocale, source: string): string | null {
   const memoryKey = `${locale}\u0000${source}`;
   const inMemory = translatedCache.get(memoryKey);
-  if (inMemory) return inMemory;
+  if (inMemory && isSafeUiTranslation(source, inMemory)) return inMemory;
+  if (inMemory) translatedCache.delete(memoryKey);
   try {
     const persisted = window.sessionStorage.getItem(
       translationCacheKey(locale, source),
     );
-    if (persisted) {
+    if (persisted && isSafeUiTranslation(source, persisted)) {
       translatedCache.set(memoryKey, persisted);
       return persisted;
     }
+    if (persisted)
+      window.sessionStorage.removeItem(translationCacheKey(locale, source));
   } catch {
     // Session caching is optional.
   }
@@ -189,6 +193,7 @@ function cacheTranslation(
   source: string,
   translated: string,
 ): void {
+  if (!isSafeUiTranslation(source, translated)) return;
   translatedCache.set(`${locale}\u0000${source}`, translated);
   try {
     window.sessionStorage.setItem(
@@ -394,7 +399,9 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             if (
               !Array.isArray(payload.translations) ||
               payload.translations.length !== missing.length ||
-              payload.translations.some((value) => typeof value !== "string")
+              payload.translations.some(
+                (value, index) => !isSafeUiTranslation(missing[index], value),
+              )
             ) {
               throw new Error("INVALID_TRANSLATION_RESPONSE");
             }
