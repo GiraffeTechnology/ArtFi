@@ -118,6 +118,9 @@ const plan = z
     wholeReceipt: receipt,
   })
   .strict();
+const approvalBusiness = plan
+  .omit({ id: true, operationId: true, taskPrincipal: true })
+  .strict();
 const slot = z
   .object({
     phase: z.enum(phases),
@@ -289,17 +292,13 @@ export type WholeReceiptBusinessProjection = Pick<
   "kind" | "chainId" | "request" | "wholeReceipt"
 >;
 
-/** Validates the existing native shape and separates pregrant business from
- * grant-derived transport IDs. No new hash/domain or authority is introduced.
- * Keep the full original plan for native wire hashing and principal verification. */
-export function projectWholeReceiptBusiness(rawPlan: unknown) {
+/** Validate the same business schema before a grant exists. Transport IDs and
+ * taskPrincipal are refused here rather than filled with fixture identities. */
+export function projectWholeReceiptApprovalBusiness(rawBusiness: unknown) {
   try {
-    const p = plan.parse(snapshot(rawPlan)),
+    const p = approvalBusiness.parse(snapshot(rawBusiness)),
       r = p.wholeReceipt;
-    const { kind, ...binding } = p.taskPrincipal;
     if (
-      kind !== "task" ||
-      p.operationId !== `native_${kernelRequestDigest(binding)}` ||
       p.chainId !== r.domain.chainId ||
       (r.phase === "registered"
         ? !r.kitRegistration
@@ -326,13 +325,29 @@ export function projectWholeReceiptBusiness(rawPlan: unknown) {
       },
     });
     if (!same(expected, r.segmentId)) refuse();
-    // Copy only explicitly named business fields. Never mutate the native plan.
-    const business: WholeReceiptBusinessProjection = {
+    return frozen(p);
+  } catch {
+    refuse();
+  }
+}
+
+/** Keep the entire postgrant native plan and verify its derived identity.
+ * Approval projection never removes principal facts from native persistence. */
+export function projectWholeReceiptBusiness(rawPlan: unknown) {
+  try {
+    const p = plan.parse(snapshot(rawPlan));
+    const { kind, ...binding } = p.taskPrincipal;
+    if (
+      kind !== "task" ||
+      p.operationId !== `native_${kernelRequestDigest(binding)}`
+    )
+      refuse();
+    const business = projectWholeReceiptApprovalBusiness({
       kind: p.kind,
       chainId: p.chainId,
-      request: structuredClone(p.request),
-      wholeReceipt: structuredClone(r),
-    };
+      request: p.request,
+      wholeReceipt: p.wholeReceipt,
+    });
     return frozen({ business, nativePlan: p });
   } catch {
     refuse();
