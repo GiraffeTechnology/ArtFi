@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { assertPortableBundleLinks } from "./bundle-portable-links.mjs";
 import { bundleNodePackage } from "./bundle-node-package.mjs";
 import {
   captureBuildSource,
@@ -231,6 +232,8 @@ try {
         await rm(join(directory, name));
     }
   }
+  // Refuse escaped or private host links before importing packaged code.
+  await assertPortableBundleLinks(bundle);
   // Exercise the packaged production dependency graph before sealing an artifact.
   // The guarded server module is imported only; no listener, configuration or signer starts.
   run(node, [
@@ -318,6 +321,8 @@ try {
     JSON.stringify(manifest, null, 2) + "\n",
   );
   run(node, [join(bundle, "tools/install/artfi.mjs"), "check-bundle"]);
+  // Recheck the completed payload immediately before archiving.
+  await assertPortableBundleLinks(bundle);
   const archive = `${release}.tar.gz`;
   run("tar", ["-czf", join(output, archive), "-C", output, release]);
   const checksum = digest(await readFile(join(output, archive)));
