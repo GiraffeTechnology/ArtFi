@@ -31,9 +31,13 @@ const languageStorageKey = "artfi-ui-language";
 // The translation pipeline may serialize primary translation and proofreading.
 // Keep each page request bounded, then render the page progressively.
 const translationRequestBatchSize = 4;
-const originals = new WeakMap<Text, string>();
-const originalAttributes = new WeakMap<Element, Map<string, string>>();
-const originalPageTitles = new Map<string, string>();
+type SourceBinding = { original: string; rendered: string };
+const originals = new WeakMap<Text, SourceBinding>();
+const originalAttributes = new WeakMap<Element, Map<string, SourceBinding>>();
+let pageTitleBinding: SourceBinding | undefined;
+const writtenTexts = new WeakMap<Text, string>();
+const writtenAttributes = new WeakMap<Element, Map<string, string>>();
+let writtenTitle: string | undefined;
 const translatedCache = new Map<string, string>();
 const translatableAttributes = [
   "aria-label",
@@ -41,6 +45,108 @@ const translatableAttributes = [
   "placeholder",
   "title",
 ] as const;
+
+// React may reuse a node for a new authoritative value. Only a value that this
+// component actually rendered is a translation of the previously captured source.
+function captureSource(previous: SourceBinding | undefined, current: string) {
+  return previous &&
+    (current === previous.original || current === previous.rendered)
+    ? previous
+    : { original: current, rendered: current };
+}
+
+function textSource(node: Text): string {
+  const binding = captureSource(originals.get(node), node.data);
+  originals.set(node, binding);
+  return binding.original;
+}
+
+function writeText(node: Text, source: string, rendered: string) {
+  if (
+    !node.isConnected ||
+    !node.parentElement ||
+    node.parentElement.closest(
+      "[data-no-translate], [data-translation-skip], select, option, script, style, noscript, code, pre, svg, canvas, textarea, input",
+    ) ||
+    textSource(node) !== source
+  )
+    return;
+  originals.get(node)!.rendered = rendered;
+  if (node.data !== rendered) {
+    writtenTexts.set(node, rendered);
+    node.data = rendered;
+  }
+}
+
+function attributeSource(element: Element, name: string, current: string) {
+  const bindings =
+    originalAttributes.get(element) ?? new Map<string, SourceBinding>();
+  originalAttributes.set(element, bindings);
+  const binding = captureSource(bindings.get(name), current);
+  bindings.set(name, binding);
+  return binding.original;
+}
+
+function writeAttribute(binding: AttributeBinding, rendered: string) {
+  const { element, name, original } = binding;
+  const current = element.getAttribute(name);
+  if (
+    !element.isConnected ||
+    current === null ||
+    element.closest(
+      "[data-no-translate], [data-translation-skip], select, option",
+    ) ||
+    attributeSource(element, name, current) !== original
+  )
+    return;
+  originalAttributes.get(element)!.get(name)!.rendered = rendered;
+  if (current !== rendered) {
+    const values = writtenAttributes.get(element) ?? new Map<string, string>();
+    writtenAttributes.set(element, values);
+    values.set(name, rendered);
+    element.setAttribute(name, rendered);
+  }
+}
+
+function titleSource() {
+  pageTitleBinding = captureSource(pageTitleBinding, document.title);
+  return pageTitleBinding.original;
+}
+
+function writeTitle(source: string, rendered: string) {
+  if (titleSource() !== source) return;
+  pageTitleBinding!.rendered = rendered;
+  if (document.title !== rendered) {
+    writtenTitle = rendered;
+    document.title = rendered;
+  }
+}
+
+function needsSourceScan(mutation: MutationRecord) {
+  const element =
+    mutation.target instanceof Element
+      ? mutation.target
+      : mutation.target.parentElement;
+  const skipped =
+    mutation.type === "attributes"
+      ? "[data-no-translate], [data-translation-skip], select, option"
+      : "[data-no-translate], [data-translation-skip], select, option, script, style, noscript, code, pre, svg, canvas, textarea, input";
+  if (element?.closest(skipped)) return false;
+  if (element?.tagName === "TITLE" && document.title === writtenTitle)
+    return false;
+  if (mutation.type === "characterData") {
+    return (
+      mutation.target.nodeValue !== writtenTexts.get(mutation.target as Text)
+    );
+  }
+  if (mutation.type === "attributes" && element && mutation.attributeName) {
+    return (
+      element.getAttribute(mutation.attributeName) !==
+      writtenAttributes.get(element)?.get(mutation.attributeName)
+    );
+  }
+  return mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0;
+}
 
 function translationCacheKey(locale: UiLocale, source: string): string {
   return `artfi-translation:${locale}:${source}`;
@@ -100,9 +206,8 @@ function collectTextNodes(root: HTMLElement): Text[] {
       ) {
         return NodeFilter.FILTER_REJECT;
       }
-      const source = originals.get(text) ?? text.data;
+      const source = textSource(text);
       if (!isTranslatableSource(source)) return NodeFilter.FILTER_REJECT;
-      if (!originals.has(text)) originals.set(text, source);
       nodes.push(text);
       return NodeFilter.FILTER_ACCEPT;
     },
@@ -132,14 +237,7 @@ function collectAttributeBindings(root: HTMLElement): AttributeBinding[] {
     for (const name of translatableAttributes) {
       const current = element.getAttribute(name);
       if (!current) continue;
-      const originalsForElement =
-        originalAttributes.get(element) ?? new Map<string, string>();
-      if (!originalAttributes.has(element)) {
-        originalAttributes.set(element, originalsForElement);
-      }
-      const original = originalsForElement.get(name) ?? current;
-      if (!originalsForElement.has(name))
-        originalsForElement.set(name, original);
+      const original = attributeSource(element, name, current);
       if (isTranslatableSource(original)) {
         bindings.push({ element, name, original });
       }
@@ -149,15 +247,11 @@ function collectAttributeBindings(root: HTMLElement): AttributeBinding[] {
   const description = document.querySelector('meta[name="description"]');
   const currentDescription = description?.getAttribute("content");
   if (description && currentDescription) {
-    const originalsForElement =
-      originalAttributes.get(description) ?? new Map<string, string>();
-    if (!originalAttributes.has(description)) {
-      originalAttributes.set(description, originalsForElement);
-    }
-    const original = originalsForElement.get("content") ?? currentDescription;
-    if (!originalsForElement.has("content")) {
-      originalsForElement.set("content", original);
-    }
+    const original = attributeSource(
+      description,
+      "content",
+      currentDescription,
+    );
     if (isTranslatableSource(original)) {
       bindings.push({ element: description, name: "content", original });
     }
@@ -165,21 +259,18 @@ function collectAttributeBindings(root: HTMLElement): AttributeBinding[] {
   return bindings;
 }
 
-function restoreOriginals(root: HTMLElement, pathname: string) {
+function restoreOriginals(root: HTMLElement) {
   for (const node of collectTextNodes(root)) {
-    const original = originals.get(node);
-    if (original !== undefined && node.data !== original) node.data = original;
+    const original = textSource(node);
+    writeText(node, original, original);
   }
   for (const binding of collectAttributeBindings(root)) {
     if (binding.element.getAttribute(binding.name) !== binding.original) {
-      binding.element.setAttribute(binding.name, binding.original);
+      writeAttribute(binding, binding.original);
     }
   }
-  const originalTitle = originalPageTitles.get(pathname) ?? document.title;
-  if (!originalPageTitles.has(pathname)) {
-    originalPageTitles.set(pathname, originalTitle);
-  }
-  document.title = originalTitle;
+  const originalTitle = titleSource();
+  writeTitle(originalTitle, originalTitle);
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
@@ -216,25 +307,31 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = htmlLangFor(locale);
     const root = document.body;
-    restoreOriginals(root, pathname);
+    restoreOriginals(root);
 
     const controller = new AbortController();
     let disposed = false;
     let timer: number | undefined;
     let translating = false;
+    let rescanRequested = false;
 
     async function translateVisiblePage() {
-      if (disposed || translating) return;
+      if (disposed) return;
+      if (translating) {
+        rescanRequested = true;
+        return;
+      }
+      rescanRequested = false;
       translating = true;
       setStatus("loading");
       root.setAttribute("aria-busy", "true");
       try {
         const nodes = collectTextNodes(root);
         const attributes = collectAttributeBindings(root);
-        const pageTitle = originalPageTitles.get(pathname) ?? document.title;
+        const pageTitle = titleSource();
         const sources = [
           ...new Set([
-            ...nodes.map((node) => originals.get(node)!.trim()),
+            ...nodes.map((node) => textSource(node).trim()),
             ...attributes.map((binding) => binding.original.trim()),
             pageTitle.trim(),
           ]),
@@ -269,11 +366,13 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
               cache: "no-store",
               signal: controller.signal,
             });
+            if (disposed) return;
             if (!response.ok) throw new Error("TRANSLATION_UNAVAILABLE");
             const payload = (await response.json()) as {
               degraded?: unknown;
               translations?: unknown;
             };
+            if (disposed) return;
             if (
               !Array.isArray(payload.translations) ||
               payload.translations.length !== missing.length ||
@@ -292,12 +391,12 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           }
 
           for (const node of nodes) {
-            const original = originals.get(node);
+            const original = textSource(node);
             if (!original) continue;
             const translated = cachedTranslation(locale, original.trim());
             if (translated) {
               const nextValue = renderTranslatedText(original, translated);
-              if (node.data !== nextValue) node.data = nextValue;
+              writeText(node, original, nextValue);
             }
           }
           for (const binding of attributes) {
@@ -305,11 +404,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
               locale,
               binding.original.trim(),
             );
-            if (translated)
-              binding.element.setAttribute(binding.name, translated);
+            if (translated) writeAttribute(binding, translated);
           }
           const translatedTitle = cachedTranslation(locale, pageTitle.trim());
-          if (translatedTitle) document.title = translatedTitle;
+          if (translatedTitle) writeTitle(pageTitle, translatedTitle);
         }
         if (!disposed) setStatus(degraded ? "unavailable" : "ready");
       } catch (error) {
@@ -317,23 +415,24 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           !disposed &&
           !(error instanceof DOMException && error.name === "AbortError")
         ) {
-          restoreOriginals(root, pathname);
+          restoreOriginals(root);
           setStatus("unavailable");
         }
       } finally {
         translating = false;
-        if (!disposed) root.removeAttribute("aria-busy");
+        if (!disposed) {
+          root.removeAttribute("aria-busy");
+          if (rescanRequested) {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(translateVisiblePage, 80);
+          }
+        }
       }
     }
 
     const observer = new MutationObserver((mutations) => {
-      if (
-        !mutations.some(
-          (mutation) =>
-            mutation.type === "characterData" || mutation.addedNodes.length > 0,
-        )
-      )
-        return;
+      if (!mutations.some(needsSourceScan)) return;
+      rescanRequested = true;
       window.clearTimeout(timer);
       timer = window.setTimeout(translateVisiblePage, 80);
     });
@@ -341,6 +440,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       childList: true,
       characterData: true,
       subtree: true,
+      attributes: true,
+      attributeFilter: [...translatableAttributes],
+    });
+    observer.observe(document.head, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["content"],
     });
     void translateVisiblePage();
 
@@ -349,6 +457,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       controller.abort();
       observer.disconnect();
       window.clearTimeout(timer);
+      root.removeAttribute("aria-busy");
     };
   }, [locale, pathname]);
 
