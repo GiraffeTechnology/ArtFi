@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { zeroAddress, type Address, type Hex } from "viem";
 import {
+  AUCTION_BID_READ_TIMEOUT_MS,
   auctionActions,
   auctionAmount,
   auctionBidPreflight,
@@ -229,5 +230,113 @@ describe("attributed auction history", () => {
       .mockResolvedValueOnce(block)
       .mockResolvedValueOnce({ ...block, hash: `0x${"2".repeat(64)}` });
     await expect(auctionEvents(client, market)).rejects.toThrow("reorganized");
+  });
+});
+
+describe("auction bid write-boundary read safety", () => {
+  it("checks the chain again after all state and canonical reads", async () => {
+    const reviewed = await loadAuction(client, market, "1");
+    getChainId.mockResolvedValueOnce(560048).mockResolvedValueOnce(1);
+    await expect(
+      auctionBidPreflight(client, reviewed, buyer, 100n),
+    ).rejects.toThrow("chain changed");
+  });
+  it.each(["number", "timestamp"])(
+    "refuses a mismatched canonical %s even with the same hash",
+    async (field) => {
+      const reviewed = await loadAuction(client, market, "1");
+      getBlock
+        .mockResolvedValueOnce(block)
+        .mockResolvedValueOnce({
+          ...block,
+          [field]: field === "number" ? 101n : 1001n,
+        });
+      await expect(
+        auctionBidPreflight(client, reviewed, buyer, 100n),
+      ).rejects.toThrow("reorganized");
+    },
+  );
+  it.each([undefined, 100, -1n, 1n << 256n, "100"])(
+    "refuses malformed payment balance %s",
+    async (value) => {
+      const reviewed = await loadAuction(client, market, "1");
+      balance = value as bigint;
+      await expect(
+        auctionBidPreflight(client, reviewed, buyer, 100n),
+      ).rejects.toThrow("prevents");
+    },
+  );
+  it.each(["cap", "used"])(
+    "refuses malformed %s instead of mixing numeric domains",
+    async (key) => {
+      const reviewed = await loadAuction(client, market, "1");
+      if (key === "cap") cap = 10000 as unknown as bigint;
+      else used = -1n;
+      await expect(
+        auctionBidPreflight(client, reviewed, buyer, 100n),
+      ).rejects.toThrow("prevents");
+    },
+  );
+  it("requires exact permission, never a truthy RPC substitute", async () => {
+    const reviewed = await loadAuction(client, market, "1");
+    allowed = "true" as unknown as boolean;
+    await expect(
+      auctionBidPreflight(client, reviewed, buyer, 100n),
+    ).rejects.toThrow("prevents");
+  });
+  it.each([null, -1n, 100])(
+    "refuses a non-mined block number %s",
+    async (number) => {
+      const reviewed = await loadAuction(client, market, "1");
+      getBlock.mockResolvedValue({ ...block, number });
+      await expect(
+        auctionBidPreflight(client, reviewed, buyer, 100n),
+      ).rejects.toThrow();
+    },
+  );
+  it.each(["0x00", "0x" + "g".repeat(64)])(
+    "refuses malformed block hash %s",
+    async (hash) => {
+      const reviewed = await loadAuction(client, market, "1");
+      getBlock.mockResolvedValue({ ...block, hash });
+      await expect(
+        auctionBidPreflight(client, reviewed, buyer, 100n),
+      ).rejects.toThrow("valid mined");
+    },
+  );
+  it("retires a hanging read at a finite deadline and ignores its late result", async () => {
+    const reviewed = await loadAuction(client, market, "1");
+    vi.useFakeTimers();
+    let finish!: (value: number) => void;
+    getChainId.mockImplementationOnce(
+      () =>
+        new Promise<number>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    try {
+      const pending = auctionBidPreflight(client, reviewed, buyer, 100n);
+      const refusal = expect(pending).rejects.toThrow("timed out");
+      await vi.advanceTimersByTimeAsync(AUCTION_BID_READ_TIMEOUT_MS);
+      await refusal;
+      finish(560048);
+      await vi.runAllTimersAsync();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("propagates an unavailable state read and clears its deadline", async () => {
+    const reviewed = await loadAuction(client, market, "1");
+    vi.useFakeTimers();
+    read.mockRejectedValue(new Error("TEST_ONLY state unavailable"));
+    try {
+      await expect(
+        auctionBidPreflight(client, reviewed, buyer, 100n),
+      ).rejects.toThrow("state unavailable");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

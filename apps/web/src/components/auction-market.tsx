@@ -238,16 +238,18 @@ function AuctionWorkbench() {
     const reviewed = snapshot;
     const value = auctionAmount(bid, paymentMeta.decimals ?? 0);
     const action = transactions.begin();
-    await assertRwaTradingEvidence({
-      section: "fractional",
-      chainId: 560048,
-      marketAddress: market,
-      fractionTokenAddress: reviewed.asset,
-      slug: sourceRecord.slug,
-      identity: rwaAssetIdentity(sourceRecord),
-    });
-    await auctionBidPreflight(client, reviewed, address, value);
-    action.assertCurrent();
+    const checkBid = async () => {
+      await assertRwaTradingEvidence({
+        section: "fractional",
+        chainId: 560048,
+        marketAddress: market,
+        fractionTokenAddress: reviewed.asset,
+        slug: sourceRecord.slug,
+        identity: rwaAssetIdentity(sourceRecord),
+      });
+      await auctionBidPreflight(client, reviewed, address, value);
+      action.assertCurrent();
+    };
     const allowance = await client.readContract({
       address: reviewed.payment,
       abi: auctionTokenAbi,
@@ -256,41 +258,35 @@ function AuctionWorkbench() {
     });
     if (allowance < value) {
       setDetail("Confirm the exact payment-token allowance in your wallet.");
-      await action.write("approval", () =>
-        writeContractAsync({
+      await action.write("approval", async () => {
+        await checkBid();
+        return writeContractAsync({
           address: reviewed.payment,
           abi: auctionTokenAbi,
           functionName: "approve",
           args: [market, value],
           chainId: 560048,
           account: address,
-        }),
-      );
+        });
+      });
     }
-    await assertRwaTradingEvidence({
-      section: "fractional",
-      chainId: 560048,
-      marketAddress: market,
-      fractionTokenAddress: reviewed.asset,
-      slug: sourceRecord.slug,
-      identity: rwaAssetIdentity(sourceRecord),
-    });
-    await auctionBidPreflight(client, reviewed, address, value);
-    action.assertCurrent();
-    const prepared = await client.simulateContract({
-      address: market,
-      abi: auctionAbi,
-      functionName: "placeBid",
-      args: [auctionID(reviewed.id), value],
-      account: address,
-    });
-    action.assertCurrent();
     setDetail(
       "Confirm the escrowed bid in your wallet. A late bid may extend the end time.",
     );
-    await action.write("fill", () =>
-      writeContractAsync({ ...prepared.request, chainId: 560048 }),
-    );
+    await action.write("fill", async () => {
+      await checkBid();
+      const prepared = await client.simulateContract({
+        address: market,
+        abi: auctionAbi,
+        functionName: "placeBid",
+        args: [auctionID(reviewed.id), value],
+        account: address,
+      });
+      // Simulation is asynchronous too. Revalidate current bid state and chain
+      // before handing its original, unchanged request to the wallet.
+      await checkBid();
+      return writeContractAsync({ ...prepared.request, chainId: 560048 });
+    });
     action.assertCurrent();
     await refresh(reviewed.id);
     if (action.isCurrent())
