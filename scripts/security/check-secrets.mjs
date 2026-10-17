@@ -1,58 +1,32 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { findSecretPatterns } from "./secret-patterns.mjs";
 
-const files = execFileSync("git", ["ls-files", "-co", "--exclude-standard"], {
+const files = execFileSync("git", ["ls-files", "-coz", "--exclude-standard"], {
   encoding: "utf8",
 })
-  .split(/\r?\n/)
+  .split("\0")
   .filter(Boolean)
   .filter((file) => !file.endsWith("pnpm-lock.yaml"));
-
-const rules = [
-  ["private key block", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
-  ["AWS access key", /\bAKIA[0-9A-Z]{16}\b/],
-  ["GitHub token", /\bgh[ps]_[A-Za-z0-9]{30,}\b/],
-  [
-    "raw EVM private key assignment",
-    /(?:PRIVATE_KEY|SECRET_KEY)\s*=\s*0x[0-9a-fA-F]{64}\b/,
-  ],
-  [
-    "mnemonic assignment",
-    /(?:MNEMONIC|SEED_PHRASE)\s*=\s*["'][a-z]+(?:\s+[a-z]+){11,23}["']/i,
-  ],
-];
 
 const findings = [];
 for (const file of files) {
   let contents;
   try {
-    contents = readFileSync(file, "utf8");
+    contents = readFileSync(file);
   } catch {
     continue;
   }
-  for (const [name, pattern] of rules) {
-    if (pattern.test(contents)) findings.push(`${file}: ${name}`);
-  }
-  for (const candidate of contents.matchAll(
-    /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g,
-  )) {
-    const octets = candidate[0].split(".").map(Number);
-    if (octets.some((octet) => octet > 255)) continue;
-    const isLoopback = octets[0] === 127;
-    const isUnspecified = octets.every((octet) => octet === 0);
-    if (!isLoopback && !isUnspecified) {
-      findings.push(`${file}: plaintext server IPv4 address`);
-    }
+  for (const name of findSecretPatterns(contents)) {
+    findings.push(JSON.stringify(file) + ": " + name);
   }
 }
-
 if (findings.length > 0) {
   process.stderr.write(
-    `Potential committed secrets detected:\n${findings.join("\n")}\n`,
+    "Potential committed secrets detected:\n" + findings.join("\n") + "\n",
   );
   process.exit(1);
 }
-
 process.stdout.write(
-  `Secret pattern check passed across ${files.length} repository files.\n`,
+  "Secret pattern check passed across " + files.length + " repository files.\n",
 );
