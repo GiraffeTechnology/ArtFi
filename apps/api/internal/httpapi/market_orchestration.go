@@ -158,8 +158,16 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
   `
 	filterWhere, filterArgs := queryInput.filterSQL()
 	countArgs := append(append([]any{}, args...), filterArgs...)
+	// Both SELECTs must share one MVCC read view. Pool-level reads can observe
+	// an indexer commit between count and page, even when their SQL is identical.
+	tx, err := service.db.BeginTx(request.Context(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil || tx == nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "A consistent catalog snapshot could not be opened.")
+		return
+	}
+	defer tx.Rollback()
 	var total int
-	countRows, err := service.db.QueryContext(request.Context(), query+"SELECT COUNT(*) FROM catalog"+filterWhere, countArgs...)
+	countRows, err := tx.QueryContext(request.Context(), query+"SELECT COUNT(*) FROM catalog"+filterWhere, countArgs...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog could not be counted.")
 		return
@@ -175,14 +183,16 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 	if err == nil {
 		err = countRows.Err()
 	}
-	countRows.Close()
+	if closeErr := countRows.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog count could not be decoded.")
 		return
 	}
 	query += "SELECT source, chain_name, contract_address, token_id, collection_slug, event_type, event_timestamp, order_hash, order_status, price, payment_symbol, marketplace_url FROM catalog" + filterWhere + queryInput.orderSQL() + " LIMIT ? OFFSET ?"
 	queryArgs := append(append([]any{}, countArgs...), pageSize, (page-1)*pageSize)
-	rows, err := service.db.QueryContext(request.Context(), query, queryArgs...)
+	rows, err := tx.QueryContext(request.Context(), query, queryArgs...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog could not be queried.")
 		return
@@ -204,6 +214,14 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 	}
 	if err := rows.Err(); err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog query was interrupted.")
+		return
+	}
+	if err := rows.Close(); err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The catalog snapshot could not be closed.")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The catalog snapshot could not be completed.")
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{
