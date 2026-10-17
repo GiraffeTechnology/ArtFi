@@ -38,8 +38,12 @@ export type FractionMatchPlan = {
   payment: bigint;
 };
 
-function validUint(value: bigint, positive = true) {
-  return value >= (positive ? 1n : 0n) && value <= maxUint256;
+function validUint(value: unknown, positive = true): value is bigint {
+  return (
+    typeof value === "bigint" &&
+    value >= (positive ? 1n : 0n) &&
+    value <= maxUint256
+  );
 }
 export function validateFractionMatchRequest(request: FractionMatchRequest) {
   if (
@@ -115,7 +119,7 @@ export function planFractionMatches({
   paymentAvailable: bigint;
 }): FractionMatchPlan {
   validateFractionMatchRequest(request);
-  if (at < 0n || at >= 1n << 48n)
+  if (!validUint(at, false) || at >= 1n << 48n)
     throw new Error("The chain snapshot time is invalid.");
   if (!validUint(paymentAvailable, false))
     throw new Error("Buyer payment availability is invalid.");
@@ -150,7 +154,8 @@ export function planFractionMatches({
     if (
       [state.filled, state.epoch, state.balance, state.allowance].some(
         (value) => !validUint(value, false),
-      )
+      ) ||
+      typeof state.signatureValid !== "boolean"
     )
       throw new Error("The observed chain state is invalid.");
     if (
@@ -193,7 +198,36 @@ export type ObservedFractionMatchPlan = FractionMatchPlan & {
   logHash: Hex;
 };
 
+export const fractionBookReadTimeoutMs = 12000;
+
+// A deadline retires the entire read result. It does not claim to cancel provider RPCs.
 export async function readFractionMatchPlan(
+  client: Reader,
+  request: FractionMatchRequest,
+  loadBook: (at: bigint) => Promise<unknown>,
+): Promise<ObservedFractionMatchPlan> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      readFractionMatchPlanAtSnapshot(client, request, loadBook),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                "The fraction book read timed out. Refresh the book before trading.",
+              ),
+            ),
+          fractionBookReadTimeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readFractionMatchPlanAtSnapshot(
   client: Reader,
   request: FractionMatchRequest,
   loadBook: (at: bigint) => Promise<unknown>,
@@ -202,7 +236,14 @@ export async function readFractionMatchPlan(
   if ((await client.getChainId()) !== 560048)
     throw new Error("The book reader is on a different chain.");
   const block = await client.getBlock({ blockTag: "latest" });
-  if (block.number === null || !block.hash || block.timestamp >= 1n << 48n)
+  if (
+    !validUint(block.number, false) ||
+    !validUint(block.timestamp, false) ||
+    block.timestamp >= 1n << 48n ||
+    typeof block.hash !== "string" ||
+    !/^0x[0-9a-fA-F]{64}$/.test(block.hash) ||
+    /^0x0{64}$/i.test(block.hash)
+  )
     throw new Error("A mined chain snapshot is unavailable.");
   const body = await loadBook(block.timestamp);
   if (
@@ -216,6 +257,7 @@ export async function readFractionMatchPlan(
     !("logHash" in body) ||
     typeof body.logHash !== "string" ||
     !/^0x[0-9a-f]{64}$/.test(body.logHash) ||
+    /^0x0{64}$/.test(body.logHash) ||
     !("priority" in body) ||
     body.priority !== "price-time-hash"
   )
@@ -257,8 +299,10 @@ export async function readFractionMatchPlan(
         blockNumber: block.number,
       }),
     ]);
-  if (paused || !assetAllowed || !paymentAllowed)
+  if (paused !== false || assetAllowed !== true || paymentAllowed !== true)
     throw new Error("The market or token pair is unavailable for settlement.");
+  if (![cap, spent, buyerBalance].every((value) => validUint(value, false)))
+    throw new Error("The buyer's chain payment state is invalid.");
   const headroom = cap > spent ? cap - spent : 0n;
   const paymentAvailable = buyerBalance < headroom ? buyerBalance : headroom;
   const sellers = new Map<
@@ -327,10 +371,18 @@ export async function readFractionMatchPlan(
   // Bounded RPC fan-out; a failed read fails the complete plan rather than privileging reachable sellers.
   for (let offset = 0; offset < candidates.length; offset += 8)
     await Promise.all(candidates.slice(offset, offset + 8).map(read));
-  const checked = await client.getBlock({ blockNumber: block.number });
-  if (checked.hash !== block.hash)
+  const [checked, chainId] = await Promise.all([
+    client.getBlock({ blockNumber: block.number }),
+    client.getChainId(),
+  ]);
+  if (
+    chainId !== 560048 ||
+    checked.number !== block.number ||
+    checked.hash !== block.hash ||
+    checked.timestamp !== block.timestamp
+  )
     throw new Error(
-      "The observed block changed. Refresh the book before trading.",
+      "The chain or observed block changed. Refresh the book before trading.",
     );
   return {
     ...planFractionMatches({
