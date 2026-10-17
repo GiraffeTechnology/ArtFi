@@ -264,6 +264,7 @@ export function AuctionDiscoveryBrowser({
           <label>
             Contract state within this page
             <select
+              data-translate-options="static"
               value={stateFilter}
               onChange={(event) => {
                 if (
@@ -283,6 +284,7 @@ export function AuctionDiscoveryBrowser({
           <label>
             Order within this page
             <select
+              data-translate-options="static"
               value={order}
               onChange={(event) => {
                 const value = event.target.value;

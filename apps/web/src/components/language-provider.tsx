@@ -18,6 +18,10 @@ import {
   translationSourceFor,
   type UiLocale,
 } from "@/lib/language";
+import {
+  StaticSelectLabels,
+  staticSelectMutationAttributes,
+} from "@/lib/static-select-labels";
 
 type TranslationStatus = "idle" | "loading" | "ready" | "unavailable";
 type LanguageContextValue = {
@@ -39,6 +43,7 @@ const writtenTexts = new WeakMap<Text, string>();
 const writtenAttributes = new WeakMap<Element, Map<string, string>>();
 let writtenTitle: string | undefined;
 const translatedCache = new Map<string, string>();
+const staticOptionLabels = new StaticSelectLabels();
 const translatableAttributes = [
   "aria-label",
   "alt",
@@ -123,6 +128,15 @@ function writeTitle(source: string, rendered: string) {
 }
 
 function needsSourceScan(mutation: MutationRecord) {
+  if (
+    mutation.type === "attributes" &&
+    staticSelectMutationAttributes.some(
+      (name) => name === mutation.attributeName,
+    )
+  ) {
+    return staticOptionLabels.needsSourceScan(mutation);
+  }
+  if (staticOptionLabels.needsSourceScan(mutation)) return true;
   const element =
     mutation.target instanceof Element
       ? mutation.target
@@ -260,6 +274,7 @@ function collectAttributeBindings(root: HTMLElement): AttributeBinding[] {
 }
 
 function restoreOriginals(root: HTMLElement) {
+  staticOptionLabels.restore(root);
   for (const node of collectTextNodes(root)) {
     const original = textSource(node);
     writeText(node, original, original);
@@ -328,15 +343,18 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       try {
         const nodes = collectTextNodes(root);
         const attributes = collectAttributeBindings(root);
+        const optionLabels = staticOptionLabels.collect(root);
         const pageTitle = titleSource();
         const sources = [
           ...new Set([
             ...nodes.map((node) => textSource(node).trim()),
             ...attributes.map((binding) => binding.original.trim()),
+            ...optionLabels.map((binding) => binding.source.trim()),
             pageTitle.trim(),
           ]),
         ].filter(
           (source) =>
+            isTranslatableSource(source) &&
             needsTranslation(source, locale) &&
             translationSourceFor(source, locale) !== null,
         );
@@ -407,6 +425,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             if (translated) writeAttribute(binding, translated);
           }
           const translatedTitle = cachedTranslation(locale, pageTitle.trim());
+          for (const binding of optionLabels) {
+            const translated = cachedTranslation(locale, binding.source.trim());
+            if (translated) staticOptionLabels.write(binding, translated);
+          }
           if (translatedTitle) writeTitle(pageTitle, translatedTitle);
         }
         if (!disposed) setStatus(degraded ? "unavailable" : "ready");
@@ -441,7 +463,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       characterData: true,
       subtree: true,
       attributes: true,
-      attributeFilter: [...translatableAttributes],
+      attributeFilter: [
+        ...translatableAttributes,
+        ...staticSelectMutationAttributes,
+      ],
     });
     observer.observe(document.head, {
       childList: true,
@@ -456,6 +481,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       disposed = true;
       controller.abort();
       observer.disconnect();
+      staticOptionLabels.restore(root);
       window.clearTimeout(timer);
       root.removeAttribute("aria-busy");
     };
