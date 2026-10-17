@@ -126,12 +126,15 @@ function sessionFrom(value: unknown): UserSession {
   if (
     !session ||
     typeof session.id !== "string" ||
+    session.id.length === 0 ||
+    session.id.length > 128 ||
     !isAddress(session.address) ||
     !isSessionChain(session.chainId) ||
     !Number.isSafeInteger(session.expiresAt) ||
     session.expiresAt <= Date.now() ||
     !Number.isSafeInteger(session.accessExpiresAt) ||
-    session.accessExpiresAt <= Date.now()
+    session.accessExpiresAt <= Date.now() ||
+    session.accessExpiresAt > session.expiresAt
   )
     throw new ClientSessionError(401, "Sign in with your wallet to continue.");
   // Only the public session fields cross into React state.
@@ -246,6 +249,29 @@ export class ClientSessionController {
       Date.now() >= expiresAt
     )
       this.invalidate("Your wallet session expired. Sign in again.");
+  };
+  /** A deadline from an older token or wallet cannot change the current session. */
+  checkSessionDeadline = (
+    id: string,
+    accessExpiresAt: number,
+    expiresAt: number,
+  ): Promise<UserSession | null> => {
+    const session = this.state.session;
+    if (
+      !session ||
+      session.id !== id ||
+      session.accessExpiresAt !== accessExpiresAt ||
+      session.expiresAt !== expiresAt
+    )
+      return Promise.resolve(null);
+    if (Date.now() >= expiresAt) {
+      this.expireSession(id, expiresAt);
+      return Promise.resolve(null);
+    }
+    if (Date.now() < accessExpiresAt) return Promise.resolve(session);
+    // Hide expired access immediately, while keeping the durable refresh eligible.
+    this.publish({});
+    return this.recheck();
   };
   private restoreSession(background: boolean): Promise<UserSession | null> {
     if (this.restoreFlight) return this.restoreFlight;
