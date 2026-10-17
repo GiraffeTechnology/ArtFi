@@ -730,19 +730,21 @@ function WholeArtworkListingScreen({
       await grounding();
       operation.assertCurrent();
       setStage("approving");
-      await verifyWholeArtworkSale({
-        client: publicClient,
-        intent,
-        signature,
-        buyer: address,
-        expectedChainId: supportedChain.id,
-        domain: { chainId: supportedChain.id, verifyingContract: market },
-      });
+      const checkSale = () =>
+        verifyWholeArtworkSale({
+          client: publicClient,
+          intent,
+          signature,
+          buyer: address,
+          expectedChainId: supportedChain.id,
+          domain: { chainId: supportedChain.id, verifyingContract: market },
+        });
       operation.assertCurrent();
       await operation.settle({
         onStage: setStage,
         approvePayment: async () => {
           await grounding();
+          await checkSale();
           operation!.assertCurrent();
           return writeContractAsync({
             abi: fractionTokenAbi,
@@ -755,6 +757,7 @@ function WholeArtworkListingScreen({
         },
         settle: async () => {
           await grounding();
+          await checkSale();
           operation!.assertCurrent();
           return writeContractAsync({
             abi: wholeArtworkMarketAbi,
