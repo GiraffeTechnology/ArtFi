@@ -102,7 +102,12 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid marketplace source", "The requested source is not approved.")
 		return
 	}
-	page, pageSize := pagination(request)
+	queryInput, err := parseMarketCatalogQuery(request.URL.Query())
+	if err != nil {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid catalog query", err.Error())
+		return
+	}
+	page, pageSize := queryInput.Page, queryInput.PageSize
 	contract := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("contract")))
 	if contract != "" && !addressPattern.MatchString(contract) {
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid contract", "Contract must be a 20-byte Ethereum address.")
@@ -115,25 +120,6 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 		where += " AND contract_address = ?"
 		args = append(args, contract)
 	}
-	var total int
-	countRows, err := service.db.QueryContext(request.Context(), `
-		SELECT COUNT(*) FROM (
-			SELECT chain_name, contract_address, token_id FROM external_market_events
-			WHERE `+where+` GROUP BY chain_name, contract_address, token_id
-		) catalog`, args...)
-	if err != nil {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog could not be counted.")
-		return
-	}
-	if countRows.Next() {
-		err = countRows.Scan(&total)
-	}
-	countRows.Close()
-	if err != nil {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog count could not be decoded.")
-		return
-	}
-
 	query := `
 		WITH ranked AS (
 			SELECT source, chain_name, contract_address, token_id,
@@ -155,11 +141,12 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 			       ) AS rn
 			FROM external_market_orders
 		)
+  , catalog AS (
 		SELECT ranked.source, ranked.chain_name, ranked.contract_address, ranked.token_id,
 		       ranked.collection_slug, ranked.event_type, ranked.event_timestamp,
-		       COALESCE(latest_orders.order_hash, ''), COALESCE(latest_orders.status, ''),
-		       COALESCE(latest_orders.price, ''), COALESCE(latest_orders.payment_symbol, ''),
-		       COALESCE(latest_orders.marketplace_url, '')
+		       COALESCE(latest_orders.order_hash, '') AS order_hash, COALESCE(latest_orders.status, '') AS order_status,
+		       COALESCE(latest_orders.price, '') AS price, COALESCE(latest_orders.payment_symbol, '') AS payment_symbol,
+		       COALESCE(latest_orders.marketplace_url, '') AS marketplace_url
 		FROM ranked
 		LEFT JOIN latest_orders ON latest_orders.source = ranked.source
 		 AND latest_orders.chain_name = ranked.chain_name
@@ -167,9 +154,34 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 		 AND latest_orders.token_id = ranked.token_id
 		 AND latest_orders.rn = 1
 		WHERE ranked.rn = 1
-		ORDER BY ranked.event_timestamp DESC, ranked.contract_address, ranked.token_id
-		LIMIT ? OFFSET ?`
-	queryArgs := append(args, pageSize, (page-1)*pageSize)
+		)
+  `
+	filterWhere, filterArgs := queryInput.filterSQL()
+	countArgs := append(append([]any{}, args...), filterArgs...)
+	var total int
+	countRows, err := service.db.QueryContext(request.Context(), query+"SELECT COUNT(*) FROM catalog"+filterWhere, countArgs...)
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog could not be counted.")
+		return
+	}
+	if !countRows.Next() {
+		err = countRows.Err()
+		if err == nil {
+			err = sql.ErrNoRows
+		}
+	} else {
+		err = countRows.Scan(&total)
+	}
+	if err == nil {
+		err = countRows.Err()
+	}
+	countRows.Close()
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog count could not be decoded.")
+		return
+	}
+	query += "SELECT source, chain_name, contract_address, token_id, collection_slug, event_type, event_timestamp, order_hash, order_status, price, payment_symbol, marketplace_url FROM catalog" + filterWhere + queryInput.orderSQL() + " LIMIT ? OFFSET ?"
+	queryArgs := append(append([]any{}, countArgs...), pageSize, (page-1)*pageSize)
 	rows, err := service.db.QueryContext(request.Context(), query, queryArgs...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog could not be queried.")
@@ -197,6 +209,7 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 	writeJSON(writer, http.StatusOK, map[string]any{
 		"data": items, "total": total, "page": page, "pageSize": pageSize,
 		"schemaVersion": "1", "source": source, "runtime": true,
+		"q": queryInput.Q, "listingStatus": queryInput.ListingStatus, "sort": queryInput.Sort,
 	})
 }
 

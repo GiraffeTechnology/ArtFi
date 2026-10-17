@@ -21,16 +21,21 @@ import {
 
 const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
 
+import { type MarketAsset } from "@/lib/complete-market-catalog";
 import {
-  readCompleteMarketCatalog,
-  type MarketAsset,
-} from "@/lib/complete-market-catalog";
+  fetchMarketCatalogPage,
+  marketCatalogQuery,
+} from "@/lib/market-catalog-query";
 
 export function LiveMarketCatalog() {
   const [assets, setAssets] = useState<readonly MarketAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string>();
   const [query, setQuery] = useState("");
+  const [draftQuery, setDraftQuery] = useState("");
+  const [inputError, setInputError] = useState<string>();
+  const [total, setTotal] = useState<number>();
+  const [attempt, setAttempt] = useState(0);
   const [listingStatus, setListingStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [page, setPage] = useState(1);
@@ -48,14 +53,17 @@ export function LiveMarketCatalog() {
     }, 15000);
     setLoading(true);
     try {
-      const collected = await readCompleteMarketCatalog(
+      const result = await fetchMarketCatalogPage(
         fetch,
         apiURL,
+        { q: query, listingStatus, sort: sortOrder },
+        page,
         controller.signal,
       );
       if (requestInFlight.current !== controller || controller.signal.aborted)
         return;
-      setAssets(collected);
+      setAssets(result.data);
+      setTotal(result.total);
       setCatalogError(undefined);
     } catch (error) {
       if (
@@ -64,9 +72,10 @@ export function LiveMarketCatalog() {
       )
         return;
       setAssets([]);
+      setTotal(undefined);
       setCatalogError(
         timedOut
-          ? "The market catalog refresh timed out before the complete scan finished."
+          ? "The market catalog page could not be read before the refresh timeout."
           : error instanceof Error
             ? error.message
             : "Live market data is unavailable.",
@@ -78,7 +87,7 @@ export function LiveMarketCatalog() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [page, query, listingStatus, sortOrder, attempt]);
 
   useEffect(() => {
     const initial = window.setTimeout(() => void loadCatalog(), 0);
@@ -101,75 +110,62 @@ export function LiveMarketCatalog() {
       : undefined;
   }, [assets]);
 
-  const filteredAssets = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const result = assets.filter((asset) => {
-      const matchesQuery =
-        normalizedQuery === "" ||
-        [
-          asset.collectionSlug,
-          asset.contractAddress,
-          asset.tokenId,
-          asset.chain,
-        ].some((value) => value?.toLowerCase().includes(normalizedQuery));
-      const active = asset.orderStatus === "active" && Boolean(asset.orderHash);
-      const matchesStatus =
-        listingStatus === "all" ||
-        (listingStatus === "active" ? active : !active);
-      return matchesQuery && matchesStatus;
-    });
-    return result.toSorted((left, right) => {
-      if (sortOrder === "oldest") {
-        return (
-          Date.parse(left.latestEventTimestamp) -
-          Date.parse(right.latestEventTimestamp)
-        );
-      }
-      if (sortOrder === "token") {
-        const contract = left.contractAddress.localeCompare(
-          right.contractAddress,
-        );
-        if (contract !== 0) return contract;
-        return BigInt(left.tokenId) < BigInt(right.tokenId) ? -1 : 1;
-      }
-      return (
-        Date.parse(right.latestEventTimestamp) -
-        Date.parse(left.latestEventTimestamp)
-      );
-    });
-  }, [assets, listingStatus, query, sortOrder]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const visibleAssets = filteredAssets.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
+  const totalPages = Math.max(1, Math.ceil((total ?? 0) / pageSize));
+  const currentPage = page;
+  const visibleAssets = assets;
+  function clearCurrentPage() {
+    setAssets([]);
+    setTotal(undefined);
+    setCatalogError(undefined);
+    setLoading(true);
+  }
+  function selectPage(next: number) {
+    clearCurrentPage();
+    setPage(next);
+  }
 
   return (
     <section className="live-market" aria-live="polite">
       <form
         className="market-filters"
         aria-label="Search and filter mirrored NFTs"
-        onSubmit={(event) => event.preventDefault()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          try {
+            marketCatalogQuery(
+              { q: draftQuery, listingStatus, sort: sortOrder },
+              1,
+            );
+          } catch {
+            setInputError(
+              "Use at most 100 search characters without control characters.",
+            );
+            return;
+          }
+          setInputError(undefined);
+          clearCurrentPage();
+          setQuery(draftQuery.trim());
+          setPage(1);
+          setAttempt((value) => value + 1);
+        }}
       >
         <label>
           Search
           <input
             type="search"
             placeholder="Collection, contract, token or chain"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.currentTarget.value);
-              setPage(1);
-            }}
+            value={draftQuery}
+            maxLength={200}
+            onChange={(event) => setDraftQuery(event.currentTarget.value)}
           />
         </label>
         <label>
           Listing status
           <select
+            data-translate-options="static"
             value={listingStatus}
             onChange={(event) => {
+              clearCurrentPage();
               setListingStatus(event.currentTarget.value);
               setPage(1);
             }}
@@ -182,18 +178,41 @@ export function LiveMarketCatalog() {
         <label>
           Sort
           <select
+            data-translate-options="static"
             value={sortOrder}
             onChange={(event) => {
+              clearCurrentPage();
               setSortOrder(event.currentTarget.value);
               setPage(1);
             }}
           >
             <option value="newest">Newest observed</option>
             <option value="oldest">Oldest observed</option>
-            <option value="token">Contract and token</option>
+            <option value="token">Chain, contract and token</option>
           </select>
         </label>
+        <button type="submit" disabled={loading}>
+          Search catalog
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setDraftQuery("");
+            setQuery("");
+            setListingStatus("all");
+            setSortOrder("newest");
+            setInputError(undefined);
+            clearCurrentPage();
+            setPage(1);
+            setAttempt((value) => value + 1);
+          }}
+        >
+          Clear search and filters
+        </button>
       </form>
+      {inputError && <p role="alert">{inputError}</p>}
+      {query && <p data-no-translate>Applied search: {query}</p>}
 
       <div className="filter-bar" aria-label="Live market status">
         <span>OpenSea information mirror</span>
@@ -202,11 +221,11 @@ export function LiveMarketCatalog() {
             ? "Loading…"
             : catalogError
               ? "Market data unavailable"
-              : `${visibleAssets.length} shown · ${filteredAssets.length} matched · ${assets.length} total`}
+              : `${visibleAssets.length} shown · ${total ?? 0} matched across the catalog`}
         </span>
         <span>
           {lastObserved
-            ? `Observed ${formatObserved(lastObserved)}`
+            ? `Latest observation on this page: ${formatObserved(lastObserved)}`
             : catalogError
               ? "Awaiting a successful refresh"
               : "Awaiting source events"}
@@ -214,8 +233,9 @@ export function LiveMarketCatalog() {
       </div>
 
       <p>
-        Search and filters cover this completed observation scan. Source records
-        may change between page reads; this is not an atomic inventory snapshot.
+        Search, status and sorting are applied across the mirrored catalog
+        before pagination. Each page is an observation; source records can
+        change between reads. This is not an atomic inventory snapshot.
       </p>
 
       {catalogError ? (
@@ -240,21 +260,13 @@ export function LiveMarketCatalog() {
       ) : null}
       {!loading && !catalogError && assets.length === 0 ? (
         <div className="market-runtime-state">
-          <strong>No OpenSea assets observed yet</strong>
+          <strong>
+            {query || listingStatus !== "all"
+              ? "No records match these filters"
+              : "No OpenSea assets observed yet"}
+          </strong>
           <span>
             The page will populate only from attributed runtime events.
-          </span>
-        </div>
-      ) : null}
-      {!loading &&
-      !catalogError &&
-      assets.length > 0 &&
-      filteredAssets.length === 0 ? (
-        <div className="market-runtime-state">
-          <strong>No records match these filters</strong>
-          <span>
-            Change the search text or listing status. Runtime data remains
-            unchanged.
           </span>
         </div>
       ) : null}
@@ -334,25 +346,58 @@ export function LiveMarketCatalog() {
         })}
       </div>
 
-      {filteredAssets.length > pageSize ? (
+      {(total !== undefined && total > pageSize) || page > 1 ? (
         <nav className="market-pagination" aria-label="Market result pages">
           <button
             type="button"
-            disabled={currentPage === 1}
-            onClick={() => setPage((value) => Math.max(1, value - 1))}
+            disabled={loading || currentPage === 1}
+            onClick={() => selectPage(Math.max(1, page - 1))}
           >
             Previous
           </button>
           <span>
-            Page {currentPage} of {totalPages}
+            {total === undefined
+              ? `Requested page ${page}`
+              : `Page ${currentPage} of ${totalPages}`}
           </span>
           <button
             type="button"
-            disabled={currentPage === totalPages}
-            onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+            disabled={
+              loading ||
+              Boolean(catalogError) ||
+              total === undefined ||
+              currentPage >= totalPages ||
+              page >= 1000000
+            }
+            onClick={() => selectPage(page + 1)}
           >
             Next
           </button>
+          <button
+            type="button"
+            disabled={loading || page === 1}
+            onClick={() => selectPage(1)}
+          >
+            First page
+          </button>
+          <button
+            type="button"
+            disabled={
+              loading ||
+              Boolean(catalogError) ||
+              total === undefined ||
+              page >= totalPages ||
+              totalPages > 1000000
+            }
+            onClick={() => selectPage(totalPages)}
+          >
+            Last page
+          </button>
+          {totalPages > 1000000 && (
+            <p>
+              Narrow the search to reach results beyond the bounded page range.
+            </p>
+          )}
         </nav>
       ) : null}
     </section>

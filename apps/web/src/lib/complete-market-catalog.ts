@@ -34,7 +34,7 @@ function text(value: unknown): string {
   check(typeof value === "string" && value.length > 0 && value.length <= 2048);
   return value;
 }
-function asset(value: unknown): MarketAsset {
+export function readMarketAsset(value: unknown): MarketAsset {
   const row = record(value);
   check(row.source === "opensea");
   const chain = text(row.chain);
@@ -134,7 +134,7 @@ export async function readCompleteMarketCatalog(
           Math.min(pageSize, expectedTotal - collected.length),
     );
     for (const value of body.data) {
-      const item = asset(value);
+      const item = readMarketAsset(value);
       const identity = JSON.stringify([
         item.source,
         item.chain,
