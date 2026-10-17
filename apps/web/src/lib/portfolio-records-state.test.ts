@@ -14,7 +14,7 @@ const records = (owner = address) => ({
       assetToken: address,
       symbol: "TEST",
       balance: "2",
-      updatedAt: "2026-10-02",
+      updatedAt: "2026-10-02T00:00:00Z",
     },
   ],
   transactions: [],
