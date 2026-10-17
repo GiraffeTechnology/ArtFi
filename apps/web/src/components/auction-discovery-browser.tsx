@@ -13,6 +13,10 @@ import {
   type AuctionDiscoveryPage,
 } from "@/lib/auction-discovery-pages";
 import type { AuctionDiscoveryCursor } from "@/lib/auction-discovery-model";
+import {
+  orderAuctionDiscoveryRows,
+  type AuctionDiscoveryOrder,
+} from "@/lib/auction-discovery-view";
 import styles from "./auction-history-browser.module.css";
 
 const errors: Record<PublicHistoryFailure, string> = {
@@ -56,6 +60,7 @@ export function AuctionDiscoveryBrowser({
     [selecting, setSelecting] = useState(false),
     [selectionProblem, setSelectionProblem] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
+  const [order, setOrder] = useState<AuctionDiscoveryOrder>("newest");
   const pager = useMemo(
     () =>
       createPublicBlockHistoryPager<
@@ -93,10 +98,12 @@ export function AuctionDiscoveryBrowser({
   }, [pager, query.request]);
   const page = state.phase === "ready" ? state.page : null;
   const busy = state.pending || selecting || state.phase === "paused";
-  const shown =
+  const shown = orderAuctionDiscoveryRows(
     page?.listings.filter(
       (listing) => stateFilter === "all" || listing.state === stateFilter,
-    ) ?? [];
+    ) ?? [],
+    order,
+  );
   return (
     <section
       className={styles.workspace}
@@ -273,6 +280,30 @@ export function AuctionDiscoveryBrowser({
               <option value="cancelled">Cancelled</option>
             </select>
           </label>
+          <label>
+            Order within this page
+            <select
+              value={order}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (
+                  value === "newest" ||
+                  value === "oldest" ||
+                  value === "ends-first"
+                )
+                  setOrder(value);
+              }}
+            >
+              <option value="newest">Latest creation first</option>
+              <option value="oldest">Earliest creation first</option>
+              <option value="ends-first">Earliest end at snapshot first</option>
+            </select>
+          </label>
+          <p>
+            Ordering applies to these verified rows only. Other pages are
+            separate results; end times at the snapshot do not establish current
+            bidding eligibility.
+          </p>
           {shown.length ? (
             <ol className={styles.events}>
               {shown.map((listing) => (
