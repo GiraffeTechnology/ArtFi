@@ -9,7 +9,7 @@ import {
   isTranslatableSource,
   needsTranslation,
   proofreaderWarningsAreSafe,
-  protectedTermsIntact,
+  isSafeUiTranslation,
   translationSourceFor,
   translationTargetFor,
   type UiLocale,
@@ -75,6 +75,7 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
   const cached = cache.get(key);
   if (
     cached &&
+    isSafeUiTranslation(sourceText, cached) &&
     cached.length <= MAX_TRANSLATED_TEXT_BYTES &&
     new TextEncoder().encode(cached).byteLength <= MAX_TRANSLATED_TEXT_BYTES
   )
@@ -120,7 +121,7 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
       !body.model.trim() ||
       !Array.isArray(body.warnings) ||
       !proofreaderWarningsAreSafe(body.proofreader, body.warnings) ||
-      !protectedTermsIntact(sourceText, translated)
+      !isSafeUiTranslation(sourceText, translated)
     ) {
       throw new Error("INVALID_TRANSLATION_RESPONSE");
     }

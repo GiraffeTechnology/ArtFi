@@ -251,6 +251,7 @@ describe("bounded upstream results and English fallback", () => {
     "does not cache a response over the byte cap with header %s",
     async (length) => {
       const source = `Oversized upstream source ${length ?? "absent"}`;
+      const validOutput = `Reponse valide${length === "1" ? " 1" : ""}`;
       const oversized = JSON.stringify({
         ...translated("Too large envelope"),
         padding: "x".repeat(MAX_TRANSLATION_RESPONSE_BYTES),
@@ -264,7 +265,7 @@ describe("bounded upstream results and English fallback", () => {
           }),
         )
         .mockResolvedValueOnce(
-          new Response(JSON.stringify(translated("Reponse valide"))),
+          new Response(JSON.stringify(translated(validOutput))),
         );
       vi.stubGlobal("fetch", fetch);
       const { translatePageTexts } = await import("./language-server");
@@ -275,7 +276,7 @@ describe("bounded upstream results and English fallback", () => {
       expect(first.cancel).toHaveBeenCalledOnce();
       expect(await translatePageTexts([source], "fr")).toEqual({
         degraded: false,
-        translations: ["Reponse valide"],
+        translations: [validOutput],
       });
       expect(fetch).toHaveBeenCalledTimes(2);
     },
@@ -352,5 +353,70 @@ describe("bounded upstream results and English fallback", () => {
       translations: ["Stalled body English source"],
     });
     expect(cancel).toHaveBeenCalledOnce();
+  });
+});
+
+describe("translation fact preservation and old-cache revalidation", () => {
+  it.each([
+    "Acheter 100 unités pour 0.01 ETH",
+    "Acheter 10 unités pour 0.1 ETH",
+    "Acheter 10 unités pour 0.01 USDC",
+    "Acheter 10 unités",
+  ])(
+    "falls back to exact original copy and does not cache changed facts: %s",
+    async (candidate) => {
+      const source = "Buy 10 units for 0.01 ETH";
+      const valid = "Acheter 10 unités pour 0.01 ETH";
+      const fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(translated(candidate))),
+        )
+        .mockResolvedValueOnce(new Response(JSON.stringify(translated(valid))));
+      vi.stubGlobal("fetch", fetch);
+      const { translatePageTexts } = await import("./language-server");
+      expect(await translatePageTexts([source], "fr")).toEqual({
+        degraded: true,
+        translations: [source],
+      });
+      expect(runtime.__artfiTranslationCache!.has(`fr\u0000${source}`)).toBe(
+        false,
+      );
+      expect(await translatePageTexts([source], "fr")).toEqual({
+        degraded: false,
+        translations: [valid],
+      });
+      expect(fetch).toHaveBeenCalledTimes(2);
+    },
+  );
+  it("revalidates and replaces a numerically unsafe cache from an earlier version", async () => {
+    const source = "Maximum 100 USDC";
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(translated("Maximum autorisé 100 USDC"))),
+      );
+    vi.stubGlobal("fetch", fetch);
+    const { translatePageTexts } = await import("./language-server");
+    runtime.__artfiTranslationCache!.set(
+      `fr\u0000${source}`,
+      "Maximum 1000 USDC",
+    );
+    expect(await translatePageTexts([source], "fr")).toEqual({
+      degraded: false,
+      translations: ["Maximum autorisé 100 USDC"],
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it("never submits a technical identity embedded in a sentence to the provider", async () => {
+    const source = `Transaction confirmed: 0x${"a".repeat(64)}`;
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const { translatePageTexts } = await import("./language-server");
+    expect(await translatePageTexts([source], "fr")).toEqual({
+      degraded: false,
+      translations: [source],
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
