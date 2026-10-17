@@ -18,6 +18,7 @@ import { publicSetting } from "@/lib/public-runtime-config";
 import { supportedChain } from "@/lib/wagmi";
 import { AuctionLiveObservation } from "./auction-live-observation";
 import { AuctionHistoryBrowser } from "./auction-history-browser";
+import { AuctionDiscoveryBrowser } from "./auction-discovery-browser";
 import { useUserSession } from "./user-session-provider";
 import {
   assertTradingSession,
@@ -599,6 +600,13 @@ function AuctionWorkbench() {
             </button>
           ))}
         </nav>
+      )}
+      {market && (
+        <AuctionDiscoveryBrowser
+          market={market}
+          disabled={blocked}
+          onInspect={(value) => run(() => refresh(value))}
+        />
       )}
       {snapshot && (
         <article className="nft-market-card">
