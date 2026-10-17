@@ -1,5 +1,10 @@
 import { publicSetting } from "@/lib/public-runtime-config";
 import "server-only";
+import {
+  maximumUserJSONBytes,
+  readUserJSON,
+  UserJSONError,
+} from "./user-auth-json";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
@@ -19,7 +24,7 @@ export const userRefreshCookie = "artfi_user_refresh";
 export const userChallengeCookie = "artfi_user_challenge";
 export const userAccessPath = "/api";
 export const userAuthPath = "/api/user/auth";
-export const maximumAuthBytes = 16_384;
+export const maximumAuthBytes = maximumUserJSONBytes;
 
 export type UserSession = {
   id: string;
@@ -91,33 +96,15 @@ export function assertUserRequestOrigin(request: Request) {
 export async function readBoundedJSON(
   request: Request | Response,
 ): Promise<unknown> {
-  const declared = request.headers.get("content-length");
-  if (
-    declared &&
-    (!/^\d+$/.test(declared) || Number(declared) > maximumAuthBytes)
-  )
-    throw new UserAuthError(413, "The sign-in request is too large.");
-  const reader = request.body?.getReader();
-  if (!reader) throw new UserAuthError(400, "A JSON request is required.");
-  const chunks: Uint8Array[] = [];
-  let size = 0;
   try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > maximumAuthBytes) {
-        await reader.cancel();
-        throw new UserAuthError(413, "The sign-in request is too large.");
-      }
-      chunks.push(value);
-    }
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return await readUserJSON(request, {
+      signal: request instanceof Request ? request.signal : undefined,
+      timeoutMs: 8_000,
+    });
   } catch (error) {
-    if (error instanceof UserAuthError) throw error;
+    if (error instanceof UserJSONError && error.reason === "too-large")
+      throw new UserAuthError(413, "The sign-in request is too large.");
     throw new UserAuthError(400, "A valid JSON request is required.");
-  } finally {
-    reader.releaseLock();
   }
 }
 
@@ -152,6 +139,7 @@ export async function userAuthRequest<T>(
   const body = JSON.stringify(payload);
   const credential = bridgeSecret();
   let response: Response;
+  const signal = AbortSignal.timeout(8_000);
   try {
     response = await fetch(userAuthUpstreamURL(action), {
       method: "POST",
@@ -162,13 +150,13 @@ export async function userAuthRequest<T>(
       body,
       cache: "no-store",
       redirect: "error",
-      signal: AbortSignal.timeout(8_000),
+      signal,
     });
   } catch {
     throw new UserAuthError(503, "Wallet sign-in API is unavailable.");
   }
   if (!response.ok) {
-    await response.body?.cancel();
+    void response.body?.cancel().catch(() => undefined);
     const status = [400, 401, 403, 409, 429].includes(response.status)
       ? response.status
       : 503;
@@ -181,7 +169,7 @@ export async function userAuthRequest<T>(
   }
   if (response.status === 204) return undefined as T;
   try {
-    return (await readBoundedJSON(response)) as T;
+    return (await readUserJSON(response, { signal, timeoutMs: 8_000 })) as T;
   } catch {
     throw new UserAuthError(
       503,
