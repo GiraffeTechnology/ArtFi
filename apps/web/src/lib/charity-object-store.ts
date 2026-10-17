@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash, createHmac } from "node:crypto";
+import { performance } from "node:perf_hooks";
 
 import type { CharityHolderAsset } from "./charity-assets";
 
@@ -31,6 +32,8 @@ import type { CharityHolderAsset } from "./charity-assets";
 
 /** A hard ceiling independent of the descriptor, so a bad `byteLength` cannot exhaust memory. */
 export const maxHolderObjectBytes = 64 * 1024 * 1024;
+/** Total time for the existing private GET, including headers and body. */
+export const maxHolderReadDurationMs = 30_000;
 
 export type HolderObjectConfig = {
   endpoint: URL;
@@ -206,30 +209,144 @@ export async function fetchHolderObject(
   now: Date = new Date(),
 ): Promise<ObjectDelivery> {
   if (!config) return { ok: false, refusal: "not-configured" };
-  if (asset.byteLength > maxHolderObjectBytes) {
+  // Freeze the descriptor values used by this read before the first asynchronous step.
+  const selected = { ...asset };
+  if (!Number.isSafeInteger(selected.byteLength) || selected.byteLength <= 0) {
+    return { ok: false, refusal: "size-mismatch" };
+  }
+  if (selected.byteLength > maxHolderObjectBytes) {
     return { ok: false, refusal: "too-large" };
   }
 
-  const signed = signedGetRequest(config, asset.objectKey, now);
-  let response: Response;
-  try {
-    response = await fetchImpl(signed.url, {
-      method: "GET",
-      headers: signed.headers,
-      cache: "no-store",
-      redirect: "error",
-    });
-  } catch {
-    return { ok: false, refusal: "unreachable" };
-  }
-  if (!response.ok) return { ok: false, refusal: "unreachable" };
+  const controller = new AbortController();
+  const expiresAt = performance.now() + maxHolderReadDurationMs;
+  let timedOut = false;
+  let bodyComplete = false;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  const unavailable = (): ObjectDelivery => ({
+    ok: false,
+    refusal: "unreachable",
+  });
+  const expired = () => timedOut || performance.now() >= expiresAt;
+  const releaseReader = (cancel: boolean) => {
+    const active = reader;
+    reader = undefined;
+    if (!active) return;
+    // Cleanup cannot extend the public deadline if an upstream cancellation never settles.
+    if (cancel) {
+      try {
+        void active.cancel().catch(() => undefined);
+      } catch {
+        /* Best effort. */
+      }
+    }
+    try {
+      active.releaseLock();
+    } catch {
+      /* Already released. */
+    }
+  };
+  const discard = (response: Response) => {
+    try {
+      void response.body?.cancel().catch(() => undefined);
+    } catch {
+      /* Best effort. */
+    }
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<ObjectDelivery>((resolve) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      releaseReader(true);
+      resolve(unavailable());
+    }, maxHolderReadDurationMs);
+  });
 
-  let bytes: Uint8Array;
-  try {
-    bytes = new Uint8Array(await response.arrayBuffer());
-  } catch {
-    return { ok: false, refusal: "unreachable" };
-  }
+  const readVerified = async (): Promise<ObjectDelivery> => {
+    try {
+      const signed = signedGetRequest(config, selected.objectKey, now);
+      const response = await fetchImpl(signed.url, {
+        method: "GET",
+        headers: signed.headers,
+        cache: "no-store",
+        redirect: "error",
+        signal: controller.signal,
+      });
+      if (expired() || !response.ok) {
+        discard(response);
+        return unavailable();
+      }
+      const declared = response.headers.get("content-length");
+      if (declared !== null) {
+        if (!/^[0-9]+$/.test(declared)) {
+          discard(response);
+          return { ok: false, refusal: "size-mismatch" };
+        }
+        const length = Number(declared);
+        if (length > maxHolderObjectBytes) {
+          discard(response);
+          return { ok: false, refusal: "too-large" };
+        }
+        if (!Number.isSafeInteger(length) || length !== selected.byteLength) {
+          discard(response);
+          return { ok: false, refusal: "size-mismatch" };
+        }
+      }
+      if (expired()) {
+        discard(response);
+        return unavailable();
+      }
+      if (!response.body) {
+        bodyComplete = true;
+        return { ok: false, refusal: "size-mismatch" };
+      }
+      const active = response.body.getReader();
+      reader = active;
+      // At most the approved descriptor size is retained. Incoming chunks are checked
+      // before copying, including when Content-Length is absent or misleading.
+      let bytes = new Uint8Array(Math.min(selected.byteLength, 64 * 1024));
+      let size = 0;
+      while (true) {
+        if (expired()) return unavailable();
+        const part = await active.read();
+        if (expired()) return unavailable();
+        if (part.done) {
+          bodyComplete = true;
+          break;
+        }
+        if (!(part.value instanceof Uint8Array)) return unavailable();
+        const end = size + part.value.byteLength;
+        if (end > maxHolderObjectBytes)
+          return { ok: false, refusal: "too-large" };
+        if (end > selected.byteLength)
+          return { ok: false, refusal: "size-mismatch" };
+        if (end > bytes.byteLength) {
+          const expanded = new Uint8Array(
+            Math.min(selected.byteLength, Math.max(end, bytes.byteLength * 2)),
+          );
+          expanded.set(bytes.subarray(0, size));
+          bytes = expanded;
+        }
+        bytes.set(part.value, size);
+        size = end;
+      }
+      if (size !== selected.byteLength)
+        return { ok: false, refusal: "size-mismatch" };
+      if (expired()) return unavailable();
+      return verifyHolderBytes(selected, bytes);
+    } catch {
+      return unavailable();
+    }
+  };
 
-  return verifyHolderBytes(asset, bytes);
+  try {
+    // One outer race covers headers and the entire body. Per-chunk deadline
+    // checks also bound an upstream producing only immediately resolved reads.
+    return await Promise.race([readVerified(), deadline]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (!bodyComplete) controller.abort();
+    releaseReader(!bodyComplete);
+  }
 }
