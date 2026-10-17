@@ -21,72 +21,62 @@ import {
 
 const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
 
-type MarketAsset = {
-  source: string;
-  chain: string;
-  contractAddress: string;
-  tokenId: string;
-  collectionSlug?: string;
-  latestEventType: string;
-  latestEventTimestamp: string;
-  orderHash?: string;
-  orderStatus?: string;
-  price?: string;
-  paymentSymbol?: string;
-  marketplaceUrl?: string;
-};
-
-type MarketCatalogResponse = {
-  data: MarketAsset[];
-  total: number;
-  runtime: true;
-};
+import {
+  readCompleteMarketCatalog,
+  type MarketAsset,
+} from "@/lib/complete-market-catalog";
 
 export function LiveMarketCatalog() {
-  const [assets, setAssets] = useState<MarketAsset[]>([]);
+  const [assets, setAssets] = useState<readonly MarketAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string>();
   const [query, setQuery] = useState("");
   const [listingStatus, setListingStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [page, setPage] = useState(1);
-  const requestInFlight = useRef(false);
+  const requestInFlight = useRef<AbortController | null>(null);
   const pageSize = 12;
 
   const loadCatalog = useCallback(async () => {
     if (requestInFlight.current) return;
-    requestInFlight.current = true;
+    const controller = new AbortController();
+    requestInFlight.current = controller;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 15000);
     setLoading(true);
     try {
-      const collected: MarketAsset[] = [];
-      let sourcePage = 1;
-      let total = 0;
-      do {
-        const response = await fetch(
-          `${apiURL}/v1/market/assets?source=opensea&page=${sourcePage}&pageSize=100`,
-          { cache: "no-store" },
-        );
-        if (!response.ok) throw await responseError(response);
-        const body = (await response.json()) as MarketCatalogResponse;
-        if (body.runtime !== true || !Array.isArray(body.data)) {
-          throw new Error("The market catalog response is not runtime data.");
-        }
-        collected.push(...body.data);
-        total = body.total;
-        sourcePage += 1;
-      } while (collected.length < total && sourcePage <= 100);
+      const collected = await readCompleteMarketCatalog(
+        fetch,
+        apiURL,
+        controller.signal,
+      );
+      if (requestInFlight.current !== controller || controller.signal.aborted)
+        return;
       setAssets(collected);
       setCatalogError(undefined);
     } catch (error) {
+      if (
+        requestInFlight.current !== controller ||
+        (controller.signal.aborted && !timedOut)
+      )
+        return;
       setAssets([]);
       setCatalogError(
-        error instanceof Error
-          ? error.message
-          : "Live market data is unavailable.",
+        timedOut
+          ? "The market catalog refresh timed out before the complete scan finished."
+          : error instanceof Error
+            ? error.message
+            : "Live market data is unavailable.",
       );
     } finally {
-      requestInFlight.current = false;
-      setLoading(false);
+      window.clearTimeout(timeout);
+      if (requestInFlight.current === controller) {
+        requestInFlight.current = null;
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -96,6 +86,9 @@ export function LiveMarketCatalog() {
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(interval);
+      const pending = requestInFlight.current;
+      requestInFlight.current = null;
+      pending?.abort();
     };
   }, [loadCatalog]);
 
@@ -219,6 +212,11 @@ export function LiveMarketCatalog() {
               : "Awaiting source events"}
         </span>
       </div>
+
+      <p>
+        Search and filters cover this completed observation scan. Source records
+        may change between page reads; this is not an atomic inventory snapshot.
+      </p>
 
       {catalogError ? (
         <div
@@ -359,16 +357,6 @@ export function LiveMarketCatalog() {
       ) : null}
     </section>
   );
-}
-
-async function responseError(response: Response) {
-  const fallback = `Request failed with status ${response.status}.`;
-  try {
-    const body = (await response.json()) as { detail?: string };
-    return new Error(body.detail || fallback);
-  } catch {
-    return new Error(fallback);
-  }
 }
 
 function shortAddress(value: string) {
