@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createWholeReceiptApprovalCommitments } from "./whole-receipt-commitments";
 import { encodeFunctionData, keccak256, parseAbi, type Hex } from "viem";
 import { kernelRequestDigest } from "../../../../scripts/agent/agent-kernel.mjs";
 import {
@@ -29,6 +30,7 @@ function fixture() {
     observedActor: a("b"),
     repeatedCallback: false,
     providerWait: undefined as undefined | (() => Promise<void>),
+    beforeGateCallback: undefined as undefined | (() => void),
   };
   const principal = {
     kind: "task" as const,
@@ -89,12 +91,25 @@ function fixture() {
     }),
     value: 0n,
   };
+  const approval = createWholeReceiptApprovalCommitments({
+    kind: native.kind,
+    chainId: native.chainId,
+    request: native.request,
+    wholeReceipt: native.wholeReceipt,
+  }, {
+    tenant: "artfi",
+    origin: "https://artfi.example:9445",
+    taskId: principal.taskId,
+    actor: native.request.account,
+    escrow: native.wholeReceipt.domain.verifyingContract,
+    runtimeCodeHash: h("e"),
+  });
   const slot = {
     phase: "paid" as const,
     nonce: "2",
     calldataHash: keccak256(request.data),
-    planDigest: h("c"),
-    journalBindingHash: h("d"),
+    planDigest: approval.receiptPlanDigest,
+    journalBindingHash: approval.receiptJournalBindingHash,
     gasLimit: "21000",
     maxFeePerGasWei: "2",
     maxPriorityFeePerGasWei: "1",
@@ -153,6 +168,7 @@ function fixture() {
         state.held = true;
         let hash: Hex;
         try {
+          state.beforeGateCallback?.();
           hash = await callback(snapshot, () => {
             if (!state.held) throw Error("SYNTHETIC_NOT_HELD");
           });
@@ -230,6 +246,68 @@ function fixture() {
 }
 
 describe("ArtFi single held receipt action composition", () => {
+  it("refuses a coherent but opaque legacy slot before reserving or invoking the action", async () => {
+    const f = fixture();
+    Object.assign(f.slot, { planDigest: h("c"), journalBindingHash: h("d") });
+    Object.assign(f.options.claimed, { planDigest: h("c"), journalBindingHash: h("d") });
+    Object.assign(f.snapshot.scope, { planDigest: h("c"), journalBindingHash: h("d") });
+    const action = vi.fn(async () => undefined);
+    await expect(
+      createWholeReceiptHeldAction(f.options).authorize(
+        f.principal, f.native, action, f.request,
+      ),
+    ).rejects.toThrow("RECEIPT_APPROVAL_COMMITMENT_REFUSED");
+    expect(f.state.gates).toBe(0);
+    expect(f.state.providerCalls).toBe(0);
+    expect(action).not.toHaveBeenCalled();
+  });
+  it.each(["tenant", "origin", "runtimeCodeHash"] as const)(
+    "refuses stale installation %s content before gate reservation",
+    async (key) => {
+      const f = fixture();
+      if (key === "runtimeCodeHash") f.policy.intent.runtimeCodeHash = h("6");
+      else f.policy[key] = key === "tenant" ? "another-artfi" : "https://another.example:9445";
+      const action = vi.fn(async () => undefined);
+      await expect(
+        createWholeReceiptHeldAction(f.options).authorize(
+          f.principal, f.native, action, f.request,
+        ),
+      ).rejects.toThrow("RECEIPT_APPROVAL_COMMITMENT_REFUSED");
+      expect(f.state.gates).toBe(0);
+      expect(f.state.providerCalls).toBe(0);
+      expect(action).not.toHaveBeenCalled();
+    },
+  );
+  it("compares the genuine held snapshot after pre-reservation validation", async () => {
+    const f = fixture();
+    f.state.beforeGateCallback = () => {
+      f.snapshot.task.policy.origin = "https://changed.example:9445";
+    };
+    const action = vi.fn(async () => undefined);
+    await expect(
+      createWholeReceiptHeldAction(f.options).authorize(
+        f.principal, f.native, action, f.request,
+      ),
+    ).rejects.toThrow("RECEIPT_APPROVAL_COMMITMENT_REFUSED");
+    expect(f.state.gates).toBe(1);
+    expect(f.state.providerCalls).toBe(0);
+    expect(f.state.held).toBe(false);
+    expect(action).not.toHaveBeenCalled();
+  });
+  it("refuses a claimed content digest that differs from the approved slot", async () => {
+    const f = fixture();
+    f.options.claimed.planDigest = h("c");
+    const action = vi.fn(async () => undefined);
+    await expect(
+      createWholeReceiptHeldAction(f.options).authorize(
+        f.principal, f.native, action, f.request,
+      ),
+    ).rejects.toThrow("RECEIPT_APPROVAL_COMMITMENT_REFUSED");
+    expect(f.state.gates).toBe(0);
+    expect(f.state.providerCalls).toBe(0);
+    expect(action).not.toHaveBeenCalled();
+  });
+
   it("keeps the existing journal/CAS callback before the one provider call inside one gate", async () => {
     const f = fixture(),
       port = createWholeReceiptHeldAction(f.options);

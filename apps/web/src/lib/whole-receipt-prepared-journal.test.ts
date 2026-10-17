@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createWholeReceiptApprovalCommitments } from "./whole-receipt-commitments";
 import { encodeFunctionData, keccak256, parseAbi, type Hex } from "viem";
 import { kernelRequestDigest } from "../../../../scripts/agent/agent-kernel.mjs";
 import { nftTaskJournalDigest } from "./nft/task-journal";
@@ -74,12 +75,25 @@ function fixture() {
     maxFeePerGasWei: "2",
     maxPriorityFeePerGasWei: "1",
   };
+  const approval = createWholeReceiptApprovalCommitments({
+    kind: native.kind,
+    chainId: native.chainId,
+    request: native.request,
+    wholeReceipt: native.wholeReceipt,
+  }, {
+    tenant: "artfi",
+    origin: "https://artfi.example:9445",
+    taskId: principal.taskId,
+    actor: native.request.account,
+    escrow: native.wholeReceipt.domain.verifyingContract,
+    runtimeCodeHash: h("e"),
+  });
   const slot = {
     phase: "paid",
     nonce: "2",
     calldataHash: keccak256(wire.data),
-    planDigest: h("c"),
-    journalBindingHash: h("d"),
+    planDigest: approval.receiptPlanDigest,
+    journalBindingHash: approval.receiptJournalBindingHash,
     gasLimit: "21000",
     maxFeePerGasWei: "2",
     maxPriorityFeePerGasWei: "1",
@@ -214,6 +228,49 @@ function fixture() {
 }
 
 describe("receipt preparation and non-send native journal port", () => {
+  it("refuses legacy opaque commitments before writing the native journal", async () => {
+    const f = fixture();
+    Object.assign(f.policy.intent.phases[0]!, { planDigest: h("c"), journalBindingHash: h("d") });
+    Object.assign(f.claimed, { planDigest: h("c"), journalBindingHash: h("d") });
+    Object.assign(f.snapshot.scope, { planDigest: h("c"), journalBindingHash: h("d") });
+    const port = createWholeReceiptPreparedJournal({
+      runtime: f.runtime, claimed: f.claimed, journal: f.journal, now: () => f.state.now,
+    });
+    await expect(port.create(f.native, f.wire)).rejects.toThrow(
+      "RECEIPT_JOURNAL_APPROVAL_COMMITMENT_REFUSED",
+    );
+    expect(f.state.journalCalls).toBe(0);
+  });
+  it.each(["tenant", "origin", "runtimeCodeHash"] as const)(
+    "rejects a stale installation %s on both preparation and recovery",
+    async (key) => {
+      const f = fixture();
+      if (key === "runtimeCodeHash") {
+        f.policy.intent.runtimeCodeHash = h("6");
+        f.snapshot.scope.runtimeCodeHash = h("6");
+      } else f.policy[key] = key === "tenant" ? "another-artfi" : "https://another.example:9445";
+      await expect(f.port.create(f.native, f.wire)).rejects.toThrow(
+        "RECEIPT_JOURNAL_APPROVAL_COMMITMENT_REFUSED",
+      );
+      expect(f.state.journalCalls).toBe(0);
+      await expect(f.port.read()).rejects.toThrow(
+        "RECEIPT_JOURNAL_APPROVAL_COMMITMENT_REFUSED",
+      );
+      expect(f.state.journalCalls).toBe(1);
+    },
+  );
+  it("recomputes the association after the journal await before releasing a recovered row", async () => {
+    const f = fixture();
+    f.state.afterJournal = () => {
+      f.policy.origin = "https://changed.example:9445";
+    };
+    await expect(f.port.read()).rejects.toThrow(
+      "RECEIPT_JOURNAL_APPROVAL_COMMITMENT_REFUSED",
+    );
+    expect(f.state.journalCalls).toBe(1);
+    expect(f.state.held).toBe(false);
+  });
+
   it("creates the full unsigned native plan inside preparation, with no wire, signature or provider action", async () => {
     const f = fixture(),
       result = await f.port.create(f.native, f.wire);
@@ -231,7 +288,7 @@ describe("receipt preparation and non-send native journal port", () => {
     expect(JSON.stringify(f.state.input)).not.toContain(f.wire.data);
     expect(result.operation).toEqual(f.state.row);
     expect(result.executionAuthorization).toBe("NOT_ESTABLISHED");
-    expect(result.approvalCommitments).toBe("NOT_RECOMPUTED");
+    expect(result.approvalCommitments).toBe("CONTENT_MATCHED");
     expect(Object.isFrozen(result.operation.plan.taskPrincipal)).toBe(true);
     expect(Object.keys(f.port).sort()).toEqual([
       "create",

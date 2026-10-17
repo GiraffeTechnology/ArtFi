@@ -502,6 +502,14 @@ export function matchWholeReceiptBusiness(
       ...projected,
       phaseSlot: structuredClone(s),
       runtimeCodeHash: i.runtimeCodeHash,
+      approvalBinding: {
+        tenant: t.tenant,
+        origin: t.origin,
+        taskId: t.taskId,
+        actor: t.actor,
+        escrow: i.escrow,
+        runtimeCodeHash: i.runtimeCodeHash,
+      },
       authorization: "NOT_ESTABLISHED" as const,
     });
   } catch {

@@ -1,5 +1,6 @@
 import "server-only";
 import type { Hex } from "viem";
+import { assertWholeReceiptApprovalPlan } from "./whole-receipt-commitments";
 import {
   matchWholeReceiptBusiness,
   projectWholeReceiptBusiness,
@@ -186,7 +187,8 @@ function transactionHash(raw: unknown): Hex {
  * the real runtime's single gate. The handler's original provider callback is
  * exposed only as an exact, one-use lease wallet INSIDE that held gate.
  *
- * This does not establish missing receipt business/association commitments.
+ * Business/association content is recomputed against the approved phase slot.
+ * Matching content does not establish source authority or authenticate a grant.
  * The existing authenticated native consumer remains mandatory and fail-closed;
  * an unavailable journal/CAS must throw before lease dispatch. No credential,
  * new grant/gate, HTTP endpoint, default provider or signer is constructed. */
@@ -258,6 +260,18 @@ export function createWholeReceiptHeldAction(options: {
           plan.wholeReceipt.domain.verifyingContract.toLowerCase()
       )
         refuse();
+      const approvedContent = (policy: unknown, wire: ReceiptWire) => {
+        const matched = matchWholeReceiptBusiness(plan, policy, wire);
+        if (
+          matched.phaseSlot.planDigest !== claimed.planDigest ||
+          matched.phaseSlot.journalBindingHash !== claimed.journalBindingHash
+        )
+          refuse("RECEIPT_APPROVAL_COMMITMENT_REFUSED");
+        assertWholeReceiptApprovalPlan(plan, matched.approvalBinding, {
+          receiptPlanDigest: matched.phaseSlot.planDigest,
+          receiptJournalBindingHash: matched.phaseSlot.journalBindingHash,
+        });
+      };
       let entered = false,
         actionEntered = false,
         dispatched = false,
@@ -281,9 +295,9 @@ export function createWholeReceiptHeldAction(options: {
           const wire = Object.freeze(
             dataFields(rawWire, wireKeys),
           ) as ReceiptWire;
-          // Validate before reserving the Wallet phase. This remains a pure
-          // comparison, not verification of the opaque approval commitments.
-          matchWholeReceiptBusiness(plan, task.policy, wire);
+          // Refuse stale content before reserving the Wallet phase, then repeat
+          // against the actual held snapshot supplied by the genuine runtime.
+          approvedContent(task.policy, wire);
           if (
             wire.account.toLowerCase() !== request.account.toLowerCase() ||
             wire.chainId !== String(request.chainId) ||
@@ -321,7 +335,7 @@ export function createWholeReceiptHeldAction(options: {
               snapshot.scope.nonce !== wire.nonce
             )
               refuse();
-            matchWholeReceiptBusiness(plan, snapshot.task.policy, wire);
+            approvedContent(snapshot.task.policy, wire);
             const lease: ReceiptHeldLease = Object.freeze({
               expiresAtMs: snapshot.expiresAtMs,
               wallet: Object.freeze({
