@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 import { bundleNodePackage } from "./bundle-node-package.mjs";
+import {
+  captureBuildSource,
+  assertBuildSourceUnchanged,
+} from "./build-source-manifest.mjs";
 import { buildTaskListingRuntime } from "./build-task-listing-runtime.mjs";
 import { collectLicenses, copyProjectNotices } from "./licenses.mjs";
 import { bundleContracts } from "./bundle-contracts.mjs";
@@ -45,34 +49,6 @@ function run(exe, args, cwd = root) {
     throw new Error(`Build command failed: ${exe} ${args.join(" ")}`);
 }
 const digest = (body) => createHash("sha256").update(body).digest("hex");
-async function sourceManifest() {
-  const files = execFileSync(
-      "git",
-      ["ls-files", "-co", "--exclude-standard", "-z"],
-      { cwd: root },
-    )
-      .toString()
-      .split("\0")
-      .filter(Boolean)
-      .sort(),
-    hashes = {};
-  for (const file of files) {
-    const st = await lstat(join(root, file));
-    if (st.isFile()) hashes[file] = digest(await readFile(join(root, file)));
-  }
-  return {
-    revision: execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: root,
-      encoding: "utf8",
-    }).trim(),
-    dirty: !!execFileSync("git", ["status", "--porcelain"], {
-      cwd: root,
-      encoding: "utf8",
-    }).trim(),
-    fingerprint: digest(JSON.stringify(hashes)),
-    files: hashes,
-  };
-}
 async function inventory(path, base = path, files = {}, links = {}) {
   for (const name of (await readdir(path)).sort()) {
     const file = join(path, name),
@@ -118,7 +94,7 @@ try {
         throw new Error(
           "Remove local .env files from the build checkout; deployment secrets must not enter the artifact.",
         );
-  const source = await sourceManifest(),
+  const source = await captureBuildSource(root),
     release =
       opts.release ||
       `artfi-${source.revision.slice(0, 12)}-${source.fingerprint.slice(0, 12)}-${process.platform}-${process.arch}`;
@@ -312,14 +288,7 @@ try {
     join(bundle, "source-manifest.json"),
     JSON.stringify(source, null, 2) + "\n",
   );
-  const after = await sourceManifest();
-  if (
-    after.fingerprint !== source.fingerprint ||
-    after.revision !== source.revision
-  )
-    throw new Error(
-      "Source changed during build; do not ship this artifact. Rebuild from a stable source snapshot.",
-    );
+  assertBuildSourceUnchanged(source, await captureBuildSource(root));
   const { files, links } = await inventory(bundle);
   const manifest = {
     format: 1,
@@ -335,6 +304,7 @@ try {
     solidity: "0.8.30",
     source: {
       revision: source.revision,
+      tree: source.tree,
       dirty: source.dirty,
       fingerprint: source.fingerprint,
     },
