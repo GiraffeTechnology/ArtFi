@@ -1,4 +1,5 @@
 import "server-only";
+import { assertWholeReceiptApprovalPlan } from "./whole-receipt-commitments";
 import { kernelRequestDigest } from "../../../../scripts/agent/agent-kernel.mjs";
 import { nftTaskJournalDigest } from "./nft/task-journal";
 import {
@@ -332,6 +333,21 @@ export function createWholeReceiptPreparedJournal(options: {
       matching[0].journalBindingHash !== claimed.journalBindingHash
     )
       fail();
+    try {
+      assertWholeReceiptApprovalPlan(p, {
+        tenant: policy.tenant,
+        origin: policy.origin,
+        taskId: policy.taskId,
+        actor: policy.actor,
+        escrow: intent.escrow,
+        runtimeCodeHash: intent.runtimeCodeHash,
+      }, {
+        receiptPlanDigest: scope.planDigest,
+        receiptJournalBindingHash: scope.journalBindingHash,
+      });
+    } catch {
+      fail("RECEIPT_JOURNAL_APPROVAL_COMMITMENT_REFUSED");
+    }
   }
   function readRow(
     rawRow: unknown,
@@ -443,7 +459,7 @@ export function createWholeReceiptPreparedJournal(options: {
     freeze({
       operation,
       executionAuthorization: "NOT_ESTABLISHED" as const,
-      approvalCommitments: "NOT_RECOMPUTED" as const,
+      approvalCommitments: "CONTENT_MATCHED" as const,
     });
   return Object.freeze({
     operationId,
