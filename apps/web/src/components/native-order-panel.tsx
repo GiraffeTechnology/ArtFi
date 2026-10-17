@@ -7,7 +7,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { assertRwaTradingEvidence } from "@/lib/rwa-catalog";
+import {
+  assertRwaTradingEvidence,
+  assertLegacyWholeSettlement,
+} from "@/lib/rwa-catalog";
 import type { Address, PublicClient } from "viem";
 import { currentOperation } from "@/lib/current-operation";
 import { useUserSession } from "@/components/user-session-provider";
@@ -270,7 +273,7 @@ export function NativeOrderPanel({
       );
       await assertTradingSession(String(order.intent.seller), order.chainId);
       assertCurrent();
-      await assertRwaTradingEvidence({
+      const record = await assertRwaTradingEvidence({
         section: kind === "whole" ? "whole" : "fractional",
         chainId: order.chainId,
         marketAddress: market,
@@ -280,6 +283,7 @@ export function NativeOrderPanel({
         slug: catalogSlug,
         identity: catalogIdentity,
       });
+      assertLegacyWholeSettlement(record);
       assertCurrent();
       const response = await fetch("/api/orders", {
         method: "POST",

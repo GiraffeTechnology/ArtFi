@@ -101,7 +101,7 @@ export async function verifyWholeArtworkSale({
   const [
     used,
     epoch,
-    holder,
+    tokenOwner,
     approved,
     approvedToken,
     collectionAllowed,
@@ -154,8 +154,8 @@ export async function verifyWholeArtworkSale({
       "This authorization is not open or its seller epoch has changed.",
     );
   }
-  if (holder.toLowerCase() !== intent.seller.toLowerCase()) {
-    throw new Error("The seller no longer holds this artwork.");
+  if (tokenOwner.toLowerCase() !== intent.seller.toLowerCase()) {
+    throw new Error("The seller is no longer the token owner.");
   }
   if (
     !approved &&

@@ -85,6 +85,7 @@ func newHandler(rwa *rwaService) http.Handler {
 	userAuth := registerUserAuthRoutes(mux, rwa)
 	registerNFTOperations(mux, userAuth)
 	registerAdministration(mux, userAuth)
+	registerNotifications(mux, userAuth)
 	registerRWACatalog(mux, rwa, userAuth)
 	mux.HandleFunc("GET /v1/orders", rwa.getSignedOrders)
 	mux.HandleFunc("GET /v1/orders/fraction-book", rwa.getFractionBook)
