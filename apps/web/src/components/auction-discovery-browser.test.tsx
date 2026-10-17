@@ -103,6 +103,9 @@ describe("public auction-discovery display", () => {
     expect(html).toContain("1 non-auction records were excluded");
     expect(html).toContain("Open current auction 7");
     expect(html).toContain("Contract state at snapshot");
+    expect(html).toContain("Order within this page");
+    expect(html).toContain("Earliest end at snapshot first");
+    expect(html).toContain("Other pages are separate results");
     expect((html.match(/<li>/g) ?? []).length).toBe(1);
   });
   it.each(["unavailable", "paused", "loading"] as const)(
