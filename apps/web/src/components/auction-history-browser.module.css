@@ -1,0 +1,18 @@
+.workspace { min-width: 0; margin-block: 1.5rem; padding: 1rem; border: 1px solid currentColor; border-radius: .5rem; }
+.controls { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin-block: 1rem; }
+.controls label { display: grid; gap: .25rem; max-width: 100%; min-width: 0; }
+.controls input, .controls select { max-width: 100%; min-height: 2.75rem; min-width: 0; }
+.controls button { min-height: 2.75rem; max-width: 100%; white-space: normal; }
+.provenance, .events dl { display: grid; grid-template-columns: minmax(7rem, 1fr) minmax(0, 3fr); gap: .25rem .75rem; }
+.provenance dd, .events dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.workspace code { overflow-wrap: anywhere; white-space: normal; }
+.events { padding-left: 1.25rem; }
+.events li { margin-block: 1rem; }
+@media (max-width: 38rem) {
+  .workspace { padding: .75rem; }
+  .provenance, .events dl { grid-template-columns: minmax(0, 1fr); }
+  .provenance dd, .events dd { margin-bottom: .5rem; }
+  .controls { align-items: stretch; }
+  .controls label { flex: 1 1 100%; }
+  .controls input, .controls select { width: 100%; }
+}

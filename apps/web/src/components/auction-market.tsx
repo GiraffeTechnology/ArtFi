@@ -17,6 +17,7 @@ import {
 import { publicSetting } from "@/lib/public-runtime-config";
 import { supportedChain } from "@/lib/wagmi";
 import { AuctionLiveObservation } from "./auction-live-observation";
+import { AuctionHistoryBrowser } from "./auction-history-browser";
 import { useUserSession } from "./user-session-provider";
 import {
   assertTradingSession,
@@ -690,6 +691,9 @@ function AuctionWorkbench() {
           )}
           {market && (
             <AuctionLiveObservation market={market} listingId={snapshot.id} />
+          )}
+          {market && (
+            <AuctionHistoryBrowser market={market} listingId={snapshot.id} />
           )}
         </article>
       )}
