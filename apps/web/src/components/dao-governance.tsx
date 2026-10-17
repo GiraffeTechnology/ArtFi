@@ -3,6 +3,7 @@
 import {
   FormEvent,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -42,6 +43,12 @@ import {
   type DaoTransaction,
   type ProposalPackage,
 } from "@/lib/dao-action-state";
+
+import { daoExecutionDeployment } from "@/lib/dao-published-execution";
+import {
+  prepareSelectedDaoAction,
+  selectedDaoPackage,
+} from "@/lib/dao-selected-execution";
 
 export type DaoDeployment = {
   actionRegistryAddress?: string;
@@ -166,8 +173,9 @@ function DaoGovernanceSession({
   const proposalPackage = actionState.submitted?.proposal;
   const selectedProposalInput =
     proposalInput ?? proposalPackage?.proposalId.toString() ?? "";
+  const selectionGeneration = useRef(0);
   const active = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     active.current = true;
     return () => {
       active.current = false;
@@ -216,6 +224,7 @@ function DaoGovernanceSession({
     () => safeBigInt(selectedProposalInput),
     [selectedProposalInput],
   );
+  const selectedPackage = selectedDaoPackage(actionState.submitted, proposalId);
   const proposalEnabled = configured && proposalId !== null;
   const { data: proposalState, refetch: refetchProposalState } =
     useReadContract({
@@ -578,17 +587,37 @@ function DaoGovernanceSession({
   }
 
   async function queueOrExecute(mode: "queue" | "execute", lease: number) {
-    if (!governor || !proposalPackage) return;
+    if (
+      !governor ||
+      !selectedPackage ||
+      !actionState.submitted ||
+      !publicClient ||
+      !address
+    )
+      throw new Error("Select the saved proposal package before continuing.");
+    const generation = selectionGeneration.current;
+    const currentPackage = await prepareSelectedDaoAction({
+      client: publicClient,
+      deployment: daoExecutionDeployment(deployment),
+      submitted: actionState.submitted,
+      selectedProposalId: proposalId,
+      account: address,
+      mode,
+      isCurrent: () =>
+        active.current &&
+        session.isCurrent(lease) &&
+        generation === selectionGeneration.current,
+    });
     await submitWrite(
       {
         abi: daoGovernorAbi,
         address: governor,
         functionName: mode,
         args: [
-          proposalPackage.targets,
-          proposalPackage.values,
-          proposalPackage.calldatas,
-          proposalPackage.descriptionHash,
+          currentPackage.targets,
+          currentPackage.values,
+          currentPackage.calldatas,
+          currentPackage.descriptionHash,
         ],
       },
       mode === "queue"
@@ -691,7 +720,10 @@ function DaoGovernanceSession({
             Proposal ID
             <input
               inputMode="numeric"
-              onChange={(event) => setProposalInput(event.target.value)}
+              onChange={(event) => {
+                selectionGeneration.current++;
+                setProposalInput(event.target.value);
+              }}
               value={selectedProposalInput}
             />
           </label>
@@ -757,6 +789,13 @@ function DaoGovernanceSession({
               Abstain
             </button>
           </div>
+          <p className="dao-note">
+            To continue a proposal created by another member or browser,{" "}
+            <a href="/dao/proposals/execute">
+              load its published execution terms
+            </a>
+            .
+          </p>
           <p className="dao-note">
             Voting weight comes from the proposal snapshot, preventing transfers
             or temporary borrowing from being counted twice.
@@ -948,14 +987,43 @@ function DaoGovernanceSession({
       {proposalPackage ? (
         <section className="dao-panel">
           <p className="approved-eyebrow">4 · Timelock</p>
-          <h2>Queue and execute current proposal package</h2>
+          <h2>Queue and execute the selected proposal package</h2>
           <p data-no-translate>
             Proposal {proposalPackage.proposalId.toString()}
           </p>
           <p>{proposalPackage.description}</p>
+          {!selectedPackage && (
+            <p role="status">
+              This saved package does not match the selected Proposal ID. Select
+              it before continuing.
+            </p>
+          )}
+          <p className="dao-note">
+            Before requesting a transaction, the original creation receipt, DAO
+            binding, current membership, proposal state and timelock are checked
+            again.
+          </p>
           <div className="dao-actions-row">
+            {!selectedPackage && (
+              <button
+                type="button"
+                disabled={transactionPending}
+                onClick={() => {
+                  selectionGeneration.current++;
+                  setProposalInput(proposalPackage.proposalId.toString());
+                }}
+              >
+                Select saved proposal
+              </button>
+            )}
             <button
-              disabled={!member || !correctChain || transactionPending}
+              disabled={
+                !member ||
+                !correctChain ||
+                !selectedPackage ||
+                transactionPending ||
+                proposalState !== 4
+              }
               onClick={() =>
                 void runAction((lease) => queueOrExecute("queue", lease))
               }
@@ -964,7 +1032,13 @@ function DaoGovernanceSession({
               Queue succeeded proposal
             </button>
             <button
-              disabled={!member || !correctChain || transactionPending}
+              disabled={
+                !member ||
+                !correctChain ||
+                !selectedPackage ||
+                transactionPending ||
+                proposalState !== 5
+              }
               onClick={() =>
                 void runAction((lease) => queueOrExecute("execute", lease))
               }
