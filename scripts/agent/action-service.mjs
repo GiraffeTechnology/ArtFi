@@ -1,3 +1,4 @@
+import { actionHistoryPage } from "./action-history-page.mjs";
 import { compileStage1Action } from "./stage1-action-plans.mjs";
 import { validateActionAuthority } from "./action-policy.mjs";
 const fail = (code) => {
@@ -129,11 +130,18 @@ export function createActionService({
         observedAt: clock(),
       };
     },
-    async actionHistory(session, id) {
+    async actionHistory(session, id, input = {}) {
+      const page = actionHistoryPage(input);
       await owned(session, id);
-      const events = await store.history(id);
+      const events = await store.history(id, page);
       wallet(session);
-      return { id, mode, events };
+      return {
+        id,
+        mode,
+        events,
+        nextAfter: events.at(-1)?.id ?? page.after,
+        page: { version: 1, after: page.after, limit: page.limit },
+      };
     },
   });
 }
