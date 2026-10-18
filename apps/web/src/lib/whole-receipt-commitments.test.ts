@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  getAddress,
+  isAddress,
   hashStruct,
   hashTypedData,
   type Address,
@@ -76,7 +78,7 @@ function resegment(f: Fixture) {
     types: {
       ReceiptAuthorization: [
         { name: "saleIntentHash", type: "bytes32" },
-        ...correspondenceKeys.map((name) => ({ name, type: "bytes32" })),
+        ...correspondenceKeys.map((name) => ({ name, type: "bytes32" as const })),
       ],
     },
     primaryType: "ReceiptAuthorization",
@@ -280,17 +282,29 @@ describe("whole receipt pregrant content commitments", () => {
     const before = commitments(f);
     const upper = (x: string) => x.toUpperCase().replace(/^0X/, "0x");
     const r = f.business.wholeReceipt;
-    f.business.request.account = upper(f.business.request.account) as Address;
+    f.business.request.account = getAddress(f.business.request.account);
     r.segmentId = upper(r.segmentId) as Hex;
-    r.domain.verifyingContract = upper(r.domain.verifyingContract) as Address;
+    r.domain.verifyingContract = getAddress(r.domain.verifyingContract);
     for (const key of ["seller", "collection", "paymentToken", "buyer"] as const)
-      r.sale[key] = upper(r.sale[key]) as Address;
+      r.sale[key] = getAddress(r.sale[key]);
     for (const key of correspondenceKeys)
       r.correspondence[key] = upper(r.correspondence[key]) as Hex;
     r.kitRegistration!.proofHash = upper(r.kitRegistration!.proofHash) as Hex;
-    f.binding.actor = upper(f.binding.actor) as Address;
+    f.binding.actor = getAddress(f.binding.actor);
     f.binding.runtimeCodeHash = upper(f.binding.runtimeCodeHash) as Hex;
+    expect(f.business.request.account).not.toBe(
+      f.business.request.account.toLowerCase(),
+    );
     expect(commitments(f)).toEqual(before);
+  });
+  it("rejects invalid all-uppercase address checksums before canonicalization", () => {
+    const f = fixture("registered");
+    const invalid = `0x${"B".repeat(40)}` as Address;
+    expect(isAddress(invalid)).toBe(false);
+    f.business.request.account = invalid;
+    f.business.wholeReceipt.sale.buyer = invalid;
+    f.binding.actor = invalid;
+    expect(() => commitments(f)).toThrow(refused);
   });
   it("does not accept a native plan as pregrant input", () => {
     const f = fixture();
