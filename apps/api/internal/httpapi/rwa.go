@@ -176,9 +176,13 @@ func newRWAService(config rwaConfig, store objectStore) *rwaService {
 		vaultIntents:       make(map[string]*vaultIntent),
 		vaultIntentByKey:   make(map[string]string),
 		marketplaceSources: map[string]struct{}{"opensea": {}},
-		marketHTTPClient:   &http.Client{Timeout: 12 * time.Second},
-		openseaAPIBaseURL:  "https://api.opensea.io",
-		now:                func() time.Time { return time.Now().UTC() },
+		marketHTTPClient: &http.Client{
+			Timeout: 12 * time.Second,
+			// Credentialed venue requests must never follow an unreviewed redirect.
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+		},
+		openseaAPIBaseURL: "https://api.opensea.io",
+		now:               func() time.Time { return time.Now().UTC() },
 	}
 }
 
