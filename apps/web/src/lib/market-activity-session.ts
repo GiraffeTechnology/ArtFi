@@ -138,16 +138,23 @@ async function readMarketHistoryBody(
   query: string,
   signal: AbortSignal,
 ): Promise<unknown> {
+  signal.throwIfAborted();
   const response = await fetch(`${apiURL}/v1/market/activity?${query}`, {
     cache: "no-store",
     signal,
   });
-  if (!response.ok)
+  if (signal.aborted) {
+    discardHistoryResponse(response);
+    signal.throwIfAborted();
+  }
+  if (!response.ok) {
+    discardHistoryResponse(response);
     throw new MarketHistoryError(
       response.status === 503
         ? "The external-market mirror is unavailable, so no history can be shown. This is not the same as no activity."
         : `The external-market mirror answered HTTP ${response.status}.`,
     );
+  }
   if (
     response.headers
       .get("Content-Type")
@@ -155,18 +162,31 @@ async function readMarketHistoryBody(
       ?.trim()
       .toLowerCase() !== "application/json" ||
     !response.body
-  )
+  ) {
+    discardHistoryResponse(response);
     throw new MarketHistoryError(
       "The mirror did not return a readable JSON activity page.",
     );
+  }
   const reader = response.body.getReader(),
     decoder = new TextDecoder("utf-8", { fatal: true });
   let bytes = 0,
-    body = "";
+    body = "",
+    ended = false;
+  let onAbort: (() => void) | undefined;
+  const interrupted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new Error("Activity read interrupted."));
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
   try {
     for (;;) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
+      const chunk = await Promise.race([reader.read(), interrupted]);
+      signal.throwIfAborted();
+      if (chunk.done) {
+        ended = true;
+        break;
+      }
       bytes += chunk.value.byteLength;
       if (bytes > responseByteLimit)
         throw new MarketHistoryError(
@@ -182,15 +202,26 @@ async function readMarketHistoryBody(
       "The mirror returned unreadable activity JSON. No history page was appended.",
     );
   } finally {
-    try {
-      await reader.cancel();
-    } catch {
-      /* The request may already be aborted. */
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+    if (!ended) {
+      try {
+        void reader.cancel().catch(() => undefined);
+      } catch {
+        /* Best effort. */
+      }
     }
     reader.releaseLock();
   }
 }
-/** Bound both response headers and body reads; an unavailable page stays distinct from empty data. */
+/** Cleanup never delays a refused or cancelled history read. */
+function discardHistoryResponse(response: Response) {
+  try {
+    void response.body?.cancel().catch(() => undefined);
+  } catch {
+    /* Best effort. */
+  }
+}
+/** Bound settlement even when fetch or a stream ignores the cancellation signal. */
 export async function readMarketHistoryPage(
   apiURL: string,
   query: string,
@@ -199,23 +230,46 @@ export async function readMarketHistoryPage(
   const controller = new AbortController();
   let timedOut = false;
   const abort = () => controller.abort();
-  if (signal.aborted) abort();
-  else signal.addEventListener("abort", abort, { once: true });
+  let onAbort: (() => void) | undefined;
+  const interrupted = new Promise<never>((_, reject) => {
+    onAbort = () =>
+      reject(
+        new MarketHistoryError(
+          "The activity read was cancelled. No history page was appended.",
+        ),
+      );
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+  });
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, 20_000);
+  signal.addEventListener("abort", abort, { once: true });
+  if (signal.aborted) abort();
   try {
-    return await readMarketHistoryBody(apiURL, query, controller.signal);
+    return await Promise.race([
+      Promise.resolve().then(() =>
+        readMarketHistoryBody(apiURL, query, controller.signal),
+      ),
+      interrupted,
+    ]);
   } catch (error) {
     if (timedOut)
       throw new MarketHistoryError(
         "The activity read timed out. The history is incomplete; retry or refresh it.",
       );
-    throw error;
+    if (signal.aborted)
+      throw new MarketHistoryError(
+        "The activity read was cancelled. No history page was appended.",
+      );
+    if (error instanceof MarketHistoryError) throw error;
+    throw new MarketHistoryError(
+      "The activity read is unavailable. No history page was appended.",
+    );
   } finally {
     clearTimeout(timer);
     signal.removeEventListener("abort", abort);
+    if (onAbort) controller.signal.removeEventListener("abort", onAbort);
   }
 }
 export function createMarketHistorySession(
