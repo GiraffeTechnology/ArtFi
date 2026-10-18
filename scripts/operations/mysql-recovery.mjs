@@ -380,16 +380,19 @@ async function runLockedClient(session, binary, args, io) {
   if (problem) throw problem;
 }
 
-async function digestFile(handle) {
+async function digestFile(handle, signal) {
+  if (signal?.aborted) throw fail("Backup verification interrupted.");
   const digest = createHash("sha256");
   let bytes = 0;
   for await (const chunk of handle.createReadStream({
     start: 0,
     autoClose: false,
+    signal,
   })) {
     digest.update(chunk);
     bytes += chunk.length;
   }
+  if (signal?.aborted) throw fail("Backup verification interrupted.");
   return { sha256: digest.digest("hex"), bytes };
 }
 
@@ -407,7 +410,8 @@ async function privateBackupDirectory(directory) {
     );
 }
 
-async function openBackup(directory) {
+async function openBackup(directory, signal) {
+  if (signal?.aborted) throw fail("Backup verification interrupted.");
   await privateBackupDirectory(directory);
   await requirePrivateFile(join(directory, MANIFEST_FILE), "backup manifest");
   let manifest;
@@ -415,7 +419,10 @@ async function openBackup(directory) {
     const stat = await lstat(join(directory, MANIFEST_FILE));
     if (stat.size > MAX_QUERY_BYTES) throw fail("too large");
     manifest = JSON.parse(
-      await readFile(join(directory, MANIFEST_FILE), "utf8"),
+      await readFile(join(directory, MANIFEST_FILE), {
+        encoding: "utf8",
+        signal,
+      }),
     );
   } catch {
     throw fail("Invalid or missing backup manifest.");
@@ -439,7 +446,7 @@ async function openBackup(directory) {
     constants.O_RDONLY | constants.O_NOFOLLOW,
   );
   try {
-    const actual = await digestFile(handle);
+    const actual = await digestFile(handle, signal);
     if (actual.sha256 !== manifest.sha256 || actual.bytes !== manifest.bytes)
       throw fail("Backup checksum or size mismatch; restore refused.");
     return { manifest, handle };
@@ -593,6 +600,33 @@ export async function verify(options) {
     schemaSha256: manifest.schemaSha256,
     authenticityVerified: false,
   };
+}
+
+// Read-only telemetry reuses the existing complete backup checks. Integrity and
+// creation time never establish publisher authenticity or a successful restore.
+export async function observeBackup(options, { signal } = {}) {
+  const { manifest, handle } = await openBackup(
+    resolve(options.backup),
+    signal,
+  );
+  let result;
+  try {
+    if (signal?.aborted) throw fail("Backup verification interrupted.");
+    result = {
+      integrityVerified: true,
+      createdAt:
+        Object.hasOwn(manifest, "createdAt") &&
+        typeof manifest.createdAt === "string"
+          ? manifest.createdAt
+          : null,
+      authenticityVerified: false,
+      restoreVerified: false,
+    };
+  } finally {
+    await handle.close();
+  }
+  if (signal?.aborted) throw fail("Backup verification interrupted.");
+  return result;
 }
 
 export async function restore(options) {

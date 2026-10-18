@@ -14,6 +14,7 @@ export const monitorFiles = Object.freeze([
   "monitor-core.mjs",
   "monitor-service.mjs",
   "host-capacity.mjs",
+  "backup-integrity.mjs",
   "monitor-status.mjs",
   "README.md",
   "artfi-monitor@.service",

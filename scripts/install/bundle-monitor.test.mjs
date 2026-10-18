@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -129,12 +130,17 @@ test("monitor package imports the actual copied production dependency graph with
   const directory = await mkdtemp(join(tmpdir(), "artfi-monitor-realgraph-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-  await bundleMonitor(root, join(directory, "monitor"));
+  await mkdir(join(directory, "tools/operations"), { recursive: true });
+  await cp(
+    join(root, "scripts/operations/mysql-recovery.mjs"),
+    join(directory, "tools/operations/mysql-recovery.mjs"),
+  );
+  await bundleMonitor(root, join(directory, "tools/ops"));
   const service = await import(
-    pathToFileURL(join(directory, "monitor/monitor-service.mjs"))
+    pathToFileURL(join(directory, "tools/ops/monitor-service.mjs"))
   );
   const status = await import(
-    pathToFileURL(join(directory, "monitor/monitor-status.mjs"))
+    pathToFileURL(join(directory, "tools/ops/monitor-status.mjs"))
   );
   assert.equal(typeof service.runService, "function");
   assert.equal(typeof service.serviceProbe, "function");

@@ -31,8 +31,9 @@ Open deployment gates: actual CTYun Aivan endpoint/model/auth/resource verificat
 approved notification channel, service-user ACLs and single-instance enforcement,
 startup/crash recovery service unit, bounded retention/rotation, capacity/backup/mirror
 telemetry adapters, controlled four-machine inventory, and test fault/soak evidence.
-The local host-capacity adapter described below supplies only host telemetry; backup,
-mirror freshness and database readiness still require their separate real adapters.
+The local host-capacity adapter supplies only host telemetry. The optional backup
+integrity adapter below supplies file-integrity/age observations only; mirror freshness,
+database readiness and real backup/restore acceptance remain separate requirements.
 The `artfi-monitor@.service` template proposes separate test/production users/state,
 nonblocking process-lifetime flock, least privilege, loopback-only networking and
 bounded restart attempts. It is not installed. Verified target paths/runtime pins,
@@ -132,3 +133,33 @@ Filesystem stat calls themselves are not abortable; a timed-out call cannot beco
 successful tick. Host capacity does not establish DB, backup, chain or business health.
 Unit/source checks and one read-only native host observation do not install this
 service or establish durable incidents, real delivery channels or 24x7 availability.
+
+### Read-only backup integrity observations
+
+`kind: "backup-integrity"`, `category: "backup"` accepts the existing logical
+`id`/`maxAgeMs` plus an explicit absolute `backupDirectory` and safe integer
+`maxBackupAgeMs` of at least 1000 milliseconds. No path, backup schedule, storage
+provider or age threshold is invented. The service identity must already have the
+approved read access required by the recovery tool's owned private backup format;
+this adapter never changes ownership, permissions or credentials.
+
+The adapter reuses `tools/operations/mysql-recovery.mjs` verification of the completed
+`artfi-mysql-backup-v1` manifest, schema checksum and actual SQL bytes/SHA-256. It
+uses the manifest's canonical UTC `createdAt`, not a copied file's new modification
+time. Missing, invalid or future creation times cannot report healthy. An intact
+but old backup is stale; corruption or inaccessible storage is unavailable.
+
+Only `available`, `fresh` and the current `observedAt` enter the incident evaluator.
+Paths, SQL, schema, database names, hashes and exceptions never enter optional
+model/notification payloads. In this check, healthy means only recent file integrity:
+the observation explicitly does not verify authenticity, successful restoration,
+off-host retention, encryption, RPO/RTO or database readiness. Accepting a trusted
+backup for restore and verifying its independent recovery remain separate operator
+actions. No restore, SQL execution, promotion, activation or deletion is performed.
+
+The original bounded monitor signal propagates into the SQL read stream, and its
+opened descriptor is closed after completion or failure. Slow scans can time out
+instead of becoming healthy; storage syscalls themselves may remain uninterruptible.
+An abort is not a guarantee that a stalled filesystem or device has terminated.
+Choose the check inventory and interval within the verified host's actual resource
+budget; unit fixtures do not establish real deployment or continuous operation.

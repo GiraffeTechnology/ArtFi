@@ -4,6 +4,10 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Monitor } from "./monitor-core.mjs";
 import { hostCapacityProbe, validateHostCapacity } from "./host-capacity.mjs";
+import {
+  backupIntegrityProbe,
+  validateBackupIntegrity,
+} from "./backup-integrity.mjs";
 
 export function validateConfig(config) {
   if (
@@ -27,6 +31,10 @@ export function validateConfig(config) {
   )
     throw new Error("SERVICE_CONFIG_REFUSED");
   for (const check of config.checks) {
+    if (check?.kind === "backup-integrity") {
+      validateBackupIntegrity(check);
+      continue;
+    }
     if (check?.kind === "host-capacity") {
       validateHostCapacity(check);
       continue;
@@ -105,13 +113,23 @@ export function serviceProbe(
   const capacities = checks.filter((check) => check.kind === "host-capacity");
   const capacityIds = new Set(capacities.map((check) => check.id));
   const capacity = hostCapacityProbe(capacities, { disk, host, now });
+  const backups = checks.filter((check) => check.kind === "backup-integrity");
+  const backupIds = new Set(backups.map((check) => check.id));
+  const backup = backupIntegrityProbe(backups, { now });
   const http = httpProbe(
-    checks.filter((check) => check.kind !== "host-capacity"),
+    checks.filter(
+      (check) =>
+        check.kind !== "host-capacity" && check.kind !== "backup-integrity",
+    ),
     fetchImpl,
     now,
   );
   return (id, signal) =>
-    capacityIds.has(id) ? capacity(id, signal) : http(id, signal);
+    capacityIds.has(id)
+      ? capacity(id, signal)
+      : backupIds.has(id)
+        ? backup(id, signal)
+        : http(id, signal);
 }
 
 export async function runService(config, { signal, once = false } = {}) {
