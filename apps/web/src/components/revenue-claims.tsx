@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import styles from "./revenue-claims.module.css";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { type Address, type Hash } from "viem";
 import { useUserSession } from "./user-session-provider";
@@ -14,7 +15,7 @@ import {
   revenueAddress,
   revenueRoundId,
   readRevenueRound,
-  assertReviewedRevenue,
+  verifyRevenueClaimAtWallet,
   revenueReadDeadline,
   revenueDistributorAbi,
   type RevenueRound,
@@ -32,7 +33,7 @@ export function RevenueClaims() {
   const sessionKey = portfolioSessionKey(auth, wallet);
   if (!distributor || !token)
     return (
-      <section className="product-tools">
+      <section className={`product-tools ${styles.root}`}>
         <h2>Snapshot revenue claims</h2>
         <p>
           A per-asset revenue distributor and its fraction token are not
@@ -42,7 +43,7 @@ export function RevenueClaims() {
     );
   if (!sessionKey || wallet.chainId !== 560048 || !wallet.address)
     return (
-      <section className="product-tools">
+      <section className={`product-tools ${styles.root}`}>
         <h2>Snapshot revenue claims</h2>
         <p>
           Sign in with the connected Hoodi wallet to inspect its historical
@@ -143,32 +144,24 @@ function ConnectedRevenueClaims({
     const ticket = ++generation.current;
     try {
       const operation = begin();
-      await assertTradingSession(account, 560048);
-      const fresh = await revenueReadDeadline(() =>
-        readRevenueRound(client, binding, reviewed.id),
-      );
-      operation.assertCurrent();
-      assertReviewedRevenue(reviewed, fresh);
-      await revenueReadDeadline(() =>
-        client.simulateContract({
-          address: distributor,
-          abi: revenueDistributorAbi,
-          functionName: "claim",
-          args: [reviewed.id],
-          account,
-        }),
-      );
-      operation.assertCurrent();
-      await operation.write("claim", () =>
-        writeContractAsync({
+      await operation.write("claim", async () => {
+        // The original transaction hook authenticates before entering this
+        // callback. Do not carry business evidence across that asynchronous wait.
+        await verifyRevenueClaimAtWallet(
+          client,
+          reviewed,
+          operation.assertCurrent,
+        );
+        operation.assertCurrent();
+        return writeContractAsync({
           address: distributor,
           abi: revenueDistributorAbi,
           functionName: "claim",
           args: [reviewed.id],
           account,
           chainId: 560048,
-        }),
-      );
+        });
+      });
       if (active.current && ticket === generation.current)
         setDetail(
           "The claim transaction confirmed. Read the round again to inspect current on-chain claim state.",
@@ -206,7 +199,10 @@ function ConnectedRevenueClaims({
     }
   }
   return (
-    <section className="product-tools" aria-label="Snapshot revenue claims">
+    <section
+      className={`product-tools ${styles.root}`}
+      aria-label="Snapshot revenue claims"
+    >
       <h2>Snapshot revenue claims</h2>
       <p>
         Funded rounds use the fraction token&apos;s historical balances,

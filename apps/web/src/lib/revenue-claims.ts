@@ -237,3 +237,48 @@ export async function revenueReadDeadline<T>(
     if (timer !== undefined) clearTimeout(timer);
   }
 }
+
+/** Called inside the existing authenticated wallet callback. A read or
+ * simulation is advisory; the distributor still determines atomic settlement.
+ * The finite deadline retires this result, not the underlying provider RPC. */
+export async function verifyRevenueClaimAtWallet(
+  client: PublicClient,
+  reviewed: RevenueRound,
+  assertCurrent: () => void,
+) {
+  let active = true;
+  const current = () => {
+    if (!active) throw new Error("This revenue verification has retired.");
+    assertCurrent();
+  };
+  try {
+    return await revenueReadDeadline(async () => {
+      current();
+      const fresh = await readRevenueRound(client, reviewed, reviewed.id);
+      current();
+      assertReviewedRevenue(reviewed, fresh);
+      await client.simulateContract({
+        address: reviewed.distributor,
+        abi: revenueDistributorAbi,
+        functionName: "claim",
+        args: [reviewed.id],
+        account: reviewed.account,
+      });
+      current();
+      const [canonical, chain] = await Promise.all([
+        client.getBlock({ blockNumber: fresh.blockNumber }),
+        client.getChainId(),
+      ]);
+      current();
+      if (
+        chain !== 560048 ||
+        canonical.number !== fresh.blockNumber ||
+        canonical.hash !== fresh.blockHash
+      )
+        throw new Error("The revenue observation changed during simulation.");
+      return fresh;
+    });
+  } finally {
+    active = false;
+  }
+}
