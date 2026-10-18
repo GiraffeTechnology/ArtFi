@@ -30,7 +30,7 @@ async function open(page: Page) {
     if (url.pathname !== "/") return route.abort();
     return route.fulfill({
       contentType: "text/html; charset=utf-8",
-      body: '<meta charset="utf-8"><link rel="stylesheet" href="/fixture.css"><div id="root"></div><script src="/fixture.js"></script>',
+      body: '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/fixture.css"><div id="root"></div><script src="/fixture.js"></script>',
     });
   });
   await isolatedSourceCatalog(page);
@@ -59,6 +59,9 @@ async function open(page: Page) {
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Load auction", exact: true }).click();
   await expect(bid(page)).toBeEnabled();
+  await bid(page).scrollIntoViewIfNeeded();
+  await expect(bid(page)).toBeInViewport();
+  await expectAuctionViewport(page);
   return {
     holdAuth() {
       gate = new Promise<void>((resolve) => {
@@ -68,6 +71,69 @@ async function open(page: Page) {
     held: () => held,
     releaseAuth: () => release?.(),
   };
+}
+async function expectAuctionViewport(page: Page) {
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  const layout = await page.evaluate(() => ({
+    innerWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+  }));
+  if (
+    layout.innerWidth !== viewport!.width ||
+    layout.documentWidth > viewport!.width
+  ) {
+    console.log(
+      "AUCTION_LAYOUT_DIAGNOSTIC",
+      JSON.stringify(
+        await page.evaluate(() => ({
+          viewportMeta: document
+            .querySelector('meta[name="viewport"]')
+            ?.getAttribute("content"),
+          innerWidth: window.innerWidth,
+          clientWidth: document.documentElement.clientWidth,
+          documentWidth: document.documentElement.scrollWidth,
+          overflowing: Array.from(
+            document.querySelectorAll<HTMLElement>("body *"),
+          )
+            .filter(
+              (element) =>
+                element.scrollWidth > element.clientWidth + 1 ||
+                element.getBoundingClientRect().right >
+                  document.documentElement.clientWidth + 1,
+            )
+            .map((element) => ({
+              tag: element.tagName,
+              className: element.className,
+              text: element.textContent?.slice(0, 90),
+              width: element.getBoundingClientRect().width,
+              scrollWidth: element.scrollWidth,
+              clientWidth: element.clientWidth,
+              overflowWrap: getComputedStyle(element).overflowWrap,
+              whiteSpace: getComputedStyle(element).whiteSpace,
+            }))
+            .sort(
+              (a, b) =>
+                b.scrollWidth - b.clientWidth - (a.scrollWidth - a.clientWidth),
+            )
+            .slice(0, 24),
+        })),
+      ),
+    );
+    await page.screenshot({
+      path: test.info().outputPath("auction-overflow.png"),
+      fullPage: true,
+    });
+  }
+  console.log(
+    "AUCTION_VIEWPORT",
+    JSON.stringify({ project: test.info().project.name, viewport, layout }),
+  );
+  expect(layout.innerWidth).toBe(viewport!.width);
+  expect(
+    layout.documentWidth,
+    "auction controls must fit the current desktop or mobile viewport",
+  ).toBeLessThanOrEqual(layout.innerWidth);
 }
 const bid = (page: Page) =>
   page.getByRole("button", { name: "Review and place bid", exact: true });
@@ -170,7 +236,7 @@ test("an UNKNOWN approval stays journaled and never requests a bid", async ({
 });
 test("unchanged terms forward only the exact approved token amount and bid", async ({
   page,
-}) => {
+}, testInfo) => {
   await open(page);
   await bid(page).click();
   await expect(
@@ -202,6 +268,11 @@ test("unchanged terms forward only the exact approved token amount and bid", asy
       args: ["1", "100"],
     },
   ]);
+  await expectAuctionViewport(page);
+  await page.screenshot({
+    path: testInfo.outputPath("confirmed-auction.png"),
+    fullPage: true,
+  });
 });
 test("wallet departure during simulation retires the old bid callback", async ({
   page,

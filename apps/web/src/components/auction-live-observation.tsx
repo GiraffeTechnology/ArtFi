@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { usePublicClient } from "wagmi";
 import type { Address } from "viem";
+import styles from "./auction-live-observation.module.css";
 import { supportedChain } from "@/lib/wagmi";
 import {
   auctionCountdown,
@@ -92,7 +93,7 @@ export function AuctionLiveObservation({
       </p>
       {observed && (
         <>
-          <dl className="contract-facts">
+          <dl className={`contract-facts ${styles.facts}`}>
             <div>
               <dt>Current highest bid, payment base units</dt>
               <dd data-no-translate data-translation-skip>
@@ -185,7 +186,7 @@ export function AuctionLiveObservation({
                             ? "Auction settled"
                             : "Auction cancelled"}
                   </strong>
-                  <dl className="contract-facts">
+                  <dl className={`contract-facts ${styles.facts}`}>
                     {entry.actor && (
                       <div>
                         <dt>Event account</dt>

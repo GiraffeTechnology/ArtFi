@@ -1,3 +1,4 @@
+import "../../src/app/globals.css";
 import { createRoot } from "react-dom/client";
 import { AuctionMarket } from "../../src/components/auction-market";
 import { UserSessionProvider } from "../../src/components/user-session-provider";
