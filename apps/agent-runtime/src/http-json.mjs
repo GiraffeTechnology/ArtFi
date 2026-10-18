@@ -6,7 +6,11 @@ function discardResponse(response) {
     /* Best effort. */
   }
 }
-export async function readResponseJSON(response, limit = 65536) {
+export async function readResponseJSON(response, limit = 65536, signal) {
+  if (signal?.aborted) {
+    discardResponse(response);
+    signal.throwIfAborted();
+  }
   const declared = response.headers.get("content-length");
   if (declared && (!/^\d+$/.test(declared) || Number(declared) > limit)) {
     discardResponse(response);
@@ -17,9 +21,17 @@ export async function readResponseJSON(response, limit = 65536) {
   const chunks = [];
   let size = 0;
   let ended = false;
+  let onAbort;
+  const interrupted = new Promise((_, reject) => {
+    if (!signal) return;
+    onAbort = () => reject(Error("UPSTREAM_RESPONSE_INTERRUPTED"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
   try {
     for (;;) {
-      const { value, done } = await reader.read();
+      const { value, done } = await Promise.race([reader.read(), interrupted]);
+      signal?.throwIfAborted();
       if (done) {
         ended = true;
         break;
@@ -37,6 +49,7 @@ export async function readResponseJSON(response, limit = 65536) {
     if (error?.message === "UPSTREAM_RESPONSE_TOO_LARGE") throw error;
     fail("UPSTREAM_RESPONSE_INVALID");
   } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
     if (!ended) {
       try {
         void reader.cancel().catch(() => undefined);
