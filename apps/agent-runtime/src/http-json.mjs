@@ -20,7 +20,9 @@ export async function readResponseJSON(response, limit = 65536) {
       }
       chunks.push(value);
     }
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)),
+    );
   } catch (error) {
     if (error?.message === "UPSTREAM_RESPONSE_TOO_LARGE") throw error;
     fail("UPSTREAM_RESPONSE_INVALID");
@@ -44,7 +46,9 @@ export async function readRequestJSON(request, limit = 32768) {
     chunks.push(chunk);
   }
   try {
-    const result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const result = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)),
+    );
     if (!result || typeof result !== "object" || Array.isArray(result))
       fail("REQUEST_JSON_INVALID");
     return result;
