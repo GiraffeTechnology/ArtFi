@@ -13,9 +13,9 @@ import (
 // consumed authority facts, never request fields or a persisted bearer token.
 // Successful decoding is structural validation, not receipt authorization.
 type NFTReceiptCapabilityClaims struct {
-	ReceiptPhase string `json:"receiptPhase,omitempty"`
-	ReceiptNonce string `json:"receiptNonce,omitempty"`
-	ReceiptPlanDigest string `json:"receiptPlanDigest,omitempty"`
+	ReceiptPhase              string `json:"receiptPhase,omitempty"`
+	ReceiptNonce              string `json:"receiptNonce,omitempty"`
+	ReceiptPlanDigest         string `json:"receiptPlanDigest,omitempty"`
 	ReceiptJournalBindingHash string `json:"receiptJournalBindingHash,omitempty"`
 }
 
@@ -42,6 +42,40 @@ func (claims NFTReceiptCapabilityClaims) receiptClaimsPresent() (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// The authenticated producer emits an exact seven-field task principal. Go's
+// default case-insensitive matching and duplicate-key overwrite must not change
+// that wire contract before the capability reaches native journal checks.
+func validNFTTaskCapabilityPrincipal(raw []byte) bool {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return false
+	}
+	allowed := map[string]bool{"kind": true, "taskId": true, "taskDigest": true, "executorDigest": true, "grantReference": true, "grantPolicyVersion": true, "operationId": true}
+	seen := make(map[string]bool)
+	for decoder.More() {
+		token, err = decoder.Token()
+		key, ok := token.(string)
+		if err != nil || !ok || !allowed[key] || seen[key] {
+			return false
+		}
+		seen[key] = true
+		var value string
+		if decoder.Decode(&value) != nil || value == "" {
+			return false
+		}
+	}
+	if token, err = decoder.Token(); err != nil || token != json.Delim('}') || len(seen) != len(allowed) {
+		return false
+	}
+	var extra any
+	if decoder.Decode(&extra) != io.EOF {
+		return false
+	}
+	var principal NFTTaskPrincipal
+	return decodeNFTTaskPrincipal(raw, &principal) == nil
 }
 
 // UnmarshalJSON rejects duplicate, aliased, null and incomplete receipt fields.
@@ -74,6 +108,9 @@ func (claims *NFTTaskCapability) UnmarshalJSON(raw []byte) error {
 		seen[key] = true
 		var value json.RawMessage
 		if decoder.Decode(&value) != nil {
+			return errUserForbidden
+		}
+		if key == "principal" && !validNFTTaskCapabilityPrincipal(value) {
 			return errUserForbidden
 		}
 		if strings.HasPrefix(key, "receipt") {
