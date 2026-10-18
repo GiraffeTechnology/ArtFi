@@ -26,6 +26,7 @@ await build({
     lib: {
       entry: resolve("e2e-dao-selected/fixtures/main.tsx"),
       name: "ArtFiDaoSelectedFixture",
+      cssFileName: "style",
       formats: ["iife"],
       fileName: () => "fixture.js",
     },

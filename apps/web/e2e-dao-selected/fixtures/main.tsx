@@ -1,3 +1,5 @@
+import "../../src/app/globals.css";
+import { UserSessionProvider } from "../../src/components/user-session-provider";
 import { createRoot } from "react-dom/client";
 import { DaoGovernance } from "../../src/components/dao-governance";
 import {
@@ -34,10 +36,10 @@ declare global {
   }
 }
 createRoot(document.getElementById("root")!).render(
-  <>
+  <UserSessionProvider>
     <button onClick={() => fixture.switchWallet()}>
       TEST_ONLY switch wallet
     </button>
     <DaoGovernance deployment={fixture.deployment} />
-  </>,
+  </UserSessionProvider>,
 );

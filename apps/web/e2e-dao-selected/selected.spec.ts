@@ -3,9 +3,18 @@ import { readFileSync } from "node:fs";
 import type {} from "./fixtures/main";
 async function open(page: Page, queued = false) {
   const bundle = readFileSync(process.env.ARTFI_DAO_FIXTURE!, "utf8");
+  const css = readFileSync(
+    process.env.ARTFI_DAO_FIXTURE!.replace(/fixture\.js$/, "style.css"),
+    "utf8",
+  );
   await page.route("**/*", (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== "https://dao-fixture.invalid") return route.abort();
+    if (url.pathname === "/style.css")
+      return route.fulfill({
+        contentType: "text/css; charset=utf-8",
+        body: css,
+      });
     if (url.pathname === "/fixture.js")
       return route.fulfill({
         contentType: "application/javascript; charset=utf-8",
@@ -13,17 +22,87 @@ async function open(page: Page, queued = false) {
       });
     return route.fulfill({
       contentType: "text/html; charset=utf-8",
-      body: '<meta charset="utf-8"><div id="root"></div><script src="/fixture.js"></script>',
+      body: '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/style.css"><div id="root"></div><script src="/fixture.js"></script>',
     });
   });
+  page.on("pageerror", (error) => console.log("DAO_PAGE_ERROR", error.message));
+  await page.route("**/api/user/auth/*", (route) =>
+    route.fulfill({
+      json: {
+        session: {
+          id: "TEST_ONLY-dao-session",
+          address: "0x6666666666666666666666666666666666666666",
+          chainId: 560048,
+          expiresAt: 4000000000000,
+          accessExpiresAt: 4000000000000,
+        },
+      },
+    }),
+  );
   await page.goto("https://dao-fixture.invalid/" + (queued ? "?queued=1" : ""));
   await expect(
     page.getByRole("button", { name: "Check transaction confirmation" }),
   ).toBeVisible();
+  await expectDaoViewport(page);
   const id = await page.evaluate(() =>
     window.daoFixture.fixture.proposal.proposalId.toString(),
   );
   return id;
+}
+async function expectDaoViewport(page: Page) {
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  const layout = await page.evaluate(() => ({
+    innerWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+  }));
+  if (
+    layout.innerWidth !== viewport!.width ||
+    layout.documentWidth > viewport!.width
+  ) {
+    console.log(
+      "DAO_LAYOUT_DIAGNOSTIC",
+      JSON.stringify(
+        await page.evaluate(() => ({
+          elements: Array.from(document.querySelectorAll<HTMLElement>("body *"))
+            .filter(
+              (element) =>
+                element.scrollWidth > element.clientWidth + 1 ||
+                element.getBoundingClientRect().right >
+                  document.documentElement.clientWidth + 1,
+            )
+            .map((element) => ({
+              tag: element.tagName,
+              className: element.className,
+              text: element.textContent?.slice(0, 100),
+              width: element.getBoundingClientRect().width,
+              scrollWidth: element.scrollWidth,
+              clientWidth: element.clientWidth,
+              whiteSpace: getComputedStyle(element).whiteSpace,
+              overflowWrap: getComputedStyle(element).overflowWrap,
+            }))
+            .sort(
+              (a, b) =>
+                b.scrollWidth - b.clientWidth - (a.scrollWidth - a.clientWidth),
+            )
+            .slice(0, 20),
+        })),
+      ),
+    );
+    await page.screenshot({
+      path: test.info().outputPath("dao-overflow.png"),
+      fullPage: true,
+    });
+  }
+  console.log(
+    "DAO_VIEWPORT",
+    JSON.stringify({ project: test.info().project.name, viewport, layout }),
+  );
+  expect(layout.innerWidth).toBe(viewport!.width);
+  expect(
+    layout.documentWidth,
+    "DAO proposal details and controls must fit the viewport",
+  ).toBeLessThanOrEqual(layout.innerWidth);
 }
 async function ready(page: Page) {
   await page
@@ -84,13 +163,38 @@ test("a changed inspected ID cannot queue the saved package; reselection submits
           (_, v) => (typeof v === "bigint" ? v.toString() : v),
         ),
       simulated: f.calls.filter((x) => x.method === "simulateContract").length,
+      simulationsMatchWrite: f.calls
+        .filter((x) => x.method === "simulateContract")
+        .every(({ input }) => {
+          if (
+            !input ||
+            typeof input !== "object" ||
+            !("functionName" in input) ||
+            !("account" in input) ||
+            !("address" in input) ||
+            !("args" in input)
+          )
+            return false;
+          return (
+            input.functionName === w.functionName &&
+            input.account === w.account &&
+            input.address === w.address &&
+            JSON.stringify(input.args, (_, v) =>
+              typeof v === "bigint" ? v.toString() : v,
+            ) ===
+              JSON.stringify(w.args, (_, v) =>
+                typeof v === "bigint" ? v.toString() : v,
+              )
+          );
+        }),
     };
   });
   expect(sent).toMatchObject({
     method: "queue",
     chainId: 560048,
     exactArgs: true,
-    simulated: 1,
+    simulated: 2,
+    simulationsMatchWrite: true,
   });
   await expect(
     page.getByText("Proposal queued in the Timelock.", { exact: true }),
@@ -98,6 +202,11 @@ test("a changed inspected ID cannot queue the saved package; reselection submits
   await expect(
     page.getByRole("link", { name: "load its published execution terms" }),
   ).toHaveAttribute("href", "/dao/proposals/execute");
+  await expectDaoViewport(page);
+  await page.screenshot({
+    path: test.info().outputPath("dao-queue-confirmed.png"),
+    fullPage: true,
+  });
 });
 test("a current holder read refuses transferred-away membership despite stale displayed membership", async ({
   page,

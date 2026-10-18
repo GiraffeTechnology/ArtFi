@@ -6,7 +6,12 @@ import {
   deployment,
 } from "../../test-fixtures/dao-selected";
 const f = createDaoSelectedFixture();
-let account = { address: address("6"), isConnected: true };
+let account = {
+  address: address("6"),
+  chainId: 560048,
+  status: "connected" as const,
+  isConnected: true,
+};
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
@@ -66,7 +71,7 @@ export function useReadContract(input: { functionName: string }) {
     proposalVotes: [0n, 90n, 0n],
     requiredForVotes: 50n,
   };
-  return { data: values[input.functionName], refetch };
+  return { data: values[input.functionName], isSuccess: true, refetch };
 }
 export function useSignMessage() {
   return { isPending: false, signMessageAsync: async () => "0x00" };

@@ -1,5 +1,7 @@
 "use client";
 
+import styles from "./dao-governance.module.css";
+
 import {
   FormEvent,
   useEffect,
@@ -718,7 +720,7 @@ function DaoGovernanceSession({
 
   return (
     <section
-      className="dao-console"
+      className={`dao-console ${styles.console}`}
       aria-label="DAO ownership verification and governance"
     >
       {!configured ? (
