@@ -23,12 +23,15 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function chunks(bytes: Uint8Array, width = 7) {
+function chunks(bytes: Uint8Array, width = 7, holdOpen = false) {
   let offset = 0;
   const cancel = vi.fn();
   const stream = new ReadableStream<Uint8Array>({
     pull(controller) {
-      if (offset === bytes.length) return controller.close();
+      if (offset === bytes.length) {
+        if (holdOpen) return new Promise<void>(() => {});
+        return controller.close();
+      }
       controller.enqueue(bytes.slice(offset, offset + width));
       offset = Math.min(bytes.length, offset + width);
     },
@@ -256,7 +259,9 @@ describe("bounded upstream results and English fallback", () => {
         ...translated("Too large envelope"),
         padding: "x".repeat(MAX_TRANSLATION_RESPONSE_BYTES),
       });
-      const first = chunks(encoder.encode(oversized), 1024);
+      // Keep a genuinely live upstream for cancellation assertions. A stream
+      // already closed after its final queued chunk has no cancel callback.
+      const first = chunks(encoder.encode(oversized), 1024, true);
       const fetch = vi
         .fn()
         .mockResolvedValueOnce(
@@ -281,6 +286,37 @@ describe("bounded upstream results and English fallback", () => {
       expect(fetch).toHaveBeenCalledTimes(2);
     },
   );
+
+  it("also refuses an already closed oversized body without caching it", async () => {
+    const source = "Closed oversized upstream source";
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ...translated("Too large envelope"),
+            padding: "x".repeat(MAX_TRANSLATION_RESPONSE_BYTES),
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(translated("Valid output"))),
+      );
+    vi.stubGlobal("fetch", fetch);
+    const { translatePageTexts } = await import("./language-server");
+    expect(await translatePageTexts([source], "fr")).toEqual({
+      degraded: true,
+      translations: [source],
+    });
+    expect(runtime.__artfiTranslationCache!.has(`fr\u0000${source}`)).toBe(
+      false,
+    );
+    expect(await translatePageTexts([source], "fr")).toEqual({
+      degraded: false,
+      translations: ["Valid output"],
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
 
   it("bounds translated UTF-8 bytes before caching, not just JS characters", async () => {
     const source = "Multibyte upstream output";

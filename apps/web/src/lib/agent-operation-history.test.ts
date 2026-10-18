@@ -11,7 +11,7 @@ const scope: AgentHistoryScope = {
   mode: "TEST_ONLY_NO_REAL_VALUE",
   session: {
     id: "TEST_ONLY_session",
-    address: "0x" + "a".repeat(40),
+    address: `0x${"a".repeat(40)}` as const,
     chainId: 560048,
     expiresAt: 4000000000000,
     accessExpiresAt: 4000000000000,
@@ -86,9 +86,12 @@ describe("session-scoped operation history paging", () => {
       scope,
     );
     expect(JSON.stringify(value)).not.toContain("TEST_ONLY_PRIVATE");
+    expect(value.events[0]).toMatchObject({ action: null, leg: null });
     expect(Object.keys(value.events[0]).sort()).toEqual([
+      "action",
       "id",
       "kind",
+      "leg",
       "observedAt",
       "reason",
       "state",
@@ -176,7 +179,7 @@ describe("session-scoped operation history paging", () => {
   it("session identity, chain, wallet and both expiries are part of the private view scope", () => {
     for (const session of [
       { ...scope.session, id: "other-session" },
-      { ...scope.session, address: "0x" + "b".repeat(40) },
+      { ...scope.session, address: `0x${"b".repeat(40)}` as const },
       { ...scope.session, expiresAt: scope.session.expiresAt + 1 },
       { ...scope.session, accessExpiresAt: scope.session.accessExpiresAt + 1 },
     ])

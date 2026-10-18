@@ -77,7 +77,7 @@ describe("exact recorder-only Safe flow extensions", () => {
     ).toThrow();
   });
   it.each([{ value: 1n }, { target: safe }, { requestId: zeroHash }])(
-    "rejects changed zero-value target/request binding %j",
+    "rejects changed zero-value target/request binding case %#",
     (change) => {
       expect(() =>
         reviewSafeSubmission(

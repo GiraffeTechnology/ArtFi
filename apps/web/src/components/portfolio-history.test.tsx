@@ -36,7 +36,7 @@ describe("private loaded history controls", () => {
     expect(html).toContain(record.transactionHash);
     expect(html).toContain(record.contractAddress);
     expect(html).toContain("previous confirmation no longer applies");
-    expect(html).toContain('datetime="2026-10-16T12:00:00Z"');
+    expect(html).toMatch(/<time\b[^>]*\bdatetime="2026-10-16T12:00:00Z"/i);
   });
   it("renders unavailable history instead of a partial malformed result", () => {
     const html = renderToStaticMarkup(

@@ -93,6 +93,19 @@ export async function agentRuntimeProxy(
           { code: "AGENT_QUERY_INVALID", mode },
           { status: 400, headers: responseHeaders },
         );
+    // Match the existing runtime history contract before opening its bridge.
+    const after = params.get("after") ?? "0";
+    const limit = params.get("limit") ?? "100";
+    if (
+      !/^(0|[1-9][0-9]{0,19})$/.test(after) ||
+      BigInt(after) > 18446744073709551615n ||
+      !/^[1-9][0-9]{0,2}$/.test(limit) ||
+      Number(limit) > 100
+    )
+      return Response.json(
+        { code: "AGENT_QUERY_INVALID", mode },
+        { status: 400, headers: responseHeaders },
+      );
     url.search = params.toString();
     let body: string | undefined;
     if (request.method === "POST") {

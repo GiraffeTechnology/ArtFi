@@ -121,6 +121,68 @@ describe("agent runtime private bridge", () => {
     ).toBe(413);
     expect(upstream).not.toHaveBeenCalled();
   });
+  it.each(["intents", "actions"])(
+    "refuses malformed %s history queries before contacting the runtime",
+    async (kind) => {
+      for (const query of [
+        "after=",
+        "after=01",
+        "after=-1",
+        "after=%2B1",
+        "after=1.0",
+        "after=1e2",
+        "after=%201",
+        "after=18446744073709551616",
+        "after=" + "9".repeat(1000),
+        "limit=",
+        "limit=0",
+        "limit=01",
+        "limit=-1",
+        "limit=1.0",
+        "limit=101",
+        "limit=1000",
+        "after=0&after=1",
+        "limit=1&limit=2",
+        "after=0&account=other",
+      ]) {
+        const result = await request(
+          `${kind}/TEST_ONLY_history/history?${query}`,
+        );
+        expect(result.status, query).toBe(400);
+        expect(await result.json()).toMatchObject({
+          code: "AGENT_QUERY_INVALID",
+        });
+        expect(result.headers.get("cache-control")).toBe("no-store");
+      }
+      expect(upstream).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["intents", "actions"])(
+    "preserves exact canonical %s cursors and page-size boundaries",
+    async (kind) => {
+      for (const query of [
+        "",
+        "after=0&limit=1",
+        "after=18446744073709551615&limit=100",
+      ]) {
+        // Every fetch returns its own readable body, as a real upstream does.
+        upstream.mockResolvedValueOnce(
+          Response.json({ mode: "TEST_ONLY_NO_REAL_VALUE" }),
+        );
+        expect(
+          (
+            await request(
+              `${kind}/TEST_ONLY_history/history${query ? "?" + query : ""}`,
+            )
+          ).status,
+        ).toBe(200);
+        expect(upstream.mock.lastCall![0].search).toBe(
+          query ? "?" + query : "",
+        );
+      }
+      expect(upstream).toHaveBeenCalledTimes(3);
+    },
+  );
   it("forwards canonical workflow-history cursors and refuses unknown query fields", async () => {
     const result = await request(
       "actions/TEST_ONLY_history/history?after=9007199254740993&limit=100",
@@ -142,7 +204,6 @@ describe("agent runtime private bridge", () => {
         )
       ).status,
     ).toBe(400);
-    expect(upstream).toHaveBeenCalledExactlyOnce();
+    expect(upstream).toHaveBeenCalledTimes(1);
   });
 });
-

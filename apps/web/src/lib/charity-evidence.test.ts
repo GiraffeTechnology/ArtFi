@@ -243,7 +243,7 @@ describe("original evidence transaction and canonical receipt recovery", () => {
     ).resolves.toBeUndefined();
   });
   it.each([{ from: safe }, { to: safe }, { value: 1n }, { input: "0x" }])(
-    "refuses substituted direct transaction %j",
+    "refuses substituted direct transaction case %#",
     async (change) => {
       const { client, mock } = clientFor();
       mock.getTransaction.mockResolvedValue({
