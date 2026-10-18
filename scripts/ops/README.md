@@ -31,6 +31,8 @@ Open deployment gates: actual CTYun Aivan endpoint/model/auth/resource verificat
 approved notification channel, service-user ACLs and single-instance enforcement,
 startup/crash recovery service unit, bounded retention/rotation, capacity/backup/mirror
 telemetry adapters, controlled four-machine inventory, and test fault/soak evidence.
+The local host-capacity adapter described below supplies only host telemetry; backup,
+mirror freshness and database readiness still require their separate real adapters.
 The `artfi-monitor@.service` template proposes separate test/production users/state,
 nonblocking process-lifetime flock, least privilege, loopback-only networking and
 bounded restart attempts. It is not installed. Verified target paths/runtime pins,
@@ -104,3 +106,29 @@ remote effect is uncertain; receiver-side deduplication remains required. Local 
 exercise an actual hanging loopback request and notification cancellation. Filesystem
 syscalls themselves are not abortable; these tests do not prove bounded shutdown of
 a stalled storage device or a real systemd installation.
+
+### Read-only host capacity checks
+
+The service also accepts `kind: "host-capacity"`, `category: "capacity"` checks
+with the existing logical `id` and `maxAgeMs`. Supply an explicit absolute `diskPath`
+from the verified deployment inventory. There is no default path, endpoint, new
+account, service installation or automatic resource cleanup. HTTP probe restrictions
+remain unchanged, and capacity checks cannot include an HTTP URL or arbitrary fields.
+
+Optional `minimumFreeDiskRatio`, `minimumFreeMemoryRatio` and `maximumLoadPerCPU`
+use the existing read-only monitor defaults: 0.1, 0.05 and 2. Ratios must be strictly
+between zero and one; load must be positive. `minimumFreeDiskBytes` is an optional
+nonnegative safe integer floor in addition to the disk ratio. Block counters and
+the byte-floor comparison use BigInt; missing, invalid or inaccessible measurements
+are refused as healthy evidence. A completed low-capacity observation has
+`available: false, fresh: true`; a telemetry read failure has both flags false.
+
+Only `available`, `fresh` and `observedAt` enter the existing incident evaluator.
+Disk paths, capacity numbers and exception text do not enter events, notifications
+or optional model analysis. All configured thresholds must pass for a healthy sample.
+Shutdown is checked before/after sampling, and the original monitor's bounded tick,
+queue persistence, incident threshold, STOP file and heartbeat rules still apply.
+Filesystem stat calls themselves are not abortable; a timed-out call cannot become a
+successful tick. Host capacity does not establish DB, backup, chain or business health.
+Unit/source checks and one read-only native host observation do not install this
+service or establish durable incidents, real delivery channels or 24x7 availability.

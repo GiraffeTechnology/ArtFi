@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { Monitor } from "./monitor-core.mjs";
+import { hostCapacityProbe, validateHostCapacity } from "./host-capacity.mjs";
 
 export function validateConfig(config) {
   if (
@@ -26,6 +27,10 @@ export function validateConfig(config) {
   )
     throw new Error("SERVICE_CONFIG_REFUSED");
   for (const check of config.checks) {
+    if (check?.kind === "host-capacity") {
+      validateHostCapacity(check);
+      continue;
+    }
     const url = new URL(check.url);
     if (
       url.protocol !== "http:" ||
@@ -93,13 +98,29 @@ export function httpProbe(checks, fetchImpl = fetch, now = Date.now) {
   };
 }
 
+export function serviceProbe(
+  checks,
+  { fetchImpl = fetch, now = Date.now, disk, host } = {},
+) {
+  const capacities = checks.filter((check) => check.kind === "host-capacity");
+  const capacityIds = new Set(capacities.map((check) => check.id));
+  const capacity = hostCapacityProbe(capacities, { disk, host, now });
+  const http = httpProbe(
+    checks.filter((check) => check.kind !== "host-capacity"),
+    fetchImpl,
+    now,
+  );
+  return (id, signal) =>
+    capacityIds.has(id) ? capacity(id, signal) : http(id, signal);
+}
+
 export async function runService(config, { signal, once = false } = {}) {
   validateConfig(config);
   const monitor = new Monitor({
     directory: config.stateDirectory,
     environment: config.environment,
     checks: config.checks,
-    probe: httpProbe(config.checks),
+    probe: serviceProbe(config.checks),
     threshold: 2,
     maxQueueEntries: config.maxQueueEntries,
     deliveredRetentionMs: config.deliveredRetentionMs,
