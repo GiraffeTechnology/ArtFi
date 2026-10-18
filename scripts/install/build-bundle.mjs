@@ -8,6 +8,7 @@ import {
 import { buildTaskListingRuntime } from "./build-task-listing-runtime.mjs";
 import { collectLicenses, copyProjectNotices } from "./licenses.mjs";
 import { bundleContracts } from "./bundle-contracts.mjs";
+import { bundleMonitor } from "./bundle-monitor.mjs";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -220,6 +221,7 @@ try {
   await cp(join(root, "scripts/operations"), join(bundle, "tools/operations"), {
     recursive: true,
   });
+  await bundleMonitor(root, join(bundle, "tools/ops"));
   for (const directory of [
     join(bundle, "tools/operations"),
     join(bundle, "scripts/agent"),
@@ -241,6 +243,12 @@ try {
     "-e",
     `await import(${JSON.stringify(pathToFileURL(join(bundle, "runtime/agent/src/server.mjs")).href)});`,
   ]);
+  // Import the complete packaged monitor graph without starting a listener or tick.
+  run(node, [
+    "--input-type=module",
+    "-e",
+    `await import(${JSON.stringify(pathToFileURL(join(bundle, "tools/ops/monitor-service.mjs")).href)}); await import(${JSON.stringify(pathToFileURL(join(bundle, "tools/ops/monitor-status.mjs")).href)});`,
+  ]);
   await mkdir(join(bundle, "tools/acceptance"), { recursive: true });
   for (const name of [
     "installable-acceptance.mjs",
@@ -259,6 +267,7 @@ try {
   });
   for (const name of [
     "INSTALLATION.md",
+    "MONITOR_PACKAGE.md",
     "TASK_LISTING_RUNTIME.md",
     "NFT-TASK-JOURNAL.md",
     "DELIVERY_CANDIDATE_2026-10-06.md",
