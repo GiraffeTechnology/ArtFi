@@ -200,29 +200,34 @@ export type ObservedFractionMatchPlan = FractionMatchPlan & {
 
 export const fractionBookReadTimeoutMs = 12000;
 
-// A deadline retires the entire read result. It does not claim to cancel provider RPCs.
+// Retirement prevents late results from starting further RPC work. Already-started provider RPCs are not cancelled.
 export async function readFractionMatchPlan(
   client: Reader,
   request: FractionMatchRequest,
   loadBook: (at: bigint) => Promise<unknown>,
 ): Promise<ObservedFractionMatchPlan> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let retired = false;
+  const deadline = performance.now() + fractionBookReadTimeoutMs;
+  const timeoutError = () =>
+    new Error(
+      "The fraction book read timed out. Refresh the book before trading.",
+    );
+  const assertActive = () => {
+    if (retired || performance.now() >= deadline) throw timeoutError();
+  };
   try {
     return await Promise.race([
-      readFractionMatchPlanAtSnapshot(client, request, loadBook),
+      readFractionMatchPlanAtSnapshot(client, request, loadBook, assertActive),
       new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () =>
-            reject(
-              new Error(
-                "The fraction book read timed out. Refresh the book before trading.",
-              ),
-            ),
-          fractionBookReadTimeoutMs,
-        );
+        timer = setTimeout(() => {
+          retired = true;
+          reject(timeoutError());
+        }, fractionBookReadTimeoutMs);
       }),
     ]);
   } finally {
+    retired = true;
     clearTimeout(timer);
   }
 }
@@ -231,11 +236,16 @@ async function readFractionMatchPlanAtSnapshot(
   client: Reader,
   request: FractionMatchRequest,
   loadBook: (at: bigint) => Promise<unknown>,
+  assertActive: () => void,
 ): Promise<ObservedFractionMatchPlan> {
+  assertActive();
   validateFractionMatchRequest(request);
-  if ((await client.getChainId()) !== 560048)
+  const initialChainId = await client.getChainId();
+  assertActive();
+  if (initialChainId !== 560048)
     throw new Error("The book reader is on a different chain.");
   const block = await client.getBlock({ blockTag: "latest" });
+  assertActive();
   if (
     !validUint(block.number, false) ||
     !validUint(block.timestamp, false) ||
@@ -246,6 +256,7 @@ async function readFractionMatchPlanAtSnapshot(
   )
     throw new Error("A mined chain snapshot is unavailable.");
   const body = await loadBook(block.timestamp);
+  assertActive();
   if (
     !body ||
     typeof body !== "object" ||
@@ -263,6 +274,7 @@ async function readFractionMatchPlanAtSnapshot(
   )
     throw new Error("The fraction order log is incomplete or malformed.");
   const candidates = rankFractionCandidates(body.data, request);
+  assertActive();
   const market = {
     address: request.market,
     abi: artFiFractionMarketAbi,
@@ -299,6 +311,7 @@ async function readFractionMatchPlanAtSnapshot(
         blockNumber: block.number,
       }),
     ]);
+  assertActive();
   if (paused !== false || assetAllowed !== true || paymentAllowed !== true)
     throw new Error("The market or token pair is unavailable for settlement.");
   if (![cap, spent, buyerBalance].every((value) => validUint(value, false)))
@@ -311,6 +324,7 @@ async function readFractionMatchPlanAtSnapshot(
   >();
   const liquidity = new Map<string, FractionLiquidity>();
   const read = async ({ order, intent }: FractionCandidate) => {
+    assertActive();
     if (
       intent.seller === request.buyer.toLowerCase() ||
       (intent.buyer !== anyFractionBuyer &&
@@ -347,6 +361,7 @@ async function readFractionMatchPlanAtSnapshot(
               args: [intent.seller, request.market],
             }),
           ]);
+          assertActive();
           return { epoch, balance, allowance };
         })(),
       );
@@ -366,15 +381,20 @@ async function readFractionMatchPlanAtSnapshot(
         block.number!,
       ),
     ]);
+    assertActive();
     liquidity.set(order.intentHash, { ...seller, filled, signatureValid });
   };
   // Bounded RPC fan-out; a failed read fails the complete plan rather than privileging reachable sellers.
-  for (let offset = 0; offset < candidates.length; offset += 8)
+  for (let offset = 0; offset < candidates.length; offset += 8) {
+    assertActive();
     await Promise.all(candidates.slice(offset, offset + 8).map(read));
+  }
+  assertActive();
   const [checked, chainId] = await Promise.all([
     client.getBlock({ blockNumber: block.number }),
     client.getChainId(),
   ]);
+  assertActive();
   if (
     chainId !== 560048 ||
     checked.number !== block.number ||
