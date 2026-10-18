@@ -1,21 +1,31 @@
 import { fail } from "./config.mjs";
+function discardResponse(response) {
+  try {
+    void response.body?.cancel().catch(() => undefined);
+  } catch {
+    /* Best effort. */
+  }
+}
 export async function readResponseJSON(response, limit = 65536) {
   const declared = response.headers.get("content-length");
   if (declared && (!/^\d+$/.test(declared) || Number(declared) > limit)) {
-    await response.body?.cancel();
+    discardResponse(response);
     fail("UPSTREAM_RESPONSE_TOO_LARGE");
   }
   const reader = response.body?.getReader();
   if (!reader) fail("UPSTREAM_RESPONSE_INVALID");
   const chunks = [];
   let size = 0;
+  let ended = false;
   try {
     for (;;) {
       const { value, done } = await reader.read();
-      if (done) break;
+      if (done) {
+        ended = true;
+        break;
+      }
       size += value.byteLength;
       if (size > limit) {
-        await reader.cancel();
         fail("UPSTREAM_RESPONSE_TOO_LARGE");
       }
       chunks.push(value);
@@ -27,6 +37,13 @@ export async function readResponseJSON(response, limit = 65536) {
     if (error?.message === "UPSTREAM_RESPONSE_TOO_LARGE") throw error;
     fail("UPSTREAM_RESPONSE_INVALID");
   } finally {
+    if (!ended) {
+      try {
+        void reader.cancel().catch(() => undefined);
+      } catch {
+        /* Best effort. */
+      }
+    }
     reader.releaseLock();
   }
 }

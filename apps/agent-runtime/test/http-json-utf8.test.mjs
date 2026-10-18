@@ -126,3 +126,66 @@ test("invalid JSON and non-object requests expose only stable codes", async () =
     /^Error: UPSTREAM_RESPONSE_INVALID$/,
   );
 });
+
+test(
+  "declared-size rejection settles even when unread-body cancellation never settles",
+  { timeout: 1000 },
+  async () => {
+    let cancelled = 0;
+    const body = new ReadableStream({
+      cancel() {
+        cancelled++;
+        return new Promise(() => {});
+      },
+    });
+    await assert.rejects(
+      readResponseJSON(
+        new Response(body, { headers: { "content-length": "65537" } }),
+      ),
+      /^Error: UPSTREAM_RESPONSE_TOO_LARGE$/,
+    );
+    assert.equal(cancelled, 1);
+  },
+);
+test(
+  "streamed-size rejection settles and releases the reader when cancellation never settles",
+  { timeout: 1000 },
+  async () => {
+    let cancelled = 0;
+    const body = new ReadableStream({
+      start(c) {
+        c.enqueue(new Uint8Array(65537));
+      },
+      cancel() {
+        cancelled++;
+        return new Promise(() => {});
+      },
+    });
+    await assert.rejects(
+      readResponseJSON(new Response(body)),
+      /^Error: UPSTREAM_RESPONSE_TOO_LARGE$/,
+    );
+    assert.equal(cancelled, 1);
+    assert.equal(body.locked, false);
+  },
+);
+test("cancellation errors cannot replace stable declared and streamed size refusals", async () => {
+  for (const declared of [true, false]) {
+    const body = new ReadableStream({
+      start(c) {
+        c.enqueue(new Uint8Array(65537));
+      },
+      cancel() {
+        throw Error("PRIVATE_CANCEL_FAILURE");
+      },
+    });
+    await assert.rejects(
+      readResponseJSON(
+        new Response(body, {
+          headers: declared ? { "content-length": "65537" } : {},
+        }),
+      ),
+      /^Error: UPSTREAM_RESPONSE_TOO_LARGE$/,
+    );
+  }
+});
