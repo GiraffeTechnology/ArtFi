@@ -1,9 +1,9 @@
-import {
-  boundedOrderText,
-  nativeOrderAPIURL,
-} from "@/lib/native-order-upstream";
+import { nativeOrderAPIURL } from "@/lib/native-order-upstream";
 import {
   notificationJSON,
+  notificationText,
+  discardNotificationBody,
+  withNotificationDeadline,
   notificationRoute,
   notificationSessionMatches,
 } from "@/lib/notification-transport";
@@ -29,9 +29,10 @@ const messages: Record<number, string> = {
   422: "The current revision and explicit preferences are required.",
 };
 
-async function proxy(
+async function proxyWithinDeadline(
   request: Request,
   context: { params: Promise<{ path: string[] }> },
+  signal: AbortSignal,
 ) {
   try {
     const { path } = await context.params;
@@ -78,7 +79,7 @@ async function proxy(
         "application/json"
       )
         throw new UserAuthError(400, messages[400]);
-      body = await boundedOrderText(request.body, 4096).catch(() => {
+      body = await notificationText(request.body, 4096, signal).catch(() => {
         throw new UserAuthError(413, messages[413]);
       });
       const key = request.headers.get("idempotency-key") || "";
@@ -87,16 +88,21 @@ async function proxy(
       upstreamHeaders.set("content-type", "application/json");
       upstreamHeaders.set("idempotency-key", key);
     }
+    signal.throwIfAborted();
     const response = await fetch(nativeOrderAPIURL(upstream), {
       method: request.method,
       headers: upstreamHeaders,
       body,
       cache: "no-store",
       redirect: "error",
-      signal: AbortSignal.timeout(8_000),
+      signal,
     });
+    if (signal.aborted) {
+      discardNotificationBody(response);
+      signal.throwIfAborted();
+    }
     if (!response.ok) {
-      await response.body?.cancel();
+      discardNotificationBody(response);
       const status = messages[response.status] ? response.status : 503;
       return Response.json(
         {
@@ -107,12 +113,13 @@ async function proxy(
         { status, headers },
       );
     }
-    const data = await notificationJSON(response);
+    const data = await notificationJSON(response, signal);
     const result =
       request.method === "GET" && path.join("/") === "preferences"
         ? parseNotificationPreferences(data)
         : parseNotificationPage(data, identity);
     const current = await requireUserSession(address, chainId);
+    signal.throwIfAborted();
     if (
       !notificationSessionMatches(expected, current.session) ||
       Date.now() >= identity.expiresAt
@@ -128,6 +135,26 @@ async function proxy(
           "Notifications are unavailable. No change was confirmed; refresh to reconcile.",
       },
       { status, headers },
+    );
+  }
+}
+async function proxy(
+  request: Request,
+  context: { params: Promise<{ path: string[] }> },
+) {
+  try {
+    return await withNotificationDeadline(
+      (signal) => proxyWithinDeadline(request, context, signal),
+      request.signal,
+      8_000,
+    );
+  } catch {
+    return Response.json(
+      {
+        detail:
+          "Notifications are unavailable. No change was confirmed; refresh to reconcile.",
+      },
+      { status: 503, headers },
     );
   }
 }

@@ -6,24 +6,92 @@ import {
 
 export const maximumNotificationResponseBytes = 196_608;
 
+/** Bound settlement even when a transport or stream ignores cancellation.
+ * A timed-out mutation has an unknown result and must never be retried here. */
+export async function withNotificationDeadline<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  signal?: AbortSignal,
+  timeoutMs = 12_000,
+): Promise<T> {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 12_000)
+    throw new RangeError("Invalid notification deadline.");
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  let interrupted: (() => void) | undefined;
+  const stopped = new Promise<never>((_, reject) => {
+    interrupted = () => reject(new Error("Notification request interrupted."));
+    controller.signal.addEventListener("abort", interrupted, { once: true });
+  });
+  const timer = setTimeout(abort, timeoutMs);
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => {
+        controller.signal.throwIfAborted();
+        return operation(controller.signal);
+      }),
+      stopped,
+    ]);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+    if (interrupted)
+      controller.signal.removeEventListener("abort", interrupted);
+  }
+}
+
+/** Cleanup cannot hold the caller's result or expose an upstream error. */
+export function discardNotificationBody(response: Response) {
+  try {
+    void response.body?.cancel().catch(() => undefined);
+  } catch {
+    // The body may already be locked or cancelled.
+  }
+}
+
 /** Bound bytes before parsing. No response, wallet identity or token is persisted. */
-export async function notificationJSON(response: Response): Promise<unknown> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("Notifications are unavailable.");
+export async function notificationText(
+  body: ReadableStream<Uint8Array> | null,
+  maximumBytes: number,
+  signal: AbortSignal,
+): Promise<string> {
+  if (
+    !Number.isSafeInteger(maximumBytes) ||
+    maximumBytes < 1 ||
+    maximumBytes > maximumNotificationResponseBytes
+  )
+    throw new RangeError("Invalid notification body limit.");
+  signal.throwIfAborted();
+  const reader = body?.getReader();
+  if (!reader) return "";
   const chunks: Uint8Array[] = [];
   let size = 0;
+  let ended = false;
+  let onAbort: (() => void) | undefined;
   try {
+    signal.throwIfAborted();
+    const stopped = new Promise<never>((_, reject) => {
+      onAbort = () => reject(new Error("Notification read interrupted."));
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted) onAbort();
+    });
     for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      const { done, value } = await Promise.race([reader.read(), stopped]);
+      signal.throwIfAborted();
+      if (done) {
+        ended = true;
+        break;
+      }
       size += value.byteLength;
-      if (size > maximumNotificationResponseBytes) {
-        await reader.cancel();
+      if (size > maximumBytes) {
         throw new Error("The notification response is too large.");
       }
       chunks.push(value);
     }
   } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+    if (!ended) void reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
   const bytes = new Uint8Array(size);
@@ -32,7 +100,21 @@ export async function notificationJSON(response: Response): Promise<unknown> {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+
+export async function notificationJSON(
+  response: Response,
+  signal: AbortSignal = AbortSignal.timeout(12_000),
+): Promise<unknown> {
+  if (!response.body) throw new Error("Notifications are unavailable.");
+  return JSON.parse(
+    await notificationText(
+      response.body,
+      maximumNotificationResponseBytes,
+      signal,
+    ),
+  );
 }
 
 export function notificationRoute(path: string[], method: string) {
@@ -59,36 +141,41 @@ export function notificationSessionMatches(
 export function browserNotificationTransport(
   request: typeof fetch = fetch,
 ): NotificationTransport {
-  const call = async (
+  const call = (
     route: string,
     identity: NotificationIdentity,
     signal: AbortSignal,
     method = "GET",
     body?: unknown,
     key?: string,
-  ) => {
-    const headers: Record<string, string> = {
-      "x-artfi-wallet": identity.address,
-      "x-artfi-chain": String(identity.chainId),
-      "x-artfi-session": identity.sessionId,
-    };
-    if (body !== undefined) headers["content-type"] = "application/json";
-    if (key) headers["idempotency-key"] = key;
-    const response = await request(`/api/notifications/${route}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: "same-origin",
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]),
-    });
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new NotificationRequestError(response.status);
-    }
-    return notificationJSON(response);
-  };
+  ) =>
+    withNotificationDeadline(async (requestSignal) => {
+      const headers: Record<string, string> = {
+        "x-artfi-wallet": identity.address,
+        "x-artfi-chain": String(identity.chainId),
+        "x-artfi-session": identity.sessionId,
+      };
+      if (body !== undefined) headers["content-type"] = "application/json";
+      if (key) headers["idempotency-key"] = key;
+      const response = await request(`/api/notifications/${route}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
+        signal: requestSignal,
+      });
+      if (requestSignal.aborted) {
+        discardNotificationBody(response);
+        requestSignal.throwIfAborted();
+      }
+      if (!response.ok) {
+        discardNotificationBody(response);
+        throw new NotificationRequestError(response.status);
+      }
+      return notificationJSON(response, requestSignal);
+    }, signal);
   return {
     list: (identity, signal) => call("inbox", identity, signal),
     markRead: (identity, input, key, signal) =>
