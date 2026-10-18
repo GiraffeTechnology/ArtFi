@@ -11,7 +11,7 @@ const scope: AgentHistoryScope = {
   mode: "TEST_ONLY_NO_REAL_VALUE",
   session: {
     id: "TEST_ONLY_session",
-    address: "0x" + "a".repeat(40),
+    address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     chainId: 560048,
     expiresAt: 4000000000000,
     accessExpiresAt: 4000000000000,

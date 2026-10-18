@@ -43,9 +43,14 @@ function fixture() {
     descriptionHash: keccak256(stringToHex(description)),
   };
   const proposalId = proposalPackageId(proposal);
-  const topics = encodeEventTopics({
+  const encodedTopics = encodeEventTopics({
     abi: [publishedProposalEvent],
     eventName: "ProposalCreated",
+  });
+  const topics: Hex[] = encodedTopics.map((topic) => {
+    if (typeof topic !== "string")
+      throw new Error("The fixture requires complete event topics.");
+    return topic;
   });
   const data = encodeAbiParameters(publishedProposalEvent.inputs, [
     proposalId,

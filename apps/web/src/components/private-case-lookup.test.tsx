@@ -14,7 +14,7 @@ describe("private case lookup control", () => {
         createElement(PrivateCaseLookup, {
           session: {
             id: "TEST_ONLY-session",
-            address: "0x" + "1".repeat(40),
+            address: "0x1111111111111111111111111111111111111111",
             chainId: 560048,
             expiresAt: 4000000000000,
             accessExpiresAt: 4000000000000,
