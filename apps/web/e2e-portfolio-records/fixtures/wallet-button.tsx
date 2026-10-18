@@ -2,7 +2,11 @@ import { useConnect } from "wagmi";
 export function WalletButton() {
   const { connectAsync, connectors, isPending } = useConnect();
   const initialChain =
-    new URLSearchParams(location.search).get("network") === "1" ? 1 : 560048;
+    new URLSearchParams(location.search).get("network") === "1"
+      ? 1
+      : new URLSearchParams(location.search).get("network") === "8453"
+        ? 8453
+        : 560048;
   return (
     <button
       disabled={isPending}

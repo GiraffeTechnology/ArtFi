@@ -14,7 +14,7 @@ import {
   useSwitchChain,
 } from "wagmi";
 import { mock } from "wagmi/connectors";
-import { hoodi, mainnet } from "wagmi/chains";
+import { hoodi, mainnet, base } from "wagmi/chains";
 import { WalletButton } from "./wallet-button";
 import { PortfolioRecords } from "../../src/components/portfolio-records";
 import {
@@ -29,9 +29,14 @@ const config = createConfig({
   chains: [
     { ...hoodi, rpcUrls: { default: { http: [rpc] } } },
     { ...mainnet, rpcUrls: { default: { http: [rpc] } } },
+    { ...base, rpcUrls: { default: { http: [rpc] } } },
   ],
   connectors: [mock({ accounts: [account] })],
-  transports: { [hoodi.id]: http(rpc), [mainnet.id]: http(rpc) },
+  transports: {
+    [hoodi.id]: http(rpc),
+    [mainnet.id]: http(rpc),
+    [base.id]: http(rpc),
+  },
 });
 const queries = new QueryClient({
   defaultOptions: { queries: { retry: false } },
@@ -84,6 +89,9 @@ function Controls() {
       <p data-testid="real-session-state">
         {session.authenticated ? "authenticated" : "unsigned"}
       </p>
+      <p data-testid="real-session-retirement">
+        {session.signOutPending ? "pending" : "settled"}
+      </p>
       <button onClick={() => void userSessionController.restore()}>
         Restore TEST_ONLY session
       </button>
@@ -98,6 +106,12 @@ function Controls() {
       <button onClick={() => disconnect()}>Disconnect TEST_ONLY wallet</button>
       <button onClick={() => void switchChainAsync({ chainId: 1 })}>
         Switch TEST_ONLY chain
+      </button>
+      <button onClick={() => void switchChainAsync({ chainId: 8453 })}>
+        Switch TEST_ONLY Base
+      </button>
+      <button onClick={() => void switchChainAsync({ chainId: 560048 })}>
+        Switch TEST_ONLY Hoodi
       </button>
     </header>
   );

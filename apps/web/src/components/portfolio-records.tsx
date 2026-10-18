@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
+import { hoodi } from "wagmi/chains";
 import { useUserSession } from "@/components/user-session-provider";
 import { portfolioSessionKey } from "@/lib/portfolio-session";
 import { PortfolioHistory } from "./portfolio-history";
@@ -22,6 +23,18 @@ export function PortfolioRecords() {
         <h2>Runtime positions and history</h2>
         <p>
           Sign in with the connected wallet to view its holdings and history.
+        </p>
+      </section>
+    );
+  }
+
+  if (wallet.chainId !== hoodi.id) {
+    return (
+      <section className="portfolio-records" aria-live="polite">
+        <h2>Runtime positions and history</h2>
+        <p role="status">
+          Indexed positions and history are available on Hoodi only. Switch to
+          Hoodi and sign in with the connected wallet.
         </p>
       </section>
     );
