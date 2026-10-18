@@ -4,6 +4,7 @@ import {
   boundedOrderText,
   nativeOrderAPIURL,
   nativeOrderResponse,
+  NativeOrderReadError,
 } from "@/lib/native-order-upstream";
 import {
   verifyNativeOrderSale,
@@ -54,12 +55,14 @@ export async function GET(request: Request) {
     return Response.json({ detail: "Invalid order filters." }, { status: 400 });
   try {
     const upstream = nativeOrderAPIURL(`/v1/orders?${query.toString()}`);
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(5000)]);
     return await nativeOrderResponse(
       await fetch(upstream, {
         cache: "no-store",
         redirect: "error",
-        signal: AbortSignal.timeout(5000),
+        signal,
       }),
+      { signal, timeoutMs: 5000 },
     );
   } catch {
     return Response.json(
@@ -114,11 +117,29 @@ export async function POST(request: Request) {
       );
     let raw: string;
     try {
-      raw = await boundedOrderText(request.body, 32768);
-    } catch {
+      raw = await boundedOrderText(request.body, 32768, {
+        signal: request.signal,
+        timeoutMs: 5000,
+      });
+    } catch (error) {
+      const status =
+        error instanceof NativeOrderReadError
+          ? error.reason === "too-large"
+            ? 413
+            : ["timeout", "aborted"].includes(error.reason)
+              ? 408
+              : 400
+          : 400;
       return Response.json(
-        { detail: "The order payload exceeds the supported size." },
-        { status: 413 },
+        {
+          detail:
+            status === 413
+              ? "The order payload exceeds the supported size."
+              : status === 408
+                ? "The order request did not complete before forwarding."
+                : "The order payload could not be read.",
+        },
+        { status, headers: { "cache-control": "no-store" } },
       );
     }
     let order;
@@ -157,6 +178,7 @@ export async function POST(request: Request) {
         { status: 401 },
       );
     }
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(5000)]);
     return await nativeOrderResponse(
       await fetch(nativeOrderAPIURL("/v1/indexer/signed-orders"), {
         method: "POST",
@@ -168,8 +190,9 @@ export async function POST(request: Request) {
         body: JSON.stringify(order),
         cache: "no-store",
         redirect: "error",
-        signal: AbortSignal.timeout(5000),
+        signal,
       }),
+      { signal, timeoutMs: 5000 },
     );
   } catch (error) {
     if (error instanceof UserAuthError)

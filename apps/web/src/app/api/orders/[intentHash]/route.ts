@@ -26,12 +26,14 @@ export async function GET(
     const upstream = nativeOrderAPIURL(
       `/v1/orders/${intentHash.toLowerCase()}?${query.toString()}`,
     );
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(5000)]);
     return await nativeOrderResponse(
       await fetch(upstream, {
         cache: "no-store",
         redirect: "error",
-        signal: AbortSignal.timeout(5000),
+        signal,
       }),
+      { signal, timeoutMs: 5000 },
     );
   } catch {
     return Response.json(
