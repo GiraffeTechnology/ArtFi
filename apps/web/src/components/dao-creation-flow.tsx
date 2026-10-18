@@ -1,4 +1,5 @@
 "use client";
+import styles from "./dao-creation-flow.module.css";
 
 import { DaoPresentationFields, DaoPresentationCard } from "./dao-presentation";
 import { readDaoPresentation } from "@/lib/dao-presentation";
@@ -1071,7 +1072,7 @@ function ConnectedDaoCreation({
 
   return (
     <section
-      className="dao-create"
+      className={`dao-create ${styles.root}`}
       aria-labelledby="dao-create-title"
       data-no-translate
     >

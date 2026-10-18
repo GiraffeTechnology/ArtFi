@@ -334,3 +334,47 @@ test("initial creation refuses a server intent for another token", async ({
   expect(await page.evaluate(() => window.vaultFixture.calls.length)).toBe(0);
   await done();
 });
+
+test("completed Vault stays within viewport and pointer controls remain touch sized", async ({
+  page,
+}) => {
+  const done = await open(page);
+  await approve(page).click();
+  await expect(deposit(page)).toBeEnabled();
+  await deposit(page).click();
+  await expect(issue(page)).toBeEnabled();
+  await issue(page).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "DAO asset setup confirmed",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const width = await page.evaluate(() => ({
+    viewport: innerWidth,
+    document: document.documentElement.scrollWidth,
+  }));
+  expect(width.document).toBeLessThanOrEqual(width.viewport);
+  const button = page.getByRole("button", {
+    name: "Prepare another Vault",
+    exact: true,
+  });
+  await button.scrollIntoViewIfNeeded();
+  const bounds = await button.boundingBox();
+  console.log(
+    "VAULT_LAYOUT",
+    JSON.stringify({ ...width, buttonHeight: bounds!.height }),
+  );
+  expect(bounds!.height).toBeGreaterThanOrEqual(44);
+  expect(
+    await button.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        r.x + r.width / 2,
+        r.y + r.height / 2,
+      );
+      return hit === el || el.contains(hit);
+    }),
+  ).toBe(true);
+  await done();
+});
