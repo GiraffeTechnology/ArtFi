@@ -185,7 +185,7 @@ test("unknown broadcast survives reload and reconciles without resend", async ({
   await expect(
     page.getByRole("button", { name: "Check transaction", exact: true }),
   ).toBeEnabled();
-  expect((await journal(page)).pending.hash).toMatch(/^0x[b]{64}$/);
+  expect((await journal(page)).pending.hash).toMatch(/^0x[0-9a-f]{64}$/);
   await page.reload();
   await expect(approve(page)).toBeDisabled();
   await page.evaluate(() => {
@@ -272,7 +272,7 @@ test("initial creation completes prepare/create/approve/deposit/issuance as four
   await expect(approve(page)).toBeEnabled();
   const recorded = await journal(page);
   expect(recorded.data.intent.intentId).toBe("test-only-created-intent");
-  expect(recorded.data.creationHash).toMatch(/^0x[b]{64}$/);
+  expect(recorded.data.creationHash).toMatch(/^0x[0-9a-f]{64}$/);
   expect(recorded.pending).toBeUndefined();
   expect(
     await page.evaluate(() =>
@@ -376,5 +376,122 @@ test("completed Vault stays within viewport and pointer controls remain touch si
       return hit === el || el.contains(hit);
     }),
   ).toBe(true);
+  await done();
+});
+
+for (const mode of [
+  "wrong-receipt-hash",
+  "reorg",
+  "reorg-revert",
+  "second-reorg",
+  "wrong-nonce",
+  "changed-reprice",
+  "unknown-status",
+  "missing-original",
+  "wrong-chain",
+]) {
+  test(`canonical receipt: ${mode} retains original approval and reconciles read-only after reload`, async ({
+    page,
+  }) => {
+    const done = await open(page);
+    await page.evaluate((value) => {
+      window.vaultFixture.mode = value;
+    }, mode);
+    await approve(page).click();
+    const check = page.getByRole("button", {
+      name: "Check transaction",
+      exact: true,
+    });
+    await expect(check).toBeEnabled();
+    const unresolved = await journal(page);
+    expect(unresolved.data.stage).toBe("created");
+    expect(unresolved.pending.step).toBe("approve");
+    expect(unresolved.pending.hash).toMatch(/^0x[0-9a-f]{64}$/);
+    await expect(approve(page)).toBeDisabled();
+    await expect(deposit(page)).toHaveCount(0);
+    expect(await page.evaluate(() => window.vaultFixture.calls.length)).toBe(1);
+    await page.reload();
+    await expect(approve(page)).toBeDisabled();
+    await page.evaluate(() => {
+      window.vaultFixture.mode = "success";
+    });
+    await page
+      .getByRole("button", { name: "Check transaction", exact: true })
+      .click();
+    await expect(deposit(page)).toBeEnabled();
+    expect((await journal(page)).pending).toBeUndefined();
+    expect((await journal(page)).data.stage).toBe("approved");
+    expect(await page.evaluate(() => window.vaultFixture.calls.length)).toBe(0);
+    await done();
+  });
+}
+test("canonical receipt: exact repricing advances only the reviewed approval", async ({
+  page,
+}) => {
+  const done = await open(page);
+  await page.evaluate(() => {
+    window.vaultFixture.mode = "repriced";
+  });
+  await approve(page).click();
+  await expect(deposit(page)).toBeEnabled();
+  expect((await journal(page)).data.stage).toBe("approved");
+  expect((await journal(page)).pending).toBeUndefined();
+  expect(await page.evaluate(() => window.vaultFixture.canonicalReads)).toBe(2);
+  expect(
+    await page.evaluate(() =>
+      window.vaultFixture.calls.map((c) => c.functionName),
+    ),
+  ).toEqual(["approve"]);
+  await done();
+});
+for (const mode of ["cancelled", "replaced", "revert"]) {
+  test(`canonical receipt: proven ${mode} is retryable without promoting the stage`, async ({
+    page,
+  }) => {
+    const done = await open(page);
+    await page.evaluate((value) => {
+      window.vaultFixture.mode = value;
+    }, mode);
+    await approve(page).click();
+    await expect(approve(page)).toBeEnabled();
+    expect((await journal(page)).data.stage).toBe("created");
+    expect((await journal(page)).pending).toBeUndefined();
+    await expect(deposit(page)).toHaveCount(0);
+    expect(await page.evaluate(() => window.vaultFixture.canonicalReads)).toBe(
+      2,
+    );
+    await page.evaluate(() => {
+      window.vaultFixture.mode = "success";
+    });
+    await approve(page).click();
+    await expect(deposit(page)).toBeEnabled();
+    expect(await page.evaluate(() => window.vaultFixture.calls.length)).toBe(2);
+    await done();
+  });
+}
+test("canonical receipt: unresolved read holds the original request against double click", async ({
+  page,
+}, info) => {
+  const done = await open(page);
+  await page.evaluate(() => {
+    window.vaultFixture.mode = "receipt-deferred";
+  });
+  await approve(page).click();
+  await expect
+    .poll(() => page.evaluate(() => window.vaultFixture.receipts))
+    .toBe(1);
+  await expect(approve(page)).toBeDisabled();
+  await expect(deposit(page)).toHaveCount(0);
+  expect((await journal(page)).data.stage).toBe("created");
+  expect((await journal(page)).pending.step).toBe("approve");
+  expect(await page.evaluate(() => window.vaultFixture.calls.length)).toBe(1);
+  await page.screenshot({
+    path: info.outputPath("vault-canonical-pending.png"),
+    fullPage: true,
+  });
+  await page.evaluate(() => window.vaultFixture.releaseReceipt());
+  await expect(deposit(page)).toBeEnabled();
+  expect((await journal(page)).pending).toBeUndefined();
+  expect(await page.evaluate(() => window.vaultFixture.calls.length)).toBe(1);
   await done();
 });
