@@ -12,6 +12,7 @@ import { useAccount, useWalletClient } from "wagmi";
 import { assertSameNftReview } from "@/lib/nft/client";
 import { readNftHistoryPage } from "@/lib/nft/history-view";
 import { NftHistoryResults } from "@/components/nft-history-results";
+import { NftActionReview } from "@/components/nft-action-review";
 import {
   observeNftCatalogPage,
   mergeNftCatalogPage,
@@ -1075,128 +1076,18 @@ function NftMarketSession() {
           </div>
         )}
       {visibleOperation && (
-        <section
-          className="nft-review"
-          aria-label="Wallet action review"
-          data-no-translate
-        >
-          <h3>Review {visibleOperation.plan.request.action}</h3>
-          <p>{visibleOperation.plan.summary}</p>
-          <p>
-            Collection {visibleOperation.plan.scope.label} ·{" "}
-            {visibleOperation.plan.scope.chain}
-          </p>
-          <p>
-            Contract {visibleOperation.plan.scope.contract} · Token{" "}
-            {visibleOperation.plan.request.tokenId} · Quantity{" "}
-            {visibleOperation.plan.request.quantity}
-          </p>
-          <p>
-            Order total{" "}
-            {formatEther(
-              BigInt(
-                visibleOperation.plan.orderTotalWei ??
-                  visibleOperation.plan.request.priceWei,
-              ),
-            )}{" "}
-            {visibleOperation.plan.paymentToken ||
-              (["offer", "accept"].includes(
-                visibleOperation.plan.request.action,
-              )
-                ? "WETH"
-                : "ETH")}
-            {visibleOperation.plan.request.action === "accept"
-              ? " before the fees below"
-              : ""}
-            .
-            {visibleOperation.plan.request.action === "cancel"
-              ? " Cancellation sends no purchase payment."
-              : " Wallet-estimated gas is additional."}
-          </p>
-          <p>
-            Order expiry{" "}
-            {new Date(
-              (visibleOperation.plan.orderExpiresAt ??
-                visibleOperation.plan.request.expiresAt) * 1000,
-            ).toLocaleString()}
-          </p>
-          {visibleOperation.plan.kind === "approval" &&
-            ["list", "offer"].includes(
-              visibleOperation.plan.request.action,
-            ) && (
-              <p>
-                This approval does not publish an order. Review the venue fees
-                in the next signing step.
-              </p>
-            )}
-          <p>
-            Wallet {visibleOperation.plan.request.account} · Chain{" "}
-            {visibleOperation.plan.chainId}
-          </p>
-          <p>{nftRights(visibleOperation.plan.scope.charity)}</p>
-          {visibleOperation.plan.fees.map((fee, index) => (
-            <p key={index}>
-              Fee {formatEther(BigInt(fee.amountWei))} ETH/WETH to{" "}
-              {fee.recipient}
-            </p>
-          ))}
-          <p>Status: {visibleOperation.status}</p>
-          {visibleOperation.transactionHash && (
-            <p className="nft-market-hash">
-              Transaction {visibleOperation.transactionHash}
-            </p>
-          )}
-          {visibleOperation.orderHash && (
-            <p className="nft-market-hash">
-              Order {visibleOperation.orderHash}
-            </p>
-          )}
-          <button
-            disabled={
-              busy ||
-              visibleOperation.status !== "awaiting-wallet" ||
-              visibleOperation.walletStarted ||
-              recovery?.attempted
-            }
-            onClick={() => void run(confirm)}
-          >
-            Confirm in wallet
-          </button>
-          {visibleOperation.status === "awaiting-wallet" &&
-            !visibleOperation.walletStarted &&
-            !recovery?.attempted && (
-              <button disabled={busy} onClick={() => void run(abandon)}>
-                Discard unsigned review
-              </button>
-            )}
-          {visibleOperation.status === "awaiting-wallet" &&
-            visibleOperation.walletStarted &&
-            visibleOperation.plan.kind === "signature" && (
-              <button
-                disabled={busy}
-                onClick={() => void run(discardUnsubmittedSignature)}
-              >
-                Discard unsubmitted signature review
-              </button>
-            )}
-          {visibleOperation.status === "accepted" && (
-            <button
-              disabled={busy}
-              onClick={() => void run(cancelAcceptedOrder)}
-            >
-              Cancel this order on chain
-            </button>
-          )}
-          {visibleOperation.plan.sourceURL && (
-            <p className="nft-market-hash">
-              Attributed source (reference only):{" "}
-              {visibleOperation.plan.sourceURL}
-            </p>
-          )}
-          <button disabled={busy} onClick={dismiss}>
-            Close review
-          </button>
-        </section>
+        <NftActionReview
+          operation={visibleOperation}
+          busy={busy}
+          attempted={recovery?.attempted}
+          onConfirm={() => void run(confirm)}
+          onAbandon={() => void run(abandon)}
+          onDiscardUnsubmittedSignature={() =>
+            void run(discardUnsubmittedSignature)
+          }
+          onCancelAccepted={() => void run(cancelAcceptedOrder)}
+          onClose={dismiss}
+        />
       )}
       {message && <p role="status">{message}</p>}
     </section>
