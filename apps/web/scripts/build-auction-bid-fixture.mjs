@@ -20,13 +20,14 @@ await build({
     ],
   },
   build: {
+    rolldownOptions: { output: { codeSplitting: false } },
     outDir: resolve(output),
     emptyOutDir: false,
     minify: false,
     lib: {
       entry: resolve("e2e-auction-bid/fixtures/main.tsx"),
       name: "ArtFiAuctionBidFixture",
-      formats: ["iife"],
+      formats: ["es"],
       fileName: () => "fixture.js",
       cssFileName: "fixture",
     },

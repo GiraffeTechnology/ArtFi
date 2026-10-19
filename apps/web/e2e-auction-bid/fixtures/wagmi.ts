@@ -1,5 +1,12 @@
 import { useSyncExternalStore } from "react";
-import { zeroAddress, type Address, type Hex, type PublicClient } from "viem";
+import {
+  encodeFunctionData,
+  type Abi,
+  zeroAddress,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
 
 export const buyer = "0x1000000000000000000000000000000000000010" as Address;
 export const seller = "0x1000000000000000000000000000000000000020" as Address;
@@ -24,6 +31,8 @@ const snapshot = () => account;
 let releaseSimulation: (() => void) | undefined;
 let heldSimulation: Promise<void> | undefined;
 export const state = {
+  receiptMode: "normal",
+  receiptPhase: false,
   ends: 1100,
   highest: 0n,
   bidder: zeroAddress as Address,
@@ -40,11 +49,17 @@ export const state = {
 const reader = {
   getChainId: async () => {
     if (state.postSimulationBalance) state.postSimulationFinalChain = true;
-    return 560048;
+    return state.receiptPhase && state.receiptMode === "chain-flip"
+      ? 1
+      : 560048;
   },
   getBlock: async ({ blockNumber }: { blockNumber?: bigint } = {}) => ({
     number: blockNumber ?? 100n,
-    hash: hash(77),
+    hash:
+      state.receiptPhase &&
+      ["reorg", "reorg-revert"].includes(state.receiptMode)
+        ? hash(78)
+        : hash(77),
     timestamp: 1000n,
   }),
   getLogs: async () => [],
@@ -87,19 +102,85 @@ const reader = {
     state.simulationCompleted = true;
     return { request };
   },
-  async waitForTransactionReceipt({ hash: tx }: { hash: Hex }) {
-    state.receiptReads.push(tx);
-    const request = state.writes[Number(BigInt(tx)) - 1];
-    if (request?.functionName === "approve") {
+  async getTransaction({ hash: tx }: { hash: Hex }) {
+    if (state.receiptMode === "missing-original")
+      throw Error("TEST_ONLY missing original transaction");
+    const raw = sessionStorage.getItem("TEST_ONLY:auction:transaction:" + tx);
+    if (!raw) throw Error("TEST_ONLY original transaction bytes absent");
+    const parsed = JSON.parse(raw);
+    return {
+      ...parsed,
+      value: BigInt(parsed.value),
+      blockNumber: 101n,
+      ...(state.receiptPhase && state.receiptMode === "wrong-nonce"
+        ? { nonce: parsed.nonce + 1 }
+        : {}),
+    };
+  },
+  async waitForTransactionReceipt({
+    hash: originalHash,
+    onReplaced,
+  }: {
+    hash: Hex;
+    onReplaced?: (event: unknown) => void;
+  }) {
+    state.receiptReads.push(originalHash);
+    state.receiptPhase = true;
+    const originalRaw = sessionStorage.getItem(
+      "TEST_ONLY:auction:transaction:" + originalHash,
+    );
+    if (!originalRaw) throw Error("TEST_ONLY original bytes unavailable");
+    const original = JSON.parse(originalRaw);
+    if (original.method === "approve") {
       if (state.unknownApproval)
         throw Error("TEST_ONLY unavailable approval receipt");
       state.allowance = 100n;
       if (state.approvalChange) state.ends = 1400;
-    } else if (request?.functionName === "placeBid") {
+    } else if (original.method === "placeBid") {
       state.highest = 100n;
       state.bidder = buyer;
     }
-    return { status: "success", transactionHash: tx, logs: [] };
+    let transactionHash = originalHash;
+    if (
+      ["repriced", "changed-call", "cancelled", "replaced"].includes(
+        state.receiptMode,
+      )
+    ) {
+      transactionHash = hash(999 + original.nonce);
+      sessionStorage.setItem(
+        "TEST_ONLY:auction:transaction:" + transactionHash,
+        JSON.stringify({
+          ...original,
+          hash: transactionHash,
+          ...(["changed-call", "cancelled", "replaced"].includes(
+            state.receiptMode,
+          )
+            ? { input: "0xabcd" }
+            : {}),
+        }),
+      );
+      onReplaced?.({
+        reason:
+          state.receiptMode === "cancelled"
+            ? "cancelled"
+            : state.receiptMode === "replaced"
+              ? "replaced"
+              : "repriced",
+        transactionReceipt: { transactionHash },
+      });
+    }
+    if (state.receiptMode === "wrong-hash") transactionHash = hash(998);
+    return {
+      status: ["reverted", "reorg-revert"].includes(state.receiptMode)
+        ? "reverted"
+        : state.receiptMode === "unknown-status"
+          ? "pending"
+          : "success",
+      transactionHash,
+      blockHash: hash(77),
+      blockNumber: 101n,
+      logs: [],
+    };
   },
 };
 export const fixture = {
@@ -136,7 +217,27 @@ export function useWriteContract() {
   return {
     writeContractAsync: async (request: Record<string, unknown>) => {
       state.writes.push(request);
-      return hash(state.writes.length);
+      const tx = hash(state.writes.length);
+      const original = {
+        hash: tx,
+        from: request.account,
+        to: request.address,
+        input: encodeFunctionData({
+          abi: request.abi as Abi,
+          functionName: String(request.functionName),
+          args: request.args as unknown[],
+        }),
+        value: String(request.value ?? 0),
+        nonce: state.writes.length + 7,
+        chainId: request.chainId,
+        blockHash: hash(77),
+        method: request.functionName,
+      };
+      sessionStorage.setItem(
+        "TEST_ONLY:auction:transaction:" + tx,
+        JSON.stringify(original),
+      );
+      return tx;
     },
   };
 }

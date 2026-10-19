@@ -3,6 +3,15 @@ import { readFileSync } from "node:fs";
 import { isolatedSourceCatalog } from "../e2e-market/rwa-catalog-fixture";
 import type {} from "./fixtures/main";
 
+const observedErrors = new WeakMap<Page, string[]>();
+test.beforeEach(async ({ page }) => {
+  const errors: string[] = [];
+  observedErrors.set(page, errors);
+  page.on("pageerror", (e) => errors.push(e.message));
+});
+test.afterEach(async ({ page }) => {
+  expect(observedErrors.get(page)).toEqual([]);
+});
 async function open(page: Page) {
   const bundle = readFileSync(process.env.ARTFI_AUCTION_BID_FIXTURE!, "utf8");
   const css = readFileSync(
@@ -30,7 +39,7 @@ async function open(page: Page) {
     if (url.pathname !== "/") return route.abort();
     return route.fulfill({
       contentType: "text/html; charset=utf-8",
-      body: '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/fixture.css"><div id="root"></div><script src="/fixture.js"></script>',
+      body: '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/fixture.css"><div id="root"></div><script type="module" src="/fixture.js"></script>',
     });
   });
   await isolatedSourceCatalog(page);
@@ -304,4 +313,117 @@ test("wallet departure during simulation retires the old bid callback", async ({
   // The restored screen has no inspected auction, and the old callback is retired.
   await expect(bid(page)).toHaveCount(0);
   expect(await methods(page)).toEqual([]);
+});
+
+const pendingAuctionRecords = (page: Page) =>
+  page.evaluate(() =>
+    Object.keys(sessionStorage)
+      .filter((k) => k.startsWith("artfi:pending:"))
+      .map((k) => JSON.parse(sessionStorage.getItem(k)!)),
+  );
+const checkAuction = (page: Page) =>
+  page.getByRole("button", { name: "Check transaction", exact: true });
+for (const mode of [
+  "wrong-hash",
+  "reorg",
+  "reorg-revert",
+  "wrong-nonce",
+  "changed-call",
+  "unknown-status",
+  "missing-original",
+  "chain-flip",
+])
+  test(`canonical auction: ${mode} approval cannot request a bid and remains recoverable`, async ({
+    page,
+  }) => {
+    await open(page);
+    await page.evaluate((m) => {
+      window.auctionBidFixture.state.receiptMode = m;
+    }, mode);
+    await bid(page).click();
+    await expect(checkAuction(page)).toBeVisible();
+    await expect(bid(page)).toBeDisabled();
+    expect(await methods(page)).toEqual(["approve"]);
+    let saved = await pendingAuctionRecords(page);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({
+      kind: "approval",
+      hash: `0x${"1".padStart(64, "0")}`,
+    });
+    await expect(
+      page.getByText("Bid transaction confirmed.", { exact: false }),
+    ).toHaveCount(0);
+    await page.evaluate(() => {
+      window.auctionBidFixture.state.receiptMode = "normal";
+      window.auctionBidFixture.state.receiptPhase = false;
+    });
+    await checkAuction(page).click();
+    await expect(checkAuction(page)).toHaveCount(0);
+    expect(await methods(page)).toEqual(["approve"]);
+    expect(await pendingAuctionRecords(page)).toEqual([]);
+    await expect(
+      page.getByText("The transaction receipt was reconciled.", {
+        exact: false,
+      }),
+    ).toBeVisible();
+  });
+test("canonical auction: exact repricing is confirmed before bidding and the replacement journal is cleared", async ({
+  page,
+}) => {
+  await open(page);
+  await page.evaluate(() => {
+    window.auctionBidFixture.state.receiptMode = "repriced";
+  });
+  await bid(page).click();
+  await expect(
+    page.getByText("Bid transaction confirmed.", { exact: false }),
+  ).toBeVisible();
+  expect(await methods(page)).toEqual(["approve", "placeBid"]);
+  expect(await pendingAuctionRecords(page)).toEqual([]);
+  expect(
+    await page.evaluate(
+      () => window.auctionBidFixture.state.receiptReads.length,
+    ),
+  ).toBe(2);
+});
+for (const mode of ["cancelled", "replaced", "reverted"])
+  test(`canonical auction: proven canonical ${mode} approval stops before bidding and clears only its final journal`, async ({
+    page,
+  }) => {
+    await open(page);
+    await page.evaluate((m) => {
+      window.auctionBidFixture.state.receiptMode = m;
+    }, mode);
+    await bid(page).click();
+    await expect(
+      page.getByText(
+        /The transaction (?:was cancelled or replaced|reverted on chain)\. No completion is recorded\./,
+      ),
+    ).toBeVisible();
+    expect(await methods(page)).toEqual(["approve"]);
+    expect(await pendingAuctionRecords(page)).toEqual([]);
+    await expect(
+      page.getByText("Bid transaction confirmed.", { exact: false }),
+    ).toHaveCount(0);
+    await expect(checkAuction(page)).toHaveCount(0);
+  });
+test("canonical auction: reload reconciles the original approval from independently saved TEST_ONLY transaction bytes without another wallet callback", async ({
+  page,
+}) => {
+  await open(page);
+  await page.evaluate(() => {
+    window.auctionBidFixture.state.receiptMode = "wrong-hash";
+  });
+  await bid(page).click();
+  await expect(checkAuction(page)).toBeVisible();
+  expect(await methods(page)).toEqual(["approve"]);
+  await page.reload();
+  await expect(checkAuction(page)).toBeVisible();
+  await checkAuction(page).click();
+  await expect(checkAuction(page)).toHaveCount(0);
+  expect(await methods(page)).toEqual([]);
+  expect(await pendingAuctionRecords(page)).toEqual([]);
+  await expect(
+    page.getByText("The transaction receipt was reconciled.", { exact: false }),
+  ).toBeVisible();
 });
