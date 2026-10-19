@@ -7,8 +7,7 @@ below remain bound to their original head, not this candidate.
 This independent candidate implements a prerequisite, not a hot switch. It maps to
 PRD M6.2/M6.5 and the user's DB P0 ruling. No production switch, new DB installation,
 customer-data copy, deletion, credential disclosure or blockchain action is authorized
-by this document. Only the dedicated CTYun DB or an explicitly approved new DB host
-may hold a database; application and bridge hosts are not approved DB hosts, not DB targets.
+by this document. Database targets are configured separately from application and bridge hosts.
 
 ## Implemented boundary and evidence status
 
@@ -29,7 +28,7 @@ may hold a database; application and bridge hosts are not approved DB hosts, not
   No retrievable standalone offline `go mod verify` log is attached to this PR;
   local offline observations are not counted as reviewable acceptance evidence.
   These CI results bind the cited source head only; any follow-up needs fresh CI.
-  Approved CTYun DB integration, TLS, backup/restore and switching remain
+  Dedicated database integration, TLS, backup/restore and switching remain
   **NOT_VERIFIED**. No real DB was connected by the local source checks.
 - TLS certificate/hostname policy enforcement, live pool replacement, write
   admission fencing, replication and rollback are **not implemented by this slice**.
@@ -52,7 +51,7 @@ aborted at max lifetime. Tests must establish draining explicitly.
 ## Compatibility contract, not arbitrary-database compatibility
 
 The application is pinned to `go-sql-driver/mysql` 1.10.0, SQL migrations and MySQL
-semantics. The acceptance suite specifies MySQL 8.4. A reported CTYun historical
+semantics. The acceptance suite specifies MySQL 8.4. A recorded database
 handshake of 8.0.58 is inventory only, not proof that 8.4 acceptance, migration or
 TLS behavior passes there. MariaDB, PostgreSQL and other engines are not asserted
 to be drop-in compatible. No new driver/vendor dependency is added by this slice.
@@ -121,6 +120,5 @@ business rewrite is a design goal, not a promise of zero infrastructure/traffic 
 
 The current service hydrates mutable maps at startup. Refresh/invalidation and atomic
 replacement are mandatory future work; retaining stale maps after a new pool is not
-compatibility. Server-side migrations, backups, restores and eventual approved switch
-execution belong to the fullserver lane, which records sanitized validation/rollback
-logs. This document does not authorize deletion of any source database or backup.
+compatibility. Server-side migrations, backups, restores and switching require sanitized
+validation and rollback evidence. This document does not authorize deletion of any source database or backup.

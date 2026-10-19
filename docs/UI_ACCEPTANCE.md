@@ -2,11 +2,11 @@
 
 ## Approved design and brand boundary
 
-- Design source: [ArtCCH:ArtFi approved Figma file](https://www.figma.com/design/O9etbeZZD0VrsU8ch9PaZZ?node-id=11-2).
+- Design source: the approved ArtCCH:ArtFi visual baseline.
 - The global identity uses the approved `apps/web/public/brand/artcch-logo-master.svg` VI asset directly. The implementation does not redraw, trace, or synthesize the ArtCCH logo.
 - Asset provenance is byte-for-byte verified: SHA-256
   `6e4f29d3de0026dcbac0cd763b039cc2832bb0e64296d322794fe33ced90104b` matches the
-  controlled abcdyi `artcch/brand/vi/artcch-logo-master.svg` and the current ArtCCH site asset.
+  controlled VI master and the current ArtCCH site asset.
   The VI manual names that exact file as the approved primary wall-red vector master.
 - The asset is used at its native `4:1` ratio and approved screen colour `#93272C`. Its rendered
   width is `152px` on desktop and `104px` on mobile, both above the VI manual's recommended `96px`
@@ -29,7 +29,7 @@
 - Manual browser inspection additionally confirmed the 1440px and 390px responsive layouts, no horizontal overflow, and no browser-console errors.
 - Next.js production compilation, TypeScript validation, and static generation of all 24 routes pass. The final local standalone-directory copy is blocked only by Windows symlink permission (`EPERM`); no source compile or route-generation failure occurred.
 
-## abcdyi Linux pre-chain revalidation - 2026-08-20
+## Linux pre-chain revalidation - 2026-08-20
 
 - The approved UI source was synchronized to the main `GiraffeTechnology/ArtFi` working tree without
   generated output, dependency directories, test artwork masters, or local agent files.
@@ -58,7 +58,7 @@ Sepolia deployment, real NFT mint, or OpenSea discovery validation.
 - Playwright and Axe pass 30 desktop/mobile checks. The added deterministic browser journey verifies
   language persistence, `html lang`, dynamic accessible attributes, translated page titles and
   mobile-menu redraw behavior.
-- A separate AIVAN canary reports CTranslate2 as the primary provider and returns warning-free
+- A separate translation-service canary reports CTranslate2 as the primary provider and returns warning-free
   English-to-Simplified-Chinese, Traditional-Chinese, French, Spanish, German, Korean and Japanese
   translations while preserving `NFT`, `OpenSea` and `0.01 ETH`.
 
@@ -90,5 +90,5 @@ required before production acceptance.
   controls over attributed runtime records.
 - TypeScript, ESLint and 9 Vitest assertions pass. Playwright and Axe pass 36 desktop/mobile checks,
   including both NFT-standard gates, safe DAO setup and wallet-to-DAO routing. Manual 390px
-  inspection found no horizontal overflow or browser-console warning/error. The abcdyi Linux
+  inspection found no horizontal overflow or browser-console warning/error. The Linux
   production build compiled, typechecked and generated all 28 pages.

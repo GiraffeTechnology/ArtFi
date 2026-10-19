@@ -19,7 +19,7 @@ stage delivery from business opening, final production assembly, and Stage 2 aut
 baseline and incorporates [Issue #84](https://github.com/GiraffeTechnology/ArtFi/issues/84).
 Explicit later client instructions amend the affected provisions. The latest explicit instruction
 controls a conflict; unchanged requirements remain in force. This PRD records those requirements
-and is not an independent source of agent-created scope.
+and records their product scope.
 
 The client clarification of 2026-10-02 establishes this product order and meaning:
 
@@ -46,7 +46,7 @@ Use the following documents for their distinct purposes:
 | `PRD.md`        | Product meaning, scope, and required behavior                       |
 | `ACCEPTANCE.md` | Evidence and promotion process for the applicable stage             |
 | `STATUS.md`     | Verified state, exact evidence, remaining work, and actual blockers |
-| `AGENTS.md`     | Execution boundaries and prevention of unauthorized scope changes   |
+| `AGENTS.md`     | Product invariants and engineering checks                           |
 
 An acceptance rule, status entry, review, or historical directive cannot enlarge product scope or
 supersede an explicit client instruction. Record genuine conflicts and their source. Do not turn
@@ -63,9 +63,6 @@ iteration boundaries. Preserve working implementation and requirements incorpora
 later instructions. In particular, distinguish inherited vault and fractionalization capability
 from the later work needed to complete trading and advanced governance. Do not describe all DAO
 or fractional work as a new expansion, or assume an MVP completion claim proves current delivery.
-
-Commercial terms remain outside this repository. Existing module and schedule records do not
-become evidence that a feature is implemented or that a financial action is authorized.
 
 ## 1. The three product sections
 
@@ -322,14 +319,6 @@ handover retain their existing final-stage placement. They are not imposed on ev
 Likewise, Stage 2 autonomous operating acceptance is separate from Stage 1 functional delivery.
 A true interface or safety dependency blocks only the function that demonstrably needs it.
 
-### 3.5 Historical schedule
-
-The inherited schedule records P1 requirements/design on 07-06–07-13, P2 core development on
-07-13–09-07, P3 integration/testing on 09-07–09-21, P4 audit/remediation on 09-21–10-05, and P5
-mainnet/go-live on 10-05–10-12. The recorded disagreement between the Gantt and task-list duration
-is a historical commercial scheduling issue. It does not justify reopening P1 or delaying current
-working-stage delivery. This rewrite makes no new deadline or commercial commitment.
-
 ## 4. Functional requirements
 
 ### 4.1 M1 Smart contracts
@@ -362,7 +351,7 @@ licensing conclusion.
 - Wallet-signature login uses a SIWE-style nonce challenge, JWT issue/refresh, persistent
   sessions, wallet-address binding, logout, and permission enforcement. Unauthenticated users
   cannot trade.
-- Public marketplace discovery and opening the Xiongan Wallet test entry do not require
+- Public marketplace discovery and opening the configured V2 wallet tenant test entry do not require
   login. Wallet assets, balances, holdings, and history require an authenticated session;
   connecting a wallet address or opening its page does not satisfy this requirement. Never
   expose a previous user's assets after logout, expiry, or an account change. This bounded
@@ -469,7 +458,7 @@ possession of a receipt acquires fund-governance rights by analogy.
 - Runbooks and operator documentation appropriate to the delivered functions and final handover.
 
 The existing topology keeps delivery and database operations in `<CLOUD_PROVIDER_A>` and
-public-chain operations in the approved SIN execution zone in `<CLOUD_PROVIDER_B>`.
+public-chain operations in the configured public-chain execution zone in `<CLOUD_PROVIDER_B>`.
 The operations agent's model interface uses replaceable `<LLM_PROVIDER_A>` capability; no
 control path obtains transaction authority from model output.
 
@@ -602,7 +591,7 @@ A smaller functional delivery must not be reported as having passed an unrun loa
 - Third-party test-chain limitations defer only the affected mainnet-only operation, not its
   adapter or the rest of the product.
 - RPC, simulation, estimation, broadcast, and receipt checks use the existing approved
-  non-sandbox SIN execution boundary.
+  public-chain execution boundary.
 - Preserve the separate G3-A internal/simulated audit, G3-B third-party audit, remediation,
   mainnet deployment, and go-live steps in their applicable phase.
 - Mainnet, real-asset, and real-money operations follow the applicable written authority and
@@ -610,8 +599,8 @@ A smaller functional delivery must not be reported as having passed an unrun loa
   that the required execution authority has been obtained. This PRD does not grant it.
 
 Historical documents contain inconsistent wording about automatic mainnet promotion versus
-separate written approval. Record that conflict for the delivery owner; do not infer permission
-from it or make it a prerequisite for the unrelated Hoodi and web-application delivery.
+separate written approval. Do not infer permission
+from that conflict or make it a prerequisite for the unrelated Hoodi and web-application delivery.
 
 ## 7. Test payload and historical charity records
 
@@ -641,8 +630,7 @@ ownership, redemption, or delivery right.
 
 ### 7.2 Isolated Hoodi validation
 
-The delivery side supplies a separately generated AI artwork payload for runtime testing on
-Hoodi. It exercises applicable minting, atomic batch, vault, fractionalization, DAO, and market
+A separately generated AI artwork payload is used for runtime testing on Hoodi. It exercises applicable minting, atomic batch, vault, fractionalization, DAO, and market
 paths without touching the frozen real record.
 
 Every test asset is marked `TESTNET`, `NO REAL-WORLD VALUE`, and `NO LEGAL EFFECT` in token
@@ -699,8 +687,7 @@ administration and retains its applicable evidence, scope, and revocation requir
 Stage 2 normal operations demonstrate observation, planning, policy, execution, verification,
 reconciliation, recovery, and continuation without routine human repair. Out-of-bounds actions
 are rejected, not used to expand authority. Constitutional changes keep their existing governance.
-This product operating model does not authorize a development agent to bypass tool permissions or
-execution approvals.
+Execution approvals remain distinct from the product operating model.
 
 A0 architecture, A1 deterministic core, A2 bounded authority, A3 grounding, A4 recovery,
 A5 continuous gray operation, and A6 NO-HIL soak are Stage 2 acceptance dimensions. Keep their
@@ -721,9 +708,9 @@ wallet and Oracle interfaces its actual workflows require. Neither the existence
 wallet-extension code nor an ecosystem diagram imports every independent product milestone into
 ArtFi's current handover.
 
-The product is 8415 Wallet and Xiongan Wallet is its V2 tenant. Its assigned domain is
-`xiongan.8415wallet.com`. ArtFi consumes a complete absolute deployment URL through the
-server-only `ARTFI_XIONGAN_WALLET_URL` and no-store `/api/wallet-config` route; code supplies
+The product is 8415 Wallet, using a configured V2 wallet tenant. ArtFi consumes a
+complete absolute deployment URL through the
+server-only wallet destination setting and no-store `/api/wallet-config` route; code supplies
 no default hostname or port. The public entry may be opened without login during testing,
 but assets, balances, holdings, and history remain unavailable until login. ArtFi and the
 wallet must not imply a shared session or cross-origin signing capability that is not
@@ -733,8 +720,8 @@ Approved external registries, custodians, warehouses, and evidence providers are
 sources, not ArtFi subsidiaries, exclusive dependencies, or universally authoritative sources.
 Keep neutral placeholders for infrastructure and registry partners. CCHS and OpenSea identify
 the client-specified business relationship and marketplace in section 1; their use here grants
-no architectural privilege. Actual infrastructure bindings, when authorized, remain isolated in
-`DEPLOYMENT_ENVIRONMENT.md` and removable without redesigning the application.
+no architectural privilege. Deployment roles are described in `DEPLOYMENT_ENVIRONMENT.md`; actual bindings remain
+external runtime configuration and can change without redesigning the application.
 
 ArtFi does not imply discretionary portfolio management, investment advice, guaranteed value,
 guaranteed liquidity or returns, credit underwriting, deposit-taking, or unauthorized key custody.

@@ -29,17 +29,15 @@ pnpm wallet:test-local
 The self-test prints only the public address and verification result. It signs a fixed,
 domain-separated ownership message offline; it does not create or broadcast a transaction.
 
-## Named Hoodi test wallets
+## Hoodi test-wallet roles
 
-These public addresses identify the two local, test-only roles used by the pre-chain validation
-plan:
+The validation plan uses two distinct, deployment-configured test roles:
 
-- `ArtFi1`: `0x75F6e1BAc9bF07a54FECc416ef76327BbD2c3089` — initial mint and holding wallet.
-- `ArtFi2`: `0xDE3c1D455c2CCe1bAcf1e70aAC7fA3B8cCb1ec2B` — asset-transfer receiving wallet.
+- Initial mint and holding wallet.
+- Asset-transfer receiving wallet.
 
-Only the public addresses belong in the repository. Private keys and local key-file paths must
-remain outside Git, servers, CI, logs, tickets, and documentation. Both wallets are Hoodi-only
-and must not receive mainnet ETH or real-value assets.
+Both wallets are Hoodi-only and must not receive mainnet ETH or real-value assets.
+The role addresses and private signing configuration are supplied at runtime.
 
 The local file signer refuses production mode, every chain other than Hoodi, repository-contained
 files, symlinks, malformed values, and insecure permissions. Contract deployment continues to use

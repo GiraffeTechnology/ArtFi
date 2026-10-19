@@ -11,24 +11,25 @@ real value, real title transfer, or production operation.
 ## P0 execution topology
 
 All automated or operator-controlled interaction with a public chain or public NFT marketplace must
-execute in the Singapore (SIN) public-chain zone. This includes RPC reads/writes, deployment,
+execute in the configured public-chain execution zone. This includes RPC reads/writes, deployment,
 receipt polling, chain indexing, source verification, explorer API calls, OpenSea API/Stream calls,
 discovery and listing validation.
 
 | Zone            | Allowed                                                                                               | Prohibited                                                     |
 | --------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| abcdyi          | Clone through approved bridge, install, compile, unit/fuzz/invariant test, package and hash artifacts | Public RPC, broadcast, receipt polling, explorer/OpenSea calls |
-| AIVAN           | Translation generation and Qwen proofread-only support                                                | Public chain, wallet, explorer or marketplace work             |
-| CTYun MySQL/API | Durable business records, normalized evidence ingestion, admin/data services                          | Direct public RPC or OpenSea egress                            |
-| SIN             | Public RPC, Sepolia deploy/probe/index, Etherscan verification, OpenSea discovery/mirror validation   | Storing signer material in Git/API/MySQL/CI                    |
+| Build zone      | Clone through approved bridge, install, compile, unit/fuzz/invariant test, package and hash artifacts | Public RPC, broadcast, receipt polling, explorer/OpenSea calls |
+| Translation zone | Translation generation and Qwen proofread-only support                                                | Public chain, wallet, explorer or marketplace work             |
+| Database/API zone | Durable business records, normalized evidence ingestion, admin/data services                          | Direct public RPC or OpenSea egress                            |
+| Public-chain zone | Public RPC, Sepolia deploy/probe/index, Etherscan verification, OpenSea discovery/mirror validation   | Storing signer material in Git/API/MySQL/CI                    |
 
-Repository scripts require `ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE=sin` before they read an RPC setting.
-The repository carries no default RPC URL. The SIN deployment layer injects runtime configuration
+Repository scripts validate `ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE` against the configured
+public-chain boundary before they read an RPC setting.
+The repository carries no default RPC URL. The public-chain deployment layer injects runtime configuration
 and references a test-only signer outside Git. A user-controlled external wallet remains the only
 transaction signer; ArtFi services never receive its private key. For an operator test, the browser
-and wallet session are run from the SIN test workstation/runner.
+and wallet session are run from the public-chain test workstation/runner.
 
-## Stage 0 — offline release candidate on abcdyi
+## Stage 0 — offline release candidate in the build zone
 
 1. Lock the Git commit, lockfile, Foundry version, Solidity `0.8.30`, optimizer settings and EVM
    target.
@@ -42,18 +43,18 @@ and wallet session are run from the SIN test workstation/runner.
 Pass evidence: commit, tool versions, command/exit-code log and artifact hashes. This stage cannot
 claim chain deployment.
 
-## Stage 1 — immutable handoff to SIN
+## Stage 1 — immutable handoff to the public-chain zone
 
-1. Transfer only the reviewed commit/artifact bundle through the approved Singapore bridge.
-2. Recompute every SHA-256 value on SIN and compare it with the release manifest.
+1. Transfer only the reviewed commit/artifact bundle through the configured public-chain bridge.
+2. Recompute every SHA-256 value in the public-chain zone and compare it with the release manifest.
 3. Inject the RPC endpoint, explorer credential and test-only keystore references at runtime. Do not
-   copy these values back to abcdyi, Git, logs, API or MySQL.
-4. Confirm the execution-zone guard passes only on the designated SIN runner.
+   copy these values back to build hosts, Git, logs, API or MySQL.
+4. Confirm the execution-zone guard passes only on the designated public-chain runner.
 
 Pass evidence: matching hashes, runner attestation identifier and redacted configuration presence
 report.
 
-## Stage 2 — Ethereum JSON-RPC compatibility probe on SIN
+## Stage 2 — Ethereum JSON-RPC compatibility probe in the public-chain zone
 
 Before deployment, record responses for:
 
@@ -65,9 +66,9 @@ Before deployment, record responses for:
 - client/provider identity without exposing credentials.
 
 Fail closed on a chain-ID mismatch, missing fee data, inconsistent latest block, unsupported calls
-required by the deployment scripts, or any response from a non-SIN run.
+required by the deployment scripts, or any response from a run outside the public-chain zone.
 
-## Stage 3 — Sepolia deployment on SIN
+## Stage 3 — Sepolia deployment in the public-chain zone
 
 Deploy only the reviewed scope:
 
@@ -81,7 +82,7 @@ address, deployer public address, constructor arguments, compiler/settings hash,
 bytecode hashes and source-verification result. A source verification failure blocks acceptance even
 when bytecode exists.
 
-## Stage 4 — ERC and security probes on SIN
+## Stage 4 — ERC and security probes in the public-chain zone
 
 ### ERC-721
 
@@ -111,7 +112,7 @@ when bytecode exists.
 
 Any mismatch between deployed runtime bytecode and the locked build is a hard failure.
 
-## Stage 5 — real test artwork mint and wallet display from SIN
+## Stage 5 — real test artwork mint and wallet display from the public-chain zone
 
 1. Use only a rights-cleared test work and a package containing source hash, public metadata hash,
    authorization, takedown contact and `TESTNET / NO REAL-WORLD TITLE TRANSFER` notice.
@@ -127,7 +128,7 @@ Any mismatch between deployed runtime bytecode and the locked build is a hard fa
 No real ETH is required by this plan. If the designated test signer lacks Sepolia gas, broadcast is
 recorded as blocked; offline and read-only probes continue, and no fake receipt is accepted.
 
-## Stage 6 — OpenSea discovery and optional listing validation from SIN
+## Stage 6 — OpenSea discovery and optional listing validation from the public-chain zone
 
 1. Query OpenSea's current supported-chain surface at test time; do not assume Sepolia support from
    historic documentation.
@@ -140,14 +141,14 @@ recorded as blocked; offline and read-only probes continue, and no fake receipt 
    quantity, price, currency, expiry, royalty and wallet transaction. This plan does not authorize
    listing.
 
-OpenSea mirror validation is a separate track: the read-only mirror service runs in SIN, performs
+OpenSea mirror validation is a separate track: the read-only mirror service runs in the public-chain zone, performs
 REST backfill then Stream subscription, injects duplicates/out-of-order events, reconnects after an
-interruption and proves convergence in the CTYun-backed read model. ArtFi does not create its own
+interruption and proves convergence in the database-backed read model. ArtFi does not create its own
 order, matching engine or settlement.
 
 ## Stage 7 — recovery, reorg and evidence closeout
 
-- restart the SIN indexer and prove checkpoint recovery;
+- restart the public-chain indexer and prove checkpoint recovery;
 - replay duplicate logs and removed/replacement logs without double counting;
 - reconcile RPC receipt, explorer data, normalized backend evidence and UI state;
 - test provider timeout, rate limit, wrong chain, stale OpenSea event and gateway outage;
@@ -164,7 +165,7 @@ order, matching engine or settlement.
 | Wallet                 | Exact external-wallet review, receipt match and display import pass         | Key enters service/CI, mismatched target/calldata/value           |
 | DAO/Vault              | Custody, snapshots, thresholds, category and Timelock tests pass            | ArtCCH/admin override, duplicate vote, custody loss               |
 | OpenSea                | Exact discovery outcome is recorded honestly                                | Unsupported/not-found represented as accepted or listed           |
-| Topology               | Every public-chain/OpenSea action originates in SIN                         | Any abcdyi/AIVAN/MySQL public egress or unguarded operator script |
+| Topology               | Every public-chain/OpenSea action originates in the public-chain zone                         | Any backend/translation/database public egress or unguarded operator script |
 
 Mainnet remains gated after all testnet checks pass. A separate legal, compliance, custody,
 security, operations and written go/no-go approval is required.

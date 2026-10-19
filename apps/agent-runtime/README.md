@@ -18,7 +18,7 @@ Financial reservations currently implement a conservative gross-authorized-value
 
 ## Safe configuration
 
-The installer owns enabling/stopping the optional service. `ARTFI_AGENT_CONFIG_FILE` points to a private JSON file outside the immutable application artifact. `config.example.json` is a local example, not an approved deployment allocation. In particular, it does not allocate a CTYun port; TCP 443 remains reserved for SSH there.
+The installer owns enabling/stopping the optional service. `ARTFI_AGENT_CONFIG_FILE` points to a private JSON file outside the immutable application artifact. `config.example.json` is a local example, not an approved deployment allocation. Respect the target host's configured port reservations.
 
 Configuration contains no JavaScript or import/module path. Available adapter kinds are:
 

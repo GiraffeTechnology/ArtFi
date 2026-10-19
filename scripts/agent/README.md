@@ -89,16 +89,9 @@ The frozen r2 producer predates the vendor-neutral host-role ruling. Its exact
 is normalized to `artfi-delivery-link` for ArtFi's internal contract. New
 producers and schemas may not reuse the legacy producer field.
 
-The separately frozen `ArtFiLinkOps` r3 package is audit-only provenance, not
-an executable dependency contract: archive
-`E95AB4436F276C3831A35CAD498C903C061716B9F5E8D10EB36F04F6B487D000`,
-manifest
-`189326EE4C030A24CE9AD183F902499506A48F8775B4F89ADB759298E32CCEB0`,
-integrity
-`EB04584630464CDE28BF3FF6B5D5C4A91245C595C7AA34135BD90C73AED1C827`
-and test results
-`729F22E3B60BDDFE2DEC82CAAA142977F9AB4F77F41D3F7C6EA430EE7EADF825`.
-The producer reported 23/23 local and 23/23 ABCDYI tests, but this repository
+A separately frozen r3 operations-health package is audit-only provenance, not
+an executable dependency contract.
+The producer reported 23/23 local and 23/23 backend-environment tests, but this repository
 contains no durable run or artifact that independently reproduces those counts.
 Treat them as unverified external provenance, not current delivery evidence. r3
 is not imported into this machine contract and cannot enable execution.

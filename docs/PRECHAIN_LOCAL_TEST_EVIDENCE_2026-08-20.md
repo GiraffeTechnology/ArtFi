@@ -24,7 +24,7 @@ metadata was uploaded, and no OpenSea listing was created.
   read-only external-market mode.
 - The approved ArtCCH primary wall-red vector is used directly. Its SHA-256 is
   `6e4f29d3de0026dcbac0cd763b039cc2832bb0e64296d322794fe33ced90104b`, matching the controlled
-  abcdyi `artcch/brand/vi` and current ArtCCH site copies. It is not redrawn.
+  controlled VI master and current ArtCCH site copies. It is not redrawn.
 
 ## Contract and deployment-tooling gates
 
@@ -50,8 +50,8 @@ metadata was uploaded, and no OpenSea listing was created.
   isolated database.
 - Five down migrations produced exactly 0 tables. The unique test database was dropped, the
   isolated Redis database was cleared, and the Redis service started for this test was stopped.
-- Dependency download used a recorded, temporary SSH SOCKS PID through the approved Singapore
-  host. The exact process was terminated, port `11082` was confirmed closed, and all
+- Dependency download used a recorded, temporary SSH SOCKS PID through the configured public-chain
+  host. The exact process was terminated, the temporary listener was confirmed closed, and all
   task-specific dependency caches and bridge artifacts were removed.
 
 ## Charity-edition and artwork gates

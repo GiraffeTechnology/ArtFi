@@ -4,7 +4,7 @@
 | --------- | ------------------------------------------------------------------------- |
 | Issued    | 2026-09-19                                                                |
 | Issuer    | Client (ArtCCH)                                                           |
-| Authority | Explicit later client ruling (`AGENTS.md` §1, priority 2)                 |
+| Authority | Recorded product clarification                 |
 | Scope     | Trading model, rollout sequencing, operations topology, delivery standard |
 | Applies   | `GiraffeTechnology/ArtFi`, all branches                                   |
 
@@ -12,42 +12,17 @@
 
 ## 0. Partner naming
 
-This directive uses the neutral placeholders required by #110 §4. The client's own message named
-real vendors; they are **not** reproduced here.
+This directive uses the neutral placeholders required by #110 §4. Infrastructure and partner roles are independently configurable.
 
 | Placeholder          | Means                                                           |
 | -------------------- | --------------------------------------------------------------- |
 | `<CLOUD_PROVIDER_A>` | The domestic cloud holding delivery and the database            |
-| `<CLOUD_PROVIDER_B>` | The cloud hosting the SIN execution zone for on-chain operation |
+| `<CLOUD_PROVIDER_B>` | The cloud hosting the public-chain execution zone for on-chain operation |
 | `<LLM_PROVIDER_A>`   | The model API the operations agent calls                        |
 | `<REGISTRY_CHAIN_A>` | The third-party registry chain (a cultural-heritage registry)   |
 
 `<LLM_PROVIDER_A>` is **explicitly swappable**. The client's words: ArtFi is not in that vendor's
 ecosystem and the model may be changed at any time. No design may assume one model vendor.
-
-### 0.1 Two categories, two rules
-
-A later ruling the same day: **the deployment environment may be written to GitHub, and must be
-removable at any time.** This repository is **private** — it is on GitHub so external auditors and
-VC auditors can read it, not for public distribution.
-
-That permission covers infrastructure, not relationships:
-
-| Category               | Example                 | Naming                                                     |
-| ---------------------- | ----------------------- | ---------------------------------------------------------- |
-| Deployment environment | Which cloud runs the DB | May be named, in `docs/DEPLOYMENT_ENVIRONMENT.md` **only** |
-| Partner / ecosystem    | `<REGISTRY_CHAIN_A>`    | **Placeholder always** (#110 §4, unchanged)                |
-
-The distinction is the reason #110 §4 exists: a deployment vendor is infrastructure ArtFi rents; a
-partner is a relationship ArtFi claims. Naming the second implies an endorsement that may not exist.
-
-**Deletability is the operative constraint.** The bindings live in one file so that removing them is
-`git rm docs/DEPLOYMENT_ENVIRONMENT.md` and nothing else. Governing documents keep using
-placeholders and roles, so they still read correctly once the file is gone. A vendor name written
-into a governing document, a code path or a contract value breaks this and turns deletion into a
-repository-wide edit with behaviour risk.
-
----
 
 ## 1. Trading model
 
@@ -81,9 +56,8 @@ both phases: ArtFi never creates, signs, matches, custodies, fulfils or settles 
 
 Because mirroring _is_ attributed data plus a link out, the deep link required by `PRD.md` §4.8
 XM.4 stands. `ACCEPTANCE.md` §7.8 listed an external-marketplace redirect in the public UI as an
-audit failure; an item that forbids what a requirement mandates cannot be an audit condition, and
-under the authority order in `AGENTS.md` §1 that file may not contradict a higher source. **That one
-item is removed.** Every other exposure listed in §7.8 is untouched and still fails an audit.
+audit failure; an item that forbids what a requirement mandates cannot be an audit condition.
+**That one item is removed.** Every other exposure listed in §7.8 is untouched and still fails an audit.
 
 ### 1.2 Correction recorded
 
@@ -101,7 +75,7 @@ support is reduced is a **client decision** and is not made here. Until such a r
 - **no gate, status value or delivery condition follows from it.**
 
 Product direction is not scope. Turning "ArtFi is primary" into a requirement to build or retire
-anything would be agent-authored scope (`AGENTS.md` §0).
+anything is not established by that direction alone.
 
 ---
 
@@ -160,11 +134,6 @@ out in `PRD.md` §1.0.5.
 `ACCEPTANCE.md`, creates no new status value, and blocks no requirement. A track that has not
 opened is still built, tested and counted in `STATUS.md`.
 
-> Recorded deliberately: an earlier agent-authored "gray gate" (`G0`) was dismantled by #91 and #94
-> precisely because it invented a gate nobody asked for. This section must not become that. It
-> describes **when a built capability is switched on for business**, not when engineering may
-> proceed.
-
 ### 2.1 Charity NFT editions
 
 Rollout order: **OpenSea first, then ArtFi**, opened in stages.
@@ -196,17 +165,17 @@ is not an engineering deliverable and must not be recorded as an engineering blo
 | Concern               | Where                                              |
 | --------------------- | -------------------------------------------------- |
 | Delivery and database | `<CLOUD_PROVIDER_A>`                               |
-| On-chain operation    | The **SIN execution zone** on `<CLOUD_PROVIDER_B>` |
+| On-chain operation    | The **public-chain execution zone** on `<CLOUD_PROVIDER_B>` |
 | Availability          | An **operations agent** maintaining 24/7 service   |
 | Model access          | `<LLM_PROVIDER_A>`, **swappable at any time**      |
 
 This keeps the deployment topology ruling of 2026-09-05 (#74): off-chain data stays domestic; only
-public-chain operation runs in the SIN execution zone.
+public-chain operation runs in the public-chain execution zone.
 
 **The model boundary is a design constraint.** Because `<LLM_PROVIDER_A>` may be replaced at any
 time, the operations agent must reach it through a replaceable interface. No prompt, schema or
 control path may depend on one vendor's behaviour, and model output stays advisory — transaction
-authority comes from deterministic policy, per `AGENTS.md` §6.
+authority comes from deterministic policy, per `AGENTS.md` §5.
 
 ---
 
@@ -248,12 +217,12 @@ no reading of any document produces a screenshot. Nothing else waits on it.
 ### 3.2 The production version is assembled once, at the end
 
 Same date: **the production version is done last, in one piece.** Production assembly is a
-client-scheduled step, not a per-stage obligation.
+final release step, not a per-stage obligation.
 
 A stage delivers against the test chain and carries no production build, production deployment,
 production-grade visual design or go-live packaging; it is not incomplete for lacking them.
 `ACCEPTANCE.md` §6 items 7–10 stay with the complete market (`S-MKT`). **No stage may be blocked on
-production readiness, and no agent may pull production work forward to prepare for it.**
+production readiness, and independent stage delivery does not require it.**
 
 **Building is not assembling.** An unopened or not-yet-productionised track is still built, tested
 and counted — `M6` operations code is written when its requirements say so.

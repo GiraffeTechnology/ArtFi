@@ -71,7 +71,7 @@ Selected artifacts:
 - Source-built M6 API executable SHA-256: `715ea681940b6c1a66d28d48064f61070b8623b1dccf95bb30742333d7d9603a`
 - Packaged web server SHA-256: `49774097763c85104f5a1b0ba12d7407cb51a067b498df78d90b94bff755c632`
 - Linux x64 shared executor; 9 visible logical CPUs, approximately 9.7 GiB memory; Node 24.21.0, MySQL 8.4.11, Anvil 1.7.1, Nginx 1.30.5
-- Quiet window coordinated with the delivery owner; other work existed on the executor. **Exclusive resource isolation was not established.** The load generator, database, application services, and local EVM shared this machine.
+- Other work existed on the executor during the measurement window. **Exclusive resource isolation was not established.** The load generator, database, application services, and local EVM shared this machine.
 - 100 distinct signed sessions, 100 real locally settled order envelopes, 250 indexed events taken from the settlement receipts, and 39 MySQL tables from the bundle's 13 migrations. No Redis was configured.
 
 | HTTP surface                   | Users / peak in flight | Requests / failures | Aggregate p95 |    Worst endpoint p95 | Aggregate p99 / maximum | Timed HTTP duration |
@@ -88,7 +88,7 @@ Each endpoint has 1,200 samples. API p95 by route: session 56.225 ms, orders 75.
 
 The HTTP phases together lasted less than five seconds; these are finite burst measurements, **not sustained-capacity or soak evidence**. The local trade times include controlled mining and verification. This result covers the specifically identified v7/M6 artifacts only. A changed combined installation candidate needs its own exact-artifact rerun before inheriting this claim.
 
-Checkpoint evidence is preserved separately in the delivery workspace's `evidence/performance-preliminary-v7/`: the complete results, raw HTTP samples, local receipt identifiers, executable/source/artifact hashes, run summary, and an independent offline recomputation receipt with file digests. The original run's service logs remain in `runtime-cache/performance-local-Ep4zPs/`. The disposable database was stopped and removed. Three focused helper tests and the full local smoke/profile ran successfully. One earlier harness-only smoke attempt failed before service startup due to a variable-name collision; that was fixed and both smoke and full profile were rerun. No application code was changed for the measurements.
+Checkpoint evidence is preserved in an off-repository evidence bundle: the complete results, raw HTTP samples, local receipt identifiers, executable/source/artifact hashes, run summary, and an independent offline recomputation receipt with file digests. The original service logs are retained with that run. The disposable database was stopped and removed. Three focused helper tests and the full local smoke/profile ran successfully. One earlier harness-only smoke attempt failed before service startup due to a variable-name collision; that was fixed and both smoke and full profile were rerun. No application code was changed for the measurements.
 
 Final-production acceptance, 48-hour availability, and Stage 2 NO-HIL soak remain **not run** by these scripts.
 

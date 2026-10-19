@@ -164,7 +164,7 @@ private service addresses, allocated ports, data/log paths, distinct nonzero
 server IDs and verified TLS files. Keep deployment bindings separate from the
 generic product package. No template guesses a public port or changes a host's
 network/security settings. In particular, this tooling does not touch SSH or
-the CTYun TCP 443 reservation.
+existing port reservations.
 
 Both sides use GTID, enforced GTID consistency, row-based binary logging,
 replica-update logging, synchronous binlog flushing and transaction-log flushing

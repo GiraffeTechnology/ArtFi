@@ -29,7 +29,7 @@ reviewed `ArtFiAdminSafe`, or leave both unset for a direct-role deployment:
 The public value is runtime supplied through the existing public configuration
 bootstrap. No network endpoint or production port is introduced by this feature.
 The supported write-test chain remains Hoodi, chain ID `560048`; this is not a
-production-chain selection. The server retains its existing SIN execution-zone
+production-chain selection. The server retains its existing public-chain execution-zone
 and RPC requirements.
 
 The registry and VaultFactory targets still come from the existing deployment

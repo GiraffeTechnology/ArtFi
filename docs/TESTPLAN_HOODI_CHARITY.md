@@ -4,14 +4,12 @@
 | -------- | -------------------------------------------------------------------------- |
 | Scope    | Charity NFT editions (`S-CH`) only. No other product line, no other module |
 | Chain    | Hoodi `560048`. Nothing here ever touches Sepolia, mainnet or a real asset |
-| For      | The delivery side, to deploy, execute and report back                      |
 | Standing | **Record only.** It creates no requirement — see §0                        |
 
 ## 0. What this document is, and is not
 
 Every requirement below is an **existing** one — `PRD.md` §4.7 `CH.1`–`CH.11`, §7.0, the topology
-ruling of 2026-09-05 (#74), and the evidence rules in `ACCEPTANCE.md` §3. This file is priority 6 in
-the `AGENTS.md` §1 authority order: it restates them as an executable sequence and **adds nothing**.
+ruling of 2026-09-05 (#74), and the evidence rules in `ACCEPTANCE.md` §3. This file restates them as an executable sequence and **adds nothing**.
 If a step here has no cited requirement, it is a defect in this file, not a new obligation.
 
 **It proves the technical path only.** Client ruling of 2026-09-19, recorded in `PRD.md` §7.0: the
@@ -24,7 +22,7 @@ effect, and no step may produce a claim about them.
 
 ---
 
-## 1. Naming rule — no real address, host or IP, anywhere
+## 1. Runtime placeholders and evidence safety
 
 **#110 §4 and `ACCEPTANCE.md` §7.8.** Every endpoint in this document is a placeholder, and the rule
 applies to what the run produces as much as to the run itself:
@@ -39,7 +37,7 @@ applies to what the run produces as much as to the run itself:
 
 **Never written into this repository, a report, a commit message, a log or a screenshot:** a real
 hostname, a real IP address, an internal topology detail, a bucket name that identifies an
-organization, or any key, seed phrase or credential (`AGENTS.md` §6).
+organization, or any key, seed phrase or credential (`AGENTS.md` §5).
 
 **Screenshots are the easy way to leak one.** Step E captures browser screenshots, and a browser
 shows its address bar. **Serve the app from `localhost` for the run, or crop the address bar.** A
@@ -72,23 +70,19 @@ outside this scope is being exercised.
 
 ### 2.3 Two accounts, three roles
 
-The delivery side holds Hoodi test funds in the ERC-8415 wallet across two accounts (`artfi1`,
-`artfi2`). **Funding is not a blocker.** They map onto what the run needs:
+Use two distinct funded test accounts for distribution and holder checks, plus
+a zero-balance account for the rejection path.
 
 | Role                | Use               | Why                                                                                          |
 | ------------------- | ----------------- | -------------------------------------------------------------------------------------------- |
-| Distribution wallet | `artfi1`          | Receives all 100 units at series creation                                                    |
-| Holder              | `artfi2`          | §6 F requires a holder **distinct from** the distribution wallet                             |
+| Distribution wallet | configured distribution account          | Receives all 100 units at series creation                                                    |
+| Holder              | configured holder account          | §6 F requires a holder **distinct from** the distribution wallet                             |
 | Zero-balance wallet | any third address | §6 G requires a wallet holding **zero** units. **It needs no funds** to fail the way it must |
 
-> **The same wallet holds Sepolia funds. This plan never spends them.**
->
-> Sepolia carries the frozen real batch — 37 works, 3,700 units, a completed record of real assets
-> that `PRD.md` §7.0 says **does not migrate, is never re-minted and never rewritten**. Spendable
-> Sepolia funds in the wallet running a Hoodi plan is the one way this run could do irreversible
-> damage, so it is named here rather than left to care: **every transaction goes to Hoodi
-> `560048`.** `DeployCharityEditions` reverts `UnsupportedChain` anywhere else — a guard to rely on,
-> not one to route around. Touching the Sepolia batch is a stop condition (§8).
+> The frozen Sepolia batch contains 37 works and 3,700 units. It is never
+> re-minted, migrated or rewritten by this plan. Every transaction here targets
+> Hoodi `560048`; `DeployCharityEditions` rejects other chains with
+> `UnsupportedChain`. Touching the Sepolia batch is a stop condition (§8).
 
 ---
 
@@ -100,11 +94,11 @@ The delivery side holds Hoodi test funds in the ERC-8415 wallet across two accou
 approved execution zone:
 
 ```
-ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE=sin
+ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE=<APPROVED_EXECUTION_ZONE>
 ```
 
-Without it, ownership verification throws `Charity holder chain verification is restricted to the
-SIN execution zone`, and §6 F and G fail for a reason that has nothing to do with charity logic.
+Without it, ownership verification refuses the request at the execution-zone guard,
+and §6 F and G cannot exercise charity logic.
 This is the topology ruling of 2026-09-05 (#74) enforced in code: public-chain operation runs in the
 approved zone, and the check **fails closed** rather than assuming.
 
@@ -117,7 +111,7 @@ Server-side. **None of these may be committed.**
 
 | Variable                                        | Value                                  | Requirement    |
 | ----------------------------------------------- | -------------------------------------- | -------------- |
-| `ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE`             | `sin`                                  | §3.1           |
+| `ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE`             | `<APPROVED_EXECUTION_ZONE>`             | §3.1           |
 | `ARTFI_RPC_URL`                                 | `<HOODI_RPC>`                          | `CH.5`         |
 | `ARTFI_CHARITY_EDITIONS_ADDRESS`                | `<EDITIONS_CONTRACT>`                  | `CH.5`         |
 | `ARTFI_CHARITY_HOLDER_SESSION_SECRET`           | 32+ characters, random                 | `CH.5`         |
@@ -125,8 +119,8 @@ Server-side. **None of these may be committed.**
 | `ARTFI_CHARITY_HOLDER_ASSET_MANIFEST`           | the reviewed descriptor, §3.4          | `CH.6`         |
 | `ARTFI_CHARITY_HOLDER_OBJECT_ENDPOINT`          | `<OBJECT_STORE>`                       | `CH.5`         |
 | `ARTFI_CHARITY_HOLDER_OBJECT_BUCKET`            | `<OBJECT_BUCKET>`                      | `CH.5`         |
-| `ARTFI_CHARITY_HOLDER_OBJECT_ACCESS_KEY_ID`     | store credential                       | `AGENTS.md` §6 |
-| `ARTFI_CHARITY_HOLDER_OBJECT_SECRET_ACCESS_KEY` | store credential                       | `AGENTS.md` §6 |
+| `ARTFI_CHARITY_HOLDER_OBJECT_ACCESS_KEY_ID`     | store credential                       | `AGENTS.md` §5 |
+| `ARTFI_CHARITY_HOLDER_OBJECT_SECRET_ACCESS_KEY` | store credential                       | `AGENTS.md` §5 |
 
 Browser-side. **A public contract address only — never a signer or a credential.**
 
@@ -173,20 +167,20 @@ refused and yields no bytes.
 ### 3.5 Secrets
 
 The signing method is supplied to Forge. **No key, seed phrase or credential is written to this
-repository, an env file in Git, CI, or a log** (`AGENTS.md` §6). Role variables hold **addresses**,
+repository, an env file in Git, CI, or a log** (`AGENTS.md` §5). Role variables hold **addresses**,
 not keys.
 
 ---
 
 ## 4. Before the first transaction
 
-### 4.1 Preconditions the delivery side owns
+### 4.1 Preconditions
 
 | Input                              | State                                                                                                         |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Hoodi RPC egress                   | Required                                                                                                      |
-| Funded Hoodi accounts              | **Held** — §2.3                                                                                               |
-| The Hoodi AI test payload (`VD.3`) | **Does not exist yet.** `VD.3` is `NOT-IMPLEMENTED`, and `PRD.md` §7.0 makes producing it the delivery side's |
+| Funded Hoodi accounts              | Required — §2.3                                                                                               |
+| The Hoodi AI test payload (`VD.3`) | **Does not exist yet.** `VD.3` is `NOT-IMPLEMENTED` |
 | An S3-compatible store             | Loopback is sufficient — §2.1                                                                                 |
 
 If the payload does not exist, produce it first under §5. **Do not substitute the real Sepolia
@@ -394,7 +388,7 @@ default.
 
 ---
 
-## 7. What to report back
+## 7. Required runtime evidence
 
 One report, against the commit SHA fixed in §4.2. Per `ACCEPTANCE.md` §3, a claim without a citation
 is not evidence.
@@ -450,12 +444,7 @@ the technical path, which is exactly what the client asked it to be.
 
 ---
 
-## 11. Assignment and coverage
-
-**Owner: the delivery side (Codex).** Client instruction, 2026-09-19. The supervision side wrote
-these requirements and cannot execute them — no chain egress and no funded wallet — so this document
-is the whole of the brief. Where it is wrong or incomplete, say so in the report rather than working
-around it silently; §7's last bullet exists for exactly that.
+## 11. Requirement coverage
 
 All eleven `CH` rows in `docs/STATUS.md` are `IMPLEMENTED-NOT-VERIFIED`. This run is the runtime
 evidence they lack. It does not promote them — §7 is explicit, and promotion is a separate decision
@@ -515,7 +504,7 @@ record.
 | 3 · on screen                | Done — `CharityTestAssetMarkers` on both surfaces, desktop and mobile     |
 | 4 · batch manifest           | Done — required on a test payload, forbidden on the real batch            |
 
-Place 2 is recorded as **correctable** (`AGENTS.md` §5). §7.0 says "at contract or series level at
+Place 2 is recorded as **correctable**. §7.0 says "at contract or series level at
 deployment", which could also mean on-chain. The deployment record is the reading that needs no
 contract change and no redeploy; putting it on chain would cost both, and steps A–D would have to
 be run again. If that is wanted, it is an additive contract change, not a redesign.
@@ -529,21 +518,19 @@ assertion was stricter than `CH.7` and `CH.6` require. **F–I were never execut
 
 **All eleven `CH` rows remain `IMPLEMENTED-NOT-VERIFIED` and no status value has moved.** Three
 reasons, each sufficient on its own: the run did not finish; A–D ran against a commit older than the
-step E fix; and the receipts are held by the delivery side and have not been filed against a
+step E fix; and the receipts have not been filed against a
 reviewed commit per `ACCEPTANCE.md` §3.
 
 ### 12.4 What would close it
 
 One complete A–I run on the current commit, reported per §7, then a separate promotion decision.
-The `VD.3` payload is the only prerequisite still missing, and producing it is the delivery side's
-(`PRD.md` §7.0). Nothing else is waiting on anything: no client decision is open on this module, and
-the supervision side has no further code to write for it until a run says otherwise.
+The `VD.3` payload remains missing at this checkpoint (`PRD.md` §7.0).
 
 ---
 
 ## 13. The run of 2026-09-25 — what it establishes
 
-Delivery-side report, contract `0x2395c8f4eb2847199a61b83ff7857718990ef85b` on Hoodi, candidate
+Runtime report for the isolated Hoodi test contract, candidate
 `c55852d`. **Its own conclusion is that A–I did not all pass**, and it states that it summarises
 existing execution records rather than being a new run. That reading is taken as given here.
 
@@ -566,8 +553,8 @@ existing execution records rather than being a new run. That reading is taken as
 **No `CH` row moves, and three reasons are each sufficient.**
 
 1. **No transaction hash appears anywhere in the report.** §7 asks for "transaction hashes and
-   receipts" per step; what is supplied is SHA-256 of evidence _files_ held on the delivery side's
-   own machine. Those are citations to artifacts this repository cannot see, so nothing on chain can
+   receipts" per step; what is supplied is SHA-256 of evidence _files_ held outside
+   this repository. Those are citations to artifacts this repository cannot see, so nothing on chain can
    be checked here even in principle.
 2. **B is unreconciled and F2 is blocked.** `CH.5` is the holder benefit _end to end_, and
    `PRD.md` §3.2.1 measures delivery by what a user can carry out from the UI. G3 proves the API
@@ -587,22 +574,20 @@ replay.
 That is `CH.1`, `CH.3`, `CH.4`, `CH.6` and `CH.11` exercised at runtime, and the gate half of
 `CH.5`. It is recorded here so the next run starts from it rather than repeating it.
 
-### 13.4 What is still open, and whose it is
+### 13.4 Outstanding evidence
 
-| Item                            | Owner      | Note                                                                                      |
-| ------------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
-| Transaction hashes for A–H      | delivery   | §7 asks for them; without them nothing is checkable here                                  |
-| B reconciliation                | delivery   | A process step on their side; the raw observations were all successes                     |
-| F2 real wallet UI               | delivery   | Blocked on their browser environment                                                      |
-| A WalletConnect project ID      | **client** | Only if WalletConnect is the route. This is a **missing input**, not a technical question |
-| `VD.3` payload markers, place 1 | delivery   | §7.0's first place; still `NOT-IMPLEMENTED`                                               |
+| Item | Note |
+| --- | --- |
+| Transaction hashes for A–H | §7 asks for them; without them nothing is checkable here |
+| B reconciliation | Raw observations were successes; reconciliation is still required |
+| F2 real wallet UI | Blocked on the test browser environment |
+| A WalletConnect project ID | Only if WalletConnect is the route. This is a **missing input**, not a technical question |
+| `VD.3` payload markers, place 1 | §7.0's first place; still `NOT-IMPLEMENTED` |
 
 **Nothing here is a product defect.** The one defect the run surfaced was in this document, and it
 is fixed in step H.
 
-> **On the wallet connector.** `wagmi.ts` configures `injected()` only, which is a legitimate
-> choice and not a defect; the run could not drive it because that environment has no injected
-> wallet. Adding a second connector is a scope item with an external dependency, so it is reported
-> rather than taken: a public WalletConnect project ID is something the client's side supplies, and
-> `AGENTS.md` §5 separates a missing input from a decision. Until one exists, F2 stays blocked and
-> that is not a reason to hold anything else.
+> **Wallet connector limitation.** `wagmi.ts` configures `injected()` only.
+> The test environment had no injected wallet, so F2 could not run. A separate
+> WalletConnect integration would require its configured public project ID and
+> its own verification; this plan does not establish that capability.
