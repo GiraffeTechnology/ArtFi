@@ -1,3 +1,4 @@
+import { testReceipt, testReceiptClient } from "./market-receipt-test-client";
 import { describe, expect, it, vi } from "vitest";
 import type { Hash, PublicClient, TransactionReceipt } from "viem";
 
@@ -10,8 +11,7 @@ import {
 const approvalHash = `0x${"11".repeat(32)}` as Hash;
 const fillHash = `0x${"22".repeat(32)}` as Hash;
 const replacementHash = `0x${"33".repeat(32)}` as Hash;
-const receipt = (hash: Hash, status: "success" | "reverted" = "success") =>
-  ({ transactionHash: hash, status }) as TransactionReceipt;
+const receipt = testReceipt;
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -21,12 +21,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function receiptClient(wait: ReturnType<typeof vi.fn>) {
-  return { waitForTransactionReceipt: wait } as unknown as Pick<
-    PublicClient,
-    "waitForTransactionReceipt"
-  >;
-}
+const receiptClient = testReceiptClient;
 
 describe("confirmed market transactions", () => {
   it("does not settle on an approval hash or complete on a fill hash", async () => {
