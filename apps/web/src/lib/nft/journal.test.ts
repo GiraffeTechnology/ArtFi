@@ -231,15 +231,17 @@ describe("native NFT session journal response admission", () => {
       ).operation.plan.request.tokenId,
     ).toBe("7");
   });
-  it.each([null, [], {}, "invalid"])(
-    "rejects malformed result %j",
-    async (value) => {
-      reply(value);
-      await expect(
-        nftJournal("get", { id }, "TEST_ONLY-access"),
-      ).rejects.toMatchObject({ status: 503 });
-    },
-  );
+  it.each([
+    { label: "null", value: null },
+    { label: "array", value: [] },
+    { label: "object", value: {} },
+    { label: "string", value: "invalid" },
+  ])("rejects malformed result $label", async ({ value }) => {
+    reply(value);
+    await expect(
+      nftJournal("get", { id }, "TEST_ONLY-access"),
+    ).rejects.toMatchObject({ status: 503 });
+  });
   it.each(["json", "oversized", "network"])(
     "retains an uncertain %s acknowledgement without automatic write retry",
     async (kind) => {
