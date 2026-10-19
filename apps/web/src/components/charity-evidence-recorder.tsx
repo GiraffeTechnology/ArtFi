@@ -26,15 +26,16 @@ import { currentOperation } from "@/lib/current-operation";
 import { isDaoWalletRejection } from "@/lib/dao-action-state";
 import { setupRecoverySession } from "@/lib/setup-recovery";
 import {
-  confirmMarketReceipt,
-  MarketReceiptFinalError,
-} from "@/lib/market-transaction";
+  CharityEvidenceFinalError,
+  charityEvidenceRead,
+  prepareCharityEvidenceForView,
+  readCharityEvidenceOutcome,
+} from "@/lib/charity-evidence-recovery";
 import { operatorErrorText } from "@/lib/operator-error";
 import {
   charityEvidenceCall,
   charityEvidenceFlow,
   isCharityEvidenceRecord,
-  prepareCharityEvidence,
   verifyCharityEvidenceReceipt,
   verifyDirectCharityEvidenceTransaction,
   type CharityEvidenceAction,
@@ -43,7 +44,7 @@ import {
 import { AdminSafeConsole } from "./admin-safe-console";
 
 export function CharityEvidenceRecorder({ tokenId }: { tokenId: string }) {
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
   const chainId = useChainId();
   if (!/^[1-9][0-9]{0,77}$/.test(tokenId) || BigInt(tokenId) >= 2n ** 256n)
     return (
@@ -67,9 +68,9 @@ export function CharityEvidenceRecorder({ tokenId }: { tokenId: string }) {
     );
   return (
     <ConnectedRecorder
-      key={`${chainId}:${address}:${configured}:${tokenId}`}
+      key={`${chainId}:${address}:${isConnected}:${configured}:${tokenId}`}
       target={configured}
-      account={address}
+      account={isConnected ? address : undefined}
       chainId={chainId}
       tokenId={tokenId}
     />
@@ -89,6 +90,7 @@ function ConnectedRecorder({
 }) {
   const client = usePublicClient({ chainId: supportedChain.id });
   const { writeContractAsync } = useWriteContract();
+  const [storageReady, setStorageReady] = useState(false);
   const [action, setAction] = useState<CharityEvidenceAction>("sellout");
   const [evidenceHash, setEvidenceHash] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
@@ -121,6 +123,7 @@ function ConnectedRecorder({
   const view = useRef(currentOperation());
   useLayoutEffect(() => {
     session.restore(() => sessionStorage);
+    setStorageReady(true);
     view.current = currentOperation();
     const retire = () => view.current.retire();
     window.addEventListener("pagehide", retire);
@@ -131,7 +134,9 @@ function ConnectedRecorder({
       window.removeEventListener("popstate", retire);
     };
   }, [session]);
-  const ready = Boolean(account && client && chainId === supportedChain.id);
+  const ready = Boolean(
+    storageReady && account && client && chainId === supportedChain.id,
+  );
   const writable =
     ready && !snapshot.busy && !snapshot.blocked && !snapshot.record?.pending;
   function edit() {
@@ -144,20 +149,22 @@ function ConnectedRecorder({
     lease: number,
     record: CharityEvidenceRecord,
     hash: Hex,
+    current: ReturnType<typeof currentOperation>,
     retainRepricedHash = true,
   ) {
     if (!client) throw new Error("The reviewed chain client is unavailable.");
-    await verifyDirectCharityEvidenceTransaction(client, record, hash);
-    const receipt = await confirmMarketReceipt(client, hash, (next) => {
-      if (retainRepricedHash) session.repriced(lease, next);
-    });
-    await verifyDirectCharityEvidenceTransaction(
+    const result = await readCharityEvidenceOutcome(
       client,
       record,
-      receipt.transactionHash,
+      hash,
+      () => current.assertCurrent(),
+      (next) => {
+        current.assertCurrent();
+        if (retainRepricedHash) session.repriced(lease, next);
+      },
     );
-    const result = await verifyCharityEvidenceReceipt(client, record, receipt);
-    session.resolved(lease, record);
+    current.assertCurrent();
+    session.resolved(lease, { ...record, outcome: result.outcome });
     return result;
   }
   async function submit(event: FormEvent) {
@@ -179,10 +186,11 @@ function ConnectedRecorder({
         throw new Error(
           "Use a positive token ID and a nonzero bytes32 evidence hash.",
         );
-      const result = await prepareCharityEvidence(
+      const result = await prepareCharityEvidenceForView(
         client,
         record,
         configuredAdminSafe(),
+        () => current.assertCurrent(),
       );
       current.assertCurrent();
       if (result.safeSubmission) {
@@ -198,11 +206,14 @@ function ConnectedRecorder({
       setMessage(
         "Confirm the exact evidence hash, series and zero-value call in your wallet. Gas is separate. A pending request is not a completed record.",
       );
-      const hash = await writeContractAsync(charityEvidenceCall(record));
+      const hash = await writeContractAsync({
+        ...charityEvidenceCall(record),
+        account: record.account,
+      });
       // Persist a late wallet hash before retiring a departed screen.
       session.broadcast(lease, hash);
       current.assertCurrent();
-      const resultRecord = await finish(lease, record, hash);
+      const resultRecord = await finish(lease, record, hash, current);
       current.assertCurrent();
       setMessage(
         `${resultRecord.action === "sellout" ? "Sellout evidence" : "Physical donation acceptance evidence"} recorded for series ${resultRecord.tokenId}. Transaction: ${resultRecord.transactionHash}. Refresh edition facts to view the current chain record.`,
@@ -210,8 +221,14 @@ function ConnectedRecorder({
     } catch (error) {
       if (isDaoWalletRejection(error)) session.rejected(lease);
       const saved = session.getSnapshot().record;
-      if (error instanceof MarketReceiptFinalError && saved)
-        session.resolved(lease, saved.data);
+      if (
+        error instanceof CharityEvidenceFinalError &&
+        saved &&
+        current.isCurrent()
+      ) {
+        current.assertCurrent();
+        session.resolved(lease, { ...saved.data, outcome: error.outcome });
+      }
       if (current.isCurrent())
         session.fail(lease, new Error(operatorErrorText(error)));
     } finally {
@@ -238,7 +255,16 @@ function ConnectedRecorder({
         throw new Error(
           "Check the original wallet activity and supply its transaction hash. Do not submit again.",
         );
-      await verifyDirectCharityEvidenceTransaction(client, saved.data, hash);
+      await charityEvidenceRead(
+        () => current.assertCurrent(),
+        (active) =>
+          verifyDirectCharityEvidenceTransaction(
+            client,
+            saved.data,
+            hash,
+            active,
+          ),
+      );
       current.assertCurrent();
       // A user-supplied candidate hash is not proof of the unanswered request's identity.
       // Only its matching successful canonical record resolves the logical one-time action.
@@ -247,6 +273,7 @@ function ConnectedRecorder({
         lease,
         saved.data,
         hash,
+        current,
         Boolean(saved.pending.hash),
       );
       current.assertCurrent();
@@ -254,8 +281,14 @@ function ConnectedRecorder({
         `The original evidence call for series ${result.tokenId} is reconciled. Transaction: ${result.transactionHash}. Refresh edition facts for current chain state.`,
       );
     } catch (error) {
-      if (error instanceof MarketReceiptFinalError && saved?.pending?.hash)
-        session.resolved(lease, saved.data);
+      if (
+        error instanceof CharityEvidenceFinalError &&
+        saved?.pending?.hash &&
+        current.isCurrent()
+      ) {
+        current.assertCurrent();
+        session.resolved(lease, { ...saved.data, outcome: error.outcome });
+      }
       if (current.isCurrent())
         session.fail(lease, new Error(operatorErrorText(error)));
     } finally {
@@ -280,9 +313,18 @@ function ConnectedRecorder({
       action,
       evidenceHash: decoded.namedArgs.evidenceHash as Hex,
     };
-    const receipt = await client.getTransactionReceipt({ hash });
-    current.assertCurrent();
-    const result = await verifyCharityEvidenceReceipt(client, record, receipt);
+    const result = await charityEvidenceRead(
+      () => current.assertCurrent(),
+      async (active) => {
+        const receipt = await client.getTransactionReceipt({ hash });
+        active();
+        if (receipt.transactionHash.toLowerCase() !== hash.toLowerCase())
+          throw Error(
+            "The Safe evidence receipt hash does not match its original execution.",
+          );
+        return verifyCharityEvidenceReceipt(client, record, receipt, active);
+      },
+    );
     current.assertCurrent();
     setMessage(
       `The Safe evidence record for series ${result.tokenId} is reconciled with its exact event and canonical recorded hash. Transaction: ${result.transactionHash}. Refresh edition facts for current state.`,

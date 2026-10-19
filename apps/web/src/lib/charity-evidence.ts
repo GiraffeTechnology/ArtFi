@@ -18,6 +18,13 @@ import {
 } from "./admin-safe-client";
 
 export type CharityEvidenceAction = "sellout" | "donation";
+export type CharityEvidenceOutcome = {
+  originalHash: Hex;
+  transactionHash: Hex;
+  blockNumber: string;
+  blockHash: Hex;
+  status: "confirmed" | "reverted" | "replaced";
+};
 export type CharityEvidenceRecord = {
   chainId: 560048;
   account: Address;
@@ -25,6 +32,7 @@ export type CharityEvidenceRecord = {
   tokenId: string;
   action: CharityEvidenceAction;
   evidenceHash: Hex;
+  outcome?: CharityEvidenceOutcome;
 };
 export type CharityEvidenceState = {
   createdAt: bigint;
@@ -58,7 +66,7 @@ export function isCharityEvidenceRecord(
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const v = value as CharityEvidenceRecord;
   return (
-    Object.keys(v).length === 6 &&
+    Object.keys(v).filter((key) => key !== "outcome").length === 6 &&
     Object.keys(v).every((key) =>
       [
         "chainId",
@@ -67,6 +75,7 @@ export function isCharityEvidenceRecord(
         "tokenId",
         "action",
         "evidenceHash",
+        "outcome",
       ].includes(key),
     ) &&
     v.chainId === 560048 &&
@@ -74,7 +83,27 @@ export function isCharityEvidenceRecord(
     address(v.target) &&
     uint(v.tokenId) &&
     ["sellout", "donation"].includes(v.action) &&
-    commitment(v.evidenceHash)
+    commitment(v.evidenceHash) &&
+    (v.outcome === undefined ||
+      (v.outcome &&
+        typeof v.outcome === "object" &&
+        Object.keys(v.outcome).length === 5 &&
+        Object.keys(v.outcome).every((key) =>
+          [
+            "originalHash",
+            "transactionHash",
+            "blockNumber",
+            "blockHash",
+            "status",
+          ].includes(key),
+        ) &&
+        typeof v.outcome.blockNumber === "string" &&
+        commitment(v.outcome.originalHash) &&
+        commitment(v.outcome.transactionHash) &&
+        commitment(v.outcome.blockHash) &&
+        /^(0|[1-9][0-9]{0,77})$/.test(v.outcome.blockNumber) &&
+        BigInt(v.outcome.blockNumber) < 2n ** 256n &&
+        ["confirmed", "reverted", "replaced"].includes(v.outcome.status)))
   );
 }
 
@@ -170,11 +199,21 @@ export async function prepareCharityEvidence(
   >,
   record: CharityEvidenceRecord,
   safe?: Address,
+  assertCurrent: () => void = () => {},
 ) {
   const call = charityEvidenceCall(record);
   if ((await client.getChainId()) !== record.chainId)
     throw new Error("The RPC chain does not match Hoodi.");
+  assertCurrent();
   const block = await client.getBlock();
+  assertCurrent();
+  if (
+    typeof block.number !== "bigint" ||
+    block.number < 0n ||
+    !block.hash ||
+    !commitment(block.hash)
+  )
+    throw failure();
   const read = {
     address: record.target,
     abi: charityEditionsAbi,
@@ -188,6 +227,7 @@ export async function prepareCharityEvidence(
     }),
     client.readContract({ ...read, functionName: "paused" }),
   ]);
+  assertCurrent();
   if (!validState(state)) throw failure();
   const balance =
     record.action === "sellout"
@@ -197,6 +237,7 @@ export async function prepareCharityEvidence(
           args: [state.distributionWallet, BigInt(record.tokenId)],
         })
       : undefined;
+  assertCurrent();
   checkCharityEvidencePreconditions(record, state, paused, balance);
   const caller = await operatorCallRoute(
     client,
@@ -205,7 +246,23 @@ export async function prepareCharityEvidence(
     record.account,
     safe,
   );
+  assertCurrent();
   await client.simulateContract({ ...call, account: caller });
+  assertCurrent();
+  const [chain, canonical] = await Promise.all([
+    client.getChainId(),
+    client.getBlock({ blockNumber: block.number }),
+  ]);
+  assertCurrent();
+  if (
+    chain !== record.chainId ||
+    canonical.number !== block.number ||
+    !canonical.hash ||
+    !equal(canonical.hash, block.hash)
+  )
+    throw Error(
+      "The charity evidence preparation block or chain changed. Review again before any wallet request.",
+    );
   return {
     caller,
     state,
@@ -222,10 +279,14 @@ export async function verifyDirectCharityEvidenceTransaction(
   client: Pick<PublicClient, "getChainId" | "getTransaction">,
   record: CharityEvidenceRecord,
   hash: Hex,
+  assertCurrent: () => void = () => {},
 ) {
   const call = charityEvidenceCall(record);
   if ((await client.getChainId()) !== record.chainId) throw failure();
+  assertCurrent();
+  if (!commitment(hash)) throw failure();
   const transaction = await client.getTransaction({ hash });
+  assertCurrent();
   if (
     !transaction.to ||
     !equal(transaction.to, record.target) ||
@@ -241,13 +302,23 @@ export async function verifyCharityEvidenceReceipt(
   client: Pick<PublicClient, "getChainId" | "getBlock" | "readContract">,
   record: CharityEvidenceRecord,
   receipt: TransactionReceipt,
+  assertCurrent: () => void = () => {},
 ) {
   charityEvidenceCall(record);
+  assertCurrent();
+  if (
+    !commitment(receipt.transactionHash) ||
+    !commitment(receipt.blockHash) ||
+    typeof receipt.blockNumber !== "bigint" ||
+    receipt.blockNumber < 0n
+  )
+    throw failure();
   if (
     (await client.getChainId()) !== record.chainId ||
     receipt.status !== "success"
   )
     throw failure();
+  assertCurrent();
   if (
     receipt.logs.some((log) => equal(log.address, record.target) && log.removed)
   )
@@ -268,6 +339,16 @@ export async function verifyCharityEvidenceReceipt(
     !equal(events[0].args.evidenceHash, record.evidenceHash)
   )
     throw failure();
+  const before = await client.getBlock({ blockNumber: receipt.blockNumber });
+  assertCurrent();
+  if (
+    before.number !== receipt.blockNumber ||
+    !before.hash ||
+    !equal(before.hash, receipt.blockHash)
+  )
+    throw Error(
+      "The evidence receipt is not reconciled with the canonical chain state.",
+    );
   const state = await client.readContract({
     address: record.target,
     abi: charityEditionsAbi,
@@ -275,6 +356,7 @@ export async function verifyCharityEvidenceReceipt(
     args: [BigInt(record.tokenId)],
     blockNumber: receipt.blockNumber,
   });
+  assertCurrent();
   if (!validState(state)) throw failure();
   const timestamp =
     record.action === "sellout"
@@ -285,7 +367,11 @@ export async function verifyCharityEvidenceReceipt(
       ? state.selloutEvidenceHash
       : state.physicalDonationEvidenceHash;
   const canonical = await client.getBlock({ blockNumber: receipt.blockNumber });
+  const chain = await client.getChainId();
+  assertCurrent();
   if (
+    chain !== record.chainId ||
+    canonical.number !== receipt.blockNumber ||
     state.createdAt === 0n ||
     (record.action === "donation" && state.soldOutAt === 0n) ||
     timestamp === 0n ||
