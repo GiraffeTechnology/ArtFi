@@ -240,3 +240,127 @@ describe("fixed authenticated task journal adapter", () => {
     expect(() => nftTaskJournalDigest({ "\u96ea": 1 })).toThrow();
   });
 });
+
+describe("native task journal exact update acknowledgements", () => {
+  it.each(["status", "wallet-started", "transaction"])(
+    "task-ack regression: rejects changed %s at an otherwise correct revision",
+    async (field) => {
+      const original = record(),
+        next = { ...record(), revision: 2 };
+      if (field === "status") next.status = "confirmed";
+      if (field === "wallet-started") next.walletStarted = true;
+      if (field === "transaction")
+        next.transactionHash = "0x" + "22".repeat(32);
+      const f = fixture(next);
+      await expect(
+        f.journal(principal, "update", original),
+      ).rejects.toMatchObject({ status: 503 });
+      expect(f.requests).toHaveLength(1);
+      expect(f.scopes).toHaveLength(1);
+    },
+  );
+  it("rejects an injected order reference without replaying the update", async () => {
+    const f = fixture({
+      ...record(),
+      revision: 2,
+      orderHash: "0x" + "33".repeat(32),
+    });
+    await expect(
+      f.journal(principal, "update", record()),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(f.requests).toHaveLength(1);
+  });
+  it.each(["transaction", "order"])(
+    "rejects a missing or replaced %s reference",
+    async (field) => {
+      const original = record();
+      if (field === "transaction")
+        original.transactionHash = "0x" + "44".repeat(32);
+      else original.orderHash = "0x" + "55".repeat(32);
+      for (const missing of [true, false]) {
+        const next = { ...structuredClone(original), revision: 2 };
+        if (field === "transaction") {
+          if (missing) Reflect.deleteProperty(next, "transactionHash");
+          else next.transactionHash = "0x" + "66".repeat(32);
+        } else {
+          if (missing) Reflect.deleteProperty(next, "orderHash");
+          else next.orderHash = "0x" + "66".repeat(32);
+        }
+        const f = fixture(next);
+        await expect(
+          f.journal(principal, "update", original),
+        ).rejects.toMatchObject({ status: 503 });
+        expect(f.requests).toHaveLength(1);
+      }
+    },
+  );
+  it("accepts the complete exact next durable result including original public hash spelling", async () => {
+    const original = {
+        ...record(),
+        status: "pending",
+        walletStarted: true,
+        transactionHash: "0x" + "AB".repeat(32),
+        orderHash: "0x" + "CD".repeat(32),
+      },
+      next = { ...structuredClone(original), revision: 2 };
+    const f = fixture(next);
+    expect(await f.journal(principal, "update", original)).toEqual(next);
+    expect(original.revision).toBe(1);
+    expect(f.requests).toHaveLength(1);
+  });
+  it("preserves a progressed idempotent create rather than treating it as a new update acknowledgement", async () => {
+    const next = {
+      ...record(),
+      revision: 9,
+      status: "pending",
+      walletStarted: true,
+      transactionHash: "0x" + "77".repeat(32),
+    };
+    const f = fixture(next);
+    expect(await f.journal(principal, "create", record())).toEqual(next);
+  });
+  it("does not infer update equality for a read-only recovered record", async () => {
+    const next = {
+      ...record(),
+      revision: 9,
+      status: "pending",
+      walletStarted: true,
+      transactionHash: "0x" + "77".repeat(32),
+    };
+    const f = fixture(next);
+    expect(await f.journal(principal, "get", { id: record().id })).toEqual(
+      next,
+    );
+  });
+  it("checks the outer held-context return as well as the transport response", async () => {
+    const next = { ...record(), revision: 2 },
+      f = fixture(next);
+    f.config.withCapability = async (_scope, dispatch) => {
+      const value = await dispatch(
+        "synthetic-capability-not-a-real-credential",
+      );
+      Reflect.set(value as object, "status", "confirmed");
+      return value;
+    };
+    f.config.transport = async () => Response.json(next);
+    const journal = createNftTaskJournal(f.config);
+    await expect(journal(principal, "update", record())).rejects.toMatchObject({
+      status: 503,
+    });
+  });
+  it("uses the original submitted snapshot after a caller mutates during the held context await", async () => {
+    const original = record(),
+      next = { ...record(), revision: 2 },
+      f = fixture(next);
+    f.config.withCapability = async (_scope, dispatch) => {
+      original.status = "confirmed";
+      original.walletStarted = true;
+      return dispatch("synthetic-capability-not-a-real-credential");
+    };
+    f.config.transport = async () => Response.json(next);
+    expect(
+      (await createNftTaskJournal(f.config)(principal, "update", original))
+        .status,
+    ).toBe("awaiting-wallet");
+  });
+});

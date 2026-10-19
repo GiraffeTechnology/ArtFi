@@ -175,7 +175,11 @@ function checkResult(
       result.wallet.toLowerCase() !== operation.wallet?.toLowerCase() ||
       result.chainId !== operation.chainId ||
       (action === "update" &&
-        result.revision !== Number(operation.revision) + 1))
+        (result.revision !== Number(operation.revision) + 1 ||
+          result.status !== operation.status ||
+          result.walletStarted !== operation.walletStarted ||
+          result.transactionHash !== operation.transactionHash ||
+          result.orderHash !== operation.orderHash)))
   )
     unavailable("The task journal returned a changed operation.");
   return structuredClone(result);
