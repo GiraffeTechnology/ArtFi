@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { type Hex } from "viem";
+import { encodeFunctionData } from "viem";
 import {
   useAccount,
   useChainId,
@@ -22,6 +23,7 @@ import {
 import {
   daoActionSession,
   checkDaoTransaction,
+  isDaoCallBinding,
   isDaoWalletRejection,
   type DaoTransaction,
 } from "@/lib/dao-action-state";
@@ -153,10 +155,16 @@ function PublishedExecutionSession({
     }
   }
   async function confirm(transaction: DaoTransaction, lease: number) {
-    if (!client) throw Error("The chain reader is unavailable.");
+    if (!client || !address)
+      throw Error("The original chain reader and account are unavailable.");
     let expected = transaction.hash;
     await checkDaoTransaction({
       client,
+      binding: {
+        chainId: 560048,
+        account: address,
+        targets: [deployment.governorAddress],
+      },
       transaction,
       isCurrent: () => session.isCurrent(lease),
       update: (next) =>
@@ -235,6 +243,13 @@ function PublishedExecutionSession({
         account,
         chain: client.chain,
       } as const;
+      const boundRequest = {
+        target: request.address,
+        input: encodeFunctionData(request),
+        value: "0",
+      };
+      if (!isDaoCallBinding(boundRequest))
+        throw Error("The DAO call is invalid or too large for safe recovery.");
       await publishedDaoReadDeadline(client.simulateContract(request));
       await assertTradingSession(account, 560048);
       assertCurrent();
@@ -259,6 +274,7 @@ function PublishedExecutionSession({
       });
       const transaction: DaoTransaction = {
         hash,
+        request: boundRequest,
         phase: "pending",
         success:
           mode === "queue"

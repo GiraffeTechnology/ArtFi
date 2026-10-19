@@ -38,15 +38,39 @@ const transaction: DaoTransaction = {
   success: "Proposal queued in the Timelock.",
   phase: "pending",
 };
+const account = "0x2000000000000000000000000000000000000002";
+const blockHash = `0x${"33".repeat(32)}` as Hash;
+const binding: Parameters<typeof checkDaoTransaction>[0]["binding"] = {
+  chainId: 560048,
+  account,
+  targets: [target],
+};
 const receipt = (
   status: "success" | "reverted" = "success",
   transactionHash = hash,
-) => ({ status, transactionHash }) as TransactionReceipt;
+) =>
+  ({
+    status,
+    transactionHash,
+    blockNumber: 77n,
+    blockHash,
+    logs: [],
+  }) as unknown as TransactionReceipt;
 const client = (wait: ReturnType<typeof vi.fn>) =>
-  ({ waitForTransactionReceipt: wait }) as unknown as Pick<
-    PublicClient,
-    "waitForTransactionReceipt"
-  >;
+  ({
+    waitForTransactionReceipt: wait,
+    getChainId: async () => 560048,
+    getBlock: async () => ({ number: 77n, hash: blockHash }),
+    getTransaction: async ({ hash }: { hash: Hash }) => ({
+      hash,
+      chainId: 560048,
+      from: account,
+      to: target,
+      value: 0n,
+      nonce: 7,
+      input: "0x12345678",
+    }),
+  }) as unknown as Parameters<typeof checkDaoTransaction>[0]["client"];
 function storage() {
   const values = new Map<string, string>();
   return {
@@ -69,6 +93,7 @@ describe("DAO transaction outcomes", () => {
     });
     const states: DaoTransaction[] = [];
     const running = checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockReturnValue(promise)),
       transaction,
       isCurrent: () => true,
@@ -85,6 +110,7 @@ describe("DAO transaction outcomes", () => {
   it("reports a reverted receipt as failed", async () => {
     const update = vi.fn();
     const result = await checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockResolvedValue(receipt("reverted"))),
       transaction,
       isCurrent: () => true,
@@ -99,6 +125,7 @@ describe("DAO transaction outcomes", () => {
   it("keeps an unavailable receipt unresolved and allows a read-only recheck", async () => {
     const update = vi.fn();
     const first = await checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockRejectedValue(new Error("timeout"))),
       transaction,
       isCurrent: () => true,
@@ -106,6 +133,7 @@ describe("DAO transaction outcomes", () => {
     });
     expect(first.phase).toBe("unknown");
     const retried = await checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockResolvedValue(receipt())),
       transaction: first,
       isCurrent: () => true,
@@ -118,6 +146,7 @@ describe("DAO transaction outcomes", () => {
     "never marks a %s transaction successful",
     async (reason) => {
       const result = await checkDaoTransaction({
+        binding,
         client: client(
           vi.fn().mockImplementation(async ({ onReplaced }) => {
             onReplaced({
@@ -138,6 +167,7 @@ describe("DAO transaction outcomes", () => {
   it("retains the replacement hash for a repriced identical operation", async () => {
     const onHash = vi.fn();
     const result = await checkDaoTransaction({
+      binding,
       client: client(
         vi.fn().mockImplementation(async ({ onReplaced }) => {
           onReplaced({
@@ -164,6 +194,7 @@ describe("DAO transaction outcomes", () => {
     });
     const update = vi.fn();
     const running = checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockReturnValue(promise)),
       transaction,
       isCurrent: () => current,

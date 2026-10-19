@@ -48,6 +48,7 @@ import {
 import { supportedChain } from "@/lib/wagmi";
 import {
   checkDaoTransaction,
+  isDaoCallBinding,
   daoActionSession,
   isDaoWalletRejection,
   type DaoTransaction,
@@ -392,13 +393,18 @@ function DaoGovernanceSession({
   }
 
   async function checkReceipt(next: DaoTransaction, lease: number) {
-    if (!publicClient)
+    if (!publicClient || !address || !governor || !token)
       throw new Error(
         "The chain client is unavailable. The transaction is still unconfirmed.",
       );
     let expectedHash = next.hash;
     await checkDaoTransaction({
       client: publicClient,
+      binding: {
+        chainId: 560048,
+        account: address,
+        targets: [governor, token],
+      },
       transaction: next,
       isCurrent: () => session.isCurrent(lease),
       update: (value) =>
@@ -449,6 +455,15 @@ function DaoGovernanceSession({
     if (!active.current || !session.isCurrent(lease)) return;
     if (!member || !correctChain || !address || !publicClient)
       throw new Error("DAO ownership verification on Hoodi is required.");
+    const boundRequest = {
+      target: request.address,
+      input: encodeFunctionData(
+        request as Parameters<typeof encodeFunctionData>[0],
+      ),
+      value: ((request as { value?: bigint }).value ?? 0n).toString(),
+    };
+    if (!isDaoCallBinding(boundRequest))
+      throw Error("The DAO call is invalid or too large for safe recovery.");
     const hash = await runDaoSessionAction({
       account: address,
       chainId,
@@ -482,6 +497,7 @@ function DaoGovernanceSession({
     // Keep the original operation alive across navigation; a returned view subscribes to it.
     const next: DaoTransaction = {
       hash,
+      request: boundRequest,
       success,
       phase: "pending",
       proposalCreation: Boolean(submittedPackage),
