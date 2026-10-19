@@ -1,3 +1,4 @@
+import { snapshotFractionMatches } from "./fraction-match-snapshot";
 import { isAddress, type Address, type Hex, type PublicClient } from "viem";
 import { artFiFractionMarketAbi, fractionTokenAbi } from "./contracts";
 import { anyFractionBuyer, type FractionSaleIntent } from "./fraction-intent";
@@ -31,7 +32,7 @@ export type FractionMatch = FractionCandidate & {
   payment: bigint;
 };
 export type FractionMatchPlan = {
-  matches: FractionMatch[];
+  matches: readonly FractionMatch[];
   requested: bigint;
   matched: bigint;
   unfilled: bigint;
@@ -179,13 +180,13 @@ export function planFractionMatches({
     budget -= payment;
     sellerConsumption.set(intent.seller, consumed + amount);
   }
-  return {
-    matches,
+  return Object.freeze({
+    matches: snapshotFractionMatches(matches),
     requested: request.amount,
     matched: request.amount - remaining,
     unfilled: remaining,
     payment: matches.reduce((sum, match) => sum + match.payment, 0n),
-  };
+  });
 }
 
 type Reader = Pick<
@@ -206,6 +207,16 @@ export async function readFractionMatchPlan(
   request: FractionMatchRequest,
   loadBook: (at: bigint) => Promise<unknown>,
 ): Promise<ObservedFractionMatchPlan> {
+  // Capture primitive business terms before the first source await.
+  const capturedRequest = Object.freeze({
+    market: request.market,
+    asset: request.asset,
+    paymentToken: request.paymentToken,
+    buyer: request.buyer,
+    amount: request.amount,
+    maxPayment: request.maxPayment,
+    maxUnitPrice: request.maxUnitPrice,
+  });
   let timer: ReturnType<typeof setTimeout> | undefined;
   let retired = false;
   const deadline = performance.now() + fractionBookReadTimeoutMs;
@@ -218,7 +229,12 @@ export async function readFractionMatchPlan(
   };
   try {
     return await Promise.race([
-      readFractionMatchPlanAtSnapshot(client, request, loadBook, assertActive),
+      readFractionMatchPlanAtSnapshot(
+        client,
+        capturedRequest,
+        loadBook,
+        assertActive,
+      ),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
           retired = true;
@@ -255,8 +271,18 @@ async function readFractionMatchPlanAtSnapshot(
     /^0x0{64}$/i.test(block.hash)
   )
     throw new Error("A mined chain snapshot is unavailable.");
-  const body = await loadBook(block.timestamp);
+  const rawBody = await loadBook(block.timestamp);
   assertActive();
+  // The provider retains its object; later changes cannot replace this log identity.
+  const body =
+    rawBody && typeof rawBody === "object"
+      ? Object.freeze({
+          data: "data" in rawBody ? rawBody.data : undefined,
+          at: "at" in rawBody ? rawBody.at : undefined,
+          logHash: "logHash" in rawBody ? rawBody.logHash : undefined,
+          priority: "priority" in rawBody ? rawBody.priority : undefined,
+        })
+      : rawBody;
   if (
     !body ||
     typeof body !== "object" ||
@@ -404,7 +430,7 @@ async function readFractionMatchPlanAtSnapshot(
     throw new Error(
       "The chain or observed block changed. Refresh the book before trading.",
     );
-  return {
+  return Object.freeze({
     ...planFractionMatches({
       orders: candidates.map(({ order }) => order),
       request,
@@ -415,5 +441,5 @@ async function readFractionMatchPlanAtSnapshot(
     blockNumber: block.number,
     blockHash: block.hash,
     logHash: body.logHash as Hex,
-  };
+  });
 }
