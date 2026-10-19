@@ -71,6 +71,8 @@ export type DaoDeployment = {
   vaultAddress?: string;
 };
 
+import { verifyDaoGovernanceAtWallet } from "@/lib/dao-governance-wallet-boundary";
+
 type ActionType = DaoDraftForm["actionType"];
 
 const proposalStates = [
@@ -451,6 +453,7 @@ function DaoGovernanceSession({
     success: string,
     lease: number,
     submittedPackage?: ProposalPackage,
+    verifySelection?: () => Promise<unknown>,
   ) {
     if (!active.current || !session.isCurrent(lease)) return;
     if (!member || !correctChain || !address || !publicClient)
@@ -464,26 +467,38 @@ function DaoGovernanceSession({
     };
     if (!isDaoCallBinding(boundRequest))
       throw Error("The DAO call is invalid or too large for safe recovery.");
+    const selectedGeneration = selectionGeneration.current;
+    const selectionSensitive = ["castVote", "queue", "execute"].includes(
+      request.functionName,
+    );
+    const verifyBeforeWallet = async () => {
+      await publishedDaoReadDeadline(
+        verifyDaoGovernanceAtWallet({
+          client: publicClient,
+          deployment: daoExecutionDeployment(deployment),
+          account: address,
+          call: boundRequest,
+          verifySelection,
+          assertCurrent: () => {
+            if (
+              !actionIsCurrent(lease) ||
+              (selectionSensitive &&
+                selectedGeneration !== selectionGeneration.current)
+            )
+              throw Error("The DAO action selection or session changed.");
+          },
+        }),
+      );
+    };
     const hash = await runDaoSessionAction({
       account: address,
       chainId,
       assertSession: assertTradingSession,
       isCurrent: () => actionIsCurrent(lease),
-      prepare: async () => {
-        if (
-          (await publishedDaoReadDeadline(publicClient.getChainId())) !==
-          supportedChain.id
-        )
-          throw Error("The DAO reader is not on Hoodi.");
-        await publishedDaoReadDeadline(
-          publicClient.simulateContract({
-            ...request,
-            account: address,
-            chain: publicClient.chain,
-          } as Parameters<typeof publicClient.simulateContract>[0]),
-        );
-      },
+      prepare: verifyBeforeWallet,
       execute: async () => {
+        await verifyBeforeWallet();
+
         if (!session.awaitWallet(lease, () => window.sessionStorage))
           return undefined;
         return writeContractAsync({
@@ -703,18 +718,21 @@ function DaoGovernanceSession({
     )
       throw new Error("Select the saved proposal package before continuing.");
     const generation = selectionGeneration.current;
-    const currentPackage = await prepareSelectedDaoAction({
-      client: publicClient,
-      deployment: daoExecutionDeployment(deployment),
-      submitted: actionState.submitted,
-      selectedProposalId: proposalId,
-      account: address,
-      mode,
-      isCurrent: () =>
-        active.current &&
-        session.isCurrent(lease) &&
-        generation === selectionGeneration.current,
-    });
+    const submitted = actionState.submitted;
+    const verifySelection = () =>
+      prepareSelectedDaoAction({
+        client: publicClient,
+        deployment: daoExecutionDeployment(deployment),
+        submitted,
+        selectedProposalId: proposalId,
+        account: address,
+        mode,
+        isCurrent: () =>
+          active.current &&
+          session.isCurrent(lease) &&
+          generation === selectionGeneration.current,
+      });
+    const currentPackage = await verifySelection();
     await submitWrite(
       {
         abi: daoGovernorAbi,
@@ -731,6 +749,8 @@ function DaoGovernanceSession({
         ? "Proposal queued in the Timelock."
         : "Timelock execution confirmed.",
       lease,
+      undefined,
+      verifySelection,
     );
   }
 
