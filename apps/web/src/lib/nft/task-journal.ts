@@ -1,22 +1,38 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { boundedOrderText } from "../native-order-upstream";
-import { NftError, type NftTaskPrincipal } from "./model";
+import { NftError, type NftPlan, type NftTaskPrincipal } from "./model";
 import type { NftOperation } from "./journal";
 
 export const NFT_TASK_JOURNAL_PATH = "/internal/v1/nft/operations";
 export const NFT_TASK_JOURNAL_INTERFACE = "artfi-task-journal/1";
 export type NftTaskJournalAction = "get" | "create" | "update";
-export type NftTaskJournalOperation = Partial<NftOperation> & { id: string };
-export type NftTaskJournalCapabilityScope = {
+/** The native journal stores unsigned task plans, including whole-receipt
+ * business plans. NFT callers keep their existing complete NftPlan default. */
+export type NftTaskJournalPlan = {
+  operationId: string;
+  chainId: number;
+  taskPrincipal?: NftTaskPrincipal;
+  sessionId?: string;
+  request: { account: string };
+};
+export type NftTaskJournalRecord<P extends NftTaskJournalPlan = NftPlan> = Omit<
+  NftOperation,
+  "plan"
+> & { plan: P };
+export type NftTaskJournalOperation<P extends NftTaskJournalPlan = NftPlan> =
+  Partial<NftTaskJournalRecord<P>> & { id: string };
+export type NftTaskJournalCapabilityScope<
+  P extends NftTaskJournalPlan = NftPlan,
+> = {
   principal: NftTaskPrincipal;
   action: NftTaskJournalAction;
   nativeOperationId: string;
   planDigest: string;
   requestDigest: string;
-  operation: NftTaskJournalOperation;
+  operation: NftTaskJournalOperation<P>;
 };
-export type NftTaskJournalConfig = {
+export type NftTaskJournalConfig<P extends NftTaskJournalPlan = NftPlan> = {
   /** Fixed internal HTTPS endpoint; never taken from a browser request. */
   url: string;
   /** Expected exact URI SAN of the installed outbound mTLS workload identity. */
@@ -29,7 +45,7 @@ export type NftTaskJournalConfig = {
    * grant nor a substitute for grant verification. Its consume endpoint must
    * use the held-capability registry without reacquiring the grant store lock. */
   withCapability<T>(
-    scope: NftTaskJournalCapabilityScope & { peerId: string },
+    scope: NftTaskJournalCapabilityScope<P> & { peerId: string },
     use: (capability: string) => Promise<T>,
   ): Promise<T>;
 };
@@ -132,11 +148,11 @@ export function nftTaskJournalDigest(value: unknown): string {
   );
   return createHash("sha256").update(encoded).digest("hex");
 }
-function checkResult(
-  result: NftOperation,
+function checkResult<P extends NftTaskJournalPlan>(
+  result: NftTaskJournalRecord<P>,
   principal: NftTaskPrincipal,
   action: NftTaskJournalAction,
-  operation: NftTaskJournalOperation,
+  operation: NftTaskJournalOperation<P>,
   planDigest: string,
 ) {
   if (
@@ -186,7 +202,9 @@ function checkResult(
 }
 
 /** Fixed composition factory; no environment-based bridge/session fallback. */
-export function createNftTaskJournal(config?: NftTaskJournalConfig) {
+export function createNftTaskJournal<P extends NftTaskJournalPlan = NftPlan>(
+  config?: NftTaskJournalConfig<P>,
+) {
   const url = (() => {
     try {
       return new URL(config?.url ?? "");
@@ -213,8 +231,8 @@ export function createNftTaskJournal(config?: NftTaskJournalConfig) {
   return async function journal(
     rawPrincipal: NftTaskPrincipal,
     action: NftTaskJournalAction,
-    rawOperation: NftTaskJournalOperation,
-  ): Promise<NftOperation> {
+    rawOperation: NftTaskJournalOperation<P>,
+  ): Promise<NftTaskJournalRecord<P>> {
     if (!configured || !transport || !withCapability || !endpoint || !peerId)
       unavailable();
     const principal = structuredClone(rawPrincipal);
@@ -223,7 +241,7 @@ export function createNftTaskJournal(config?: NftTaskJournalConfig) {
     // properties are omitted). The snapshot cannot change during any await.
     const operation = JSON.parse(
       JSON.stringify(rawOperation),
-    ) as NftTaskJournalOperation;
+    ) as NftTaskJournalOperation<P>;
     if (
       !["get", "create", "update"].includes(action) ||
       !/^[A-Za-z0-9_-]{16,80}$/.test(operation.id) ||
@@ -290,7 +308,7 @@ export function createNftTaskJournal(config?: NftTaskJournalConfig) {
               "The task operation could not be verified. Read its durable state before retrying.",
             );
           }
-          return checkResult(
+          return checkResult<P>(
             JSON.parse(await boundedOrderText(response.body, 65536)),
             principal,
             action,
@@ -300,7 +318,7 @@ export function createNftTaskJournal(config?: NftTaskJournalConfig) {
         },
       );
       if (!entered) unavailable();
-      return checkResult(result, principal, action, operation, planDigest);
+      return checkResult<P>(result, principal, action, operation, planDigest);
     } catch (error) {
       if (error instanceof NftError) throw error;
       // Never retry a write here. Lost responses may follow a committed CAS.

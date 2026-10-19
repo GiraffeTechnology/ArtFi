@@ -9,6 +9,7 @@ import {
   createNftTaskJournal,
   nftTaskJournalDigest,
 } from "../../apps/web/src/lib/nft/task-journal.ts";
+export { createWholeReceiptNativeJournal } from "../../apps/web/src/lib/whole-receipt-journal-composition.ts";
 import * as validation from "../../apps/web/src/lib/nft/validation.ts";
 import {
   NFT_CHAINS,
