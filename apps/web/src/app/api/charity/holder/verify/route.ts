@@ -1,3 +1,4 @@
+import { readUserJSON } from "@/lib/user-auth-json";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { isAddress, isHex, type Address, type Hex } from "viem";
@@ -12,20 +13,23 @@ import {
 } from "@/lib/charity-holder-auth";
 import { configuredOrigin } from "@/lib/operator-auth";
 
-export async function POST(request: Request) {
+async function verify(request: Request, signal: AbortSignal) {
   const origin = configuredOrigin(new URL(request.url).origin);
   let owns: boolean;
   let address: Address;
   let tokenId: string;
   try {
-    const body = (await request.json()) as {
+    const body = (await readUserJSON(request, { signal, timeoutMs: 8000 })) as {
       address?: string;
       signature?: string;
     };
+    signal.throwIfAborted();
     const cookieStore = await cookies();
-    const challenge = readHolderChallenge(
-      cookieStore.get(holderChallengeCookie)?.value,
-    );
+    signal.throwIfAborted();
+    const originalChallengeToken = cookieStore.get(
+      holderChallengeCookie,
+    )?.value;
+    const challenge = readHolderChallenge(originalChallengeToken);
     if (
       !challenge ||
       !body.address ||
@@ -47,6 +51,14 @@ export async function POST(request: Request) {
       challenge.message,
       body.signature as Hex,
     );
+    signal.throwIfAborted();
+    // Preserve the original challenge lifetime through the asynchronous ownership read.
+    if (!readHolderChallenge(originalChallengeToken)) {
+      return NextResponse.json(
+        { detail: "The holder challenge is invalid or expired." },
+        { status: 401 },
+      );
+    }
   } catch {
     // An unreachable chain is reported as unavailable. It is never treated as ownership.
     return NextResponse.json(
@@ -85,4 +97,38 @@ export async function POST(request: Request) {
     maxAge: 0,
   });
   return response;
+}
+
+/** Bound this read-only proof; late or cancelled reads never issue a new grant. */
+export async function POST(request: Request) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  let onAbort: (() => void) | undefined;
+  const stopped = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new Error("Holder verification interrupted."));
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+  });
+  const timer = setTimeout(abort, 8000);
+  request.signal.addEventListener("abort", abort, { once: true });
+  if (request.signal.aborted) abort();
+  try {
+    const response = await Promise.race([
+      Promise.resolve().then(() => {
+        controller.signal.throwIfAborted();
+        return verify(request, controller.signal);
+      }),
+      stopped,
+    ]);
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  } catch {
+    return NextResponse.json(
+      { detail: "Charity holder verification is unavailable." },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  } finally {
+    clearTimeout(timer);
+    request.signal.removeEventListener("abort", abort);
+    if (onAbort) controller.signal.removeEventListener("abort", onAbort);
+  }
 }
