@@ -25,6 +25,9 @@ const event = new Interface(SeaportABI).encodeEventLog("OrderFulfilled", [
   [],
 ]);
 type Mode =
+  | "log-transaction"
+  | "log-block-hash"
+  | "log-block-number"
   | "normal"
   | "tx-hash"
   | "receipt-hash"
@@ -104,9 +107,14 @@ class FixtureProvider extends ReadOnlyNftProvider {
                           address: SEAPORT,
                           topics: event.topics,
                           data: event.data,
-                          blockHash,
-                          blockNumber: "0x64",
-                          transactionHash: hash,
+                          blockHash:
+                            this.mode === "log-block-hash"
+                              ? otherHash
+                              : blockHash,
+                          blockNumber:
+                            this.mode === "log-block-number" ? "0x63" : "0x64",
+                          transactionHash:
+                            this.mode === "log-transaction" ? otherHash : hash,
                           transactionIndex: "0x0",
                           logIndex: "0x0",
                           removed: this.mode === "removed",
@@ -270,4 +278,18 @@ describe("native NFT receipt through real ethers JSON-RPC codecs", () => {
     ).toBe("pending");
     expect(f.updates.map((x) => x.status)).toEqual(["pending"]);
   });
+});
+
+describe("real ethers NFT settlement-log inclusion", () => {
+  it.each(["log-transaction", "log-block-hash", "log-block-number"] as const)(
+    "log-inclusion regression: rejects decoded %s despite matching event contents",
+    async (mode) => {
+      const f = setup(mode);
+      await expect(
+        reconcileNftOperationWithContext(operation(), f.context),
+      ).rejects.toThrow("expected NFT order event");
+      expect(f.updates).toEqual([]);
+      expect(f.provider.methods).toContain("eth_getTransactionReceipt");
+    },
+  );
 });

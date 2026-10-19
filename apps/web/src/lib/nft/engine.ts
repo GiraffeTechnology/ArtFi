@@ -784,7 +784,14 @@ export async function reconcileNftOperationWithContext(
       const expected =
         plan.request.action === "cancel" ? "OrderCancelled" : "OrderFulfilled";
       const event = receipt.logs.some((log) => {
-        if (log.removed || !equalAddress(log.address, SEAPORT)) return false;
+        if (
+          log.removed ||
+          !equalAddress(log.address, SEAPORT) ||
+          log.transactionHash?.toLowerCase() !== receipt.hash.toLowerCase() ||
+          log.blockHash?.toLowerCase() !== receipt.blockHash.toLowerCase() ||
+          log.blockNumber !== receipt.blockNumber
+        )
+          return false;
         try {
           const parsed = seaportABI.parseLog(log);
           return (

@@ -76,7 +76,14 @@ function event(expectedHash = orderHash, recipient = wallet) {
     [],
     [],
   ]);
-  return { address: SEAPORT, topics: log.topics, data: log.data };
+  return {
+    address: SEAPORT,
+    topics: log.topics,
+    data: log.data,
+    transactionHash: hash,
+    blockHash,
+    blockNumber: 100,
+  };
 }
 function operation(): NftOperation {
   const plan: NftPlan = {
@@ -467,4 +474,19 @@ describe("NFT receipt exact identity and final canonicality", () => {
       "pending",
     ]);
   });
+});
+
+describe("NFT settlement log inclusion identity", () => {
+  it.each(["transactionHash", "blockHash", "blockNumber"])(
+    "cannot confirm an event missing %s",
+    async (field) => {
+      const log = { ...event() };
+      Reflect.deleteProperty(log, field);
+      state.receipt = { ...(state.receipt as object), logs: [log] };
+      await expect(
+        reconcileNftOperation(operation(), "test-access"),
+      ).rejects.toThrow("expected NFT order event");
+      expect(state.updates).toEqual([]);
+    },
+  );
 });
