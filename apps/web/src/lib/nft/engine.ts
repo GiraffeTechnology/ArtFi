@@ -610,11 +610,22 @@ export async function submitNftSignatureWithContext(
   }
 }
 function assertTransactionBinding(
-  tx: { from: string; to: string | null; data: string; value: bigint },
+  tx: {
+    hash: string;
+    chainId: bigint;
+    from: string;
+    to: string | null;
+    data: string;
+    value: bigint;
+  },
   plan: NftPlan,
+  expectedHash: string,
 ) {
   if (
     !plan.transaction ||
+    typeof tx.hash !== "string" ||
+    tx.hash.toLowerCase() !== expectedHash.toLowerCase() ||
+    tx.chainId !== BigInt(plan.chainId) ||
     !equalAddress(tx.from, plan.request.account) ||
     !equalAddress(tx.to, plan.transaction.to) ||
     tx.data.toLowerCase() !== plan.transaction.data.toLowerCase() ||
@@ -663,7 +674,7 @@ export async function recordNftTransaction(
           "This transaction is not visible on the configured chain yet. Keep its hash and check again.",
           409,
         );
-      assertTransactionBinding(tx, plan);
+      assertTransactionBinding(tx, plan, hash);
     } finally {
       rpc.destroy();
     }
@@ -721,12 +732,40 @@ export async function reconcileNftOperationWithContext(
         return context.journal("update", { ...operation, status: "pending" });
       return operation;
     }
-    assertTransactionBinding(tx, plan);
+    assertTransactionBinding(tx, plan, operation.transactionHash);
+    if (
+      receipt.hash.toLowerCase() !== operation.transactionHash.toLowerCase() ||
+      !Number.isSafeInteger(receipt.blockNumber) ||
+      receipt.blockNumber < 0 ||
+      !/^0x[0-9a-fA-F]{64}$/.test(receipt.blockHash) ||
+      /^0x0{64}$/i.test(receipt.blockHash) ||
+      tx.blockNumber !== receipt.blockNumber ||
+      tx.blockHash?.toLowerCase() !== receipt.blockHash.toLowerCase() ||
+      !equalAddress(receipt.from, plan.request.account) ||
+      !equalAddress(receipt.to, plan.transaction.to) ||
+      ![0, 1].includes(receipt.status as number)
+    )
+      fail(
+        "The NFT receipt identity is unavailable or does not match the tracked transaction.",
+        409,
+      );
     const block = await rpc.getBlock(receipt.blockNumber);
+    const observedHead = await rpc.getBlockNumber();
+    const [checkedBlock, checkedNetwork] = await Promise.all([
+      rpc.getBlock(receipt.blockNumber),
+      rpc.getNetwork(),
+    ]);
+    if (Number(checkedNetwork.chainId) !== plan.chainId)
+      fail("The receipt service is on another chain.", 503);
     if (
       !block ||
-      block.hash !== receipt.blockHash ||
-      (await rpc.getBlockNumber()) - receipt.blockNumber + 1 < 2
+      !checkedBlock ||
+      block.number !== receipt.blockNumber ||
+      checkedBlock.number !== receipt.blockNumber ||
+      block.hash?.toLowerCase() !== receipt.blockHash.toLowerCase() ||
+      checkedBlock.hash?.toLowerCase() !== receipt.blockHash.toLowerCase() ||
+      !Number.isSafeInteger(observedHead) ||
+      observedHead - receipt.blockNumber + 1 < 2
     ) {
       if (["confirmed", "failed"].includes(operation.status))
         return context.journal("update", { ...operation, status: "pending" });
@@ -745,7 +784,7 @@ export async function reconcileNftOperationWithContext(
       const expected =
         plan.request.action === "cancel" ? "OrderCancelled" : "OrderFulfilled";
       const event = receipt.logs.some((log) => {
-        if (!equalAddress(log.address, SEAPORT)) return false;
+        if (log.removed || !equalAddress(log.address, SEAPORT)) return false;
         try {
           const parsed = seaportABI.parseLog(log);
           return (
