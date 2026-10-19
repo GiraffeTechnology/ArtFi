@@ -1,4 +1,8 @@
 import {
+  PortfolioRequestError,
+  requestPortfolioRecords,
+} from "./portfolio-request";
+import {
   parsePortfolioRecords,
   PortfolioRecordsError,
 } from "./portfolio-records-contract";
@@ -73,17 +77,10 @@ export async function loadPortfolioRecords({
   if (signal.aborted) return;
   update({ loading: true });
   try {
-    const response = await request(
-      `/api/portfolio/${encodeURIComponent(address)}`,
-      {
-        cache: "no-store",
-        credentials: "same-origin",
-        redirect: "error",
-        signal,
-      },
+    const value = parsePortfolioRecords(
+      await requestPortfolioRecords(request, address, signal),
+      address,
     );
-    if (!response.ok) throw new PortfolioRecordsError("http", response.status);
-    const value = parsePortfolioRecords(await response.json(), address);
     if (signal.aborted) return;
     update({ loading: false, portfolio: value });
   } catch (reason) {
@@ -91,7 +88,8 @@ export async function loadPortfolioRecords({
     update({
       loading: false,
       error:
-        reason instanceof PortfolioRecordsError
+        reason instanceof PortfolioRecordsError ||
+        reason instanceof PortfolioRequestError
           ? reason.message
           : "Portfolio records are unavailable.",
     });
