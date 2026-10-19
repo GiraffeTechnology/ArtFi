@@ -72,6 +72,18 @@ func rankFractionBook(orders []signedOrder) error {
 	return nil
 }
 
+// Verify the complete stored scope and validity window before ranking public terms.
+func fractionBookOrderMatches(order signedOrder, values url.Values, at uint64) bool {
+	if order.Kind != "fraction" || order.ChainID != hoodiChainID || !signedOrderMatchesFilters(order, values) || orderString(order.Intent, "paymentToken") != strings.ToLower(values.Get("paymentToken")) {
+		return false
+	}
+	var startsAt, endsAt uint64
+	if json.Unmarshal(order.Intent["startsAt"], &startsAt) != nil || json.Unmarshal(order.Intent["endsAt"], &endsAt) != nil {
+		return false
+	}
+	return startsAt <= at && at < endsAt
+}
+
 func (service *rwaService) getFractionBook(writer http.ResponseWriter, request *http.Request) {
 	args, at, err := fractionBookScope(request.URL.Query())
 	if err != nil {
@@ -94,7 +106,7 @@ func (service *rwaService) getFractionBook(writer http.ResponseWriter, request *
 	orders := make([]signedOrder, 0)
 	for rows.Next() {
 		order, scanErr := scanSignedOrder(rows)
-		if scanErr != nil {
+		if scanErr != nil || !fractionBookOrderMatches(order, request.URL.Query(), at) {
 			writeProblem(writer, request, 503, "Order storage unavailable", "The fraction book contains unavailable terms.")
 			return
 		}

@@ -99,8 +99,8 @@ func decodeSignedOrder(request *http.Request) (signedOrder, error) {
 	if len(raw) > 32768 {
 		return signedOrder{}, errors.New("the order exceeds 32 KiB")
 	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
+	fields, err := uniqueSignedOrderFields(raw)
+	if err != nil {
 		return signedOrder{}, err
 	}
 	if len(fields) != 6 {
@@ -120,7 +120,62 @@ func decodeSignedOrder(request *http.Request) (signedOrder, error) {
 	if decoder.Decode(new(any)) != io.EOF {
 		return input, errors.New("exactly one JSON object is required")
 	}
+	input.Intent, err = uniqueSignedOrderFields(fields["intent"])
+	if err != nil {
+		return signedOrder{}, err
+	}
 	return normalizeSignedOrder(input)
+}
+
+// Read exact JSON objects without last-key-wins ambiguity at either order layer.
+func uniqueSignedOrderFields(raw []byte) (map[string]json.RawMessage, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	first, err := decoder.Token()
+	if err != nil || first != json.Delim('{') {
+		return nil, errors.New("an order object is required")
+	}
+	fields := make(map[string]json.RawMessage)
+	for decoder.More() {
+		token, err := decoder.Token()
+		key, ok := token.(string)
+		if err != nil || !ok {
+			return nil, errors.New("invalid order field")
+		}
+		if _, exists := fields[key]; exists {
+			return nil, errors.New("duplicate order field")
+		}
+		var value json.RawMessage
+		if err = decoder.Decode(&value); err != nil {
+			return nil, errors.New("invalid order field value")
+		}
+		fields[key] = value
+	}
+	if end, err := decoder.Token(); err != nil || end != json.Delim('}') {
+		return nil, errors.New("incomplete order object")
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return nil, errors.New("exactly one order object is required")
+	}
+	return fields, nil
+}
+
+// A persistence selector never substitutes for the identity in the stored envelope.
+func signedOrderMatchesFilters(order signedOrder, values url.Values) bool {
+	asset, token := orderString(order.Intent, "assetToken"), ""
+	if order.Kind == "whole" {
+		asset, token = orderString(order.Intent, "collection"), orderString(order.Intent, "tokenId")
+	}
+	actual := map[string]string{
+		"kind": order.Kind, "chainId": strconv.Itoa(order.ChainID),
+		"marketAddress": order.MarketAddress, "assetAddress": asset,
+		"tokenId": token, "sellerAddress": orderString(order.Intent, "seller"),
+	}
+	for key, value := range actual {
+		if expected := values.Get(key); expected != "" && value != strings.ToLower(expected) {
+			return false
+		}
+	}
+	return true
 }
 
 // Only the existing server verifier can admit a sale signature; the independent
@@ -291,7 +346,7 @@ func (service *rwaService) getSignedOrders(writer http.ResponseWriter, request *
 	data := make([]signedOrder, 0)
 	for rows.Next() {
 		order, err := scanSignedOrder(rows)
-		if err != nil {
+		if err != nil || !signedOrderMatchesFilters(order, request.URL.Query()) {
 			writeProblem(writer, request, 503, "Order storage unavailable", "Stored order data is unavailable.")
 			return
 		}
@@ -308,12 +363,18 @@ func scanSignedOrder(rows *sql.Rows) (signedOrder, error) {
 	var raw []byte
 	var created time.Time
 	var order signedOrder
-	err := rows.Scan(&raw, &created)
-	if err == nil {
-		err = json.Unmarshal(raw, &order)
+	if err := rows.Scan(&raw, &created); err != nil {
+		return order, err
+	}
+	if created.IsZero() {
+		return order, errors.New("stored order publication time is unavailable")
+	}
+	order, err := decodeSignedOrder(&http.Request{Body: io.NopCloser(bytes.NewReader(raw))})
+	if err != nil {
+		return signedOrder{}, err
 	}
 	order.CreatedAt = created.UTC().Format(time.RFC3339Nano)
-	return order, err
+	return order, nil
 }
 func (service *rwaService) getSignedOrder(writer http.ResponseWriter, request *http.Request) {
 	values := request.URL.Query()
@@ -341,7 +402,7 @@ func (service *rwaService) getSignedOrder(writer http.ResponseWriter, request *h
 		return
 	}
 	order, err := scanSignedOrder(rows)
-	if err != nil {
+	if err != nil || order.IntentHash != hash || !signedOrderMatchesFilters(order, values) {
 		writeProblem(writer, request, 503, "Order storage unavailable", "The stored order is unavailable.")
 		return
 	}
