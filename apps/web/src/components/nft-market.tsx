@@ -11,6 +11,7 @@ import { formatEther, type Hex } from "viem";
 import { useAccount, useWalletClient } from "wagmi";
 import { assertSameNftReview } from "@/lib/nft/client";
 import { readNftHistoryPage } from "@/lib/nft/history-view";
+import { readNftOwnedPage } from "@/lib/nft/owned";
 import { NftHistoryResults } from "@/components/nft-history-results";
 import { NftActionReview } from "@/components/nft-action-review";
 import {
@@ -356,23 +357,15 @@ function NftMarketSession() {
     const captured = context;
     const query = new URLSearchParams({ collection, account: wallet.address });
     if (next) query.set("cursor", next);
-    const response = await api<{
-      data: NftView[];
-      next: string | null;
-      observedAt: string;
-      wallet: string;
-      chainId: number;
-    }>("owned", undefined, query);
+    const response = await api<unknown>("owned", undefined, query);
     if (current !== generation.current || captured !== liveContext.current)
       return;
-    if (
-      response.wallet.toLowerCase() !== wallet.address.toLowerCase() ||
-      response.chainId !== wallet.chainId
-    )
-      throw new Error(
-        "The holdings response belongs to another wallet or chain.",
-      );
-    setOwned(response);
+    setOwned(
+      readNftOwnedPage(response, scope, {
+        wallet: wallet.address,
+        chainId: wallet.chainId!,
+      }),
+    );
   }
   function save(value: Recovery) {
     localStorage.setItem(storageKey, JSON.stringify(value));
