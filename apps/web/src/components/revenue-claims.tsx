@@ -4,6 +4,7 @@ import styles from "./revenue-claims.module.css";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { type Address, type Hash } from "viem";
 import { useUserSession } from "./user-session-provider";
+import { RevenueDistributionBrowser } from "./revenue-distribution-browser";
 import { publicSetting } from "@/lib/public-runtime-config";
 import {
   assertTradingSession,
@@ -106,7 +107,7 @@ function ConnectedRevenueClaims({
     },
   );
   const binding = { distributor, fractionToken, account };
-  async function inspect() {
+  async function inspect(selectedId = id) {
     if (!client || gate.current) return;
     gate.current = true;
     setBusy(true);
@@ -116,7 +117,7 @@ function ConnectedRevenueClaims({
     try {
       await assertTradingSession(account, 560048);
       const result = await revenueReadDeadline(() =>
-        readRevenueRound(client, binding, revenueRoundId(id)),
+        readRevenueRound(client, binding, revenueRoundId(selectedId)),
       );
       if (
         active.current &&
@@ -214,6 +215,23 @@ function ConnectedRevenueClaims({
         Hoodi 560048 · Distributor {distributor} · Fraction token{" "}
         {fractionToken}
       </p>
+      <RevenueDistributionBrowser
+        client={client}
+        binding={binding}
+        disabled={busy || Boolean(pending)}
+        beforeRead={async () => {
+          await assertTradingSession(account, 560048);
+          if (
+            !active.current ||
+            userSessionController.getSnapshot().revision !== revision
+          )
+            throw new Error("The signed-in wallet changed.");
+        }}
+        onSelect={(selectedId) => {
+          setId(selectedId);
+          void inspect(selectedId);
+        }}
+      />
       <form
         className="product-actions"
         onSubmit={(event) => {
