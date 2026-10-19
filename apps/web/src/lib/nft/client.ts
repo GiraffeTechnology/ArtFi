@@ -19,6 +19,8 @@ export function assertSameNftReview(
   chainId: number,
 ) {
   if (
+    !["approval", "signature", "transaction"].includes(current.kind) ||
+    !Number.isSafeInteger(current.expiresAt) ||
     JSON.stringify(canonical(displayed)) !==
       JSON.stringify(canonical(current)) ||
     !equalAddress(current.request.account, account) ||
@@ -33,6 +35,8 @@ export function assertSameNftReview(
     const data = current.typedData;
     if (
       !data ||
+      current.transaction !== undefined ||
+      data.primaryType !== "OrderComponents" ||
       data.domain.name !== "Seaport" ||
       data.domain.version !== "1.6" ||
       data.domain.chainId !== chainId ||
@@ -49,8 +53,14 @@ export function assertSameNftReview(
     const tx = current.transaction;
     if (
       !tx ||
-      !/^0x[0-9a-fA-F]{8,131072}$/.test(tx.data) ||
-      !/^\d+$/.test(tx.value)
+      current.typedData !== undefined ||
+      !equalAddress(tx.to, tx.to) ||
+      equalAddress(tx.to, "0x0000000000000000000000000000000000000000") ||
+      typeof tx.data !== "string" ||
+      !/^0x(?:[0-9a-fA-F]{2}){4,65536}$/.test(tx.data) ||
+      typeof tx.value !== "string" ||
+      !/^(0|[1-9][0-9]*)$/.test(tx.value) ||
+      BigInt(tx.value) >= 1n << 256n
     )
       throw new Error("The reviewed NFT transaction is invalid.");
     if (
