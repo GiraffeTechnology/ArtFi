@@ -35,6 +35,6 @@ transaction, block, source commit, role assignments, monitoring owner, and attes
 record private material. A wallet is not considered open until the owners complete a harmless
 multi-signature test transaction and recovery responsibilities are accepted in writing.
 
-The current abcdyi environment has no approved production keystore directory, password store,
+The reviewed deployment environment has no approved production keystore directory, password store,
 encryption standard, backup location, or recovery drill. Server-side key generation therefore
 remains prohibited until a custody design is approved.

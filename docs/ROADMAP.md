@@ -8,8 +8,8 @@
 - Sepolia is the only allowed chain until Stage 7.
 - Regulatory, security, and custody gates can stop delivery regardless of feature completion.
 - All automated/operator public-chain RPC, deployment, indexer, explorer and OpenSea work runs only
-  in the SIN execution zone. abcdyi performs offline builds/tests; AIVAN performs translation; the
-  CTYun API/MySQL tier receives normalized evidence and does not connect directly to public chains.
+  in the configured public-chain execution zone. Build services perform offline builds/tests;
+  translation services translate; the backend API/MySQL tier receives normalized evidence and does not connect directly to public chains.
 
 ## Stage 0 - Foundation
 
@@ -28,7 +28,7 @@ Exit gate:
 - Fresh clone can install, test, lint, typecheck, and build.
 - CI passes on the Stage 0 pull request.
 - No committed secrets.
-- Stage 1 issues have owners and acceptance criteria.
+- Stage 1 requirements have acceptance criteria.
 
 ## Stage 1 - Read-only product and wallet connection
 

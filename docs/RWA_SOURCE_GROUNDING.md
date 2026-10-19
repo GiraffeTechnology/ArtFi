@@ -251,8 +251,7 @@ recovery and token-transfer exits are not blocked by source expiry.
 
 These are local isolated checks. They are not a real-source activation, public-chain
 operation, production deployment, independent external audit, browser aggregate or
-final installable acceptance claim. The delivery owner runs the final browser and
-installer checks on the frozen combined source.
+final installable acceptance claim. Final browser and installer checks remain required on the frozen combined source.
 
 ### Prepared-request evidence renewal
 

@@ -27,8 +27,8 @@ nginx -t -c /absolute/path/nginx.conf
 ```
 
 The renderer never starts or reloads Nginx. Its example ports are local test
-allocations, not production defaults. On CTYun, set `hostClass` to `ctyun`;
-TCP 443 remains reserved for SSH. Reuse confirmed allocations rather than guessing.
+allocations, not production defaults. Reserved listeners are part of deployment configuration. Reuse confirmed
+allocations rather than guessing.
 The public listener proxies to **web nodes only**. The separate internal API pool
 must not become a public bypass around the web BFF. Set each web node's
 `ARTFI_API_URL` to its approved internal API pool. Keep the same-origin public
@@ -36,16 +36,17 @@ GET-only relay and authenticated mutations unchanged.
 
 ### Existing delivery and execution zones
 
-The chain-capable BFF must run in the approved SIN execution zone. Do not set the
-SIN flag on a delivery/database node just to bypass the application's boundary.
+The chain-capable BFF must run in the configured public-chain execution zone. Do not set the
+execution-zone flag on a delivery/database node just to bypass the application's boundary.
 The optional `bffExecution` pool keeps the public origin unchanged while routing
 only `/api/*` to approved execution-side Next/BFF instances from the same package.
 Pages and the public catalog relay stay on the delivery web pool; the Go API and
-primary database retain their established delivery-side placement.
+primary database retain their established backend placement.
 
-Set `bffExecution.executionZone` to `sin`, its two or more explicitly allocated
+Set `bffExecution.executionZone` to the value accepted by the configured execution
+boundary, together with two or more explicitly allocated
 `backends`, and verified `backendTLS` for remote hosts. It creates no new public
-listener. Configure execution instances with their existing SIN zone setting,
+listener. Configure execution instances with their existing execution-zone setting,
 private venue/RPC inputs, the same public origin/session bridge identity and the
 approved internal Go API URL. Delivery instances do not receive public-chain
 execution permission. Proxy headers preserve the public Host and scheme; browser
@@ -111,7 +112,7 @@ Use a format-1 JSON object with `probes`, `intervalSeconds` (5–3600), optional
 `maximumLoadPerCPU`. An HTTP probe has `name`, `kind: "http"`, `url`, and optional
 expected `service`. A chain probe has `kind: "chain"`, `chainId`,
 `maxAgeSeconds` and the approved read RPC URL. Public-chain probes require
-`executionZone: "sin"`; they must not run from the delivery/database zone.
+the configured `executionZone` guard; they must not run from the backend/data zone.
 Credential-bearing URLs are rejected. Missing, stale, wrong-chain and unavailable
 results remain distinct. No transaction or signature is sent by monitoring.
 

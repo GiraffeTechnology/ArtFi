@@ -1,23 +1,8 @@
-# 交付指令 — 计量、审计与 Hoodi 真实测试
+# Historical Hoodi testing and audit requirements — 2026-08-30
 
-| 项目   | 内容                                                     |
-| ------ | -------------------------------------------------------- |
-| 签发   | 2026-08-30                                               |
-| 签发人 | 客户(ArtCCH)                                             |
-| 权威   | 客户最新明示要求(`PRD.md` §0)                            |
-| 优先级 | 最高 — 覆盖所有既有排期与计量约定                        |
-| 补充   | `docs/DIRECTIVE_2026-08-24_HOODI.md`(测试链裁定继续有效) |
-| 适用   | `GiraffeTechnology/ArtFi`,全部分支与交付方               |
-
----
-
-## 0. 本指令的性质
-
-这是裁定,不是建议。§1 各条即刻生效,无需再确认。
-
-`PRD.md` §0 规定:多份文件冲突时,**以客户最新明示要求为准,并记录冲突**。本指令即该最新明示要求。与之冲突的既有条款,以本指令为准;冲突本身记录在 §6,不得静默处理。
-
----
+This record preserves the product and test requirements from that date. Current
+product scope is recorded in `PRD.md`; historical execution instructions do not
+authorize present operations.
 
 ## 1. 裁定
 
@@ -34,8 +19,7 @@
 
 - `ACCEPTANCE.md` §4 G4 改为:`G1 + G2 + G3-A` 同一 commit 全绿 = **验收完成**;再加 `G3-B` = **主网授权**。
 - `ACCEPTANCE.md` §6 第 4 条改为:G3-A 完成即满足验收;G3-B 记 `PENDING-GATE`。
-- 外部审计的状态词**只能是 `PENDING-GATE`**。按 `ACCEPTANCE.md` §2,它「在范围内且已排期」。**不得记为 `BLOCKED`,不得记为 `OUT-OF-SCOPE`** —— §2 明文:把只是延后的工作标 `OUT-OF-SCOPE`,等于悄悄删掉已付费范围。
-- 外部审计预算**延后,不取消**,在 STATUS.md 中如实保留。
+- 外部审计的状态词**只能是 `PENDING-GATE`**。按 `ACCEPTANCE.md` §2,它「在范围内且已排期」。**不得记为 `BLOCKED`,不得记为 `OUT-OF-SCOPE`** —— §2 明文:把只是延后的工作标 `OUT-OF-SCOPE`,等于悄悄删掉既有产品范围。
 
 **模拟审计的合格标准 —— 不满足即视为未交付:**
 
@@ -47,14 +31,14 @@
 
 **第一优先级是 `packages/contracts/src/ArtFiMarket.sol`** —— 407 行,是唯一处理资金的合约,当前仅 14 个测试,为全仓库风险最高、覆盖最低处。
 
-### 1.2 Hoodi 真实测试 —— 全面授权
+### 1.2 Hoodi runtime testing
 
-授权在 Hoodi(`560048`)上执行真实链上测试,**可使用任意测试资产与测试钱包**,无需逐次请示。
+Runtime tests use isolated test assets and test wallets on Hoodi (`560048`).
 
 不可协商的边界(沿用 `PRD.md` §4.5 与 `ACCEPTANCE.md` §3):
 
 - 私钥与助记词**不得**进入 Web、API、MySQL、服务器、GitHub、CI 或日志;签名保持本地离线,使用 keystore(`--account` + `--password-file`),原始已签名交易不得进入 stdout、Git、CI 或服务器。
-- 所有 RPC、部署、广播、receipt、explorer 与外部市场调用,**只能从获批的 SIN 执行区发起**。
+- 所有 RPC、部署、广播、receipt、explorer 与外部市场调用,**只能从获批的公链执行区发起**。
 - 历史 Sepolia 铸造证据(交易 `0xfe71d3af…0534b`、区块 `11545902`)**不得改写**。Hoodi 批次生成到独立命名空间。
 
 四个 Foundry 部署脚本此前硬性 revert 非 Sepolia 链,已在 `a3d6784` 解除并本地验证(chain-id `560048` 部署成功;chain-id `1` 返回 `UnsupportedChain(1)`,fail-closed 完好)。**执行不再有工具障碍。**
@@ -67,7 +51,7 @@
 
 **37 件叶永潤作品(3,700 单位)在 Ethereum Sepolia,不迁往 Hoodi。** 该批次为真实资产的既成记录,冻结为已被取代状态,不重铸、不改写。
 
-Hoodi 上的链上测试,**由交付方自行生成 AI 作品并铸造测试 token**,作为独立测试载荷。授权即刻生效,数量与题材自定,不必逐次请示。
+Hoodi runtime tests use a separately generated AI-artwork payload and isolated test tokens.
 
 **强制标记 —— 全部资产仅为测试资产,无任何真实价值,交易不具任何法律效力。**
 
@@ -90,16 +74,10 @@ Hoodi 上的链上测试,**由交付方自行生成 AI 作品并铸造测试 tok
 
 **目的说明**:该测试集用于验证平台的铸造、批次、Vault、份额化、DAO 与市场流程在 Hoodi 上的真实可执行性。它是**工具,不是产品**,与 `PRD.md` §7 对验证数据集的定性一致 —— 交付不由它定义。
 
-### 1.3 废止人天计量
+### 1.3 Evidence status
 
-自采用 AI 编码起,**报价中的「人天」作为排期与进度单位即告失效**。不得再以人天报告进度、估算周期或解释延期。商务条款不在本仓库留存。
-
-替代计量:**`ACCEPTANCE.md` §2 的六值状态词,逐条计数。**
-
-- 全部要求(`PRD.md` §4、§5、§7,及 §2.2 / §2.3 的 Class B / Class C)拆为独立可验收项;
-- 进度 = `VERIFIED` 条目数 / 总条目数;
-- `VERIFIED` 的门槛不下调:证据必须存在于**被审的那个 commit 与环境**上;
-- 报价金额本身不受本条影响;受影响的只是计量与排期口径。
+Each requirement uses the six status values in `ACCEPTANCE.md` section 2.
+`VERIFIED` requires evidence from the exact reviewed commit and environment.
 
 ### 1.4 ArtFi 是交易中介,不是交易所
 
@@ -158,13 +136,11 @@ Hoodi 上的链上测试,**由交付方自行生成 AI 作品并铸造测试 tok
 - 冻结后,G2 运行时证据在该 bytecode 上采集;
 - 外部审计在 P5 对**同一份 bytecode**执行。
 
-理由:`ACCEPTANCE.md` §3 排除「来自不同 commit、分支、链或合约的测试结果」。若审计后置且合约仍在变,一条高危发现将同时作废合约与整套 G2 证据。**冻结点必须早于 M2/M3 开工。**
+理由:`ACCEPTANCE.md` §3 排除「来自不同 commit、分支、链或合约的测试结果」。若审计后置且合约仍在变,一条高危发现将同时作废合约与整套 G2 证据。
 
 ---
 
-## 2. 立即并行执行
-
-以下五条互不阻塞,即日同时开工。不得串行等待。
+## 2. Historical implementation work
 
 | #   | 事项                | 产出                                                                                                |
 | --- | ------------------- | --------------------------------------------------------------------------------------------------- |
@@ -174,7 +150,7 @@ Hoodi 上的链上测试,**由交付方自行生成 AI 作品并铸造测试 tok
 | 4   | M6 运维             | CD、生产集群、主从、备份恢复、监控告警 —— 与业务代码零耦合                                          |
 | 5   | A01–A38 合规预览    | 当前零文件;`ACCEPTANCE.md` §7.8 规定缺失即审计不通过                                                |
 
-M2 为关键路径,已由 §1.4 解锁。其前置是 `migration 000009`(`orders` / `trades` / `positions` / `sessions` / `users`,当前一张都不存在)。**不建 `ledger_entries`,不建 `accounts`** —— 按 §1.4 的不变量,持仓是链上事件的只读投影,不是托管账本。
+M2 requires `migration 000009`(`orders` / `trades` / `positions` / `sessions` / `users`,当前一张都不存在)。**不建 `ledger_entries`,不建 `accounts`** —— 按 §1.4 的不变量,持仓是链上事件的只读投影,不是托管账本。
 
 ---
 
@@ -183,26 +159,14 @@ M2 为关键路径,已由 §1.4 解锁。其前置是 `migration 000009`(`orders
 以下任一情形,视为该交付无效:
 
 1. **交付空表。** `STATUS.md` 的每一行必须填写状态与引用。占位符(`<SHA>`、`<YYYY-MM-DD>`)出现在交付版本中即为未交付。
-2. **自评充当证据。** `ACCEPTANCE.md` §3:不构成证据的包括「操作方陈述而无可复现证据」。交付方对自身产出的评级不是验收依据。
-3. **单次倾倒式提交。** 每个 PR 限于一个可审查的变更,附绿色 CI。历史上 187 / 100 / 90 文件的单次提交不可复审,禁止再现。
+2. **自评充当证据。** `ACCEPTANCE.md` §3:不构成证据的包括「操作方陈述而无可复现证据」。自评不能替代可复现证据。
+3. Keep each pull request bounded, reviewable and verified by applicable CI.
 4. **fixture 冒充 live。** `ACCEPTANCE.md` §7.5:Class B 界面若仍由 mock / 静态 / fixture 数据支撑却呈现为可用功能,审计不通过。
 5. **跨链或跨 commit 挪用证据。**
-6. **重建 Class A。** `PRD.md` §2.1 明文:重建不在范围内、不计费。
-7. **把已付费而未完成的工作标 `OUT-OF-SCOPE`。**
+6. Preserve the existing Class A product behavior under `PRD.md` section 2.1.
+7. Do not classify unfinished in-scope requirements as `OUT-OF-SCOPE`.
 
-### 3.1 停滞报告义务
-
-**指令无法执行时,不得沉默。**
-
-若任何指令因工具、权限、依赖、环境或范围冲突而无法执行,交付方须在 **24 小时内**书面回报:阻塞点、证据、以及**至少一个改案**。
-
-此条针对已发生的事实:2026-08-24 已下达 Hoodi 测试指令并授权测试资产,但四个部署脚本硬性 revert 非 Sepolia 链,执行在技术上不可能;该阻塞从未被回报,自 8 月 23 日起无任何产出。**沉默不构成执行,也不构成阻塞说明。**
-
----
-
-## 4. 由客户提供
-
-以下事项在客户一侧,不得据此推诿其余工作,亦不得等待其中任何一项才开始 §2 的五条:
+## 4. Remaining inputs and product decisions
 
 ### 4.1 M2 撮合场所范围裁定 —— 已裁定 ✅
 
@@ -214,11 +178,11 @@ M2 为关键路径,已由 §1.4 解锁。其前置是 `migration 000009`(`orders
 
 `pics/*.png` 与 `fractional_steps/*`。缺失则 G1 人工视觉签署无法进行 —— 这是全部 60 项中唯一的 `BLOCKED`。
 
-### 4.3 SIN 执行环境 —— 已授权,自行接入
+### 4.3 Test runtime configuration
 
-交付方已获授权接入 SIN 仓库与执行区。**此项不再是客户侧待办,不得再以此为由推迟 Hoodi 执行。**
-
-客户仍需提供:Hoodi RPC 端点、已注资的测试签名账户(keystore 形式,私钥不出运维机器)。若这两项存在障碍,依 §3.1 在 24 小时内回报。
+Runtime testing requires a configured Hoodi RPC endpoint and funded test-only
+signer through the approved signing boundary. Private signing material is not
+part of the repository or test report.
 
 ### 4.4 生产链决定
 
@@ -226,12 +190,10 @@ M2 为关键路径,已由 §1.4 解锁。其前置是 `migration 000009`(`orders
 
 ---
 
-## 5. 汇报方式
+## 5. Reproducible evidence
 
-- **每个交付 commit 更新 `STATUS.md`** —— 这是该文件自身的规则。
-- 每行引用文件路径、测试名、CI run 链接或交易哈希与 receipt 之一。
-- 进度以 `VERIFIED` 计数报告,不用百分比,不用人天。
-- `PRD.md`、`ACCEPTANCE.md`、`STATUS.md` 三份文件**必须提交进仓库**。基线只存在于压缩包中,本身即为交付缺陷。
+Record the source commit, test name or command, CI run, and transaction/receipt
+identity where applicable. Distinguish passed, failed and unrun checks.
 
 ---
 
@@ -242,15 +204,6 @@ M2 为关键路径,已由 §1.4 解锁。其前置是 `migration 000009`(`orders
 | 冲突                                                                     | 裁定                                                                                                          |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | `ACCEPTANCE.md` §4 要求 G3 在 G4 前完成;§6 第 4 条以第三方审计为交付条件 | 由 §1.1 拆分为 G3-A / G3-B                                                                                    |
-| 报价以人天计量;实际采用 AI 编码                                          | 由 §1.3 废止人天作为计量与排期单位                                                                            |
 | `PRD.md` §6 载明 Base Sepolia `84532`                                    | 由 `DIRECTIVE_2026-08-24_HOODI.md` 裁定为 Hoodi `560048`,本指令重申                                           |
 | `PRD.md` §8.4 载明 13 个 token ID / 1,300 单位;已铸批次为 37 / 3,700     | **未裁定** — 已在 Ethereum Sepolia 链上,待客户书面确认口径。与 §1.2.1 无关:Hoodi 测试载荷是另行生成的 AI 作品 |
 | `ACCEPTANCE.md` §4 G2.4 要求在测试链上执行 37 件原子批次                 | 由 §1.2.1 裁定:该批次留在 Sepolia;Hoodi 上以自生成 AI 测试载荷执行等价的批次原子性、隔离与预览验证            |
-
----
-
-## 7. 生效
-
-即日生效。接受本指令的方式是执行,不是回复确认。
-
-首次汇报:§2 五条各自的开工状态,以及 §3.1 项下任何已知阻塞。

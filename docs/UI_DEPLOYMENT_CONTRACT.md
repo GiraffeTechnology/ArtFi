@@ -11,23 +11,15 @@ The current application and technical write-testing chain is Hoodi `560048`. Thi
 does not select or authorize a new production chain, mainnet deployment, real-asset opening,
 or real-money transaction. Historical Sepolia deployment records remain historical evidence.
 
-## Existing deployment topology
+## Deployment topology
 
-- SIN hosts the UI and chain execution.
-- CTYun abcdyi and MySQL host backend and data services. SIN routes to them through the
-  existing bridge; do not assume an API process on the UI host.
-- Reuse the existing ArtFi build, bridge, Qwen API operations and 24-hour supervision after
-  checking the current deployment configuration. A related `artcch.com` build must be
-  identified as the intended ArtFi application before replacement.
-- Obtain port allocations and reservations from the target deployment configuration. Preserve
-  SSH, shared bridges and other-task listeners. Inspect current allocations and choose a
-  suitable free, unreserved port under the client's existing deployment authority; do not invent
-  a separate per-port approval requirement. Actual public-ingress authority remains scoped
-  to its target rule. Configure the complete public URL; standard HTTPS may omit its default
-  port when that is the selected deployment endpoint.
+The UI and public-chain execution zone is separate from backend and database
+services. UI-to-API traffic uses the configured authenticated bridge; an API process
+must not be assumed to exist on the UI host.
 
-DNS, TLS, host listeners and deployment changes belong to the existing deployment task.
-This repository provides the application images and interface contract.
+Ports, public ingress, DNS, TLS and listeners are deployment configuration. Use the
+complete configured public URL and preserve existing services when changing images.
+This repository provides application images and their interface contract.
 
 ## Pinned image builds
 
@@ -54,14 +46,14 @@ Retain the previous image digest for the existing rollback procedure.
 
 ## Routing and server configuration
 
-- `/`, Next.js assets and `/api/*` route to the SIN Web container. `/api/orders` and
+- `/`, Next.js assets and `/api/*` route to the Web container. `/api/orders` and
   `/api/user/auth/*` are Next server routes, not direct browser access to internal API keys.
-- Public `/v1/*` routes to the CTYun API through the established private bridge.
+- Public `/v1/*` routes to the backend API through the established private bridge.
 - Preserve the configured public `Host` and effective port at the UI proxy. Native order
   publication checks that Host and the exact browser Origin independently. Untrusted
   client-supplied forwarded headers do not establish authority.
 - Keep Next `ARTFI_WEB_URL` and API `ARTFI_WEB_ORIGIN` consistent with
-  the complete configured public URL, including its actual port. Public HTTP-to-HTTPS routing belongs to the SIN public origin;
+  the complete configured public URL, including its actual port. Public HTTP-to-HTTPS routing belongs to the UI public origin;
   preserve the deployment's configured reservations and existing listeners.
 - Use the existing `ARTFI_API_URL`, `ARTFI_USER_AUTH_API_URL`, `ARTFI_OPERATOR_API_URL`
   and `ARTFI_ORACLE_READ_API_URL` server bindings. Resolve their supported upstream paths
@@ -101,6 +93,6 @@ After publishing the pinned image, record the deployed SHA/digest and actual res
    explicitly unscaled base units; removed history retains priority.
 
 Current-head CI is code evidence. Actual deployment bindings and these observed runtime
-results are separate evidence for the delivery owner's final acceptance. Missing configuration
+results are separate evidence for deployment acceptance. Missing configuration
 must remain visible rather than being replaced by fabricated assets or a claimed successful
 transaction. No Stage 2 or independent-wallet completion prerequisite is introduced here.

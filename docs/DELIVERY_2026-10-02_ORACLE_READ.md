@@ -1,6 +1,6 @@
 # Whole-artwork Oracle read integration
 
-This connects the existing whole-artwork receipt screen to the implemented public Oracle read API. The delivery owner selected this bounded integration when resuming the three-section coding task after requirement-source review. Its authority is the current receipt/voucher product definition and that explicit integration task; issue or PRD inheritance is not used to approve additional scope.
+This connects the existing whole-artwork receipt screen to the implemented public Oracle read API. Its scope is the existing receipt/voucher product definition.
 
 ## User path
 
@@ -32,9 +32,9 @@ No new Oracle endpoint is assumed. This change does not import the independent B
 
 Base: merged ArtFi `da59d3c383b2dca33e949049d59867fcd0a03093` (same file tree as the fully-tested #131 head).
 
-The only new setting is the empty, server-only `ARTFI_ORACLE_READ_API_URL` placeholder. The existing artfi control task should resolve the already-deployed Oracle read service through the established bridge/backend path. It reuses the current whole-artwork public collection/token/slug settings and Hoodi chain. No public URL variable, Docker build argument, new host, credential or live source was configured.
+The only new setting is the empty, server-only `ARTFI_ORACLE_READ_API_URL` placeholder. The Oracle read service is resolved through the configured bridge/backend path. It reuses the current whole-artwork public collection/token/slug settings and Hoodi chain. No public URL variable, Docker build argument, new host, credential or live source was configured.
 
-The required sequence remains: complete coding and tests, hand over a fixed candidate and non-secret configuration contract, deploy through the existing authorized task, then verify runtime behavior. The UI and chain-execution zone and backend/database split remain as recorded in `DEPLOYMENT_ENVIRONMENT.md`. This code work did not inspect or modify those servers.
+The UI and chain-execution zone and backend/database split remain as recorded in `DEPLOYMENT_ENVIRONMENT.md`. This code work did not inspect or modify those servers.
 
 ## Verification
 

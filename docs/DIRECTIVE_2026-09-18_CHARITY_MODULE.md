@@ -4,7 +4,7 @@
 | --------- | ---------------------------------------------------------- |
 | Issued    | 2026-09-18                                                 |
 | Issuer    | Client (ArtCCH)                                            |
-| Authority | Explicit later client ruling (`AGENTS.md` §1, priority 2)  |
+| Authority | Recorded product clarification  |
 | Scope     | Requirement coverage for the charity and mirroring modules |
 | Applies   | `GiraffeTechnology/ArtFi`, all branches                    |
 
@@ -33,7 +33,7 @@ absent from the ledger reads as done.
 ### 1.1 The same defect on the mirroring side
 
 The client identified **charity plus approved-external-marketplace mirroring as ArtFi's original
-paired requirement**. The original PRD, `docs/PRD_CLAUDE_CODE_ACCEPTANCE.md` (`d754c6b`,
+paired requirement**. The original PRD, `docs/PRD_ACCEPTANCE_BASELINE.md` (`d754c6b`,
 2026-08-20), carries both: `CHARITY-001`–`CHARITY-004` and `MARKET-001`–`MARKET-006`.
 
 The mirroring side had the same gap. `apps/api` contains roughly 1,500 lines implementing it —
@@ -114,8 +114,8 @@ Strongest at the bottom, absent at the top:
 separate workspace app carrying the OpenSea adapter: `opensea.ts` runs an `OpenSeaStreamClient` over
 `ws` alongside a cursor-paged REST `backfill()`, and its tests run in CI. A first scoring of `XM.3`
 and `XM.6` as `NOT-IMPLEMENTED` was wrong — it searched only `apps/api` and only Go string literals.
-Both are `IMPLEMENTED-NOT-VERIFIED`. The lesson is recorded here because understating built work
-wastes delivery-side time as surely as overstating it.
+Both are `IMPLEMENTED-NOT-VERIFIED`; the correction preserves the distinction between
+implementation and runtime verification.
 
 One narrow gap and one tension remain, both precise:
 

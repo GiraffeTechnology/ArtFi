@@ -71,7 +71,7 @@ Required root fields:
 
 - `schema`: `artfi-server-listing-config/1`
 - `chainId`: string `1` or `8453`
-- `executionZone`: `sin`
+- `executionZone`: the value accepted by the configured public-chain execution guard
 - `tradingEnabled`: boolean; false always refuses a listing
 - `collections`: one to 100 entries with exactly `slug`, `chain`, `contract`,
   `standard`, `label`, `charity`. Chains are `ethereum` or `base`; all entries

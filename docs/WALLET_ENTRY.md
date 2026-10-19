@@ -1,10 +1,10 @@
-# Xiongan Wallet entry
+# Configured wallet entry
 
 ## Bounded requirement and implementation
 
-8415 Wallet is the product; Xiongan Wallet is its V2 tenant with the assigned public domain
-`xiongan.8415wallet.com`. The deployment still supplies the complete URL through the runtime
-configuration below; this product identity does not add a source-code hostname or port default.
+8415 Wallet is the product, using a configured V2 wallet tenant. The deployment supplies
+the complete URL through the runtime configuration below; this product identity does
+not add a source-code hostname or port default.
 
 The test entry may open without login. Asset display is a separate authenticated workflow:
 balances, holdings, and history require login, and must disappear on logout, session expiry,
@@ -13,7 +13,7 @@ wallet is not authentication. The entry implementation below does not establish 
 wallet-side asset-display requirements have already been verified or deployed.
 
 The client's 2026-10-03 instruction asks for a discoverable path from ArtFi at
-`https://io.artcch.com` to Xiongan Wallet, with login omitted from this navigation
+`https://io.artcch.com` to the configured V2 wallet tenant, with login omitted from this navigation
 test. This is an application-side integration under AGENTS.md section 1.3.
 
 The client's later 2026-10-03 correction requires the deployment to supply the
@@ -22,7 +22,7 @@ the initial fixed-destination implementation below; it does not authorize deploy
 
 The overview tools, desktop Tools menu, mobile Menu, portfolio page and existing
 RainbowKit connection modal all consume one shared runtime configuration. The
-server-only `ARTFI_XIONGAN_WALLET_URL` is read for each request to the same-origin,
+server-only wallet destination setting is read for each request to the same-origin,
 read-only `GET /api/wallet-config` route. The route is force-dynamic and no-store.
 This is not a `NEXT_PUBLIC_*` build-time value. The same built application can be
 started with different deployment URLs without editing source or rebuilding it.
@@ -35,7 +35,7 @@ validated on both sides. Invalid values are never echoed in API errors. Only the
 validated public URL is returned; no environment object, secret, account or token
 is exposed. The API does not contact the destination or proxy arbitrary requests.
 
-`Open Xiongan Wallet` opens that URL in a new tab with `rel="noopener noreferrer"`.
+The wallet-opening control opens that URL in a new tab with `rel="noopener noreferrer"`.
 Missing, invalid, loading, failed or refreshing configuration produces no clickable
 wallet destination. A visible status and retry action allow recovery. Old successful
 URLs are hidden while refreshing or after an API failure, rather than used as a
@@ -52,7 +52,7 @@ Reviewed source revisions:
 
 - ArtFi `main`: `13f9b6b774fd7ba6010cd7a500574074d1ac37d3`.
 - 8415Wallet `main`: `18499967348a6db572e699bc37700d98376755dc`.
-- 8415Wallet `deploy/xiongan-sin`: `1ccafcdd769e9c41e3531876ace1b9714fdc932b`.
+- 8415Wallet deployment source: `1ccafcdd769e9c41e3531876ace1b9714fdc932b`.
 
 The wallet's `web/app.mjs` and `web/external-assets.mjs` have identical blob SHAs
 in the two reviewed wallet revisions. Their connection handlers consume
@@ -62,7 +62,7 @@ explicit public-file review; they are not an ArtFi connection handshake.
 
 No cross-origin provider, WalletConnect session endpoint or ArtFi deep-link
 handshake is implemented in those reviewed browser entry points. Therefore this
-change does not fabricate a Xiongan wagmi connector or claim shared sessions,
+change does not fabricate a tenant-specific wagmi connector or claim shared sessions,
 signing authority or a completed transaction. A future protocol integration
 would need a real supported interface and separate scoped verification.
 
@@ -108,13 +108,13 @@ TEST_ONLY browser fixtures. They do not prove deployed wallet availability.
 Exact-head CI evidence is recorded on the PR; no production/transaction pass is
 inferred from these isolated tests.
 
-## Deployment handoff
+## Deployment verification
 
-After the release owner merges an exact CI-green revision, publish the ArtFi Web
-image using the existing procedure and full `ARTFI_BUILD_SHA`. Retain all existing
+The deployed ArtFi Web image must identify the exact CI-verified revision using
+the full `ARTFI_BUILD_SHA`. Retain all existing
 API/bridge/authentication/chain settings and the previous rollback digest.
 
-The deployment owner must set `ARTFI_XIONGAN_WALLET_URL` in the running Web
+Set the server-only wallet destination setting in the running Web
 process/container environment to the approved complete public wallet URL, using
 the actual allocated host, port and path. It is public non-secret configuration.
 Do not put credentials, accounts, tokens, query strings or fragments in it. The
@@ -134,6 +134,6 @@ or unavailable wallet service is deployment evidence, not repaired by source alo
 
 Preserve existing bridge/listener allocations and the target deployment's
 configured port reservations. Do not disrupt or rebind other services. Use the
-deployment owner's confirmed allocation; environment names do not define a
+confirmed deployment allocation; environment names do not define a
 product-wide URL-port blacklist. This source change makes no SSH, firewall, listener, proxy, TLS,
 credential, production deployment, real-chain or real-asset changes.

@@ -1,7 +1,6 @@
-# Pre-chain deployment evidence
+# Pre-chain tooling checks — 2026-08-19
 
-Recorded at `2026-08-19T08:59:05Z` for deployment-tooling commit `fd9f6cf` on
-`agent/stages-2-7-completion`.
+Recorded at `2026-08-19T08:59:05Z` for deployment-tooling commit `fd9f6cf`.
 
 ## Decision
 
@@ -9,17 +8,15 @@ The Sepolia deployment package is ready for a funded live preflight. No transact
 no contract address was reserved, and no dry-run address is release evidence. ArtFiMarket remains
 disabled and is not part of the deployment package. Governance deployment remains off by default.
 
-## Verified environment
+## Test conditions and limits
 
-- Execution host: `abcdyi`, using the existing `privoxy.service` loopback bridge.
-- Verified egress: the approved Singapore host; its address remains in server-local configuration only.
-- Verified RPC chain ID: Sepolia `11155111` (`0xaa36a7`).
-- Test-only signer: `0xFa67da006Fc31b00e3a8ED94098230F895b0FAd8`.
-- Keystore decryption and signer-address matching passed using Foundry `--password-file`; neither
-  the password nor private key was written to the repository or evidence.
-- Admin, registrar, pauser, and vault-creator roles are temporarily assigned to the same test-only
-  signer for this evidence run. This concentration is not approved for production or mainnet.
-- The live preflight fails closed at the balance gate because the signer balance is zero.
+- The checked chain was Sepolia `11155111` (`0xaa36a7`).
+- Keystore decryption and signer-address matching passed using Foundry
+  `--password-file`; no signing material is part of this published record.
+- Admin, registrar, pauser and vault-creator roles all used the same test-only
+  signer. This concentration was not approved for production or mainnet.
+- The signer had zero balance, so the live preflight failed closed at the balance
+  gate. No broadcast was performed.
 
 ## No-broadcast simulations
 
@@ -48,7 +45,7 @@ Both Forge runs ended with `SIMULATION COMPLETE` and were executed without `--br
 
 ## Live gates still required
 
-1. Fund the test-only signer and rerun `scripts/test/sepolia-preflight.sh` through the Singapore
+1. Fund the test-only signer and rerun `scripts/test/sepolia-preflight.sh` through the configured public-chain
    bridge. The chain ID, signer, roles, and positive balance must all pass in the same run.
 2. Obtain a real artwork that has explicit NFT minting, metadata publication, and marketplace
    listing authorization. Record the rights owner, scope, territory, duration, attribution, and

@@ -6,7 +6,7 @@
 | Priority   | Emergency — halts the current testnet track                             |
 | Authority  | Latest explicit client requirement (`PRD.md` §0)                        |
 | Supersedes | Base Sepolia `84532` as the write-test chain (`PRD.md` §6)              |
-| Applies to | `GiraffeTechnology/ArtFi`, branch `claude/ci-all-pr-6dytk9` @ `47c9fe4` |
+| Applies to | `GiraffeTechnology/ArtFi`, branch the historical feature source @ `47c9fe4` |
 | Status     | **Ruled and implemented** — see §0 and §4                               |
 
 ---
@@ -64,7 +64,7 @@ transitive copy. The version this workspace actually resolves ships Hoodi.
 The development and integration write-test chain moves from **Base Sepolia (`84532`)** to
 **Hoodi**, chain ID **`560048`**, an Ethereum testnet. The id is taken from the viem chain
 definition rather than from prose; it must still be attested against genesis through the approved
-SIN boundary before any write, per `ACCEPTANCE.md` §4 G2.1.
+public-chain execution boundary before any write, per `ACCEPTANCE.md` §4 G2.1.
 
 The Base Sepolia migration landed in commit `eddb87a`. That work is reverted in direction, not
 deleted: the same files change again, to a different target.
@@ -89,7 +89,7 @@ will almost certainly record `unsupported-chain`. That disposition is permitted,
 marketplace's mainnet-only write action may be deferred — its adapter, mirror, validation, error
 handling and non-write integration tests remain required on the test chain.
 
-**Resolved by §0.** Probe OpenSea from the SIN boundary on Hoodi. If it returns no support,
+**Resolved by §0.** Probe OpenSea from the public-chain execution boundary on Hoodi. If it returns no support,
 that is fallback order 2: record `unsupported-chain`, defer only the marketplace write action, and
 keep the adapter, mirror, validation and error-handling tests on Hoodi. Do not substitute evidence
 from another chain.
@@ -155,7 +155,7 @@ Sections 4.2 through 4.4 are **implemented**; 4.1 and 4.5 carry the remaining it
 ### 4.1 Chain definition
 
 - [x] §2.3 resolved — `viem@2.55.18` already exports `hoodi`; no dependency change made.
-- [ ] Attest Hoodi chain ID and genesis through the SIN boundary; record the attested value.
+- [ ] Attest Hoodi chain ID and genesis through the public-chain execution boundary; record the attested value.
 - [ ] Probe OpenSea supported-chain list on Hoodi and record the result per §0.1 order 2.
 
 ### 4.2 Runtime layer
@@ -222,8 +222,8 @@ not mistaken for progress against them.
 
 | Item                                                                  | State                                            |
 | --------------------------------------------------------------------- | ------------------------------------------------ |
-| M2 backend trading — 115 days, the largest line item                  | No implementation                                |
-| M5 third-party security audit — budget line                           | Not engaged                                      |
+| M2 backend trading                  | No implementation                                |
+| M5 third-party security audit                           | Not engaged                                      |
 | M6 operations — CD, cluster, replication, monitoring, alerting        | Not implemented                                  |
 | Class B surfaces — auction, trade history, search, P&L, notifications | Mock or absent                                   |
 | A01–A38 compliant previews                                            | Zero present; `ACCEPTANCE.md` §7.8 audit failure |

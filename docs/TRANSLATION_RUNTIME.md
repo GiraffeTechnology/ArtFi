@@ -1,20 +1,20 @@
-# AIVAN translation runtime contract
+# Translation runtime contract
 
 ## Purpose and trust boundary
 
 ArtFi provides one global `EN / 简 / 繁 / FR / ES / DE / 한 / 日` selector across every public
 route. Visible menu copy stays compact while each option exposes its complete language name to
-assistive technology. Translation is generated only by the dedicated AIVAN language service. The
-AIVAN general-purpose Qwen model is not a translation provider and may only proofread a completed
+assistive technology. Translation is generated only by the dedicated language service. The
+general-purpose Qwen model is not a translation provider and may only proofread a completed
 primary translation.
 
 The production path is:
 
 ```text
 ArtFi same-origin API
-  -> SIN portal loopback tunnel
-  -> abcdyi loopback tunnel
-  -> isolated AIVAN ArtFi language service
+  -> UI loopback tunnel
+  -> backend loopback tunnel
+  -> isolated ArtFi language service
   -> CTranslate2 + pinned OPUS-MT/M2M100 primary translation
   -> OpenCC conversion for Traditional Chinese
   -> optional qwen3.5:9b proofread-only pass
@@ -74,7 +74,7 @@ must be sanitized and bound to the deployed source commit and model hash manifes
 
 ## Customer-service and operations boundary
 
-AIVAN `qwen3.5:9b` may separately support customer service and operations through authenticated,
+`qwen3.5:9b` may separately support customer service and operations through authenticated,
 RBAC-protected, rate-limited and audited APIs. That workflow is not part of translation generation,
 must not share the public translation endpoint, and must fail closed for privileged actions. No AI
 response may directly sign transactions, change infrastructure, disclose personal data or bypass a
@@ -82,11 +82,11 @@ human approval gate.
 
 ## Multilingual runtime evidence - 2026-08-21
 
-- Translation source commit `79e3fa4` passes Ruff and 47 pytest assertions in the isolated abcdyi
+- Translation source commit `79e3fa4` passes Ruff and 47 pytest assertions in the isolated backend
   environment; it has not been pushed and has not triggered GitHub CI.
 - The ArtFi-only model release contains six primary model directories and a 42-file SHA-256 manifest;
   every file verifies. Model weights remain outside Git.
-- The dedicated AIVAN production service advertises CTranslate2 for `en-zh`, `en-zh-Hant`, `en-fr`, `en-es`,
+- The dedicated production service advertises CTranslate2 for `en-zh`, `en-zh-Hant`, `en-fr`, `en-es`,
   `en-de`, `en-ko` and `en-ja`. One protected-term/numeric-fact probe per target returns without a
   warning.
 - Localized decimal punctuation is accepted only when its parsed numeric value and currency/unit are
@@ -95,8 +95,8 @@ human approval gate.
   `en-fr` model. The service remains active with zero restarts after the immutable code-release switch.
 - A forced Qwen outage preserves the CTranslate2 primary result and returns typed
   `PROOFREAD_FAILED`; Qwen is advertised only as `proofread-only`.
-- Both abcdyi loopback compatibility endpoints resolve through the managed tunnel to the dedicated
-  AIVAN service. The shared AIVAN translation service is not modified.
+- Both backend loopback compatibility endpoints resolve through the managed tunnel to the dedicated
+  language service. The shared translation service is not modified.
 
-This evidence validates the private translation runtime only. It does not authorize a public portal
-release, GitHub push or GitHub CI run.
+This evidence validates the isolated translation runtime only. It does not establish
+public-portal release acceptance or a hosted CI result.

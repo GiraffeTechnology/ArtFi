@@ -78,7 +78,7 @@ mock data fails G1 if it appears in Class B.
 
 Every Class B and Class C requirement `VERIFIED` on Hoodi (560048), on one integrated commit:
 
-1. Chain ID and genesis attested through the approved SIN boundary.
+1. Chain ID and genesis attested through the approved public-chain execution boundary.
 2. Wallet balances and nonces read; source commit, init-code/runtime hashes, manifest and signer
    policy verified; every transaction estimated and simulated before broadcast.
 3. Contract suite deployed; auction, revenue distribution, governance and multi-sig exercised
@@ -143,8 +143,7 @@ remediated; remediation re-verified by the auditor or by a test proving the find
 Report and remediation record are delivery artifacts.
 
 **G3-B does not block development or acceptance.** It is the last work before go-live. Its status
-is `PENDING-GATE` until it runs — never `BLOCKED`, never `OUT-OF-SCOPE`, and its budget remains on
-the books.
+is `PENDING-GATE` until it runs — never `BLOCKED`, never `OUT-OF-SCOPE`.
 
 **Contracts freeze at G3-A, not at G3-B.** The suite is frozen once M1 closes; G2 runtime evidence
 is gathered against that bytecode, and G3-B audits the same bytecode. Deferring the external audit
@@ -204,15 +203,10 @@ ArtFi is delivered when all of the following hold:
 Items 7–9 are the delivery terminus (Gantt P5). A delivery that stops at testnet has completed
 G2, not the project. G3-B runs immediately before item 7 and gates it.
 
-### 6.1 Measuring progress
+### 6.1 Requirement coverage
 
-Person-days are not a unit of progress. Every requirement in `PRD.md` §4, §5 and §7, and every
-Class B and Class C surface in §2.2 and §2.3, is itemized in `STATUS.md` and carries one of the six
-values in §2. Progress is reported as a count of `VERIFIED` items against the total — never as a
-percentage of elapsed effort, and never in person-days.
-
-`STATUS.md` is updated on every delivery commit. A commit that changes source without updating it
-is incomplete.
+`STATUS.md` records each applicable requirement and its evidence using the six
+values in section 2. Source changes require rechecking the affected evidence.
 
 ### 6.2 Stage delivery — UI-visible evidence
 
@@ -255,7 +249,7 @@ of §6 remain the terminus for the complete market only — **a stage does not r
    > attributed data plus an HTTPS link out to the venue (`PRD.md` §4.8 XM.4, carrying the original
    > `MARKET-004`), and the ruling of 2026-09-19 requires ArtFi to mirror until a product line opens
    > on ArtFi. An item that forbids the thing a requirement mandates cannot be an audit condition:
-   > this file is priority 4 in `AGENTS.md` §1 and may record a higher source, never contradict one.
+   > acceptance criteria must remain consistent with the applicable product requirements.
    >
    > The removal is bounded to that one item. **Every other listed exposure still fails an audit**,
    > and a link is only ever the one the source attributed — `market-links.ts` refuses a non-HTTPS
@@ -267,8 +261,7 @@ of §6 remain the terminus for the complete market only — **a stage does not r
 12. **Fail the audit if in-scope work is marked `OUT-OF-SCOPE` without a signed scope change**, or
     if a scheduled item awaiting a gate is recorded as `BLOCKED` or `OUT-OF-SCOPE` rather than
     `PENDING-GATE`.
-13. Produce a gap table by module, counted in `STATUS.md` items and their §2 status values. Do not
-    express the gap in person-days.
+13. Record gaps by module and their section 2 status values.
 14. Fail the audit if `STATUS.md` carries unfilled placeholders, or if source changed since its
     last update.
 15. Fail the audit if the configured test chain is not consistent across every layer that names

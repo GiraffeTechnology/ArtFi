@@ -132,13 +132,13 @@ Add only operator-approved values to the private input file, rerun `configure`, 
 - `ARTFI_NFT_RPC_1`, `ARTFI_NFT_RPC_8453`: server RPC connections for supported NFT chains.
 - `ARTFI_USER_AUTH_CHAIN_IDS`: supported allowed session chains; default `560048`, with
   `1` and `8453` included only when that deployment enables them.
-- `ARTFI_XIONGAN_WALLET_URL`: complete HTTPS wallet destination, optional port/path, no
+- Wallet destination setting: complete HTTPS wallet destination, optional port/path, no
   credentials, query or fragment. No default destination is inserted.
 - Existing `ARTFI_RPC_URL`, contract bindings, Oracle read URL, private holder-object storage,
   indexer, operator, R2 and Giraffe translation settings retain their existing semantics.
 
 For the passive market mirror, set `ARTFI_MIRROR_ENABLED=true`, `OPENSEA_COLLECTION_SLUGS`,
-`OPENSEA_API_KEY` and the existing execution-zone setting. The mirror's existing SIN boundary
+`OPENSEA_API_KEY` and the existing execution-zone setting. The mirror's existing public-chain execution boundary
 is preserved; it is not a package-wide host restriction. Its durable storage paths are assigned
 under `shared/mirror` and persist across upgrades. Keep a single writer per checkpoint directory.
 The installer never turns on public-chain access merely because a key or hostname exists.

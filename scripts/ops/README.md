@@ -1,8 +1,8 @@
 # ArtFi monitor-only candidate
 
-User directive: test and production 24×7 operations, with CTYun **host alias** Aivan
-QWEN3.5:9B preferred for sanitized analysis. This is not the Giraffe Agent product.
-Implementation maps to PRD M6.3 and NFR.7. Neither is verified by unit tests.
+This monitor supports test and production operations with an optional model for
+sanitized analysis. Implementation maps to PRD M6.3 and NFR.7. Neither is verified
+by unit tests.
 
 Current candidate: deterministic local probes → durable incident/recovery queue →
 optional bounded classifier and notifier. No shell/action executor, signing, database
@@ -16,7 +16,7 @@ are never forwarded. The two corresponding negative tests use synthetic markers 
 `node --test scripts/ops/*.test.mjs` tests the core and an actual ephemeral loopback
 HTTP server. That server is synthetic test infrastructure, not a deployed ArtFi service.
 `node scripts/ops/monitor-service.mjs /controlled/config.json --once` runs one tick;
-without `--once` it is a standalone loop independent of a Codex conversation.
+without `--once` it is a standalone loop.
 
 Configuration is not supplied with invented endpoints. A verified deployment supplies
 schemaVersion 1, enabled true, inventoryVerified true, mode monitor-only, environment
@@ -27,7 +27,7 @@ Liveness probes only establish process HTTP availability, not DB/provider readin
 The sanitized-metrics adapter accepts exactly available/fresh/observedAt; no raw body,
 credentials or application data is forwarded to an LLM.
 
-Open deployment gates: actual CTYun Aivan endpoint/model/auth/resource verification,
+Open deployment gates: configured model endpoint/auth/resource verification,
 approved notification channel, service-user ACLs and single-instance enforcement,
 startup/crash recovery service unit, bounded retention/rotation, capacity/backup/mirror
 telemetry adapters, controlled four-machine inventory, and test fault/soak evidence.

@@ -1,7 +1,7 @@
 # Stage 2 bounded delivery status
 
 > Historical bounded Stage 2 record, dated 2026-09-20. Preserve its exact
-> evidence scope. Current AGENTS.md and later client instructions control execution;
+> evidence scope. Current product requirements remain in PRD.md;
 > this record does not create a global Stage 1 delivery or deployment gate.
 
 Status: evidence snapshot only. This file creates no product requirement and makes no delivery
@@ -10,7 +10,6 @@ claim.
 | Field                     | Value                                                                                                             |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Product authority         | Issue #110 §0 Part A                                                                                              |
-| Delivery execution ruling | Client recovery plan dated 2026-09-08, SHA-256 `D2E25148E4F25E5CC94BDB7C99D36F7D3A9BB3608B28962D1012A8591DD445F4` |
 | Candidate reviewed        | ArtFi PR #113 head `a66238991e0416f2b761d3c1a5f1f944e3a4f791`                                                     |
 | Candidate tree            | `0d68052fce7699a2ced9a955c37554405aef90b5`                                                                        |
 | Parent                    | `33edccdc7a46179c59cf0fdf383a2d1c141d6ae3`                                                                        |
@@ -37,7 +36,7 @@ Only the six values in `docs/ACCEPTANCE.md` §2 are used.
 | A4 Policy                     | `IMPLEMENTED-NOT-VERIFIED` | `bounded-intent.mjs`; `intent.test.mjs`                                                   | Same-candidate runtime proof                                                        |
 | A5 Execute                    | `IMPLEMENTED-NOT-VERIFIED` | Execution interface and state machine in `agent-kernel.mjs`                               | Approved test-chain execution adapter and receipt                                   |
 | A6 Verify                     | `IMPLEMENTED-NOT-VERIFIED` | `buy-receipt.mjs`; `buy-receipt.test.mjs`                                                 | Actual submission/receipt/binding evidence                                          |
-| A7 Recover                    | `IMPLEMENTED-NOT-VERIFIED` | `recovery-worker.mjs`; `execution.test.mjs`; `wiring.test.mjs`                            | Real CTYun DB restart and approved RPC/source failure evidence                      |
+| A7 Recover                    | `IMPLEMENTED-NOT-VERIFIED` | `recovery-worker.mjs`; `execution.test.mjs`; `wiring.test.mjs`                            | Real dedicated DB restart and approved RPC/source failure evidence                      |
 | A8 Learn                      | `NOT-IMPLEMENTED`          | No implementation claim                                                                   | Valid later-stage work; non-authoritative only                                      |
 | A9 RWA Grounding              | `IMPLEMENTED-NOT-VERIFIED` | `oracle-observation.mjs`; `oracle-observation.test.mjs`; `oracle-sdk.integration.mjs`     | Live exact Oracle API evidence and eligible mint/activation proof                   |
 | A10 Constitutional Governance | `IMPLEMENTED-NOT-VERIFIED` | Current operational interfaces expose no constitutional mutation path                     | Integrated proof that operational compromise cannot change constitutional authority |
@@ -61,7 +60,7 @@ Only the six values in `docs/ACCEPTANCE.md` §2 are used.
 | D1 Authority            | `IMPLEMENTED-NOT-VERIFIED` | Deterministic boundary tests; no actual signed execution receipt                                                 |
 | D2 Asset Truth          | `IMPLEMENTED-NOT-VERIFIED` | Oracle consumer and mint-authority refusal tests; no eligible mint/activation runtime proof                      |
 | D3 Autonomous Execution | `IMPLEMENTED-NOT-VERIFIED` | Kernel interfaces and fake-backed state transitions; no end-to-end execution/verification/reconciliation receipt |
-| D4 Autonomous Recovery  | `IMPLEMENTED-NOT-VERIFIED` | Fake-backed DB outage/restart and reconciliation; no real CTYun/RPC/source injection run                         |
+| D4 Autonomous Recovery  | `IMPLEMENTED-NOT-VERIFIED` | Fake-backed DB outage/restart and reconciliation; no real database/RPC/source injection run                         |
 | Minimum UI              | `IMPLEMENTED-NOT-VERIFIED` | `agent-console.mjs` and desktop/mobile fixture browser evidence                                                  | Not connected to the running exact candidate                                       |
 | Vertical slice          | `NOT-IMPLEMENTED`          | Partial components only                                                                                          | One actual end-to-end TEST_ONLY run is absent                                      |
 | Delivery candidate      | `NOT-IMPLEMENTED`          | None                                                                                                             | D1–D4, vertical slice, minimum UI, exact-head CI, and review are not all satisfied |
@@ -77,14 +76,14 @@ Only the six values in `docs/ACCEPTANCE.md` §2 are used.
 - Focused current-tree review found no new defect in the Oracle API boundary, evidence persistence,
   fail-closed policy path, source-outage behavior, freeze preservation, or export refusal.
 
-Fixture tests and screenshots remain fixture evidence. They are not live Oracle, CTYun MySQL,
+Fixture tests and screenshots remain fixture evidence. They are not live Oracle, dedicated MySQL,
 test-chain, deployed UI, gray-operation, or soak evidence.
 
 ## Next executable evidence path
 
 The next promotion work is the smallest available real vertical-slice dependency, in this order:
 
-1. connect the existing runtime to the approved dedicated CTYun TEST schema without exposing the
+1. connect the existing runtime to the approved dedicated TEST schema without exposing the
    DSN;
 2. connect the existing ArtFi verifier to the exact Oracle application API;
 3. execute one authorized TEST_ONLY action through the approved test-chain boundary;

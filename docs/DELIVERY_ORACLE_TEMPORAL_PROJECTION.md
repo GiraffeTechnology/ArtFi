@@ -46,8 +46,7 @@ requested instant. Calls remain separate observations, not an atomic snapshot.
 
 Oracle's `source.chainId` and `source.contract` describe its configured deployment
 binding. They are not cryptographic evidence of chain/contract identity. Oracle
-checks its pinned register ID against its Kit source. The operations owner must
-verify the configured source binding before runtime acceptance. ArtFi displays
+checks its pinned register ID against its Kit source. Verify the configured source binding before runtime acceptance. ArtFi displays
 this distinction and does not create authority from an HTTP response.
 
 Unknown/private fields are stripped. Requests omit credentials and cookies,
@@ -64,8 +63,7 @@ ArtFi credential or public environment input is added. The existing bridge path
 prefix is retained. Do not configure ArtFi directly against Kit.
 
 The Oracle dependency must be the reviewed forward-port revision with its
-application routes and startup factory wired. Its deployment owner supplies the
-existing approved Kit read endpoint and verified binding through:
+application routes and startup factory wired. Supply the configured Kit read endpoint and verified binding through:
 
 - `GIRAFFE_ORACLE_KIT_READ_API_URL`
 - `GIRAFFE_ORACLE_PROJECTION_CHAIN_ID`
@@ -73,11 +71,11 @@ existing approved Kit read endpoint and verified binding through:
 - `GIRAFFE_ORACLE_PROJECTION_REGISTER_ID`
 
 These are a deployment contract, not authorized values. Missing or mismatched
-configuration remains visibly unavailable. Preserve SIN/CTYun separation, existing
-bridge allocations and existing reserved listeners. No SSH, port, credential,
+configuration remains visibly unavailable. Preserve separation between public-chain and backend/database services,
+configured bridge allocations and reserved listeners. No SSH, port, credential,
 real-chain, or real-asset action is part of this change.
 
-After deployment, the existing owner should verify the served ArtFi SHA, the
+After deployment, verify the served ArtFi SHA, the
 Oracle revision and the configured source identity; exercise a covered and an
 uncovered instant, owner/holder divergence, source outage/retry, historical query,
 desktop/mobile navigation and recovery. Record actual runtime evidence separately

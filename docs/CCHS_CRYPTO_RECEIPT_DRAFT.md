@@ -119,8 +119,8 @@ Production requires CCHS brand-owner approval, legal/tax review, confirmation of
 legal identity and CRA number, and a rendered proof. Do not add "Canada" or a third line to the
 approved logo lockup.
 
-The controlled CCHS VI manual was reviewed on abcdyi. Its internal storage path remains private
-operations evidence and is not published in Git.
+The controlled CCHS VI manual was reviewed; its private storage location is not
+part of this public product specification.
 
 ## Authoritative references
 

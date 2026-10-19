@@ -4,7 +4,7 @@
 | --------- | --------------------------------------------------------- |
 | Issued    | 2026-09-18                                                |
 | Issuer    | Client (ArtCCH)                                           |
-| Authority | Explicit later client ruling (`AGENTS.md` §1, priority 2) |
+| Authority | Recorded product clarification |
 | Scope     | Documentation and product constraint layer only           |
 | Applies   | `GiraffeTechnology/ArtFi`, all branches                   |
 
