@@ -109,7 +109,17 @@ export async function readBoundedJSON(
 }
 
 export function userAuthUpstreamURL(action: string) {
-  if (!["challenge", "verify", "session", "refresh", "logout"].includes(action))
+  if (
+    ![
+      "challenge",
+      "verify",
+      "session",
+      "refresh",
+      "logout",
+      "holder-challenge",
+      "holder-consume",
+    ].includes(action)
+  )
     throw new UserAuthError(404, "Unknown sign-in action.");
   const base = new URL(
     process.env.ARTFI_USER_AUTH_API_URL?.trim() ||

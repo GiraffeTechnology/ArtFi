@@ -110,6 +110,8 @@ func registerUserAuthRoutes(mux *http.ServeMux, rwa *rwaService) *userAuthServic
 }
 
 func (service *userAuthService) registerRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /v1/user/auth/holder-challenge", service.trustedBridge(service.registerHolderChallenge))
+	mux.HandleFunc("POST /v1/user/auth/holder-consume", service.trustedBridge(service.consumeHolderChallenge))
 	mux.HandleFunc("POST /v1/user/auth/challenge", service.trustedBridge(service.challenge))
 	mux.HandleFunc("POST /v1/user/auth/verify", service.trustedBridge(service.verify))
 	mux.HandleFunc("POST /v1/user/auth/session", service.trustedBridge(service.session))

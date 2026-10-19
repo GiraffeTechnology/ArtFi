@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   read: vi.fn(),
   grant: vi.fn(),
   origin: vi.fn(),
+  consume: vi.fn(),
 }));
 vi.mock("next/headers", () => ({ cookies: mocks.cookies }));
 vi.mock("./operator-auth", () => ({ configuredOrigin: mocks.origin }));
@@ -19,6 +20,9 @@ vi.mock("./charity-holder-auth", async () => {
     verifyHolderOwnership: mocks.owns,
   };
 });
+vi.mock("./charity-holder-challenge-store", () => ({
+  consumeHolderChallenge: mocks.consume,
+}));
 import { POST } from "../app/api/charity/holder/verify/route";
 const holder = "0x1111111111111111111111111111111111111111";
 const signature = `0x${"11".repeat(65)}`;
@@ -61,6 +65,7 @@ beforeEach(async () => {
   mocks.read.mockImplementation(auth.readHolderChallenge);
   mocks.grant.mockImplementation(auth.createHolderGrant);
   mocks.owns.mockResolvedValue(true);
+  mocks.consume.mockResolvedValue(undefined);
   mocks.origin.mockReturnValue("https://artfi.example");
 });
 afterEach(() => {
@@ -243,5 +248,67 @@ describe("holder verification original challenge and finite return", () => {
     const response = await POST(request());
     noGrant(response, 503);
     expect(await response.text()).not.toContain("private origin");
+  });
+});
+
+describe("holder proof consumes the original persistent challenge before grant", () => {
+  it("consumes exactly once after ownership and before the existing grant", async () => {
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(mocks.consume).toHaveBeenCalledExactlyOnceWith(
+      issued.token,
+      issued.challenge,
+      "https://artfi.example",
+    );
+    expect(mocks.owns.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.consume.mock.invocationCallOrder[0],
+    );
+    expect(mocks.consume.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.grant.mock.invocationCallOrder[0],
+    );
+  });
+  it("does not consume a failed ownership proof", async () => {
+    mocks.owns.mockResolvedValue(false);
+    noGrant(await POST(request()), 403);
+    expect(mocks.consume).not.toHaveBeenCalled();
+  });
+  it("never grants or retries an uncertain consumption result", async () => {
+    mocks.consume.mockRejectedValue(new Error("private SQL result uncertain"));
+    const response = await POST(request());
+    noGrant(response, 503);
+    expect(mocks.consume).toHaveBeenCalledTimes(1);
+    expect(await response.text()).not.toContain("private SQL");
+  });
+  it("does not issue a late grant after a stalled consume", async () => {
+    let finish!: () => void;
+    mocks.consume.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = POST(request());
+    await vi.waitFor(() => expect(mocks.consume).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(8000);
+    noGrant(await pending, 503);
+    finish();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.grant).not.toHaveBeenCalled();
+    expect(mocks.consume).toHaveBeenCalledTimes(1);
+  });
+  it("retains challenge expiry after a confirmed consume", async () => {
+    mocks.consume.mockImplementation(async () => {
+      vi.setSystemTime(issued.challenge.expiresAt);
+    });
+    noGrant(await POST(request()), 401);
+    expect(mocks.consume).toHaveBeenCalledTimes(1);
+  });
+  it("retains cancellation after a confirmed consume", async () => {
+    const controller = new AbortController();
+    mocks.consume.mockImplementation(async () => {
+      controller.abort();
+    });
+    noGrant(await POST(request(undefined, controller.signal)), 503);
+    expect(mocks.consume).toHaveBeenCalledTimes(1);
   });
 });

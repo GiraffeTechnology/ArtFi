@@ -801,6 +801,49 @@ paths:
           description: Idempotency, immutable-plan, or revision conflict
         "503":
           description: Durable operation journal is unavailable
+  /v1/user/auth/holder-challenge:
+    post:
+      operationId: registerCharityHolderChallenge
+      description: Register the identity and scope of an original signed charity ownership challenge through the existing server-only authentication bridge before issuing its browser cookie. This grants no user login, payment or property authority. Registration never resets an existing consumed record.
+      security:
+        - WalletAuthBridge: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharityHolderChallengeBinding"
+      responses:
+        "204":
+          description: The original challenge binding was durably registered.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /v1/user/auth/holder-consume:
+    post:
+      operationId: consumeCharityHolderChallenge
+      description: The existing authenticated web bridge calls this only after verifying control of the named wallet and its held edition balance. One conditional durable update consumes the exact original unexpired challenge once. A missing, consumed or mismatched record is refused; an unconfirmed result is not retried. The web layer issues no holder grant without a confirmed response and a still-current original request/challenge.
+      security:
+        - WalletAuthBridge: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharityHolderChallengeBinding"
+      responses:
+        "204":
+          description: Exactly one matching unexpired challenge was consumed.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+
   /v1/user/auth/challenge:
     post:
       operationId: walletUserChallenge
@@ -2380,6 +2423,42 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    CharityHolderChallengeBinding:
+      type: object
+      additionalProperties: false
+      required:
+        [challengeHash, address, chainId, tokenId, origin, issuedAt, expiresAt]
+      properties:
+        challengeHash:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: SHA-256 identity of the original signed holder-challenge cookie. It is not a receipt, payment or transaction digest.
+        address:
+          type: string
+          pattern: "^0x[0-9a-f]{40}$"
+        chainId:
+          type: integer
+          const: 560048
+        tokenId:
+          type: string
+          pattern: "^[1-9][0-9]{0,77}$"
+          maxLength: 78
+          description: Canonical positive decimal uint256; values above 2^256-1 are refused.
+        origin:
+          type: string
+          format: uri
+          description: Must equal the configured web origin.
+        issuedAt:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Original challenge issue time in Unix milliseconds, derived from its fixed five-minute expiry.
+        expiresAt:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Original Unix millisecond expiry; exactly 300000 milliseconds after issuedAt and still in the future.
+
     NotificationRevision:
       type: string
       pattern: "^(0|[1-9][0-9]{0,19})$"
