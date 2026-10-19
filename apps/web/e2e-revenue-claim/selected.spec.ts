@@ -360,3 +360,142 @@ test("zero historical balance does not offer a claim despite connected wallet st
   await expect(claim(page)).toBeDisabled();
   expect((await dump(page)).writes).toEqual([]);
 });
+
+const pendingRecords = (page: Page) =>
+  page.evaluate(() =>
+    Object.entries(sessionStorage)
+      .filter(([key]) => key.startsWith("artfi:pending:"))
+      .map(([, value]) => JSON.parse(value)),
+  );
+const checkPending = (page: Page) =>
+  page.getByRole("button", {
+    name: "Check pending claim transaction",
+    exact: true,
+  });
+for (const mode of [
+  "receipt-wrong-hash",
+  "receipt-reorg",
+  "receipt-reorg-revert",
+  "receipt-wrong-nonce",
+  "receipt-changed-call",
+  "receipt-unknown-status",
+  "receipt-missing-original",
+  "receipt-chain-flip",
+] as const) {
+  test(`canonical revenue: ${mode} survives reload without another claim`, async ({
+    page,
+  }) => {
+    const { blocked } = await open(page);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await inspect(page);
+    await page.evaluate((value) => window.revenueFixture.setMode(value), mode);
+    await claim(page).click();
+    await expect(
+      page.getByText(/A revenue transaction is unresolved/),
+    ).toBeVisible();
+    const saved = await pendingRecords(page);
+    expect(saved).toHaveLength(1);
+    expect(saved[0].hash).toBe(`0x${"7".repeat(64)}`);
+    await expect(claim(page)).toHaveCount(0);
+    expect((await dump(page)).writes).toHaveLength(1);
+    await expect(page.getByText(/The claim transaction confirmed/)).toHaveCount(
+      0,
+    );
+    await page.reload();
+    await expect(page.getByTestId("session-state")).toHaveText("authenticated");
+    await inspect(page);
+    await expect(claim(page)).toBeDisabled();
+    await checkPending(page).click();
+    await expect(
+      page.getByText(/The pending transaction is confirmed/),
+    ).toBeVisible();
+    expect(await pendingRecords(page)).toEqual([]);
+    expect((await dump(page)).writes).toEqual([]);
+    expect(blocked).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+test("canonical revenue: verified repricing confirms the actual same-call hash", async ({
+  page,
+}) => {
+  const { blocked } = await open(page);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await inspect(page);
+  await page.evaluate(() => window.revenueFixture.setMode("receipt-repriced"));
+  await claim(page).click();
+  await expect(page.getByText(/The claim transaction confirmed/)).toBeVisible();
+  await expect(page.getByText(/Latest transaction:/)).toContainText(
+    `0x${"8".repeat(64)}`,
+  );
+  expect(await pendingRecords(page)).toEqual([]);
+  expect((await dump(page)).writes).toHaveLength(1);
+  expect(blocked).toEqual([]);
+  expect(errors).toEqual([]);
+});
+for (const mode of [
+  "receipt-cancelled",
+  "receipt-replaced",
+  "receipt-reverted",
+] as const) {
+  test(`canonical revenue: proven ${mode} permits a separate deliberate retry`, async ({
+    page,
+  }) => {
+    const { blocked } = await open(page);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await inspect(page);
+    await page.evaluate((value) => window.revenueFixture.setMode(value), mode);
+    await claim(page).click();
+    await expect(
+      page.getByText(/The claim did not reach a verified completion/),
+    ).toBeVisible();
+    expect(await pendingRecords(page)).toEqual([]);
+    await expect(page.getByText(/The claim transaction confirmed/)).toHaveCount(
+      0,
+    );
+    await page.evaluate(() => window.revenueFixture.setMode("normal"));
+    await inspect(page);
+    await claim(page).click();
+    await expect(
+      page.getByText(/The claim transaction confirmed/),
+    ).toBeVisible();
+    expect((await dump(page)).writes).toHaveLength(2);
+    expect(blocked).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+for (const mode of ["hold-receipt", "late-repriced-receipt"] as const) {
+  test(`canonical revenue: ${mode} deadline keeps the original journal and ignores late completion`, async ({
+    page,
+  }, info) => {
+    const { blocked } = await open(page);
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await inspect(page);
+    await page.evaluate((value) => window.revenueFixture.setMode(value), mode);
+    await claim(page).click();
+    await expect.poll(async () => (await dump(page)).receiptCalls).toBe(1);
+    await expect(claim(page)).toHaveCount(0);
+    await page.clock.fastForward(15001);
+    await expect(
+      page.getByText(/A revenue transaction is unresolved/),
+    ).toBeVisible();
+    expect((await pendingRecords(page))[0].hash).toBe(`0x${"7".repeat(64)}`);
+    await page.evaluate(() => window.revenueFixture.release());
+    await page.clock.fastForward(1);
+    expect((await pendingRecords(page))[0].hash).toBe(`0x${"7".repeat(64)}`);
+    await expect(page.getByText(/The claim transaction confirmed/)).toHaveCount(
+      0,
+    );
+    expect((await dump(page)).writes).toHaveLength(1);
+    expect(blocked).toEqual([]);
+    expect(errors).toEqual([]);
+    if (mode === "late-repriced-receipt")
+      await page.screenshot({
+        path: info.outputPath("revenue-canonical-unknown.png"),
+        fullPage: true,
+      });
+  });
+}
