@@ -232,7 +232,14 @@ describe("mint on-chain evidence and continuation", () => {
       .mockResolvedValueOnce(collection);
     return {
       readContract,
-      client: { readContract } as unknown as Pick<PublicClient, "readContract">,
+      client: {
+        readContract,
+        getChainId: async () => 560048,
+        getBlock: async () => ({ number: 100n, hash: `0x${"77".repeat(32)}` }),
+      } as unknown as Pick<
+        PublicClient,
+        "readContract" | "getChainId" | "getBlock"
+      >,
     };
   }
   it("recovers without another mint event and builds the exact DAO link", async () => {
@@ -322,11 +329,19 @@ describe("mint on-chain evidence and continuation", () => {
     const readContract = vi.fn(() => response.promise);
     const op = currentOperation();
     const promise = recoverMintedAsset(
-      { readContract } as unknown as Pick<PublicClient, "readContract">,
+      {
+        readContract,
+        getChainId: async () => 560048,
+        getBlock: async () => ({ number: 100n, hash: `0x${"77".repeat(32)}` }),
+      } as unknown as Pick<
+        PublicClient,
+        "readContract" | "getChainId" | "getBlock"
+      >,
       intent,
       wallet,
       op.assertCurrent,
     );
+    await vi.waitFor(() => expect(readContract).toHaveBeenCalledTimes(1));
     op.retire();
     response.resolve({} as never);
     await expect(promise).rejects.toThrow("changed");
