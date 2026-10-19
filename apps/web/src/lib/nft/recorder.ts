@@ -47,7 +47,36 @@ export class ReadOnlyNftProvider extends JsonRpcProvider {
       )
     )
       throw new NftError(403, "Server-side wallet execution is prohibited.");
-    return super._send(payload);
+    const responses = await super._send(payload);
+    // Receipt formatters may discard raw removed-log flags; reject them before decoding.
+    const receiptIds = new Set(
+      (Array.isArray(payload) ? payload : [payload])
+        .filter((item) => item.method === "eth_getTransactionReceipt")
+        .map((item) => item.id),
+    );
+    for (const response of responses) {
+      if (
+        !receiptIds.has(response.id) ||
+        !("result" in response) ||
+        !response.result
+      )
+        continue;
+      const result = response.result as { logs?: unknown };
+      if (
+        Array.isArray(result.logs) &&
+        result.logs.some(
+          (log) =>
+            log &&
+            typeof log === "object" &&
+            (log as { removed?: unknown }).removed === true,
+        )
+      )
+        throw new NftError(
+          409,
+          "A removed log cannot establish an NFT receipt.",
+        );
+    }
+    return responses;
   }
   override async broadcastTransaction(): Promise<TransactionResponse> {
     throw new NftError(403, "Server-side wallet execution is prohibited.");
