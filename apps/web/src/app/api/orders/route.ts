@@ -1,4 +1,7 @@
-import { isAddress } from "viem";
+import {
+  readNativeOrderPage,
+  validNativeOrderQuery,
+} from "@/lib/native-order-page";
 import { decodeNativeOrder } from "@/lib/native-order";
 import {
   boundedOrderText,
@@ -13,50 +16,15 @@ import {
 import { requireUserSession, UserAuthError } from "@/lib/user-auth";
 
 export const dynamic = "force-dynamic";
-const allowedFilters = new Set([
-  "kind",
-  "chainId",
-  "marketAddress",
-  "assetAddress",
-  "tokenId",
-  "sellerAddress",
-  "page",
-  "pageSize",
-]);
-const uint256Max = (1n << 256n) - 1n;
-
-function validQuery(query: URLSearchParams) {
-  for (const key of query.keys()) {
-    const values = query.getAll(key);
-    if (!allowedFilters.has(key) || values.length !== 1 || !values[0])
-      return false;
-    const value = values[0];
-    if (key.endsWith("Address") && !isAddress(value)) return false;
-    if (key === "chainId" && value !== "560048") return false;
-    if (key === "kind" && !["whole", "fraction"].includes(value)) return false;
-    if (
-      key === "tokenId" &&
-      (!/^(0|[1-9][0-9]{0,77})$/.test(value) || BigInt(value) > uint256Max)
-    )
-      return false;
-    if (
-      ["page", "pageSize"].includes(key) &&
-      (!/^[1-9][0-9]*$/.test(value) ||
-        Number(value) > (key === "pageSize" ? 100 : 1000000))
-    )
-      return false;
-  }
-  return true;
-}
 
 export async function GET(request: Request) {
   const query = new URL(request.url).searchParams;
-  if (!validQuery(query))
+  if (!validNativeOrderQuery(query))
     return Response.json({ detail: "Invalid order filters." }, { status: 400 });
   try {
     const upstream = nativeOrderAPIURL(`/v1/orders?${query.toString()}`);
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(5000)]);
-    return await nativeOrderResponse(
+    const response = await nativeOrderResponse(
       await fetch(upstream, {
         cache: "no-store",
         redirect: "error",
@@ -64,6 +32,12 @@ export async function GET(request: Request) {
       }),
       { signal, timeoutMs: 5000 },
     );
+    if (!response.ok) return response;
+    const data: unknown = await response.json();
+    return Response.json(readNativeOrderPage(data, query), {
+      status: response.status,
+      headers: { "cache-control": "no-store" },
+    });
   } catch {
     return Response.json(
       { detail: "The order service is unavailable." },

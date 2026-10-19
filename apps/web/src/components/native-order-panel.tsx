@@ -26,6 +26,7 @@ import {
   type NativeOrderKind,
 } from "@/lib/native-order";
 import type { NativeOrderState } from "@/lib/native-order-state";
+import { readNativeOrderPage } from "@/lib/native-order-page";
 import {
   readNativeOrderObservation,
   type NativeOrderObservation,
@@ -177,22 +178,11 @@ export function NativeOrderPanel({
           onSelectRef.current(nativeOrderAuthorization(order));
         }
         const body: unknown = await read(`/api/orders?${query}`);
-        if (
-          !body ||
-          typeof body !== "object" ||
-          !("data" in body) ||
-          !Array.isArray(body.data) ||
-          !("total" in body) ||
-          typeof body.total !== "number" ||
-          !Number.isSafeInteger(body.total) ||
-          body.total < 0 ||
-          body.data.length > 20
-        )
-          throw new Error("The order list response is malformed.");
-        const list = body.data.map(accept);
+        const result = readNativeOrderPage(body, query);
+        const list = result.data.map(accept);
         if (!active()) return;
         setOrders(list);
-        setTotal(body.total);
+        setTotal(result.total);
         if (publicClient && list.length) {
           try {
             const snapshot = await readNativeOrderObservation(
