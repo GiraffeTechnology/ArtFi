@@ -1,4 +1,5 @@
 "use client";
+import "./dao-published-execution.css";
 import {
   useEffect,
   useLayoutEffect,
@@ -39,6 +40,8 @@ import {
   type DaoExecutionDeployment,
 } from "@/lib/dao-published-execution";
 
+import { verifyPublishedDaoActionAtWallet } from "@/lib/dao-published-wallet-boundary";
+
 type InputDeployment = Parameters<typeof daoExecutionDeployment>[0];
 export function DaoPublishedExecution({
   deployment,
@@ -65,7 +68,7 @@ export function DaoPublishedExecution({
   ].join(":");
   if (!configured)
     return (
-      <section className="dao-panel">
+      <section className="dao-panel dao-published-execution">
         <h2>Published proposal execution unavailable</h2>
         <p>All four existing DAO deployment bindings are required.</p>
       </section>
@@ -253,6 +256,18 @@ function PublishedExecutionSession({
       await publishedDaoReadDeadline(client.simulateContract(request));
       await assertTradingSession(account, 560048);
       assertCurrent();
+      // Authentication can yield. Never carry holder/state evidence across it.
+      await publishedDaoReadDeadline(
+        verifyPublishedDaoActionAtWallet({
+          client,
+          deployment,
+          reviewed,
+          account,
+          mode,
+          assertCurrent,
+        }),
+      );
+      assertCurrent();
       if (
         !session.isCurrent(lease) ||
         !session.awaitWallet(lease, () => window.sessionStorage)
@@ -321,7 +336,7 @@ function PublishedExecutionSession({
   }
   return (
     <section
-      className="dao-panel"
+      className="dao-panel dao-published-execution"
       aria-label="Published DAO proposal execution"
     >
       <h2>Load a published proposal</h2>
