@@ -17,6 +17,7 @@ import {
 } from "@/lib/notification-inbox-state";
 import { browserNotificationTransport } from "@/lib/notification-transport";
 import styles from "./notification-inbox.module.css";
+import { NotificationInboxBrowser } from "./notification-inbox-browser";
 
 const serverSnapshot: NotificationInboxState = Object.freeze({
   identity: null,
@@ -128,100 +129,11 @@ function SessionInbox({ identity }: { identity: NotificationIdentity }) {
               current platform notice. Older records remain in transaction
               history.
             </p>
-            {page.notifications.length === 0 ? (
-              <p>
-                No notifications match the current sources and your delivery
-                preferences.
-              </p>
-            ) : (
-              <ul className={styles.list} aria-label="Current notifications">
-                {page.notifications.map((item) => (
-                  <li key={item.id} className={styles.notice}>
-                    <div className={styles.heading}>
-                      <h3>
-                        {item.sourceKind === "system_notice"
-                          ? "System message"
-                          : "Transaction alert"}
-                      </h3>
-                      <span>{item.read ? "Read" : "Unread"}</span>
-                    </div>
-                    {item.sourceKind === "chain_event" && item.event ? (
-                      <>
-                        <p>
-                          {item.state === "removed"
-                            ? "This indexed event was removed. A prior acknowledgement does not establish finality."
-                            : item.state === "confirmed"
-                              ? "The indexed event is confirmed."
-                              : "The indexed event is pending confirmation."}
-                        </p>
-                        <dl
-                          className={styles.details}
-                          data-no-translate
-                          data-translation-skip
-                        >
-                          <dt>Event</dt>
-                          <dd>{item.event.eventName}</dd>
-                          <dt>Transaction</dt>
-                          <dd>
-                            <code>{item.event.transactionHash}</code>
-                          </dd>
-                          <dt>Contract</dt>
-                          <dd>
-                            <code>{item.event.contractAddress}</code>
-                          </dd>
-                          <dt>Log / block</dt>
-                          <dd>
-                            {item.event.logIndex} / {item.event.blockNumber}
-                          </dd>
-                          <dt>Source / revision</dt>
-                          <dd>
-                            <code>{item.sourceKey}</code> /{" "}
-                            {item.sourceRevision}
-                          </dd>
-                        </dl>
-                      </>
-                    ) : item.state === "withdrawn" ? (
-                      <p>
-                        This system message was withdrawn. Its prior text is no
-                        longer displayed.
-                      </p>
-                    ) : (
-                      <p
-                        className={styles.message}
-                        data-no-translate
-                        data-translation-skip
-                      >
-                        {item.text}
-                      </p>
-                    )}
-                    {item.readAt && (
-                      <p>
-                        Read at{" "}
-                        <time
-                          dateTime={item.readAt}
-                          data-no-translate
-                          data-translation-skip
-                        >
-                          {item.readAt}
-                        </time>
-                      </p>
-                    )}
-                    {!item.read && item.state !== "withdrawn" && (
-                      <button
-                        type="button"
-                        className="wallet-button"
-                        disabled={state.pending}
-                        onClick={() =>
-                          void controller.markRead(item.id, item.sourceRevision)
-                        }
-                      >
-                        Mark read
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <NotificationInboxBrowser
+              notifications={page.notifications}
+              pending={state.pending}
+              markRead={controller.markRead}
+            />
           </>
         )}
       </section>
