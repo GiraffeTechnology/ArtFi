@@ -117,13 +117,14 @@ test("queue uses exact reviewed call only after final auth and fresh holder proo
   await review(page);
   await queue(page).click();
   await expect(
-    page
-      .getByRole("status")
-      .filter({
-        hasText:
-          /Published proposal|Saved transaction|no known transaction hash|declined/,
-      }),
+    page.getByRole("status").filter({
+      hasText:
+        /Published proposal|Saved transaction|no known transaction hash|declined/,
+    }),
   ).toContainText("Published proposal queued");
+  await expect(page.locator("body")).not.toContainText(
+    "The unresolved transaction hash is retained",
+  );
   const d = await dump(page);
   expect(d.writes).toHaveLength(1);
   expect(d.writes[0]).toMatchObject({
@@ -159,12 +160,10 @@ test("only matured queued proposals reach exact execute callback", async ({
   await expect(queue(page)).toBeDisabled();
   await execute(page).click();
   await expect(
-    page
-      .getByRole("status")
-      .filter({
-        hasText:
-          /Published proposal|Saved transaction|no known transaction hash|declined/,
-      }),
+    page.getByRole("status").filter({
+      hasText:
+        /Published proposal|Saved transaction|no known transaction hash|declined/,
+    }),
   ).toContainText("execution confirmed");
   expect((await dump(page)).writes[0]).toMatchObject({
     functionName: "execute",
@@ -221,12 +220,10 @@ test("two immediate action events do not create two wallet requests", async ({
     (e as HTMLButtonElement).click();
   });
   await expect(
-    page
-      .getByRole("status")
-      .filter({
-        hasText:
-          /Published proposal|Saved transaction|no known transaction hash|declined/,
-      }),
+    page.getByRole("status").filter({
+      hasText:
+        /Published proposal|Saved transaction|no known transaction hash|declined/,
+    }),
   ).toContainText("Published proposal queued");
   expect((await dump(page)).writes).toHaveLength(1);
 });
@@ -248,12 +245,10 @@ test("unknown receipt survives reload and reconciliation does not replay", async
   await page.evaluate(() => window.daoFixture.setMode("normal"));
   await reconcile(page).click();
   await expect(
-    page
-      .getByRole("status")
-      .filter({
-        hasText:
-          /Published proposal|Saved transaction|no known transaction hash|declined/,
-      }),
+    page.getByRole("status").filter({
+      hasText:
+        /Published proposal|Saved transaction|no known transaction hash|declined/,
+    }),
   ).toContainText("Saved transaction confirmed");
   expect((await dump(page)).writes).toEqual([]);
 });
@@ -267,12 +262,10 @@ test("hashless wallet wait survives reload and blocks duplicate action", async (
   await expect.poll(async () => (await dump(page)).writes.length).toBe(1);
   await page.reload();
   await expect(
-    page
-      .getByRole("status")
-      .filter({
-        hasText:
-          /Published proposal|Saved transaction|no known transaction hash|declined/,
-      }),
+    page.getByRole("status").filter({
+      hasText:
+        /Published proposal|Saved transaction|no known transaction hash|declined/,
+    }),
   ).toContainText("no known transaction hash");
   await expect(load(page)).toBeDisabled();
   await expect(reconcile(page)).toHaveCount(0);
@@ -285,12 +278,10 @@ test("canonical repricing keeps the reviewed call and replaces known hash", asyn
   await review(page);
   await queue(page).click();
   await expect(
-    page
-      .getByRole("status")
-      .filter({
-        hasText:
-          /Published proposal|Saved transaction|no known transaction hash|declined/,
-      }),
+    page.getByRole("status").filter({
+      hasText:
+        /Published proposal|Saved transaction|no known transaction hash|declined/,
+    }),
   ).toContainText("Published proposal queued");
   await expect(page.getByText(/Transaction:/)).toContainText(
     "0x" + "8".repeat(64),
@@ -304,12 +295,10 @@ test("explicit wallet rejection frees only its own unresolved marker", async ({
   await review(page);
   await queue(page).click();
   await expect(
-    page
-      .getByRole("status")
-      .filter({
-        hasText:
-          /Published proposal|Saved transaction|no known transaction hash|declined/,
-      }),
+    page.getByRole("status").filter({
+      hasText:
+        /Published proposal|Saved transaction|no known transaction hash|declined/,
+    }),
   ).toContainText("declined");
   await expect(load(page)).toBeEnabled();
   expect((await dump(page)).writes).toHaveLength(1);

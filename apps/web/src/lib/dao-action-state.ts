@@ -488,6 +488,14 @@ export function createDaoActionSession(context: string) {
           });
           return true;
         }
+        publish({
+          transaction,
+          awaitingWallet: false,
+          recoveryNotice: snapshot.submitted
+            ? persistPackage(snapshot.submitted, storage)
+            : "",
+        });
+        return true;
       }
       publish({ transaction });
       return true;

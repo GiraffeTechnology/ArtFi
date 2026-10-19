@@ -584,3 +584,153 @@ describe("minimal DAO interruption recovery", () => {
     expect(session.getSnapshot().awaitingWallet).toBe(false);
   });
 });
+
+describe("DAO terminal recovery notices", () => {
+  it.each(["confirmed", "failed"] as const)(
+    "regression terminal: a %s owned request retires its unresolved notice",
+    (phase) => {
+      const store = storage(),
+        session = createDaoActionSession("terminal-" + phase),
+        lease = session.begin()!;
+      session.awaitWallet(lease, () => store);
+      session.broadcast(lease, transaction, undefined, () => store);
+      expect(session.getSnapshot().recoveryNotice).toContain("unresolved");
+      session.updateTransaction(
+        lease,
+        hash,
+        { ...transaction, phase },
+        () => store,
+      );
+      expect(session.getSnapshot().transaction?.phase).toBe(phase);
+      expect(session.getSnapshot().recoveryNotice).toBe("");
+      expect(session.getSnapshot().awaitingWallet).toBe(false);
+      session.finish(lease);
+      expect(session.begin()).toBeDefined();
+    },
+  );
+  it.each(["confirmed", "failed"] as const)(
+    "a reloaded %s receipt clears its own notice only after removing the owned record",
+    (phase) => {
+      const store = storage(),
+        context = "terminal-reload-" + phase,
+        first = createDaoActionSession(context),
+        lease = first.begin()!;
+      first.awaitWallet(lease, () => store);
+      first.broadcast(lease, transaction, undefined, () => store);
+      first.finish(lease);
+      const reloaded = createDaoActionSession(context);
+      reloaded.restore(() => store, target);
+      const check = reloaded.begin(true)!;
+      reloaded.updateTransaction(
+        check,
+        hash,
+        { ...transaction, phase },
+        () => store,
+      );
+      expect(store.getItem("artfi:dao-pending:" + context)).toBeNull();
+      expect(reloaded.getSnapshot().recoveryNotice).toBe("");
+    },
+  );
+  it.each([true, false])(
+    "retains the proposal package save outcome after confirmation: %s",
+    (canSave) => {
+      const memory = storage();
+      const store = {
+        ...memory,
+        setItem(key: string, value: string) {
+          if (!canSave && !key.startsWith("artfi:dao-pending:"))
+            throw Error("TEST_ONLY quota");
+          memory.setItem(key, value);
+        },
+      };
+      const session = createDaoActionSession("terminal-package-" + canSave),
+        lease = session.begin()!;
+      session.awaitWallet(lease, () => store);
+      session.broadcast(
+        lease,
+        { ...transaction, proposalCreation: true },
+        proposal,
+        () => store,
+      );
+      session.updateTransaction(
+        lease,
+        hash,
+        { ...transaction, proposalCreation: true, phase: "confirmed" },
+        () => store,
+      );
+      expect(session.getSnapshot().recoveryNotice).toContain(
+        canSave
+          ? "retains the submitted execution package"
+          : "could not save its execution package",
+      );
+      expect(session.getSnapshot().awaitingWallet).toBe(false);
+      expect(session.getSnapshot().submitted?.proposal).toEqual(proposal);
+    },
+  );
+  it("never clears a blocking notice when removal of the owned record fails", () => {
+    const memory = storage(),
+      session = createDaoActionSession("terminal-remove-fails"),
+      lease = session.begin()!;
+    session.awaitWallet(lease, () => memory);
+    session.broadcast(lease, transaction, undefined, () => memory);
+    session.updateTransaction(
+      lease,
+      hash,
+      { ...transaction, phase: "confirmed" },
+      () => ({
+        ...memory,
+        removeItem() {
+          throw Error("TEST_ONLY removal unavailable");
+        },
+      }),
+    );
+    expect(
+      memory.getItem("artfi:dao-pending:terminal-remove-fails"),
+    ).not.toBeNull();
+    expect(session.getSnapshot().awaitingWallet).toBe(true);
+    expect(session.getSnapshot().recoveryNotice).toContain(
+      "removal unavailable",
+    );
+    session.finish(lease);
+    expect(session.begin()).toBeUndefined();
+  });
+  it("keeps UNKNOWN notice and the original request until reconciliation", () => {
+    const store = storage(),
+      session = createDaoActionSession("terminal-unknown"),
+      lease = session.begin()!;
+    session.awaitWallet(lease, () => store);
+    session.broadcast(lease, transaction, undefined, () => store);
+    const notice = session.getSnapshot().recoveryNotice;
+    session.updateTransaction(
+      lease,
+      hash,
+      { ...transaction, phase: "unknown" },
+      () => store,
+    );
+    expect(session.getSnapshot().recoveryNotice).toBe(notice);
+    expect(store.getItem("artfi:dao-pending:terminal-unknown")).not.toBeNull();
+    session.finish(lease);
+    expect(session.begin()).toBeUndefined();
+  });
+  it("does not let a stale lease erase the current unresolved notice", () => {
+    const store = storage(),
+      session = createDaoActionSession("terminal-stale"),
+      lease = session.begin()!;
+    session.awaitWallet(lease, () => store);
+    session.broadcast(lease, transaction, undefined, () => store);
+    session.finish(lease);
+    const check = session.begin(true)!,
+      notice = session.getSnapshot().recoveryNotice;
+    expect(
+      session.updateTransaction(
+        lease,
+        hash,
+        { ...transaction, phase: "confirmed" },
+        () => store,
+      ),
+    ).toBe(false);
+    expect(session.getSnapshot().recoveryNotice).toBe(notice);
+    expect(store.getItem("artfi:dao-pending:terminal-stale")).not.toBeNull();
+    session.finish(check);
+  });
+});
