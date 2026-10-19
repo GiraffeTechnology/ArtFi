@@ -134,3 +134,47 @@ describe("charity holder descriptor cache boundary", () => {
     expect(mocks.resolve).toHaveBeenCalledWith("1", expect.any(Function));
   });
 });
+
+describe("holder descriptor original grant at return", () => {
+  afterEach(() => vi.useRealTimers());
+  it.each(["expired", "changed-token-key"])(
+    "holder-descriptor regression refuses %s after resolving a descriptor",
+    async (kind) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-10-20T00:00:00Z"));
+      vi.stubEnv(
+        "ARTFI_CHARITY_HOLDER_SESSION_SECRET",
+        "test-only-holder-descriptor-key-not-a-real-credential",
+      );
+      const auth = await vi.importActual<
+        typeof import("./charity-holder-auth")
+      >("./charity-holder-auth");
+      const issued = auth.createHolderGrant(
+        "0x1111111111111111111111111111111111111111",
+        "1",
+      );
+      mocks.cookies.mockResolvedValue({ get: () => ({ value: issued.token }) });
+      mocks.readHolderGrant.mockImplementation(auth.readHolderGrant);
+      mocks.grantCoversEdition.mockImplementation(auth.grantCoversEdition);
+      mocks.resolve.mockImplementation(async () => {
+        if (kind === "expired") vi.setSystemTime(issued.grant.expiresAt);
+        else
+          vi.stubEnv(
+            "ARTFI_CHARITY_HOLDER_SESSION_SECRET",
+            "different-test-only-descriptor-key-not-a-real-credential",
+          );
+        return { ok: true, asset };
+      });
+      const response = await GET(request(), context());
+      expect(response.status).toBe(401);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.text()).not.toContain(asset.objectKey);
+    },
+  );
+  it("returns a still-valid descriptor without another ownership challenge", async () => {
+    const response = await GET(request(), context());
+    expect(response.status).toBe(200);
+    expect(mocks.cookies).toHaveBeenCalledOnce();
+    expect(mocks.resolve).toHaveBeenCalledOnce();
+  });
+});
