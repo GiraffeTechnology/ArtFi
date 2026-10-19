@@ -834,6 +834,8 @@ export function publicOrder(
       p = components(object(raw.protocolData).parameters);
     const nft = side === "listing" ? p.offer[0] : p.consideration[0];
     if (
+      nft.itemType !== (scope.standard === "erc721" ? 2 : 3) ||
+      (scope.standard === "erc721" && nft.startAmount !== "1") ||
       !equalAddress(nft.token, scope.contract) ||
       nft.identifierOrCriteria !== tokenId
     )
@@ -860,6 +862,15 @@ export function publicOrder(
             0n,
           )
         : BigInt(p.offer[0].startAmount);
+    // Keep the protocol's integers exact; omit unsupported display values.
+    const expiresAt = Number(p.endTime);
+    if (
+      price >= 1n << 256n ||
+      !Number.isSafeInteger(expiresAt) ||
+      expiresAt > 8640000000000 ||
+      BigInt(p.endTime) <= BigInt(p.startTime)
+    )
+      return null;
     return {
       hash: orderHash(p),
       side,
@@ -867,7 +878,7 @@ export function publicOrder(
       quantity: nft.startAmount,
       priceWei: price.toString(),
       currency: side === "listing" ? "ETH" : "WETH",
-      expiresAt: Number(p.endTime),
+      expiresAt,
       status: String(raw.status || "observed"),
       ...(sourceURL ? { sourceURL } : {}),
     };
