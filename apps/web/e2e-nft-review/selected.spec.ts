@@ -399,3 +399,102 @@ test("lost broadcast acknowledgement retains the original wallet hash for readon
   expect(c.state.broadcast).toBe(2);
   await c.clean();
 });
+
+async function verifyTargets(page: Page) {
+  const controls = page
+    .getByRole("region", { name: "NFT marketplace", exact: true })
+    .locator("button:visible,input:visible,select:visible");
+  const sizes = await controls.evaluateAll((elements) =>
+    elements.map((e) => {
+      const r = e.getBoundingClientRect();
+      return {
+        tag: e.tagName,
+        text: e.textContent?.trim().slice(0, 50),
+        width: r.width,
+        height: r.height,
+      };
+    }),
+  );
+  expect(sizes.length).toBeGreaterThan(5);
+  for (const size of sizes) {
+    expect(size.height, JSON.stringify(size)).toBeGreaterThanOrEqual(44);
+    expect(size.width, JSON.stringify(size)).toBeGreaterThanOrEqual(44);
+  }
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(page.viewportSize()!.width);
+}
+test("targeted layout: review controls are reachable with touch and keyboard", async ({
+  page,
+}, info) => {
+  const c = await open(page);
+  await verifyTargets(page);
+  await page.keyboard.press("Tab");
+  await confirm(page).focus();
+  await expect(confirm(page)).toBeFocused();
+  expect(
+    await confirm(page).evaluate((e) => getComputedStyle(e).outlineStyle),
+  ).toBe("solid");
+  expect(
+    await confirm(page).evaluate((e) =>
+      parseFloat(getComputedStyle(e).outlineWidth),
+    ),
+  ).toBeGreaterThanOrEqual(2);
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "Discard unsigned review", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(confirm(page)).toBeFocused();
+  await confirm(page).scrollIntoViewIfNeeded();
+  expect(
+    await confirm(page).evaluate((e) => {
+      const r = e.getBoundingClientRect(),
+        hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return hit === e || (!!hit && e.contains(hit));
+    }),
+  ).toBe(true);
+  await page.screenshot({
+    path: info.outputPath("nft-controls-review.png"),
+    fullPage: true,
+  });
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByText("Status: accepted", { exact: true }),
+  ).toBeVisible();
+  await c.clean(1, 0);
+});
+test("targeted layout: unknown recovery controls keep original identity and readable narrow layout", async ({
+  page,
+}, info) => {
+  const c = await open(page, "wallet-unknown", "transaction");
+  await confirm(page).click();
+  await expect(
+    page.getByText("Status: unknown", { exact: true }),
+  ).toBeVisible();
+  await verifyTargets(page);
+  await expect(confirm(page)).toBeDisabled();
+  await expect(
+    page.getByLabel("Original wallet transaction hash", { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Tab");
+  await recover(page).focus();
+  await expect(recover(page)).toBeFocused();
+  expect(
+    await recover(page).evaluate((e) => getComputedStyle(e).outlineStyle),
+  ).toBe("solid");
+  const saved = await page.evaluate(() =>
+    JSON.parse(
+      localStorage.getItem(
+        "artfi:nft:recovery:1:0x1111111111111111111111111111111111111111",
+      )!,
+    ),
+  );
+  expect(saved).toMatchObject({ id: c.state.operation!.id, attempted: true });
+  await recover(page).scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: info.outputPath("nft-controls-unknown.png"),
+    fullPage: true,
+  });
+  await c.clean(0, 1);
+});

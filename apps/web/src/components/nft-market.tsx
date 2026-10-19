@@ -697,7 +697,10 @@ function NftMarketSession() {
       visibleOperation.status,
     );
   return (
-    <section className="product-tools" aria-labelledby="native-nft-title">
+    <section
+      className="product-tools nft-market"
+      aria-labelledby="native-nft-title"
+    >
       <header className="section-heading">
         <p className="approved-eyebrow">OpenSea venue / ArtFi experience</p>
         <h2 id="native-nft-title">NFT marketplace</h2>
