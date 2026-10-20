@@ -152,15 +152,11 @@ func (service *userAuthService) trustedBridge(next http.HandlerFunc) http.Handle
 }
 
 func readUserAuthJSON(request *http.Request, target any) error {
-	decoder := json.NewDecoder(request.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
+	raw, err := io.ReadAll(io.LimitReader(request.Body, userAuthJSONLimit+1))
+	if err != nil {
 		return err
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return errors.New("unexpected trailing JSON")
-	}
-	return nil
+	return decodeUserAuthObject(raw, target)
 }
 
 func (service *userAuthService) challenge(writer http.ResponseWriter, request *http.Request) {
@@ -351,9 +347,7 @@ func (service *userAuthService) parseAccess(token string, allowExpired bool) (*u
 		return nil, errUserUnauthorized
 	}
 	var claims userAccessClaims
-	decoder := json.NewDecoder(bytes.NewReader(payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&claims); err != nil {
+	if err := decodeUserAuthObject(payload, &claims); err != nil {
 		return nil, errUserUnauthorized
 	}
 	now := service.now().Unix()
