@@ -7,13 +7,14 @@ import {
   useRef,
   useState,
 } from "react";
-import { formatEther, type Hex } from "viem";
+import { type Hex } from "viem";
 import { useAccount, useWalletClient } from "wagmi";
 import { assertSameNftReview } from "@/lib/nft/client";
 import { readNftHistoryPage } from "@/lib/nft/history-view";
 import { readNftOwnedPage } from "@/lib/nft/owned";
 import { NftHistoryResults } from "@/components/nft-history-results";
 import { NftActionReview } from "@/components/nft-action-review";
+import { NftOrderFacts } from "@/components/nft-order-facts";
 import {
   observeNftCatalogPage,
   mergeNftCatalogPage,
@@ -981,18 +982,7 @@ function NftMarketSession() {
           )}
           {detail.orders.map((order) => (
             <article key={order.hash} className="nft-market-card">
-              <h4>
-                {order.side === "listing" ? "Listing" : "Offer"} ·{" "}
-                {formatEther(BigInt(order.priceWei))} {order.currency}
-              </h4>
-              <p>
-                Quantity {order.quantity} · Maker {order.maker}
-              </p>
-              <p>
-                Expires {new Date(order.expiresAt * 1000).toLocaleString()} ·{" "}
-                {order.status}
-              </p>
-              <p className="nft-market-hash">Order {order.hash}</p>
+              <NftOrderFacts order={order} />
               <button
                 disabled={!ready || busy}
                 onClick={() =>
