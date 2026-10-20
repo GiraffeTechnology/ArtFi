@@ -50,41 +50,8 @@ type Detail = {
   observedAt: string;
 };
 type Recovery = { id: string; hash?: Hex; attempted?: boolean };
-class NftAPIError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-async function api<T>(
-  action: string,
-  body?: unknown,
-  query?: URLSearchParams,
-): Promise<T> {
-  const response = await fetch(
-    `/api/nft/${action}${query ? `?${query}` : ""}`,
-    {
-      method: body ? "POST" : "GET",
-      headers: body ? { "content-type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: "same-origin",
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(60000),
-    },
-  );
-  const value = await response.json();
-  if (!response.ok)
-    throw new NftAPIError(
-      response.status,
-      typeof value.detail === "string"
-        ? value.detail
-        : "The NFT service is unavailable.",
-    );
-  return value as T;
-}
+import { NftAPIError, requestNftAPI as api } from "@/lib/nft/request";
+
 export function NftMarket() {
   const auth = useUserSession();
   const wallet = useAccount();
