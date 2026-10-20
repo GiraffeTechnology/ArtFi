@@ -68,7 +68,10 @@ function publicationTime(value: string | undefined) {
   if (!match)
     throw new Error("The authoritative publication time is unavailable.");
   const seconds = Date.parse(`${match[1]}Z`);
-  if (!Number.isFinite(seconds))
+  if (
+    !Number.isFinite(seconds) ||
+    new Date(seconds).toISOString().slice(0, 19) !== match[1]
+  )
     throw new Error("The publication time is invalid.");
   return BigInt(seconds) * 1_000_000n + BigInt((match[2] ?? "").padEnd(9, "0"));
 }
