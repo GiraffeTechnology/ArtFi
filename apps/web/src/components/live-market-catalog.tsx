@@ -296,6 +296,10 @@ export function LiveMarketCatalog() {
                     <dd>{venueLabel(asset.source)}</dd>
                   </div>
                   <div>
+                    <dt>Chain</dt>
+                    <dd data-no-translate>{asset.chain}</dd>
+                  </div>
+                  <div>
                     <dt>Order</dt>
                     <dd>
                       {active ? "Active listing" : asset.orderStatus || "None"}
@@ -324,6 +328,18 @@ export function LiveMarketCatalog() {
                     </div>
                   ) : null}
                 </dl>
+                <details className="market-source-reference">
+                  <summary>Full asset identity</summary>
+                  <p data-no-translate style={{ overflowWrap: "anywhere" }}>
+                    Chain: {asset.chain}
+                  </p>
+                  <p data-no-translate style={{ overflowWrap: "anywhere" }}>
+                    Contract: {asset.contractAddress}
+                  </p>
+                  <p data-no-translate style={{ overflowWrap: "anywhere" }}>
+                    Token ID: {asset.tokenId}
+                  </p>
+                </details>
                 {link ? (
                   <details className="market-source-reference">
                     <summary>Source reference</summary>
