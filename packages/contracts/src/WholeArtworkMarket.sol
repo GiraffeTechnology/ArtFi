@@ -189,14 +189,7 @@ contract WholeArtworkMarket is AccessControl, EIP712, Pausable, ReentrancyGuard 
         // already spent.
         intentUsed[digest] = true;
 
-        IERC20 paymentToken = IERC20(intent.paymentToken);
-        uint256 sellerBalanceBefore = paymentToken.balanceOf(intent.seller);
-        paymentToken.safeTransferFrom(msg.sender, intent.seller, intent.price);
-        // A fee-on-transfer payment token would silently short the seller. Reject it rather than
-        // settle a sale on terms the seller did not sign.
-        if (paymentToken.balanceOf(intent.seller) - sellerBalanceBefore != intent.price) {
-            revert TransferAmountMismatch();
-        }
+        _moveExactPayment(IERC20(intent.paymentToken), msg.sender, intent.seller, intent.price);
 
         collection.safeTransferFrom(intent.seller, msg.sender, intent.tokenId);
 
@@ -253,6 +246,18 @@ contract WholeArtworkMarket is AccessControl, EIP712, Pausable, ReentrancyGuard 
 
     function unpause() external onlyRole(PAUSER_ROLE) {
         _unpause();
+    }
+
+    function _moveExactPayment(IERC20 token, address buyer, address seller, uint256 price) private {
+        uint256 buyerBefore = token.balanceOf(buyer);
+        uint256 sellerBefore = token.balanceOf(seller);
+        token.safeTransferFrom(buyer, seller, price);
+        uint256 buyerAfter = token.balanceOf(buyer);
+        uint256 sellerAfter = token.balanceOf(seller);
+        if (
+            buyerAfter > buyerBefore || buyerBefore - buyerAfter != price
+                || sellerAfter < sellerBefore || sellerAfter - sellerBefore != price
+        ) revert TransferAmountMismatch();
     }
 
     function _structHash(SaleIntent calldata intent) private pure returns (bytes32) {
