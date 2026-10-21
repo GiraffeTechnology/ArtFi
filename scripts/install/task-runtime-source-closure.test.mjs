@@ -58,6 +58,8 @@ test("real compiler emits the complete current task-runtime source closure", asy
   assert.equal(emitted.installationAcceptance, "NOT_ESTABLISHED");
   for (const p of [
     "apps/web/src/lib/whole-receipt-journal-composition.ts",
+    "apps/web/src/lib/whole-receipt-execution-composition.ts",
+    "apps/web/src/lib/whole-receipt-held-action.ts",
     "apps/web/src/lib/whole-receipt-prepared-journal.ts",
     "apps/web/src/lib/nft/task-journal.ts",
     "scripts/task-runtime/server.mjs",
@@ -103,7 +105,7 @@ test("emitted runtime loads in a fresh native Node process with real dependencie
     NODE_OPTIONS: process.env.NODE_OPTIONS,
     ARTFI_TEST_NETWORK_GUARD_LOG: process.env.ARTFI_TEST_NETWORK_GUARD_LOG,
   };
-  const code = `import assert from 'node:assert/strict'; const runtime=await import('./scripts/task-runtime/server.mjs'); for(const name of ['createWholeReceiptNativeJournal','createNativeNftTaskPort','createNftTaskJournal','createListedOrderObserver'])assert.equal(typeof runtime[name],'function',name);`;
+  const code = `import assert from 'node:assert/strict'; const runtime=await import('./scripts/task-runtime/server.mjs'); for(const name of ['createWholeReceiptExecutionComposition','createWholeReceiptNativeJournal','createNativeNftTaskPort','createNftTaskJournal','createListedOrderObserver'])assert.equal(typeof runtime[name],'function',name);`;
   const actual = spawnSync(
     process.execPath,
     ["--conditions=react-server", "--input-type=module", "-e", code],
