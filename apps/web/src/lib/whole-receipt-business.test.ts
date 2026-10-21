@@ -205,7 +205,10 @@ function resegment(f: Fixture) {
     types: {
       ReceiptAuthorization: [
         { name: "saleIntentHash", type: "bytes32" },
-        ...correspondenceKeys.map((name) => ({ name, type: "bytes32" })),
+        ...correspondenceKeys.map((name) => ({
+          name,
+          type: "bytes32" as const,
+        })),
       ],
     },
     primaryType: "ReceiptAuthorization",

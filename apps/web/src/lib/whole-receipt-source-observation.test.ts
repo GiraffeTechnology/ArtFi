@@ -28,7 +28,7 @@ function fixture() {
       effectiveAt: "9007199254740993",
     },
     receiptBinding: {
-      schemaId: wholeReceiptSourceSchemaId,
+      schemaId: wholeReceiptSourceSchemaId as string,
       mintPolicyHash: hash(4),
       segmentDigest: hash(9),
       requestHash: hash(10),

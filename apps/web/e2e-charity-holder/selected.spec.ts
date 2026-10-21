@@ -301,7 +301,7 @@ test("declined mock wallet prompt makes no verification or download request", as
   const { state, connect } = await open(page);
   await connect();
   await page.evaluate(() => {
-    window.charityFixture.signMode = "reject";
+    window.charityHolderFixture.signMode = "reject";
   });
   await verify(page).click();
   await expect(panel(page).getByRole("alert")).toContainText("declined");
@@ -383,7 +383,9 @@ test("wallet change aborts a pending challenge without an old prompt", async ({
   );
   await expect.poll(() => state.aborted.length).toBe(1);
   await finishHeld(page, state);
-  expect(await page.evaluate(() => window.charityFixture.signatures)).toBe(0);
+  expect(
+    await page.evaluate(() => window.charityHolderFixture.signatures),
+  ).toBe(0);
   expect(state.counts.verify).toBe(0);
   expect(state.counts.descriptor).toBe(0);
   await expect(download(page)).toHaveCount(0);
@@ -419,11 +421,11 @@ test("edition change during a pending signature cannot submit the old proof", as
   const { state, connect } = await open(page);
   await connect();
   await page.evaluate(() => {
-    window.charityFixture.signMode = "hold";
+    window.charityHolderFixture.signMode = "hold";
   });
   await verify(page).click();
   await expect
-    .poll(() => page.evaluate(() => window.charityFixture.signatures))
+    .poll(() => page.evaluate(() => window.charityHolderFixture.signatures))
     .toBe(1);
   await page
     .getByRole("button", { name: "Switch TEST_ONLY edition", exact: true })
@@ -432,7 +434,7 @@ test("edition change during a pending signature cannot submit the old proof", as
   await expect(panel(page).getByRole("status")).toHaveText(
     "Ownership not yet verified",
   );
-  await page.evaluate(() => window.charityFixture.releaseSignature?.());
+  await page.evaluate(() => window.charityHolderFixture.releaseSignature?.());
   await page.evaluate(
     () =>
       new Promise<void>((resolve) =>
@@ -459,6 +461,8 @@ test("grant expiry removes access without another signature or file request", as
     descriptor: 1,
     file: 0,
   });
-  expect(await page.evaluate(() => window.charityFixture.signatures)).toBe(1);
+  expect(
+    await page.evaluate(() => window.charityHolderFixture.signatures),
+  ).toBe(1);
   expect(state.blocked).toEqual([]);
 });

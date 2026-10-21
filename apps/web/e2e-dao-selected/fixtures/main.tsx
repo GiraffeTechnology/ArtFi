@@ -15,7 +15,7 @@ if (query.get("queued") === "1") {
 }
 const originalContext = fixture.context();
 saveSubmittedDaoProposal(sessionStorage, originalContext, fixture.submitted);
-window.daoFixture = {
+window.daoSelectedFixture = {
   fixture,
   originalBusy: () => daoActionSession(originalContext).getSnapshot().busy,
   hold() {
@@ -27,7 +27,7 @@ window.daoFixture = {
 };
 declare global {
   interface Window {
-    daoFixture: {
+    daoSelectedFixture: {
       fixture: typeof fixture;
       originalBusy: () => boolean;
       hold: () => void;

@@ -27,10 +27,14 @@ type Controls = {
 };
 declare global {
   interface Window {
-    charityFixture: Controls;
+    charityHolderFixture: Controls;
   }
 }
-window.charityFixture = { signatures: 0, messages: [], signMode: "success" };
+window.charityHolderFixture = {
+  signatures: 0,
+  messages: [],
+  signMode: "success",
+};
 function testConnector(account: typeof first | typeof second, label: string) {
   return createConnector((config) => {
     const connector = mock({ accounts: [account] })(config);
@@ -48,7 +52,7 @@ function testConnector(account: typeof first | typeof second, label: string) {
                 params?: readonly unknown[];
               }) => {
                 if (input.method === "personal_sign") {
-                  const f = window.charityFixture;
+                  const f = window.charityHolderFixture;
                   f.signatures += 1;
                   f.messages.push(input.params);
                   if (f.signMode === "reject")
@@ -91,7 +95,7 @@ function App() {
     if (wallet.isConnected) await disconnectAsync();
     await connectAsync({ connector: connectors[index]!, chainId: hoodi.id });
   };
-  window.charityFixture.connect = () => {
+  window.charityHolderFixture.connect = () => {
     void connect(0);
   };
   return (

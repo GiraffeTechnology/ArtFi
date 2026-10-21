@@ -45,7 +45,7 @@ async function open(page: Page, queued = false) {
   ).toBeVisible();
   await expectDaoViewport(page);
   const id = await page.evaluate(() =>
-    window.daoFixture.fixture.proposal.proposalId.toString(),
+    window.daoSelectedFixture.fixture.proposal.proposalId.toString(),
   );
   return id;
 }
@@ -120,7 +120,7 @@ const queue = (page: Page) =>
 const execute = (page: Page) =>
   page.getByRole("button", { name: "Execute after timelock", exact: true });
 async function writes(page: Page) {
-  return page.evaluate(() => window.daoFixture.fixture.writes.length);
+  return page.evaluate(() => window.daoSelectedFixture.fixture.writes.length);
 }
 test("a changed inspected ID cannot queue the saved package; reselection submits its exact reviewed terms", async ({
   page,
@@ -143,7 +143,7 @@ test("a changed inspected ID cannot queue the saved package; reselection submits
   await queue(page).click();
   await expect.poll(() => writes(page)).toBe(1);
   const sent = await page.evaluate(() => {
-    const f = window.daoFixture.fixture,
+    const f = window.daoSelectedFixture.fixture,
       w = f.writes[0];
     return {
       method: w.functionName,
@@ -193,7 +193,9 @@ test("a changed inspected ID cannot queue the saved package; reselection submits
     method: "queue",
     chainId: 560048,
     exactArgs: true,
-    simulated: 2,
+    // One selected-package simulation, then selection + wallet checks twice:
+    // after authentication and immediately before the single wallet write.
+    simulated: 5,
     simulationsMatchWrite: true,
   });
   await expect(
@@ -214,7 +216,7 @@ test("a current holder read refuses transferred-away membership despite stale di
   await open(page);
   await ready(page);
   await page.evaluate(() => {
-    window.daoFixture.fixture.controls.balance = 0n;
+    window.daoSelectedFixture.fixture.controls.balance = 0n;
   });
   await queue(page).click();
   await expect(
@@ -230,7 +232,7 @@ test("simulation refusal retains the saved proposal without opening a wallet req
   await open(page);
   await ready(page);
   await page.evaluate(() => {
-    window.daoFixture.fixture.controls.failSimulation = true;
+    window.daoSelectedFixture.fixture.controls.failSimulation = true;
   });
   await queue(page).click();
   await expect(
@@ -244,19 +246,19 @@ test("changing the selection during simulation retires the old preflight before 
 }) => {
   await open(page);
   await ready(page);
-  await page.evaluate(() => window.daoFixture.hold());
+  await page.evaluate(() => window.daoSelectedFixture.hold());
   await queue(page).click();
   await expect
     .poll(() =>
       page.evaluate(() =>
-        window.daoFixture.fixture.calls.some(
+        window.daoSelectedFixture.fixture.calls.some(
           (x) => x.method === "simulateContract",
         ),
       ),
     )
     .toBe(true);
   await page.getByLabel("Proposal ID", { exact: true }).fill("1");
-  await page.evaluate(() => window.daoFixture.release());
+  await page.evaluate(() => window.daoSelectedFixture.release());
   await expect(
     page.getByText(
       "The selected proposal or wallet context changed. Review it again.",
@@ -270,12 +272,12 @@ test("switching wallets during simulation cannot forward the old account's prepa
 }) => {
   await open(page);
   await ready(page);
-  await page.evaluate(() => window.daoFixture.hold());
+  await page.evaluate(() => window.daoSelectedFixture.hold());
   await queue(page).click();
   await expect
     .poll(() =>
       page.evaluate(() =>
-        window.daoFixture.fixture.calls.some(
+        window.daoSelectedFixture.fixture.calls.some(
           (x) => x.method === "simulateContract",
         ),
       ),
@@ -285,9 +287,9 @@ test("switching wallets during simulation cannot forward the old account's prepa
     .getByRole("button", { name: "TEST_ONLY switch wallet", exact: true })
     .click();
   await expect(queue(page)).toHaveCount(0);
-  await page.evaluate(() => window.daoFixture.release());
+  await page.evaluate(() => window.daoSelectedFixture.release());
   await expect
-    .poll(() => page.evaluate(() => window.daoFixture.originalBusy()))
+    .poll(() => page.evaluate(() => window.daoSelectedFixture.originalBusy()))
     .toBe(false);
   expect(await writes(page)).toBe(0);
 });
@@ -297,7 +299,7 @@ test("an UNKNOWN queue result stays blocked until its original hash is reconcile
   await open(page);
   await ready(page);
   await page.evaluate(() => {
-    window.daoFixture.fixture.controls.unknownWrite = true;
+    window.daoSelectedFixture.fixture.controls.unknownWrite = true;
   });
   await queue(page).click();
   await expect(
@@ -310,7 +312,7 @@ test("an UNKNOWN queue result stays blocked until its original hash is reconcile
     page.getByRole("button", { name: "Select saved proposal" }),
   ).toBeDisabled();
   await page.evaluate(() => {
-    window.daoFixture.fixture.controls.unknownWrite = false;
+    window.daoSelectedFixture.fixture.controls.unknownWrite = false;
   });
   await page
     .getByRole("button", { name: "Check transaction confirmation" })
@@ -330,7 +332,9 @@ test("a queued, elapsed proposal uses execution rather than queue and retains it
   await execute(page).click();
   await expect.poll(() => writes(page)).toBe(1);
   expect(
-    await page.evaluate(() => window.daoFixture.fixture.writes[0].functionName),
+    await page.evaluate(
+      () => window.daoSelectedFixture.fixture.writes[0].functionName,
+    ),
   ).toBe("execute");
   await expect(
     page.getByText("Timelock execution confirmed.", { exact: true }),

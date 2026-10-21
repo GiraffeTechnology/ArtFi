@@ -354,7 +354,7 @@ export function createWholeReceiptHeldAction(options: {
                     chainId: identity.chainId,
                   });
                 },
-                async sendTransaction(selected) {
+                async sendTransaction(selected: ReceiptActionRequest) {
                   if (dispatched || callbackComplete)
                     refuse("RECEIPT_PROVIDER_ALREADY_DISPATCHED");
                   sameRequest(selected, request);

@@ -4,11 +4,14 @@ import {
   encodeFunctionData,
   keccak256,
   stringToHex,
+  isAddress,
+  isHex,
+  type Abi,
   type Address,
   type Hex,
   type PublicClient,
 } from "viem";
-import { daoActionsAbi } from "../src/lib/dao-contracts";
+import { daoActionsAbi, daoGovernorAbi } from "../src/lib/dao-contracts";
 import { proposalPackageId } from "../src/lib/dao-action-state";
 import { publishedProposalEvent } from "../src/lib/dao-published-execution";
 export const address = (n: string) => ("0x" + n.repeat(40)) as Address;
@@ -82,7 +85,79 @@ export function createDaoSelectedFixture() {
   };
   const calls: { method: string; input?: unknown }[] = [];
   let simulated = false;
+  // Immutable synthetic transaction records model the same request that the mock wallet accepted.
+  const transactions = new Map<
+    Hex,
+    {
+      hash: Hex;
+      chainId: number;
+      from: Address;
+      to: Address;
+      nonce: number;
+      value: bigint;
+      input: Hex;
+    }
+  >([
+    [
+      hash("d"),
+      {
+        hash: hash("d"),
+        chainId: 560048,
+        from: address("6"),
+        to: deployment.governorAddress,
+        nonce: 1,
+        value: 0n,
+        input: encodeFunctionData({
+          abi: daoGovernorAbi,
+          functionName: "proposeWithKind",
+          args: [
+            proposal.targets,
+            proposal.values,
+            proposal.calldatas,
+            proposal.description,
+            1,
+          ],
+        }),
+      },
+    ],
+  ]);
+  function recordSubmittedTransaction(request: Record<string, unknown>) {
+    if (
+      !isAddress(String(request.account)) ||
+      !isAddress(String(request.address)) ||
+      request.chainId !== 560048 ||
+      !Array.isArray(request.abi) ||
+      typeof request.functionName !== "string" ||
+      !Array.isArray(request.args) ||
+      (request.value !== undefined && request.value !== 0n)
+    )
+      throw Error("TEST_ONLY invalid submitted transaction metadata");
+    const input = encodeFunctionData({
+      abi: request.abi as Abi,
+      functionName: request.functionName,
+      args: request.args,
+    });
+    if (!isHex(input)) throw Error("TEST_ONLY invalid submitted calldata");
+    transactions.set(
+      hash("f"),
+      Object.freeze({
+        hash: hash("f"),
+        chainId: 560048,
+        from: request.account as Address,
+        to: request.address as Address,
+        nonce: 2,
+        value: 0n,
+        input,
+      }),
+    );
+  }
   const reader = {
+    getTransaction: async (input: { hash: Hex }) => {
+      calls.push({ method: "getTransaction", input });
+      const transaction = transactions.get(input.hash);
+      if (!transaction) throw Error("TEST_ONLY unknown transaction hash");
+      return { ...transaction };
+    },
     getChainId: async () => {
       calls.push({ method: "getChainId" });
       return simulated ? controls.finalChainId : controls.chainId;
@@ -156,11 +231,23 @@ export function createDaoSelectedFixture() {
       calls.push({ method: "waitForTransactionReceipt", input });
       if (controls.unknownWrite && input.hash === hash("f"))
         throw Error("TEST_ONLY unavailable receipt");
-      return { status: "success", transactionHash: input.hash };
+      if (!transactions.has(input.hash))
+        throw Error("TEST_ONLY unknown transaction hash");
+      return {
+        status: "success",
+        transactionHash: input.hash,
+        blockNumber: 50n,
+        blockHash: hash("c"),
+        logs:
+          input.hash === hash("d")
+            ? [{ ...log, removed: controls.removed }]
+            : [],
+      };
     },
   };
   return {
     controls,
+    recordSubmittedTransaction,
     proposal,
     submitted,
     log,

@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  hashStruct,
-  hashTypedData,
-  type Address,
-  type Hex,
-} from "viem";
+import { getAddress, hashStruct, hashTypedData, type Address, type Hex } from "viem";
 import { kernelRequestDigest } from "../../../../scripts/agent/agent-kernel.mjs";
 import { saleIntentTypes } from "./whole-artwork-intent";
 import { nftTaskJournalDigest } from "./nft/task-journal";
@@ -21,8 +16,13 @@ const h = (c: string) => `0x${c.repeat(64)}` as Hex;
 const a = (c: string) => `0x${c.repeat(40)}` as Address;
 type Phase = "funded" | "registered" | "paid";
 const correspondenceKeys = [
-  "settlementId", "assetRecordHash", "oracleSourceId", "requestHash",
-  "executionReferenceHash", "previousSegment", "oldCertificateHash",
+  "settlementId",
+  "assetRecordHash",
+  "oracleSourceId",
+  "requestHash",
+  "executionReferenceHash",
+  "previousSegment",
+  "oldCertificateHash",
   "warehouseReceiptHash",
 ] as const;
 
@@ -38,19 +38,32 @@ function fixture(phase: Phase = "funded") {
         "0x4749d8a2de0aada4dc2cb8edf179c1dac56ee0a57310920f40b6806f40b295a9" as Hex,
       domain: { chainId: 560048 as const, verifyingContract: a("3") },
       sale: {
-        seller: a("a"), collection: a("1"), tokenId: "7",
-        paymentToken: a("2"), price: "100", buyer: a("b"), salt: "1",
-        startsAt: 1000, endsAt: 2000, epoch: "0",
+        seller: a("a"),
+        collection: a("1"),
+        tokenId: "7",
+        paymentToken: a("2"),
+        price: "100",
+        buyer: a("b"),
+        salt: "1",
+        startsAt: 1000,
+        endsAt: 2000,
+        epoch: "0",
       },
       correspondence: {
-        settlementId: h("1"), assetRecordHash: h("2"),
-        oracleSourceId: h("3"), requestHash: h("4"),
-        executionReferenceHash: h("5"), previousSegment: h("0"),
-        oldCertificateHash: h("6"), warehouseReceiptHash: h("7"),
+        settlementId: h("1"),
+        assetRecordHash: h("2"),
+        oracleSourceId: h("3"),
+        requestHash: h("4"),
+        executionReferenceHash: h("5"),
+        previousSegment: h("0"),
+        oldCertificateHash: h("6"),
+        warehouseReceiptHash: h("7"),
       },
-      ...(phase === "registered" ? {
-        kitRegistration: { version: "2", proofHash: h("e") },
-      } : {}),
+      ...(phase === "registered"
+        ? {
+            kitRegistration: { version: "2", proofHash: h("e") },
+          }
+        : {}),
     },
   };
   const binding = {
@@ -76,7 +89,10 @@ function resegment(f: Fixture) {
     types: {
       ReceiptAuthorization: [
         { name: "saleIntentHash", type: "bytes32" },
-        ...correspondenceKeys.map((name) => ({ name, type: "bytes32" })),
+        ...correspondenceKeys.map((name) => ({
+          name,
+          type: "bytes32" as const,
+        })),
       ],
     },
     primaryType: "ReceiptAuthorization",
@@ -133,13 +149,17 @@ describe("whole receipt pregrant content commitments", () => {
       const f = fixture(phase);
       const result = commitments(f);
       expect(Object.keys(result.business).sort()).toEqual([
-        "chainId", "kind", "request", "wholeReceipt",
+        "chainId",
+        "kind",
+        "request",
+        "wholeReceipt",
       ]);
       expect(result.receiptPlanDigest).toMatch(/^0x[a-f0-9]{64}$/);
       expect(result.receiptJournalBindingHash).toMatch(/^0x[a-f0-9]{64}$/);
       expect(result.authorization).toBe("NOT_ESTABLISHED");
-      expect(WHOLE_RECEIPT_BUSINESS_SCHEMA)
-        .not.toBe(WHOLE_RECEIPT_ASSOCIATION_SCHEMA);
+      expect(WHOLE_RECEIPT_BUSINESS_SCHEMA).not.toBe(
+        WHOLE_RECEIPT_ASSOCIATION_SCHEMA,
+      );
       expect(Object.isFrozen(result.business.wholeReceipt.sale)).toBe(true);
       expect(Object.isFrozen(result.binding)).toBe(true);
     },
@@ -160,8 +180,16 @@ describe("whole receipt pregrant content commitments", () => {
       businessDigest: result.receiptPlanDigest,
     });
     expect(Object.keys(result.association).sort()).toEqual([
-      "actor", "businessDigest", "escrow", "origin", "phase",
-      "runtimeCodeHash", "schema", "segmentId", "taskId", "tenant",
+      "actor",
+      "businessDigest",
+      "escrow",
+      "origin",
+      "phase",
+      "runtimeCodeHash",
+      "schema",
+      "segmentId",
+      "taskId",
+      "tenant",
     ]);
   });
   it("detaches source and binding before returning", () => {
@@ -179,14 +207,17 @@ describe("whole receipt pregrant content commitments", () => {
     const version = commitments(f);
     expect(version.receiptPlanDigest).not.toBe(before.receiptPlanDigest);
     f.business.wholeReceipt.kitRegistration!.proofHash = h("f");
-    expect(commitments(f).receiptPlanDigest).not.toBe(version.receiptPlanDigest);
+    expect(commitments(f).receiptPlanDigest).not.toBe(
+      version.receiptPlanDigest,
+    );
   });
   it("binds the phase even when segment authorization is unchanged", () => {
     const funded = commitments(fixture("funded"));
     const paid = commitments(fixture("paid"));
     expect(paid.receiptPlanDigest).not.toBe(funded.receiptPlanDigest);
-    expect(paid.receiptJournalBindingHash)
-      .not.toBe(funded.receiptJournalBindingHash);
+    expect(paid.receiptJournalBindingHash).not.toBe(
+      funded.receiptJournalBindingHash,
+    );
   });
   it.each(["tokenId", "price", "salt", "epoch"] as const)(
     "binds a valid changed sale %s",
@@ -197,8 +228,9 @@ describe("whole receipt pregrant content commitments", () => {
       resegment(f);
       const after = commitments(f);
       expect(after.receiptPlanDigest).not.toBe(before.receiptPlanDigest);
-      expect(after.receiptJournalBindingHash)
-        .not.toBe(before.receiptJournalBindingHash);
+      expect(after.receiptJournalBindingHash).not.toBe(
+        before.receiptJournalBindingHash,
+      );
     },
   );
   it.each(["seller", "collection", "paymentToken", "buyer"] as const)(
@@ -212,8 +244,9 @@ describe("whole receipt pregrant content commitments", () => {
         f.binding.actor = a("c");
       }
       resegment(f);
-      expect(commitments(f).receiptPlanDigest)
-        .not.toBe(before.receiptPlanDigest);
+      expect(commitments(f).receiptPlanDigest).not.toBe(
+        before.receiptPlanDigest,
+      );
     },
   );
   it.each(["startsAt", "endsAt"] as const)(
@@ -223,8 +256,9 @@ describe("whole receipt pregrant content commitments", () => {
       const before = commitments(f);
       f.business.wholeReceipt.sale[key] = key === "startsAt" ? 900 : 2100;
       resegment(f);
-      expect(commitments(f).receiptPlanDigest)
-        .not.toBe(before.receiptPlanDigest);
+      expect(commitments(f).receiptPlanDigest).not.toBe(
+        before.receiptPlanDigest,
+      );
     },
   );
   it("binds a consistent changed chain and escrow domain", () => {
@@ -240,8 +274,9 @@ describe("whole receipt pregrant content commitments", () => {
     resegment(f);
     const escrow = commitments(f);
     expect(escrow.receiptPlanDigest).not.toBe(chain.receiptPlanDigest);
-    expect(escrow.receiptJournalBindingHash)
-      .not.toBe(chain.receiptJournalBindingHash);
+    expect(escrow.receiptJournalBindingHash).not.toBe(
+      chain.receiptJournalBindingHash,
+    );
   });
   it.each(correspondenceKeys)("binds correspondence %s", (key) => {
     const f = fixture();
@@ -264,8 +299,9 @@ describe("whole receipt pregrant content commitments", () => {
       Object.assign(f.binding, { [key]: values[key] });
       const after = commitments(f);
       expect(after.receiptPlanDigest).toBe(before.receiptPlanDigest);
-      expect(after.receiptJournalBindingHash)
-        .not.toBe(before.receiptJournalBindingHash);
+      expect(after.receiptJournalBindingHash).not.toBe(
+        before.receiptJournalBindingHash,
+      );
     },
   );
   it("rejects actor and escrow substitution", () => {
@@ -275,27 +311,51 @@ describe("whole receipt pregrant content commitments", () => {
       expect(() => commitments(f)).toThrow(refused);
     }
   });
-  it("normalizes only business hex values to Wallet's canonical case", () => {
+  it("normalizes validated business hex values to Wallet's canonical case", () => {
     const f = fixture("registered");
     const before = commitments(f);
+    const bindingBefore = { ...f.binding };
     const upper = (x: string) => x.toUpperCase().replace(/^0X/, "0x");
     const r = f.business.wholeReceipt;
-    f.business.request.account = upper(f.business.request.account) as Address;
+    f.business.request.account = getAddress(f.business.request.account);
     r.segmentId = upper(r.segmentId) as Hex;
-    r.domain.verifyingContract = upper(r.domain.verifyingContract) as Address;
-    for (const key of ["seller", "collection", "paymentToken", "buyer"] as const)
-      r.sale[key] = upper(r.sale[key]) as Address;
+    r.domain.verifyingContract = getAddress(r.domain.verifyingContract);
+    for (const key of [
+      "seller",
+      "collection",
+      "paymentToken",
+      "buyer",
+    ] as const)
+      r.sale[key] = getAddress(r.sale[key]);
     for (const key of correspondenceKeys)
       r.correspondence[key] = upper(r.correspondence[key]) as Hex;
     r.kitRegistration!.proofHash = upper(r.kitRegistration!.proofHash) as Hex;
-    f.binding.actor = upper(f.binding.actor) as Address;
-    f.binding.runtimeCodeHash = upper(f.binding.runtimeCodeHash) as Hex;
+    expect(f.binding).toEqual(bindingBefore);
     expect(commitments(f)).toEqual(before);
+  });
+  it("normalizes validated installation hex without mutating its source", () => {
+    const f = fixture("registered");
+    const before = commitments(f);
+    f.binding.actor = getAddress(f.binding.actor);
+    f.binding.runtimeCodeHash = f.binding.runtimeCodeHash
+      .toUpperCase()
+      .replace(/^0X/, "0x") as Hex;
+    const supplied = { ...f.binding };
+    expect(f.binding.runtimeCodeHash).not.toBe(before.binding.runtimeCodeHash);
+    expect(commitments(f)).toEqual(before);
+    expect(f.binding).toEqual(supplied);
+  });
+  it("rejects an invalid installation address checksum", () => {
+    const f = fixture("registered");
+    f.binding.actor = f.binding.actor.toUpperCase().replace(/^0X/, "0x") as Address;
+    expect(f.binding.actor).not.toBe(getAddress(a("b")));
+    expect(() => commitments(f)).toThrow(refused);
   });
   it("does not accept a native plan as pregrant input", () => {
     const f = fixture();
-    expect(() => createWholeReceiptApprovalCommitments(native(f), f.binding))
-      .toThrow(refused);
+    expect(() =>
+      createWholeReceiptApprovalCommitments(native(f), f.binding),
+    ).toThrow(refused);
   });
   it("preserves phase, domain and registered-proof validation", () => {
     const f = fixture("registered");
@@ -311,14 +371,21 @@ describe("whole receipt pregrant content commitments", () => {
     const binding = { ...f.binding };
     Object.defineProperty(binding, "actor", {
       enumerable: true,
-      get() { reads++; return f.binding.actor; },
+      get() {
+        reads++;
+        return f.binding.actor;
+      },
     });
-    expect(() => createWholeReceiptApprovalCommitments(f.business, binding))
-      .toThrow(refused);
+    expect(() =>
+      createWholeReceiptApprovalCommitments(f.business, binding),
+    ).toThrow(refused);
     expect(reads).toBe(0);
-    expect(() => createWholeReceiptApprovalCommitments(
-      f.business, { ...f.binding, nonce: "0" },
-    )).toThrow(refused);
+    expect(() =>
+      createWholeReceiptApprovalCommitments(f.business, {
+        ...f.binding,
+        nonce: "0",
+      }),
+    ).toThrow(refused);
   });
   it("retains the entire independently verified postgrant identity", () => {
     const f = fixture();
@@ -326,8 +393,9 @@ describe("whole receipt pregrant content commitments", () => {
     const result = assertWholeReceiptApprovalPlan(plan, f.binding, expected(f));
     expect(result.nativePlan).toEqual(plan);
     expect(result.authorization).toBe("NOT_ESTABLISHED");
-    expect(nftTaskJournalDigest(result.nativePlan))
-      .not.toBe(result.receiptPlanDigest.slice(2));
+    expect(nftTaskJournalDigest(result.nativePlan)).not.toBe(
+      result.receiptPlanDigest.slice(2),
+    );
   });
   it("keeps content stable for a new grant while native identity changes", () => {
     const f = fixture();
@@ -338,20 +406,24 @@ describe("whole receipt pregrant content commitments", () => {
     second.operationId = `native_${kernelRequestDigest(binding)}`;
     second.id = "plan_receipt_replacement";
     const result = assertWholeReceiptApprovalPlan(
-      second, f.binding, expected(f),
+      second,
+      f.binding,
+      expected(f),
     );
     expect(result.receiptPlanDigest).toBe(expected(f).receiptPlanDigest);
     expect(nftTaskJournalDigest(second)).not.toBe(nftTaskJournalDigest(first));
-    expect(result.nativePlan.taskPrincipal.grantReference)
-      .toBe("grant:replacement");
+    expect(result.nativePlan.taskPrincipal.grantReference).toBe(
+      "grant:replacement",
+    );
     expect(result.authorization).toBe("NOT_ESTABLISHED");
   });
   it("rejects a changed principal without its native operation ID", () => {
     const f = fixture();
     const plan = native(f);
     plan.taskPrincipal.grantReference = "grant:replacement";
-    expect(() => assertWholeReceiptApprovalPlan(plan, f.binding, expected(f)))
-      .toThrow(refused);
+    expect(() =>
+      assertWholeReceiptApprovalPlan(plan, f.binding, expected(f)),
+    ).toThrow(refused);
   });
   it("rejects another task even with a recomputed native ID", () => {
     const f = fixture();
@@ -359,8 +431,9 @@ describe("whole receipt pregrant content commitments", () => {
     plan.taskPrincipal.taskId = "other-task";
     const { kind: _, ...binding } = plan.taskPrincipal;
     plan.operationId = `native_${kernelRequestDigest(binding)}`;
-    expect(() => assertWholeReceiptApprovalPlan(plan, f.binding, expected(f)))
-      .toThrow(refused);
+    expect(() =>
+      assertWholeReceiptApprovalPlan(plan, f.binding, expected(f)),
+    ).toThrow(refused);
   });
   it("rejects stale, incomplete or bare-native expected digests", () => {
     const f = fixture();
@@ -371,7 +444,8 @@ describe("whole receipt pregrant content commitments", () => {
       { ...expected(f), receiptPlanDigest: nftTaskJournalDigest(plan) },
       { ...expected(f), receiptNonce: "0" },
     ])
-      expect(() => assertWholeReceiptApprovalPlan(plan, f.binding, claims))
-        .toThrow(refused);
+      expect(() =>
+        assertWholeReceiptApprovalPlan(plan, f.binding, claims),
+      ).toThrow(refused);
   });
 });

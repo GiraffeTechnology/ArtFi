@@ -43,9 +43,9 @@ class ChainReadError extends Error {
     super(code);
   }
 }
-const fail = (code: ReceiptChainVerificationCode): never => {
+function fail(code: ReceiptChainVerificationCode): never {
   throw new ChainReadError(code);
-};
+}
 function fields(raw: unknown, keys: readonly string[], exact = true) {
   if (!raw || typeof raw !== "object" ||
       Object.getPrototypeOf(raw) !== Object.prototype)

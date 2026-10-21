@@ -11,6 +11,6 @@ export const ConnectButton = {
   }) =>
     children({
       mounted: true,
-      openConnectModal: () => window.charityFixture.connect?.(),
+      openConnectModal: () => window.charityHolderFixture.connect?.(),
     }),
 };

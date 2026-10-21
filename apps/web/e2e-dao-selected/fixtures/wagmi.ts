@@ -79,6 +79,7 @@ export function useSignMessage() {
 export function useWriteContract() {
   return {
     writeContractAsync: async (request: Record<string, unknown>) => {
+      f.recordSubmittedTransaction(request);
       fixture.writes.push(request);
       return hash("f");
     },
