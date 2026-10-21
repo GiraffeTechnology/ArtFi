@@ -66,7 +66,7 @@ export function canonicalTokenId(value: string | undefined) {
     return undefined;
   try {
     const parsed = BigInt(value);
-    if (parsed <= 0n) return undefined;
+    if (parsed <= 0n || parsed >= 1n << 256n) return undefined;
     return parsed.toString();
   } catch {
     return undefined;
@@ -214,6 +214,7 @@ function charityEditionsAddress() {
 }
 
 export type OwnershipReader = {
+  getChainId: () => Promise<number>;
   verifyMessage: (input: {
     address: Address;
     message: string;
@@ -226,6 +227,7 @@ function chainReader(): OwnershipReader {
   const client = publicClient();
   const address = charityEditionsAddress();
   return {
+    getChainId: () => client.getChainId(),
     verifyMessage: (input) => client.verifyMessage(input),
     balanceOf: (holder, tokenId) =>
       client.readContract({
@@ -249,12 +251,16 @@ export async function verifyHolderOwnership(
   tokenId: string,
   message: string,
   signature: Hex,
-  reader: OwnershipReader = chainReader(),
+  reader?: OwnershipReader,
 ) {
   const canonicalId = canonicalTokenId(tokenId);
   if (!canonicalId) return false;
-  const signed = await reader.verifyMessage({ address, message, signature });
+  const selected = reader ?? chainReader();
+  // A configured chain name does not prove the remote RPC is serving that chain.
+  if ((await selected.getChainId()) !== hoodi.id) return false;
+  const signed = await selected.verifyMessage({ address, message, signature });
   if (!signed) return false;
-  const balance = await reader.balanceOf(address, BigInt(canonicalId));
-  return balance > 0n;
+  const balance = await selected.balanceOf(address, BigInt(canonicalId));
+  // Preserve chain identity through asynchronous verification and balance reads.
+  return balance > 0n && (await selected.getChainId()) === hoodi.id;
 }

@@ -19,6 +19,7 @@ const {
 
 function reader(options: { signed: boolean; balance: bigint }) {
   return {
+    getChainId: async () => 560048,
     verifyMessage: async () => options.signed,
     balanceOf: async () => options.balance,
   };
@@ -155,6 +156,7 @@ describe("ownership verification", () => {
   it("does not read a balance when the signature fails", async () => {
     let balanceReads = 0;
     await verifyHolderOwnership(holder, "7", "message", signature, {
+      getChainId: async () => 560048,
       verifyMessage: async () => false,
       balanceOf: async () => {
         balanceReads += 1;
@@ -167,6 +169,7 @@ describe("ownership verification", () => {
   it("fails closed when the chain read throws rather than assuming a holder", async () => {
     await expect(
       verifyHolderOwnership(holder, "7", "message", signature, {
+        getChainId: async () => 560048,
         verifyMessage: async () => true,
         balanceOf: async () => {
           throw new Error("rpc unavailable");
@@ -183,6 +186,7 @@ describe("ownership verification", () => {
       "message",
       signature,
       {
+        getChainId: async () => 560048,
         verifyMessage: async () => {
           reads += 1;
           return true;
