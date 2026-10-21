@@ -18,6 +18,11 @@ function request(signal?: AbortSignal) {
 }
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv(
+    "ARTFI_CHARITY_EDITIONS_ADDRESS",
+    "0x2222222222222222222222222222222222222222",
+  );
+
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-20T00:00:00Z"));
   vi.stubEnv(

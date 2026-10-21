@@ -9,6 +9,8 @@ import {
 const token = "synthetic-test-only-signed-cookie-identity";
 const challenge = {
   type: "holder-challenge" as const,
+  chainId: 560048,
+  contractAddress: "0x2222222222222222222222222222222222222222" as const,
   address: "0x1111111111111111111111111111111111111111" as const,
   tokenId: "7",
   message: "synthetic holder proof",

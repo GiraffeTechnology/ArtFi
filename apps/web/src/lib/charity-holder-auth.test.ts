@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Address, Hex } from "viem";
 
 const holder = "0x1111111111111111111111111111111111111111" as Address;
@@ -198,3 +198,11 @@ describe("ownership verification", () => {
     expect(reads).toBe(0);
   });
 });
+
+beforeEach(() => {
+  vi.stubEnv(
+    "ARTFI_CHARITY_EDITIONS_ADDRESS",
+    "0x2222222222222222222222222222222222222222",
+  );
+});
+afterEach(() => vi.unstubAllEnvs());

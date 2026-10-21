@@ -48,6 +48,11 @@ function noGrant(response: Response, status: number) {
 }
 beforeEach(async () => {
   vi.resetAllMocks();
+  vi.stubEnv(
+    "ARTFI_CHARITY_EDITIONS_ADDRESS",
+    "0x2222222222222222222222222222222222222222",
+  );
+
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-20T00:00:00Z"));
   vi.stubEnv(
@@ -311,4 +316,24 @@ describe("holder proof consumes the original persistent challenge before grant",
     noGrant(await POST(request(undefined, controller.signal)), 503);
     expect(mocks.consume).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("holder verification retains the signed deployment", () => {
+  it.each(["ownership", "consume"])(
+    "does not issue a grant after deployment changes during %s",
+    async (phase) => {
+      const replace = async () => {
+        vi.stubEnv(
+          "ARTFI_CHARITY_EDITIONS_ADDRESS",
+          "0x3333333333333333333333333333333333333333",
+        );
+        return phase === "ownership" ? true : undefined;
+      };
+      if (phase === "ownership") mocks.owns.mockImplementation(replace);
+      else mocks.consume.mockImplementation(replace);
+      const response = await POST(request());
+      noGrant(response, 401);
+      if (phase === "ownership") expect(mocks.consume).not.toHaveBeenCalled();
+    },
+  );
 });

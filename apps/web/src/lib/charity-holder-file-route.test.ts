@@ -30,6 +30,11 @@ const context = () => ({ params: Promise.resolve({ tokenId: "1" }) });
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv(
+    "ARTFI_CHARITY_EDITIONS_ADDRESS",
+    "0x2222222222222222222222222222222222222222",
+  );
+
   vi.stubEnv("ARTFI_CHARITY_HOLDER_ASSET_MANIFEST", "");
   mocks.cookies.mockResolvedValue({ get: () => ({ value: "test-grant" }) });
   mocks.canonicalTokenId.mockReturnValue("1");
@@ -278,4 +283,31 @@ describe("holder file original grant at delivery", () => {
     expect(response.status).toBe(401);
     expect(await response.text()).not.toContain("digest-mismatch");
   });
+});
+
+describe("holder file deployment changes during delivery", () => {
+  afterEach(() => vi.useRealTimers());
+  it.each(["descriptor", "object"])(
+    "refuses replacement deployment during %s access",
+    async (phase) => {
+      await currentRealGrant();
+      const replace = async () => {
+        vi.stubEnv(
+          "ARTFI_CHARITY_EDITIONS_ADDRESS",
+          "0x3333333333333333333333333333333333333333",
+        );
+        return phase === "descriptor"
+          ? { ok: true, asset }
+          : { ok: true, bytes };
+      };
+      if (phase === "descriptor") mocks.resolve.mockImplementation(replace);
+      else mocks.fetchObject.mockImplementation(replace);
+      const response = await GET(request(), context());
+      expect(response.status).toBe(401);
+      expect(response.headers.get("content-disposition")).toBeNull();
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      if (phase === "descriptor")
+        expect(mocks.fetchObject).not.toHaveBeenCalled();
+    },
+  );
 });

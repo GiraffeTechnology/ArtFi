@@ -37,7 +37,12 @@ export const holderChallengeCookie = "artfi_charity_holder_challenge";
 export const holderGrantCookie = "artfi_charity_holder_grant";
 export const holderCookiePath = "/api/charity";
 
-type HolderChallenge = {
+type HolderDeployment = {
+  chainId: number;
+  contractAddress: Address;
+};
+
+type HolderChallenge = HolderDeployment & {
   type: "holder-challenge";
   address: Address;
   tokenId: string;
@@ -45,7 +50,7 @@ type HolderChallenge = {
   expiresAt: number;
 };
 
-export type HolderGrant = {
+export type HolderGrant = HolderDeployment & {
   type: "holder-grant";
   address: Address;
   tokenId: string;
@@ -107,6 +112,7 @@ function decode<T extends HolderChallenge | HolderGrant>(
     ) as T;
     if (
       decoded.type !== type ||
+      !matchesCurrentDeployment(decoded) ||
       !isAddress(decoded.address) ||
       canonicalTokenId(decoded.tokenId) !== decoded.tokenId ||
       !Number.isSafeInteger(decoded.expiresAt) ||
@@ -130,6 +136,7 @@ export function createHolderChallenge(
   const canonicalId = canonicalTokenId(tokenId);
   if (!canonicalId)
     throw new Error("A valid charity edition token ID is required.");
+  const deployment = holderDeployment();
   const canonicalAddress = address.toLowerCase() as Address;
   const expiresAt = Date.now() + 5 * 60_000;
   const issuedAt = new Date().toISOString();
@@ -145,11 +152,14 @@ Verify ownership of ArtCCH:ArtFi charity edition ${canonicalId} to receive the w
 
 URI: ${authority.origin}/charity/editions/${canonicalId}
 Version: 1
-Chain ID: ${hoodi.id}
+Chain ID: ${deployment.chainId}
 Nonce: ${nonce}
 Issued At: ${issuedAt}
-Expiration Time: ${expirationTime}`;
+Expiration Time: ${expirationTime}
+Resources:
+- eip155:${deployment.chainId}/erc1155:${deployment.contractAddress}/${canonicalId}`;
   const challenge: HolderChallenge = {
+    ...deployment,
     type: "holder-challenge",
     address: canonicalAddress,
     tokenId: canonicalId,
@@ -168,6 +178,7 @@ export function createHolderGrant(address: Address, tokenId: string) {
   if (!canonicalId)
     throw new Error("A valid charity edition token ID is required.");
   const grant: HolderGrant = {
+    ...holderDeployment(),
     type: "holder-grant",
     address: address.toLowerCase() as Address,
     tokenId: canonicalId,
@@ -186,7 +197,12 @@ export function grantCoversEdition(
   tokenId: string,
 ) {
   const canonicalId = canonicalTokenId(tokenId);
-  return Boolean(grant && canonicalId && grant.tokenId === canonicalId);
+  return Boolean(
+    grant &&
+    canonicalId &&
+    grant.tokenId === canonicalId &&
+    matchesCurrentDeployment(grant),
+  );
 }
 
 function publicClient() {
@@ -211,6 +227,27 @@ function charityEditionsAddress() {
   if (!isAddress(value))
     throw new Error("The charity editions contract is unavailable.");
   return value;
+}
+
+/** A token ID has meaning only within the exact charity contract and chain. */
+function holderDeployment(): HolderDeployment {
+  const contractAddress = charityEditionsAddress().toLowerCase() as Address;
+  if (/^0x0{40}$/.test(contractAddress)) {
+    throw new Error("The charity editions contract is unavailable.");
+  }
+  return { chainId: hoodi.id, contractAddress };
+}
+
+function matchesCurrentDeployment(value: HolderDeployment) {
+  try {
+    const current = holderDeployment();
+    return (
+      value.chainId === current.chainId &&
+      value.contractAddress === current.contractAddress
+    );
+  } catch {
+    return false;
+  }
 }
 
 export type OwnershipReader = {
