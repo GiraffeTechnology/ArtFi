@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { getAddress, hashStruct, hashTypedData, type Address, type Hex } from "viem";
+import {
+  getAddress,
+  hashStruct,
+  hashTypedData,
+  type Address,
+  type Hex,
+} from "viem";
 import { kernelRequestDigest } from "../../../../scripts/agent/agent-kernel.mjs";
 import { saleIntentTypes } from "./whole-artwork-intent";
 import { nftTaskJournalDigest } from "./nft/task-journal";
@@ -347,7 +353,9 @@ describe("whole receipt pregrant content commitments", () => {
   });
   it("rejects an invalid installation address checksum", () => {
     const f = fixture("registered");
-    f.binding.actor = f.binding.actor.toUpperCase().replace(/^0X/, "0x") as Address;
+    f.binding.actor = f.binding.actor
+      .toUpperCase()
+      .replace(/^0X/, "0x") as Address;
     expect(f.binding.actor).not.toBe(getAddress(a("b")));
     expect(() => commitments(f)).toThrow(refused);
   });

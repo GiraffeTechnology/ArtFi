@@ -14,6 +14,7 @@ func TestMintedNFTFiltersRetainCanonicalScope(t *testing.T) {
 	if err != nil || !strings.Contains(where, "removed = FALSE") || !strings.Contains(where, "chain_id = ?") || !reflect.DeepEqual(args, []any{hoodiChainID}) || !strings.Contains(order, "block_number DESC") {
 		t.Fatalf("default canonical scope changed: %q %v %q %v", where, args, order, err)
 	}
+	canonicalWhere := where
 	cases := []struct {
 		query string
 		want  string
@@ -21,18 +22,20 @@ func TestMintedNFTFiltersRetainCanonicalScope(t *testing.T) {
 	}{
 		{"standard=ERC-721", "event_name = ?", "AssetCreated"},
 		{"standard=ERC-1155", "event_name = ?", "SeriesCreated"},
-		{"collectionAddress=0x12345678901234567890123456789012aAbB0011", "CASE WHEN event_name = 'SeriesCreated' THEN contract_address", "0x12345678901234567890123456789012aabb0011"},
+		{"collectionAddress=0x12345678901234567890123456789012aAbB0011", "LOWER(CASE WHEN event_name = 'SeriesCreated' THEN contract_address ELSE JSON_UNQUOTE(JSON_EXTRACT(payload, '$.collectionAddress')) END) = ?", "0x12345678901234567890123456789012aabb0011"},
 		{"tokenId=0", "JSON_UNQUOTE(JSON_EXTRACT(payload, '$.tokenId')) = ?", "0"},
 		{"tokenId=115792089237316195423570985008687907853269984665640564039457584007913129639935", "JSON_UNQUOTE(JSON_EXTRACT(payload, '$.tokenId')) = ?", "115792089237316195423570985008687907853269984665640564039457584007913129639935"},
 	}
 	for _, test := range cases {
 		query, _ := url.ParseQuery(test.query)
 		where, args, _, err := mintedNFTFilters(query)
-		if err != nil || !strings.Contains(where, test.want) || args[len(args)-1] != test.arg {
+		if err != nil || where != canonicalWhere+" AND "+test.want || !reflect.DeepEqual(args, []any{hoodiChainID, test.arg}) {
 			t.Errorf("%s: %q %v %v", test.query, where, args, err)
 		}
-		if strings.Contains(where, test.arg) {
-			t.Errorf("user value interpolated into SQL for %s", test.query)
+		// The fixed canonical event names are allowed in the base predicate.
+		// Every selected value must occupy its own bound placeholder instead.
+		if strings.Count(where, "?") != len(args) {
+			t.Errorf("query placeholders and bound values differ for %s", test.query)
 		}
 	}
 	_, _, order, err = mintedNFTFilters(url.Values{"sort": {"oldest"}})
