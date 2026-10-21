@@ -85,10 +85,21 @@ export class ReadOnlyNftProvider extends JsonRpcProvider {
 /** No key material. The first requested wallet action is captured and execution is stopped. */
 export class NftPlanRecorder extends AbstractSigner {
   readonly address: Address;
+  private walletActionClaimed = false;
   captured?: { transaction: NftTransaction } | { typedData: NftTypedData };
   constructor(address: Address, provider: Provider | null) {
     super(provider);
     this.address = address;
+  }
+  // A recorder belongs to one preparation. Reserve its first request before any
+  // asynchronous resolution or user-defined serialization can admit a second.
+  private claimWalletAction() {
+    if (this.walletActionClaimed || this.captured)
+      throw new NftError(
+        409,
+        "This preparation has already requested a wallet action.",
+      );
+    this.walletActionClaimed = true;
   }
   getAddress() {
     return Promise.resolve(this.address);
@@ -105,8 +116,7 @@ export class NftPlanRecorder extends AbstractSigner {
   override async sendTransaction(
     transaction: TransactionRequest,
   ): Promise<TransactionResponse> {
-    if (this.captured)
-      throw new NftError(409, "A wallet action is already awaiting review.");
+    this.claimWalletAction();
     const tx = await resolveProperties(transaction);
     if (
       typeof tx.to !== "string" ||
@@ -128,8 +138,7 @@ export class NftPlanRecorder extends AbstractSigner {
     types: Record<string, TypedDataField[]>,
     value: Record<string, unknown>,
   ): Promise<string> {
-    if (this.captured)
-      throw new NftError(409, "A wallet action is already awaiting review.");
+    this.claimWalletAction();
     // JSON conversion rejects cyclic data; bigint is represented losslessly.
     const typedData = JSON.parse(
       JSON.stringify(
