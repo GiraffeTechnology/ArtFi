@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { bundleAgentSources } from "./bundle-agent-sources.mjs";
 import { assertPortableBundleLinks } from "./bundle-portable-links.mjs";
 import { bundleNodePackage } from "./bundle-node-package.mjs";
 import {
@@ -215,9 +216,7 @@ try {
     destination: join(bundle, "runtime/task-listing"),
     node,
   });
-  await cp(join(root, "scripts/agent"), join(bundle, "scripts/agent"), {
-    recursive: true,
-  });
+  await bundleAgentSources(root, bundle);
   await cp(join(root, "scripts/operations"), join(bundle, "tools/operations"), {
     recursive: true,
   });
