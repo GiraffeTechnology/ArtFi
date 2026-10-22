@@ -38,8 +38,23 @@ returned text before decoding. An oversized or malformed record aborts the whole
 read without returning partial totals.
 
 Database outages and incomplete snapshot reads return sanitized errors without
-sample data. This stage supplies the API and focused regression definitions.
-Approved-source UI composition, whole-receipt and external-venue analytics,
+sample data. The source-bound asset page supplies a public read-only analytics panel for the
+implemented fractional series. Its server relay rereads the source record and
+derives the chain, market and fraction token. The payment token is an explicit
+read filter, not an inferred asset property or a grant. The relay forwards no
+browser cookies or credentials, validates the complete analytics response, and
+returns the existing catalog identity and revision. Source or currency changes
+retire pending results before another result is displayed. Historical reads do
+not acquire a new login or current-grounding prerequisite. Exact amounts, hashes
+and block identities remain outside UI translation.
+
+`GET /api/rwa/assets/{slug}/analytics?paymentToken=0x...` accepts only that one
+query field. Missing or unsupported source bindings remain unavailable. The
+shared bounded read transport limits both deadline and bytes, including late
+responses. The UI labels indexed subsets, excluded records and truncated price
+history and keeps complete holder distribution unavailable.
+
+Whole-receipt and external-venue analytics,
 complete holder snapshots and actual database/runtime acceptance remain separate
 unfinished stages. Existing receipt, charity, wallet, signed settlement and
 reorganization rules retain their own authority and evidence.

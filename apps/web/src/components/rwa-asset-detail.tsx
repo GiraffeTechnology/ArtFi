@@ -11,6 +11,7 @@ import { WholeArtworkListing } from "./whole-artwork-listing";
 import { FractionListing } from "./fraction-listing";
 import { AssetHolderAuthority } from "./asset-holder-authority";
 import { RwaSourceRecord } from "./rwa-source-record";
+import { NativeMarketAnalyticsPanel } from "./native-market-analytics";
 export function RwaAssetDetail({
   slug,
   section,
@@ -116,6 +117,7 @@ export function RwaAssetDetailView({ asset }: { asset: RwaAsset }) {
   return (
     <>
       <RwaSourceRecord asset={asset} />
+      <NativeMarketAnalyticsPanel asset={asset} />
       {binding.chainId === 560048 && binding.marketAddress ? (
         asset.section === "whole" ? (
           <WholeArtworkListing
