@@ -239,8 +239,21 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
         fail("FINANCIAL_BOUND_EXCEEDED");
       const quote = uint(o.quotedValue, true),
         slippage = uint(p.slippageLimit);
-      if (value > quote && (value - quote) * 10000n > quote * slippage)
-        fail("SLIPPAGE_EXCEEDED");
+      // A sell's adverse movement is reduced proceeds; a buy's is higher cost.
+      // Derive direction from the trusted compiled operation, never an observation flag.
+      const selling =
+        leg.dispatch.kind === "SIGNED_ORDER_PUBLICATION" ||
+        (leg.marketKind === "AUCTION" && leg.action === "CREATE_ORDER") ||
+        (leg.marketKind === "NFT" &&
+          ["list", "accept"].includes(leg.nativeAction));
+      const adverse = selling
+        ? quote > value
+          ? quote - value
+          : 0n
+        : value > quote
+          ? value - quote
+          : 0n;
+      if (adverse * 10000n > quote * slippage) fail("SLIPPAGE_EXCEEDED");
     }
     if (uint(o.executions) >= uint(p.maxExecutions)) fail("AUTHORITY_CONSUMED");
     if (
