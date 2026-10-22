@@ -1,5 +1,6 @@
 "use client";
 import type { RwaAsset } from "@/lib/rwa-catalog";
+import styles from "./rwa-source-record.module.css";
 /** Translate fixed UI copy while preserving source-authored facts verbatim.
  * These data leaves must not enter the page translation request. */
 export function RwaSourceRecord({ asset }: { asset: RwaAsset }) {
@@ -45,7 +46,7 @@ export function RwaSourceRecord({ asset }: { asset: RwaAsset }) {
             or withdrawal exits are not frozen by this status.
           </p>
         )}
-        <dl className="contract-facts">
+        <dl className={`contract-facts ${styles.facts}`}>
           <div>
             <dt>Evidence source</dt>
             <dd data-no-translate>

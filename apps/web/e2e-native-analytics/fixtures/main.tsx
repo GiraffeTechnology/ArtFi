@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
+import { RwaSourceRecord } from "../../src/components/rwa-source-record";
 import { NativeMarketAnalyticsPanel } from "../../src/components/native-market-analytics";
 import { analyticsAssetFixture } from "../../src/test/native-market-analytics-fixture";
 import "../../src/app/globals.css";
@@ -40,6 +41,9 @@ function Fixture() {
       >
         TEST_ONLY remove binding
       </button>
+      {new URLSearchParams(window.location.search).has("sourceRecord") && (
+        <RwaSourceRecord asset={asset} />
+      )}
       <NativeMarketAnalyticsPanel asset={asset} />
     </main>
   );

@@ -16,7 +16,11 @@ function envelope() {
     analytics: nativeAnalyticsFixture(),
   };
 }
-async function mount(page: Page, onRequest: (route: Route) => Promise<void>) {
+async function mount(
+  page: Page,
+  onRequest: (route: Route) => Promise<void>,
+  sourceRecord = false,
+) {
   await page.route("**/*", async (route) => {
     const request = route.request(),
       url = new URL(request.url());
@@ -39,7 +43,7 @@ async function mount(page: Page, onRequest: (route: Route) => Promise<void>) {
     if (url.pathname.endsWith("/analytics")) return onRequest(route);
     return route.abort();
   });
-  await page.goto(origin);
+  await page.goto(sourceRecord ? `${origin}/?sourceRecord=1` : origin);
   await expect(
     page.getByRole("heading", { name: "Indexed fractional market analytics" }),
   ).toBeVisible();
@@ -51,11 +55,14 @@ async function submit(page: Page, token = analyticsPaymentToken) {
     .click();
 }
 async function noOverflow(page: Page) {
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= innerWidth + 1,
-    ),
-  ).toBe(true);
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error("A configured viewport is required.");
+  const widths = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth,
+  }));
+  expect(widths.scrollWidth).toBeLessThanOrEqual(viewport.width + 1);
+  expect(widths.innerWidth).toBeLessThanOrEqual(viewport.width + 1);
 }
 test("shows exact source-bound observations and protects factual fields without a wallet or storage", async ({
   page,
@@ -252,4 +259,35 @@ test("keyboard submits a single read and reports an unavailable backend without 
   ).toBeVisible();
   await expect(page.getByText("TEST_ONLY_INTERNAL_ERROR")).toHaveCount(0);
   expect(calls).toBe(1);
+});
+
+test("source evidence cards fit the configured viewport alongside analytics", async ({
+  page,
+}, info) => {
+  await mount(page, (route) => route.fulfill({ json: envelope() }), true);
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "TEST ONLY source record",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await submit(page);
+  await expect(
+    page.getByText("27021597764222979", { exact: true }),
+  ).toBeVisible();
+  const widths = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+    innerWidth,
+  }));
+  await info.attach("configured-viewport.json", {
+    body: JSON.stringify({ viewport: page.viewportSize(), widths }),
+    contentType: "application/json",
+  });
+  await page.screenshot({
+    path: info.outputPath("source-evidence-layout.png"),
+    fullPage: true,
+  });
+  await noOverflow(page);
 });
