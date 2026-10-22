@@ -170,3 +170,86 @@ func TestNativeAnalyticsDecodeByteBudget(t *testing.T) {
 		}
 	}
 }
+
+const sharedAnalyticsCurrency = "0x1111111111111111111111111111111111111111"
+
+func sharedCurrencyBatch() []portfolioEvidence {
+	a := performanceTrade(1, true, "2", "3", "6")
+	b := performanceTrade(1, true, "4", "7", "28")
+	b[0].LogIndex = 3
+	b[1].LogIndex = 4
+	hash := fmt.Sprintf("0x%064x", 9999)
+	b[1].Order.IntentHash = hash
+	b[1].Payload["intentHash"], _ = json.Marshal(hash)
+	b[1].Order.Intent["paymentToken"], _ = json.Marshal(sharedAnalyticsCurrency)
+	return append(a, b...)
+}
+func assertSharedCurrencySeries(t *testing.T, events []portfolioEvidence, currency, quantity, payment, price string) nativeMarketAnalytics {
+	t.Helper()
+	scope := analyticsScope()
+	scope.payment = currency
+	r := calculateNativeMarketAnalytics(scope, events)
+	if r.Status != "observed_indexed_subset" || r.TradeCount != 1 || r.UnmatchedFillCount != 0 || r.Quantity == nil || *r.Quantity != quantity || r.Payment == nil || *r.Payment != payment || len(r.PriceHistory) != 1 || r.PriceHistory[0].UnitPrice != price {
+		t.Fatalf("currency series lost or mixed: %+v", r)
+	}
+	if r.PaymentToken != currency || r.HolderDistribution != nil {
+		t.Fatal("scope or evidence authority changed", r)
+	}
+	return r
+}
+func TestNativeAnalyticsSharedTransfersKeepPaymentSeriesSeparate(t *testing.T) {
+	events := sharedCurrencyBatch()
+	assertSharedCurrencySeries(t, events, performanceCurrency, "2", "6", "3")
+	assertSharedCurrencySeries(t, events, sharedAnalyticsCurrency, "4", "28", "7")
+	events[0].Payload["value"] = json.RawMessage(`"6"`)
+	events = append(events[:2], events[3:]...)
+	assertSharedCurrencySeries(t, events, performanceCurrency, "2", "6", "3")
+	assertSharedCurrencySeries(t, events, sharedAnalyticsCurrency, "4", "28", "7")
+}
+func TestNativeAnalyticsSharedTransfersUnprovenBatchCannotValidateRequestedFill(t *testing.T) {
+	for _, item := range []struct {
+		name   string
+		change func([]portfolioEvidence) []portfolioEvidence
+	}{
+		{"missing other fill", func(e []portfolioEvidence) []portfolioEvidence { return e[:3] }},
+		{"missing other transfer", func(e []portfolioEvidence) []portfolioEvidence { return append(e[:2], e[3:]...) }},
+		{"pending other fill", func(e []portfolioEvidence) []portfolioEvidence { e[3].Confirmed = false; return e }},
+		{"removed other fill", func(e []portfolioEvidence) []portfolioEvidence { e[3].Removed = true; return e }},
+		{"malformed other payment", func(e []portfolioEvidence) []portfolioEvidence {
+			e[3].Payload["payment"] = json.RawMessage(`"27"`)
+			return e
+		}},
+		{"other market", func(e []portfolioEvidence) []portfolioEvidence { e[3].ContractAddress = performanceCurrency; return e }},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			r := calculateNativeMarketAnalytics(analyticsScope(), item.change(sharedCurrencyBatch()))
+			if r.TradeCount != 0 || r.UnmatchedFillCount != 1 || r.Quantity == nil || *r.Quantity != "0" || r.Payment == nil || *r.Payment != "0" || len(r.PriceHistory) != 0 {
+				t.Fatal("unproven asset transfer authorized a series", r)
+			}
+		})
+	}
+}
+func TestNativeAnalyticsSharedTransfersRetainReplayOrderingAndReorgSafety(t *testing.T) {
+	events := sharedCurrencyBatch()
+	before := assertSharedCurrencySeries(t, events, performanceCurrency, "2", "6", "3")
+	duplicate := append(append([]portfolioEvidence{}, events...), events...)
+	assertSharedCurrencySeries(t, duplicate, performanceCurrency, "2", "6", "3")
+	for i, j := 0, len(duplicate)-1; i < j; i, j = i+1, j-1 {
+		duplicate[i], duplicate[j] = duplicate[j], duplicate[i]
+	}
+	after := assertSharedCurrencySeries(t, duplicate, performanceCurrency, "2", "6", "3")
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("read order or replay changed observed totals")
+	}
+	events[2].Removed = true
+	events[3].Removed = true
+	assertSharedCurrencySeries(t, events, performanceCurrency, "2", "6", "3")
+}
+func TestNativeAnalyticsSharedTransfersPreserveLargeExactQuantities(t *testing.T) {
+	events := sharedCurrencyBatch()
+	events[0].Payload["value"] = json.RawMessage(`"9007199254740993"`)
+	events[1].Payload["amount"] = json.RawMessage(`"9007199254740993"`)
+	events[1].Payload["payment"] = json.RawMessage(`"27021597764222979"`)
+	assertSharedCurrencySeries(t, events, performanceCurrency, "9007199254740993", "27021597764222979", "3")
+	assertSharedCurrencySeries(t, events, sharedAnalyticsCurrency, "4", "28", "7")
+}

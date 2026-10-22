@@ -108,8 +108,12 @@ func calculateNativeMarketAnalytics(scope nativeAnalyticsScope, input []portfoli
 		if event.Removed || !event.Confirmed || !txHashPattern.MatchString(event.TransactionHash) || !txHashPattern.MatchString(event.BlockHash) || event.BlockNumber == 0 {
 			continue
 		}
-		if fill, ok := eligible(event); ok {
-			add(fills, fill.key, fill.amount)
+		// Asset transfers carry no payment currency. Reconcile the complete asset
+		// flow for this market, then keep the requested currency in reported totals.
+		if event.EventName == "IntentFilled" && strings.EqualFold(event.ContractAddress, scope.market) {
+			if fill, ok := mappedPerformanceFill(event); ok && fill.asset == scope.asset {
+				add(fills, fill.key, fill.amount)
+			}
 		}
 		if event.EventName == "Transfer" && strings.EqualFold(event.ContractAddress, scope.asset) {
 			if amount, ok := positiveEvidenceInteger(evidenceString(event, "value")); ok {
