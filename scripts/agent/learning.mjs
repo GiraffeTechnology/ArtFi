@@ -5,6 +5,70 @@ const fail = (code) => {
 };
 const id = (x) => typeof x === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(x);
 const count = (x) => Number.isSafeInteger(x) && x >= 0 && x <= 1000000000;
+
+const table = (value) =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  (Object.getPrototypeOf(value) === Object.prototype ||
+    Object.getPrototypeOf(value) === null);
+const fields = new Set([
+  "schemaVersion",
+  "authority",
+  "providers",
+  "actions",
+  "incidents",
+  "samples",
+  "observedAt",
+]);
+function validatedState(previous) {
+  let state;
+  try {
+    state = structuredClone(previous);
+  } catch {
+    fail("OPTIMIZATION_STATE_INVALID");
+  }
+  if (
+    !table(state) ||
+    Object.keys(state).some((key) => !fields.has(key)) ||
+    state.schemaVersion !== 1 ||
+    state.authority !== "ADVISORY_ONLY" ||
+    !count(state.samples) ||
+    !table(state.providers) ||
+    !table(state.actions) ||
+    !table(state.incidents) ||
+    ((state.samples > 0 || Object.hasOwn(state, "observedAt")) &&
+      (!Number.isSafeInteger(state.observedAt) || state.observedAt < 0))
+  )
+    fail("OPTIMIZATION_STATE_INVALID");
+  for (const records of [state.providers, state.actions]) {
+    if (Object.keys(records).length > 32) fail("OPTIMIZATION_STATE_INVALID");
+    for (const [key, row] of Object.entries(records)) {
+      if (
+        !id(key) ||
+        !table(row) ||
+        Object.keys(row).length !== 4 ||
+        !["successes", "failures", "latencyMs", "gasEstimate"].every((key) =>
+          Object.hasOwn(row, key),
+        ) ||
+        !count(row.successes) ||
+        !count(row.failures) ||
+        (row.latencyMs !== null &&
+          (!count(row.latencyMs) || row.latencyMs > 86400000)) ||
+        (row.gasEstimate !== null && !count(row.gasEstimate))
+      )
+        fail("OPTIMIZATION_STATE_INVALID");
+    }
+  }
+  if (
+    Object.keys(state.incidents).length > 64 ||
+    Object.entries(state.incidents).some(
+      ([key, value]) => !/^[A-Z][A-Z0-9_]{0,63}$/.test(key) || !count(value),
+    )
+  )
+    fail("OPTIMIZATION_STATE_INVALID");
+  return state;
+}
 export function recordOptimization(previous, input) {
   if (
     !input ||
@@ -31,38 +95,29 @@ export function recordOptimization(previous, input) {
     (input.reason !== undefined && !/^[A-Z][A-Z0-9_]{0,63}$/.test(input.reason))
   )
     fail("OPTIMIZATION_SAMPLE_INVALID");
-  const state = previous
-    ? structuredClone(previous)
-    : {
-        schemaVersion: 1,
-        authority: "ADVISORY_ONLY",
-        providers: {},
-        actions: {},
-        incidents: {},
-        samples: 0,
-      };
-  if (
-    state.schemaVersion !== 1 ||
-    state.authority !== "ADVISORY_ONLY" ||
-    !count(state.samples) ||
-    !state.providers ||
-    !state.actions ||
-    !state.incidents
-  )
-    fail("OPTIMIZATION_STATE_INVALID");
-  for (const records of [state.providers, state.actions])
-    if (Object.keys(records).length > 32) fail("OPTIMIZATION_STATE_INVALID");
-  if (Object.keys(state.incidents).length > 64)
-    fail("OPTIMIZATION_STATE_INVALID");
+  const state =
+    previous == null
+      ? {
+          schemaVersion: 1,
+          authority: "ADVISORY_ONLY",
+          providers: {},
+          actions: {},
+          incidents: {},
+          samples: 0,
+        }
+      : validatedState(previous);
   const bump = (value = 0) => Math.min(1000000000, value + 1);
   function track(records, key) {
-    if (!records[key] && Object.keys(records).length >= 32) return;
-    const row = records[key] ?? {
-      successes: 0,
-      failures: 0,
-      latencyMs: null,
-      gasEstimate: null,
-    };
+    if (!Object.hasOwn(records, key) && Object.keys(records).length >= 32)
+      return;
+    const row = Object.hasOwn(records, key)
+      ? records[key]
+      : {
+          successes: 0,
+          failures: 0,
+          latencyMs: null,
+          gasEstimate: null,
+        };
     if (!count(row.successes) || !count(row.failures))
       fail("OPTIMIZATION_STATE_INVALID");
     if (input.outcome === "SUCCESS") row.successes = bump(row.successes);
@@ -77,7 +132,13 @@ export function recordOptimization(previous, input) {
         row.gasEstimate === null
           ? input.gasUsed
           : Math.round((row.gasEstimate * 7 + input.gasUsed) / 8);
-    records[key] = row;
+    // Define a data property even for __proto__; identifiers are not object plumbing.
+    Object.defineProperty(records, key, {
+      value: row,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
   }
   track(state.providers, input.providerId);
   track(state.actions, input.action);
@@ -107,8 +168,12 @@ export function optimizationHints(
     maximumDelayMs > 60000
   )
     fail("OPTIMIZATION_SCOPE_INVALID");
+  const current = state == null ? null : validatedState(state);
   const providers = approvedProviders.map((id, index) => {
-    const stats = state?.providers?.[id];
+    const stats =
+      current && Object.hasOwn(current.providers, id)
+        ? current.providers[id]
+        : undefined;
     const total = (stats?.successes ?? 0) + (stats?.failures ?? 0);
     return {
       id,
