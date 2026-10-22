@@ -8,10 +8,6 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(process.cwd(), "../.."),
   poweredByHeader: false,
   reactStrictMode: true,
-  experimental: {
-    // Keep the full project check in the installed compiler CLI.
-    useTypeScriptCli: true,
-  },
 };
 
 export default nextConfig;
