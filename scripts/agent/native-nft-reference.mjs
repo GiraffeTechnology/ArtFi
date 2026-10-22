@@ -1,3 +1,4 @@
+import { nftPaymentAddress } from "../native-nft-currency.mjs";
 import { kernelRequestDigest } from "./agent-kernel.mjs";
 import { uint } from "./stage1-action-plans.mjs";
 const fail = (code) => {
@@ -50,6 +51,9 @@ export function compileNativeNftReference(
     !Number.isSafeInteger(p.orderExpiresAt)
   )
     fail("NATIVE_NFT_PLAN_BINDING_REFUSED");
+  const paymentToken = nftPaymentAddress(chainId, p.paymentToken);
+  if (paymentToken === null || !same(request.paymentToken, paymentToken))
+    fail("NATIVE_NFT_PAYMENT_TOKEN_REFUSED");
   const quantity = uint(r.quantity, true);
   if (quantity > 1000000n || (p.scope.standard === "erc721" && quantity !== 1n))
     fail("NATIVE_NFT_QUANTITY_REFUSED");

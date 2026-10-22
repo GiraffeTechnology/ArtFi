@@ -179,7 +179,11 @@ export function compileStage1Action(
     ) ||
     !address(request.market) ||
     !address(request.wallet) ||
-    !address(request.paymentToken) ||
+    !(
+      address(request.paymentToken) ||
+      (request.marketKind === "NFT" &&
+        same(request.paymentToken, e.ZeroAddress))
+    ) ||
     !exact(request.asset, ["contract", "tokenId"]) ||
     !address(request.asset.contract)
   )
