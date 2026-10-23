@@ -150,6 +150,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/indexer/market-health": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Credential-gated durable runtime health reports from an approved read-only marketplace mirror. */
+    post: operations["ingestExternalMarketProviderHealth"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/market/activity": {
     parameters: {
       query?: never;
@@ -176,6 +193,23 @@ export interface paths {
     };
     /** @description Paginated, deduplicated NFT catalog derived only from attributed external-market runtime events. */
     get: operations["getExternalMarketAssets"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/market/health": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Read-only durable provider health with server-computed report staleness; it never implies transaction execution or custody. */
+    get: operations["getExternalMarketProviderHealth"];
     put?: never;
     post?: never;
     delete?: never;
@@ -686,6 +720,33 @@ export interface components {
     ExternalMarketActivity: components["schemas"]["ExternalMarketEventRequest"] & {
       eventId: string;
     };
+    ExternalMarketProviderHealthReport: {
+      /** @constant */
+      schemaVersion: "1";
+      source: string;
+      /** @enum {string} */
+      state: "starting" | "healthy" | "degraded" | "stale" | "stopped";
+      stale: boolean;
+      realtimeConnected: boolean;
+      consecutiveFailures: number;
+      /** Format: date-time */
+      observedAt: string;
+      /** Format: date-time */
+      lastBackfillSuccessAt?: string;
+      /** Format: date-time */
+      lastEventAt?: string;
+      /** Format: date-time */
+      lastFailureAt?: string;
+      freshnessLagSeconds?: number;
+      staleAfterSeconds: number;
+    };
+    ExternalMarketProviderHealth: components["schemas"]["ExternalMarketProviderHealthReport"] & {
+      /** Format: date-time */
+      receivedAt: string;
+      reportLagSeconds: number;
+      reportingStale: boolean;
+      available: boolean;
+    };
     ExternalMarketAsset: {
       source: string;
       chain: string;
@@ -1019,6 +1080,40 @@ export interface operations {
       422: components["responses"]["Problem"];
     };
   };
+  ingestExternalMarketProviderHealth: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Indexer-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExternalMarketProviderHealthReport"];
+      };
+    };
+    responses: {
+      /** @description Newer report or exact replay accepted */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description First durable provider health report created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+    };
+  };
   getExternalMarketActivity: {
     parameters: {
       query?: {
@@ -1088,6 +1183,31 @@ export interface operations {
         };
       };
       400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getExternalMarketProviderHealth: {
+    parameters: {
+      query?: {
+        source?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Latest durable health report for the approved provider */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExternalMarketProviderHealth"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
       503: components["responses"]["Problem"];
     };
   };

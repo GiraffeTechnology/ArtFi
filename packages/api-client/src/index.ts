@@ -6,6 +6,8 @@ export type MintedNFT = components["schemas"]["MintedNFT"];
 export type Project = components["schemas"]["Project"];
 export type Portfolio = components["schemas"]["Portfolio"];
 export type Problem = components["schemas"]["Problem"];
+export type ExternalMarketProviderHealth =
+  components["schemas"]["ExternalMarketProviderHealth"];
 
 export class ArtFiAPIError extends Error {
   constructor(public readonly problem: Problem) {
@@ -40,5 +42,9 @@ export function createArtFiClient(
     projects: () => request<{ data: Project[]; total: number }>("/v1/projects"),
     portfolio: (address: string) =>
       request<Portfolio>(`/v1/portfolio/${encodeURIComponent(address)}`),
+    marketProviderHealth: (source = "opensea") =>
+      request<ExternalMarketProviderHealth>(
+        `/v1/market/health?source=${encodeURIComponent(source)}`,
+      ),
   };
 }

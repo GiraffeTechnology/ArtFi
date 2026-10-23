@@ -16,7 +16,9 @@ test("missing persistence is unavailable, never a healthy empty market", async (
     }),
   );
   await page.goto("/market/rwa");
-  const marketAlert = page.locator('.market-runtime-state[role="alert"]');
+  const marketAlert = page
+    .locator('.market-runtime-state[role="alert"]')
+    .filter({ hasText: "Live mirror unavailable" });
   await expect(marketAlert).toContainText("Live mirror unavailable");
   await expect(marketAlert).toContainText("No fixture is shown as live data");
   await expect(page.getByText("No OpenSea assets observed yet")).toHaveCount(0);
