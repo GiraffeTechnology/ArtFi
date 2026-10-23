@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -320,9 +322,57 @@ func TestMySQLExternalMarketMirrorDedupeAndOrdering(t *testing.T) {
 	if status != "fulfilled" || version != 8 || fulfilledAt == "" || fulfillmentTransactionHash != body["transactionHash"] {
 		t.Fatalf("fulfilled order was not terminal: status=%s version=%d fulfilledAt=%s tx=%s", status, version, fulfilledAt, fulfillmentTransactionHash)
 	}
-	activity := requestWithHandler(t, handler, http.MethodGet, "/v1/market/activity?source=opensea&limit=10")
-	if activity.Code != http.StatusOK || !strings.Contains(activity.Body.String(), "external-deeplink-only") {
-		t.Fatalf("market activity boundary missing: status=%d body=%s", activity.Code, activity.Body.String())
+	seen := map[string]struct{}{}
+	cursor := ""
+	for page := 0; page < 3; page++ {
+		path := "/v1/market/activity?source=opensea&chain=ethereum&contract=0x1111111111111111111111111111111111111111&tokenId=42&limit=2"
+		if cursor != "" {
+			path += "&cursor=" + url.QueryEscape(cursor)
+		}
+		activity := requestWithHandler(t, handler, http.MethodGet, path)
+		if activity.Code != http.StatusOK {
+			t.Fatalf("market activity page %d: status=%d body=%s", page+1, activity.Code, activity.Body.String())
+		}
+		var response marketActivityResponse
+		if err := json.Unmarshal(activity.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if response.Execution != "external-deeplink-only" || response.Custody {
+			t.Fatalf("market activity boundary drifted: %#v", response)
+		}
+		for _, item := range response.Data {
+			if _, duplicate := seen[item.EventID]; duplicate {
+				t.Fatalf("activity cursor repeated event %s", item.EventID)
+			}
+			seen[item.EventID] = struct{}{}
+		}
+		if page < 2 && (!response.HasMore || response.NextCursor == "") {
+			t.Fatalf("page %d did not expose a continuation cursor", page+1)
+		}
+		if page == 2 && (response.HasMore || response.NextCursor != "") {
+			t.Fatalf("final activity page did not terminate pagination: %#v", response)
+		}
+		cursor = response.NextCursor
+	}
+	if len(seen) != 5 {
+		t.Fatalf("expected complete five-event history, got %d", len(seen))
+	}
+
+	saleOnly := requestWithHandler(t, handler, http.MethodGet, "/v1/market/activity?source=opensea&chain=ethereum&contract=0x1111111111111111111111111111111111111111&tokenId=42&eventFamily=sale")
+	if saleOnly.Code != http.StatusOK {
+		t.Fatalf("sale activity filter: status=%d body=%s", saleOnly.Code, saleOnly.Body.String())
+	}
+	var saleResponse marketActivityResponse
+	if err := json.Unmarshal(saleOnly.Body.Bytes(), &saleResponse); err != nil {
+		t.Fatal(err)
+	}
+	if len(saleResponse.Data) != 1 || saleResponse.Data[0].EventFamily != "sale" {
+		t.Fatalf("sale activity filter drifted: %#v", saleResponse.Data)
+	}
+
+	invalidCursor := requestWithHandler(t, handler, http.MethodGet, "/v1/market/activity?source=opensea&cursor=not-a-cursor")
+	if invalidCursor.Code != http.StatusBadRequest {
+		t.Fatalf("invalid cursor was accepted: status=%d body=%s", invalidCursor.Code, invalidCursor.Body.String())
 	}
 }
 

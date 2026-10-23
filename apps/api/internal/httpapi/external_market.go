@@ -3,6 +3,7 @@ package httpapi
 import (
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,9 +16,10 @@ import (
 )
 
 var (
-	marketSourcePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-	marketChainPattern  = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-	marketEntityPattern = regexp.MustCompile(`^[A-Za-z0-9:/_.-]{1,196}$`)
+	marketSourcePattern  = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+	marketChainPattern   = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+	marketEntityPattern  = regexp.MustCompile(`^[A-Za-z0-9:/_.-]{1,196}$`)
+	marketEventIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
 var marketEventTypes = map[string]struct{}{
@@ -74,15 +76,51 @@ type marketActivity struct {
 	PaymentSymbol       string         `json:"paymentSymbol,omitempty"`
 	MarketplaceURL      string         `json:"marketplaceUrl,omitempty"`
 	EventTimestamp      string         `json:"eventTimestamp"`
+	ReceivedAt          string         `json:"receivedAt"`
 	Payload             map[string]any `json:"payload"`
 }
 
 type marketActivityResponse struct {
 	Data          []marketActivity `json:"data"`
+	NextCursor    string           `json:"nextCursor,omitempty"`
+	HasMore       bool             `json:"hasMore"`
 	SchemaVersion string           `json:"schemaVersion"`
 	Source        string           `json:"source"`
 	Execution     string           `json:"execution"`
 	Custody       bool             `json:"custody"`
+}
+
+type marketActivityCursor struct {
+	EventTimestamp string `json:"eventTimestamp"`
+	ReceivedAt     string `json:"receivedAt"`
+	EventID        string `json:"eventId"`
+}
+
+func encodeMarketActivityCursor(item marketActivity) string {
+	payload, _ := json.Marshal(marketActivityCursor{
+		EventTimestamp: item.EventTimestamp,
+		ReceivedAt:     item.ReceivedAt,
+		EventID:        item.EventID,
+	})
+	return base64.RawURLEncoding.EncodeToString(payload)
+}
+
+func decodeMarketActivityCursor(value string) (marketActivityCursor, error) {
+	var cursor marketActivityCursor
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil || len(decoded) > 512 || json.Unmarshal(decoded, &cursor) != nil {
+		return cursor, fmt.Errorf("activity cursor is invalid")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, cursor.EventTimestamp); err != nil {
+		return cursor, fmt.Errorf("activity cursor event time is invalid")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, cursor.ReceivedAt); err != nil {
+		return cursor, fmt.Errorf("activity cursor receipt time is invalid")
+	}
+	if !marketEventIDPattern.MatchString(cursor.EventID) {
+		return cursor, fmt.Errorf("activity cursor event id is invalid")
+	}
+	return cursor, nil
 }
 
 func parseMarketplaceSources(value string) map[string]struct{} {
@@ -329,9 +367,42 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid contract", "Contract must be a 20-byte Ethereum address.")
 		return
 	}
+	chain := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("chain")))
+	if chain != "" && !marketChainPattern.MatchString(chain) {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid chain", "Chain must be a normalized marketplace chain name.")
+		return
+	}
+	tokenID := strings.TrimSpace(request.URL.Query().Get("tokenId"))
+	if tokenID != "" && !uint256Pattern.MatchString(tokenID) {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid token id", "Token ID must be an unsigned decimal value.")
+		return
+	}
+	eventFamily := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("eventFamily")))
+	if eventFamily != "" {
+		if _, ok := marketEventFamilies[eventFamily]; !ok {
+			writeProblem(writer, request, http.StatusBadRequest, "Invalid event family", "Event family is not supported.")
+			return
+		}
+	}
+	eventType := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("eventType")))
+	if eventType != "" {
+		if _, ok := marketEventTypes[eventType]; !ok {
+			writeProblem(writer, request, http.StatusBadRequest, "Invalid event type", "Event type is not supported.")
+			return
+		}
+	}
+	var cursor marketActivityCursor
+	if raw := strings.TrimSpace(request.URL.Query().Get("cursor")); raw != "" {
+		var err error
+		cursor, err = decodeMarketActivityCursor(raw)
+		if err != nil {
+			writeProblem(writer, request, http.StatusBadRequest, "Invalid cursor", "Cursor must be one issued by this activity endpoint.")
+			return
+		}
+	}
 	response := marketActivityResponse{
 		Data: []marketActivity{}, SchemaVersion: "1", Source: source,
-		Execution: "external-deeplink-only", Custody: false,
+		Execution: "external-deeplink-only", Custody: false, HasMore: false,
 	}
 	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "market", request.URL.Query().Encode(), &response)
 	if cacheHit {
@@ -344,15 +415,43 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		       COALESCE(transaction_hash, ''), COALESCE(contract_address, ''), COALESCE(token_id, ''),
 		       COALESCE(maker_address, ''), COALESCE(price, ''), COALESCE(payment_token_address, ''),
 		       COALESCE(payment_symbol, ''), COALESCE(marketplace_url, ''),
-		       DATE_FORMAT(event_timestamp, '%Y-%m-%dT%H:%i:%s.%fZ'), payload
+		       DATE_FORMAT(event_timestamp, '%Y-%m-%dT%H:%i:%s.%fZ'),
+		       DATE_FORMAT(received_at, '%Y-%m-%dT%H:%i:%s.%fZ'), payload
 		FROM external_market_events WHERE source = ?`
 	args := []any{source}
 	if contract != "" {
 		query += " AND contract_address = ?"
 		args = append(args, contract)
 	}
-	query += " ORDER BY event_timestamp DESC, received_at DESC LIMIT ?"
-	args = append(args, limit)
+	if chain != "" {
+		query += " AND chain_name = ?"
+		args = append(args, chain)
+	}
+	if tokenID != "" {
+		query += " AND token_id = ?"
+		args = append(args, tokenID)
+	}
+	if eventFamily != "" {
+		query += " AND event_family = ?"
+		args = append(args, eventFamily)
+	}
+	if eventType != "" {
+		query += " AND event_type = ?"
+		args = append(args, eventType)
+	}
+	if cursor.EventID != "" {
+		eventTimestamp, _ := time.Parse(time.RFC3339Nano, cursor.EventTimestamp)
+		receivedAt, _ := time.Parse(time.RFC3339Nano, cursor.ReceivedAt)
+		query += ` AND (
+			event_timestamp < ? OR
+			(event_timestamp = ? AND received_at < ?) OR
+			(event_timestamp = ? AND received_at = ? AND event_id < ?)
+		)`
+		args = append(args, eventTimestamp, eventTimestamp, receivedAt,
+			eventTimestamp, receivedAt, cursor.EventID)
+	}
+	query += " ORDER BY event_timestamp DESC, received_at DESC, event_id DESC LIMIT ?"
+	args = append(args, limit+1)
 	rows, err := service.db.QueryContext(request.Context(), query, args...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity could not be queried.")
@@ -367,7 +466,7 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 			&item.EventFamily, &item.EntityKey, &item.Version, &item.Chain, &item.CollectionSlug,
 			&item.OrderHash, &item.TransactionHash, &item.ContractAddress, &item.TokenID,
 			&item.MakerAddress, &item.Price, &item.PaymentTokenAddress, &item.PaymentSymbol,
-			&item.MarketplaceURL, &item.EventTimestamp, &payload); err != nil {
+			&item.MarketplaceURL, &item.EventTimestamp, &item.ReceivedAt, &payload); err != nil {
 			writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity could not be decoded.")
 			return
 		}
@@ -380,6 +479,11 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 	if err := rows.Err(); err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity query was interrupted.")
 		return
+	}
+	if len(items) > limit {
+		response.HasMore = true
+		items = items[:limit]
+		response.NextCursor = encodeMarketActivityCursor(items[len(items)-1])
 	}
 	response.Data = items
 	service.storeCachedJSON(request.Context(), cacheToken, response)
