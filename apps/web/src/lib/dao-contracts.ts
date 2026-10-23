@@ -1,5 +1,20 @@
 export const daoGovernorAbi = [
   {
+    type: "event",
+    name: "ProposalCreated",
+    inputs: [
+      { name: "proposalId", type: "uint256", indexed: false },
+      { name: "proposer", type: "address", indexed: false },
+      { name: "targets", type: "address[]", indexed: false },
+      { name: "values", type: "uint256[]", indexed: false },
+      { name: "signatures", type: "string[]", indexed: false },
+      { name: "calldatas", type: "bytes[]", indexed: false },
+      { name: "voteStart", type: "uint256", indexed: false },
+      { name: "voteEnd", type: "uint256", indexed: false },
+      { name: "description", type: "string", indexed: false },
+    ],
+  },
+  {
     type: "function",
     name: "rwaEligible",
     stateMutability: "view",

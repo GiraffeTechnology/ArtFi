@@ -71,7 +71,7 @@ func (service *rwaService) ingestChainEvent(writer http.ResponseWriter, request 
 	if input.ChainID != hoodiChainID || !txHashPattern.MatchString(input.TransactionHash) ||
 		!txHashPattern.MatchString(input.BlockHash) || !addressPattern.MatchString(input.ContractAddress) ||
 		len(input.EventName) < 2 || len(input.EventName) > 80 || input.Payload == nil {
-		writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid chain event", "Only complete Sepolia event records are accepted.")
+		writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid chain event", "Only complete Hoodi event records are accepted.")
 		return
 	}
 	payload, err := json.Marshal(input.Payload)
@@ -99,43 +99,51 @@ func (service *rwaService) persistChainEvent(request *http.Request, input chainE
 		return 0, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(request.Context(), `
-		SELECT LOWER(block_hash), LOWER(HEX(payload_hash)), removed
-		FROM chain_events WHERE chain_id = ? AND LOWER(transaction_hash) = LOWER(?) AND log_index = ?`,
-		input.ChainID, input.TransactionHash, input.LogIndex)
-	if err != nil {
-		return 0, err
-	}
+	var blockHash, storedPayloadHash, contractAddress, eventName string
+	var blockNumber uint64
+	var confirmations uint32
+	var removed bool
+	err = tx.QueryRowContext(request.Context(), `
+		SELECT LOWER(block_hash), LOWER(HEX(payload_hash)), LOWER(contract_address),
+		       event_name, block_number, removed, confirmations
+		FROM chain_events WHERE chain_id = ? AND LOWER(transaction_hash) = LOWER(?) AND log_index = ?
+		FOR UPDATE`, input.ChainID, input.TransactionHash, input.LogIndex).
+		Scan(&blockHash, &storedPayloadHash, &contractAddress, &eventName, &blockNumber, &removed, &confirmations)
 	status := http.StatusCreated
-	if rows.Next() {
+	if err == nil {
 		status = http.StatusOK
-		var blockHash, storedPayloadHash string
-		var removed bool
-		if err := rows.Scan(&blockHash, &storedPayloadHash, &removed); err != nil {
-			rows.Close()
-			return 0, err
-		}
 		incomingBlockHash := strings.ToLower(input.BlockHash)
-		if storedPayloadHash != payloadHash || (blockHash != incomingBlockHash && !removed && !input.Removed) {
-			rows.Close()
+		if storedPayloadHash != payloadHash || contractAddress != strings.ToLower(input.ContractAddress) || eventName != input.EventName {
 			return 0, errEventConflict
 		}
-		rows.Close()
+		// A removal identifies the stored incarnation, not another block that
+		// happens to contain the same transaction/log identity. A replacement
+		// may be accepted only after that incarnation has been removed.
+		if (blockHash == incomingBlockHash && blockNumber != input.BlockNumber) ||
+			(blockHash != incomingBlockHash && (!removed || input.Removed)) {
+			return 0, errEventConflict
+		}
+		// Confirmation depth is monotonic only within a live incarnation.
+		// Never carry the old branch's depth into a reorg replacement.
+		if input.Removed {
+			confirmations = 0
+		} else if removed || blockHash != incomingBlockHash || input.Confirmations > confirmations {
+			confirmations = input.Confirmations
+		}
 		_, err = tx.ExecContext(request.Context(), `
 			UPDATE chain_events SET block_number = ?, block_hash = ?, removed = ?,
-			confirmations = GREATEST(confirmations, ?), observed_at = CURRENT_TIMESTAMP(6)
+			confirmations = ?, confirmed = ?, observed_at = CURRENT_TIMESTAMP(6)
 			WHERE chain_id = ? AND LOWER(transaction_hash) = LOWER(?) AND log_index = ?`,
-			input.BlockNumber, incomingBlockHash, input.Removed, input.Confirmations,
+			input.BlockNumber, incomingBlockHash, input.Removed, confirmations, !input.Removed && confirmations > 0,
 			input.ChainID, input.TransactionHash, input.LogIndex)
 		if err != nil {
 			return 0, err
 		}
-	} else {
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return 0, err
+	} else if errors.Is(err, sql.ErrNoRows) {
+		confirmations = input.Confirmations
+		if input.Removed {
+			confirmations = 0
 		}
-		rows.Close()
 		_, err = tx.ExecContext(request.Context(), `
 			INSERT INTO chain_events
 			    (chain_id, transaction_hash, log_index, block_number, block_hash, contract_address,
@@ -143,10 +151,12 @@ func (service *rwaService) persistChainEvent(request *http.Request, input chainE
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, UNHEX(?), ?, ?, ?)`,
 			input.ChainID, strings.ToLower(input.TransactionHash), input.LogIndex,
 			input.BlockNumber, strings.ToLower(input.BlockHash), strings.ToLower(input.ContractAddress),
-			input.EventName, payload, payloadHash, input.Confirmations > 0, input.Removed, input.Confirmations)
+			input.EventName, payload, payloadHash, !input.Removed && confirmations > 0, input.Removed, confirmations)
 		if err != nil {
 			return 0, err
 		}
+	} else {
+		return 0, err
 	}
 	if err := projectTransfer(request, tx, input); err != nil {
 		return 0, err
@@ -196,6 +206,7 @@ func projectTransfer(request *http.Request, tx *sql.Tx, input chainEventRequest)
 }
 
 func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Set("Cache-Control", "no-store")
 	address := strings.ToLower(request.PathValue("address"))
 	if !addressPattern.MatchString(address) {
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid address", "The portfolio address must be a 20-byte hexadecimal Ethereum address.")
@@ -207,19 +218,18 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		Offers: []map[string]any{}, Notifications: []map[string]any{},
 	}
 	if service.db == nil {
-		writeJSON(writer, http.StatusOK, response)
-		return
-	}
-	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "portfolio:"+address, "", &response)
-	if cacheHit {
-		writeJSON(writer, http.StatusOK, response)
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "Durable chain records are unavailable; an empty portfolio is not inferred.")
 		return
 	}
 	rows, err := service.db.QueryContext(request.Context(), `
-		SELECT asset_token, symbol, direction, amount,
-		       DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%sZ')
-		FROM portfolio_deltas WHERE owner_address = ? AND removed = FALSE
-		ORDER BY observed_at, transaction_hash, log_index`, address)
+		SELECT d.asset_token, d.symbol, d.direction, d.amount,
+		       DATE_FORMAT(e.observed_at, '%Y-%m-%dT%H:%i:%sZ')
+		FROM portfolio_deltas d JOIN chain_events e
+		  ON e.chain_id = d.chain_id AND e.transaction_hash = d.transaction_hash AND e.log_index = d.log_index
+		WHERE d.chain_id = ? AND d.owner_address = ? AND d.removed = FALSE
+		  AND e.removed = FALSE AND e.confirmed = TRUE AND e.confirmations > 0
+		  AND e.event_name = 'Transfer' AND LOWER(e.contract_address) = LOWER(d.asset_token)
+		ORDER BY e.block_number, e.log_index, d.transaction_hash, d.direction`, hoodiChainID, address)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio read model could not be queried.")
 		return
@@ -234,7 +244,7 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 			return
 		}
 		value, ok := new(big.Int).SetString(amount, 10)
-		if !ok {
+		if !ok || !marketUint256(amount) || !addressPattern.MatchString(token) || (direction != "debit" && direction != "credit") {
 			writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio read model contains an invalid amount.")
 			return
 		}
@@ -259,6 +269,10 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 	}
 	sort.Strings(tokens)
 	for _, token := range tokens {
+		if balances[token].Sign() < 0 || balances[token].BitLen() > 256 {
+			writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The retained transfer projection is incomplete or inconsistent; no wallet balance is inferred.")
+			return
+		}
 		position := positions[token]
 		position.Balance = balances[token].String()
 		response.Positions = append(response.Positions, *position)
@@ -301,6 +315,5 @@ func (service *rwaService) getPortfolio(writer http.ResponseWriter, request *htt
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Portfolio unavailable", "The portfolio transaction history was interrupted.")
 		return
 	}
-	service.storeCachedJSON(request.Context(), cacheToken, response)
 	writeJSON(writer, http.StatusOK, response)
 }

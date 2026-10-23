@@ -90,6 +90,7 @@ type openseaFulfillmentResponse struct {
 }
 
 func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Set("Cache-Control", "no-store")
 	if service.db == nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "Durable marketplace data is unavailable; an empty live catalog cannot be inferred.")
 		return
@@ -108,12 +109,26 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid contract", "Contract must be a 20-byte Ethereum address.")
 		return
 	}
+	chain := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("chain")))
+	tokenID := request.URL.Query().Get("tokenId")
+	if (chain != "" && !marketChainPattern.MatchString(chain)) || (tokenID != "" && !marketUint256(tokenID)) {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid token identity", "Use a supported chain name and a canonical uint256 token ID.")
+		return
+	}
 
 	where := "source = ? AND contract_address IS NOT NULL AND token_id IS NOT NULL"
 	args := []any{source}
 	if contract != "" {
 		where += " AND contract_address = ?"
 		args = append(args, contract)
+	}
+	if chain != "" {
+		where += " AND chain_name = ?"
+		args = append(args, chain)
+	}
+	if tokenID != "" {
+		where += " AND token_id = ?"
+		args = append(args, tokenID)
 	}
 	var total int
 	countRows, err := service.db.QueryContext(request.Context(), `
@@ -127,6 +142,11 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 	}
 	if countRows.Next() {
 		err = countRows.Scan(&total)
+	} else {
+		err = fmt.Errorf("market catalog count row missing")
+	}
+	if rowsErr := countRows.Err(); err == nil {
+		err = rowsErr
 	}
 	countRows.Close()
 	if err != nil {
@@ -141,7 +161,7 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 			       DATE_FORMAT(event_timestamp, '%Y-%m-%dT%H:%i:%s.%fZ') AS event_timestamp,
 			       ROW_NUMBER() OVER (
 			           PARTITION BY source, chain_name, contract_address, token_id
-			           ORDER BY event_timestamp DESC, received_at DESC, event_id DESC
+		           ORDER BY event_timestamp DESC, event_id DESC
 			       ) AS rn
 			FROM external_market_events WHERE ` + where + `
 		), latest_orders AS (
@@ -151,7 +171,8 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 			       COALESCE(marketplace_url, '') AS marketplace_url,
 			       ROW_NUMBER() OVER (
 			           PARTITION BY source, chain_name, contract_address, token_id
-			           ORDER BY (status = 'active') DESC, event_timestamp DESC, updated_at DESC
+		           ORDER BY COALESCE(fulfilled_at, event_timestamp) DESC,
+		                    (status = 'fulfilled') DESC, order_hash DESC
 			       ) AS rn
 			FROM external_market_orders
 		)
@@ -167,7 +188,7 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 		 AND latest_orders.token_id = ranked.token_id
 		 AND latest_orders.rn = 1
 		WHERE ranked.rn = 1
-		ORDER BY ranked.event_timestamp DESC, ranked.contract_address, ranked.token_id
+		ORDER BY ranked.event_timestamp DESC, ranked.chain_name, ranked.contract_address, ranked.token_id
 		LIMIT ? OFFSET ?`
 	queryArgs := append(args, pageSize, (page-1)*pageSize)
 	rows, err := service.db.QueryContext(request.Context(), query, queryArgs...)

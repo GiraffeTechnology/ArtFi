@@ -3,6 +3,10 @@ import type { components } from "./schema";
 export type ArtFiConfig = components["schemas"]["Config"];
 export type Asset = components["schemas"]["Asset"];
 export type MintedNFT = components["schemas"]["MintedNFT"];
+export type FractionalCatalogPage =
+  components["schemas"]["FractionalCatalogPage"];
+export type FractionalCatalogRecord =
+  components["schemas"]["FractionalCatalogRecord"];
 export type Project = components["schemas"]["Project"];
 export type Portfolio = components["schemas"]["Portfolio"];
 export type Problem = components["schemas"]["Problem"];

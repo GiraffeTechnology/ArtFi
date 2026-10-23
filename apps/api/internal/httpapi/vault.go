@@ -48,7 +48,7 @@ func (service *rwaService) vaultWriteEnabled() bool {
 
 func (service *rwaService) createVaultIntent(writer http.ResponseWriter, request *http.Request) {
 	if !service.vaultWriteEnabled() {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Vault write path unavailable", "A reviewed Sepolia VaultFactory and durable persistence are required.")
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Vault write path unavailable", "A reviewed Hoodi VaultFactory and durable persistence are required.")
 		return
 	}
 	idempotencyKey := strings.TrimSpace(request.Header.Get("Idempotency-Key"))
@@ -160,6 +160,6 @@ func validVaultIntent(input vaultIntentRequest) bool {
 		addressPattern.MatchString(input.AdminAddress) &&
 		addressPattern.MatchString(input.PauserAddress) &&
 		addressPattern.MatchString(input.FractionalizerAddress) &&
-		uint256Pattern.MatchString(input.TokenID) &&
+		marketUint256(input.TokenID) &&
 		len(strings.TrimSpace(input.VaultName)) >= 2 && len(input.VaultName) <= 80
 }

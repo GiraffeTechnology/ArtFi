@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { PortfolioRecords } from "@/components/portfolio-records";
+import { PortfolioFundPositions } from "@/components/portfolio-fund-positions";
 import { PortfolioWallet } from "@/components/portfolio-wallet";
 import { WalletDaoLink } from "@/components/wallet-dao-link";
 
@@ -23,6 +24,9 @@ export default function PortfolioPage() {
       </header>
       <PortfolioWallet />
       <WalletDaoLink />
+      <PortfolioFundPositions
+        factoryAddress={process.env.ARTFI_VAULT_FACTORY_ADDRESS}
+      />
       <PortfolioRecords />
     </main>
   );

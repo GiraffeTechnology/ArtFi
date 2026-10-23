@@ -3,8 +3,11 @@ package httpapi
 import (
 	"crypto/sha256"
 	"crypto/subtle"
+	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -15,9 +18,10 @@ import (
 )
 
 var (
-	marketSourcePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-	marketChainPattern  = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-	marketEntityPattern = regexp.MustCompile(`^[A-Za-z0-9:/_.-]{1,196}$`)
+	marketSourcePattern  = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+	marketChainPattern   = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+	marketEntityPattern  = regexp.MustCompile(`^[A-Za-z0-9:/_.-]{1,196}$`)
+	marketEventIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
 var marketEventTypes = map[string]struct{}{
@@ -31,6 +35,8 @@ var marketEventTypes = map[string]struct{}{
 var marketEventFamilies = map[string]struct{}{
 	"order": {}, "sale": {}, "transfer": {}, "metadata": {},
 }
+
+var errMarketEventConflict = errors.New("market event version conflicts with its stored content")
 
 type marketEventRequest struct {
 	SchemaVersion       string         `json:"schemaVersion"`
@@ -83,6 +89,49 @@ type marketActivityResponse struct {
 	Source        string           `json:"source"`
 	Execution     string           `json:"execution"`
 	Custody       bool             `json:"custody"`
+	Runtime       bool             `json:"runtime"`
+	NextCursor    string           `json:"nextCursor,omitempty"`
+}
+
+// The cursor is bound to the query scope, so it cannot silently page through a
+// different source or contract. It is a position, not an authorization token.
+type marketActivityCursor struct {
+	Timestamp string `json:"timestamp"`
+	EventID   string `json:"eventId"`
+	Source    string `json:"source"`
+	Chain     string `json:"chain"`
+	Contract  string `json:"contract"`
+	TokenID   string `json:"tokenId"`
+}
+
+func decodeMarketActivityCursor(raw, source, chain, contract, tokenID string) (marketActivityCursor, error) {
+	var cursor marketActivityCursor
+	if len(raw) > 1024 {
+		return cursor, fmt.Errorf("activity cursor is too long")
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil || json.Unmarshal(decoded, &cursor) != nil ||
+		cursor.Source != source || cursor.Chain != chain || cursor.Contract != contract ||
+		cursor.TokenID != tokenID || !marketEventIDPattern.MatchString(cursor.EventID) {
+		return cursor, fmt.Errorf("activity cursor is invalid for this query")
+	}
+	parsed, err := time.Parse("2006-01-02T15:04:05.000000Z", cursor.Timestamp)
+	if err != nil || parsed.UTC().Format("2006-01-02T15:04:05.000000Z") != cursor.Timestamp {
+		return cursor, fmt.Errorf("activity cursor timestamp is invalid")
+	}
+	return cursor, nil
+}
+
+func encodeMarketActivityCursor(item marketActivity, source, chain, contract, tokenID string) string {
+	payload, _ := json.Marshal(marketActivityCursor{
+		Timestamp: item.EventTimestamp,
+		EventID:   item.EventID,
+		Source:    source,
+		Chain:     chain,
+		Contract:  contract,
+		TokenID:   tokenID,
+	})
+	return base64.RawURLEncoding.EncodeToString(payload)
 }
 
 func parseMarketplaceSources(value string) map[string]struct{} {
@@ -128,15 +177,21 @@ func (service *rwaService) ingestMarketEvent(writer http.ResponseWriter, request
 		return
 	}
 	payloadHash := sha256.Sum256(payload)
-	eventIDMaterial := fmt.Sprintf("%s|%s|%s|%s|%d|%s|%s", input.SchemaVersion, input.Source, input.EventFamily, input.EntityKey, input.Version, input.EventType, input.EventTimestamp)
+	eventIDMaterial := fmt.Sprintf("%s|%s|%s|%s|%s|%d|%s|%s", input.SchemaVersion, input.Source, input.Chain, input.EventFamily, input.EntityKey, input.Version, input.EventType, input.EventTimestamp)
 	eventID := sha256.Sum256([]byte(eventIDMaterial))
-	status, err := service.persistMarketEvent(request, input, hex.EncodeToString(eventID[:]), payload, payloadHash[:])
+	status, persistedEventID, err := service.persistMarketEvent(request, input, hex.EncodeToString(eventID[:]), payload, payloadHash[:])
+	if errors.Is(err, errMarketEventConflict) {
+		writeProblem(writer, request, http.StatusConflict, "Market event conflict", "This event version is already bound to different content.")
+		return
+	}
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The normalized event could not be stored durably.")
 		return
 	}
-	service.bumpCacheNamespace(request.Context(), "market")
-	writeJSON(writer, status, map[string]any{"eventId": hex.EncodeToString(eventID[:]), "status": "mirrored"})
+	if status == http.StatusCreated {
+		service.bumpCacheNamespace(request.Context(), "market")
+	}
+	writeJSON(writer, status, map[string]any{"eventId": persistedEventID, "status": "mirrored"})
 }
 
 func (service *rwaService) validateMarketEvent(input marketEventRequest) error {
@@ -147,7 +202,7 @@ func (service *rwaService) validateMarketEvent(input marketEventRequest) error {
 		return fmt.Errorf("marketplace source is not approved")
 	}
 	if !marketChainPattern.MatchString(input.Chain) || !marketEntityPattern.MatchString(input.EntityKey) || input.Version == 0 {
-		return fmt.Errorf("chain, entity key, and monotonic version are required")
+		return fmt.Errorf("chain, entity key, and a positive source version are required")
 	}
 	if _, ok := marketEventTypes[input.EventType]; !ok {
 		return fmt.Errorf("unsupported marketplace event type")
@@ -169,10 +224,10 @@ func (service *rwaService) validateMarketEvent(input marketEventRequest) error {
 			return fmt.Errorf("marketplace addresses must be 20-byte hexadecimal values")
 		}
 	}
-	if input.TokenID != "" && !uint256Pattern.MatchString(input.TokenID) {
+	if input.TokenID != "" && !marketUint256(input.TokenID) {
 		return fmt.Errorf("token id must be an unsigned 256-bit decimal value")
 	}
-	if input.Price != "" && !uint256Pattern.MatchString(input.Price) {
+	if input.Price != "" && !marketUint256(input.Price) {
 		return fmt.Errorf("price must be an unsigned 256-bit decimal value")
 	}
 	if len(input.CollectionSlug) > 160 || len(input.PaymentSymbol) > 16 {
@@ -194,14 +249,14 @@ func (service *rwaService) validateMarketEvent(input marketEventRequest) error {
 	return nil
 }
 
-func (service *rwaService) persistMarketEvent(request *http.Request, input marketEventRequest, eventID string, payload []byte, payloadHash []byte) (int, error) {
+func (service *rwaService) persistMarketEvent(request *http.Request, input marketEventRequest, eventID string, payload []byte, payloadHash []byte) (int, string, error) {
 	eventTimestamp, err := time.Parse(time.RFC3339, input.EventTimestamp)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	tx, err := service.db.BeginTx(request.Context(), nil)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	defer tx.Rollback()
 	result, err := tx.ExecContext(request.Context(), `
@@ -219,40 +274,76 @@ func (service *rwaService) persistMarketEvent(request *http.Request, input marke
 		strings.ToLower(input.MakerAddress), input.Price, strings.ToLower(input.PaymentTokenAddress),
 		input.PaymentSymbol, input.MarketplaceURL, eventTimestamp, payload, payloadHash)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return 0, err
+		return 0, "", err
+	}
+	if rows == 0 {
+		// An exact replay has already committed its event and projections together.
+		// Conflicting normalized fields must never reach the order upserts below.
+		// Lookup by the full chain-scoped tuple, not the freshly computed hash:
+		// pre-migration events keep their original IDs, including on replay.
+		var persistedEventID string
+		err = tx.QueryRowContext(request.Context(), `
+			SELECT event_id FROM external_market_events
+			WHERE schema_version = ? AND source = ?
+			  AND event_type = ? AND event_family = ? AND entity_key = ? AND event_version = ?
+			  AND chain_name = ? AND CAST(COALESCE(collection_slug, '') AS BINARY) = ?
+			  AND CAST(COALESCE(order_hash, '') AS BINARY) = ? AND CAST(COALESCE(transaction_hash, '') AS BINARY) = ?
+			  AND CAST(COALESCE(contract_address, '') AS BINARY) = ? AND CAST(COALESCE(token_id, '') AS BINARY) = ?
+			  AND CAST(COALESCE(maker_address, '') AS BINARY) = ? AND CAST(COALESCE(price, '') AS BINARY) = ?
+			  AND CAST(COALESCE(payment_token_address, '') AS BINARY) = ? AND CAST(COALESCE(payment_symbol, '') AS BINARY) = ?
+			  AND CAST(COALESCE(marketplace_url, '') AS BINARY) = ? AND event_timestamp = ? AND payload_hash = ?`,
+			input.SchemaVersion, input.Source, input.EventType, input.EventFamily, input.EntityKey,
+			input.Version, input.Chain, input.CollectionSlug, strings.ToLower(input.OrderHash),
+			strings.ToLower(input.TransactionHash), strings.ToLower(input.ContractAddress), input.TokenID,
+			strings.ToLower(input.MakerAddress), input.Price, strings.ToLower(input.PaymentTokenAddress),
+			input.PaymentSymbol, input.MarketplaceURL, eventTimestamp, payloadHash).Scan(&persistedEventID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, "", errMarketEventConflict
+		}
+		if err != nil {
+			return 0, "", err
+		}
+		if err := tx.Commit(); err != nil {
+			return 0, "", err
+		}
+		return http.StatusOK, persistedEventID, nil
 	}
 	if input.EventFamily == "order" && input.OrderHash != "" {
 		status := marketOrderStatus(input.EventType)
+		// REST's timestamp fallback and stream revision counters are different
+		// scales. Retain event_version as evidence, not as a cross-feed clock.
+		// Ties prefer a non-active observation, then a stable event ID.
 		_, err = tx.ExecContext(request.Context(), `
 			INSERT INTO external_market_orders
 			    (source, chain_name, order_hash, event_version, status, collection_slug,
 			     contract_address, token_id, maker_address, price, payment_token_address,
-			     payment_symbol, marketplace_url, event_timestamp, payload)
+			     payment_symbol, marketplace_url, event_timestamp, payload, projection_event_id)
 			VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''),
-			        NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?, ?)
+			        NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?)
 			ON DUPLICATE KEY UPDATE
-			    status = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(status), status),
-			    collection_slug = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(collection_slug), collection_slug),
-			    contract_address = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(contract_address), contract_address),
-			    token_id = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(token_id), token_id),
-			    maker_address = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(maker_address), maker_address),
-			    price = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(price), price),
-			    payment_token_address = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(payment_token_address), payment_token_address),
-			    payment_symbol = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(payment_symbol), payment_symbol),
-			    marketplace_url = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(marketplace_url), marketplace_url),
-			    event_timestamp = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(event_timestamp), event_timestamp),
-			    payload = IF(fulfilled_at IS NULL AND VALUES(event_version) >= event_version, VALUES(payload), payload),
-			    event_version = IF(fulfilled_at IS NULL, GREATEST(event_version, VALUES(event_version)), event_version)`,
+			    collection_slug = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(collection_slug), collection_slug),
+			    contract_address = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(contract_address), contract_address),
+			    token_id = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(token_id), token_id),
+			    maker_address = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(maker_address), maker_address),
+			    price = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(price), price),
+			    payment_token_address = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(payment_token_address), payment_token_address),
+			    payment_symbol = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(payment_symbol), payment_symbol),
+			    marketplace_url = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(marketplace_url), marketplace_url),
+			    payload = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(payload), payload),
+			    event_version = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(event_version), event_version),
+			    projection_event_id = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(projection_event_id), projection_event_id),
+			    status = IF(fulfilled_at IS NULL AND (VALUES(event_timestamp) > event_timestamp OR (VALUES(event_timestamp) = event_timestamp AND (FIELD(VALUES(status), 'active', 'invalidated', 'cancelled') > FIELD(status, 'active', 'invalidated', 'cancelled') OR (VALUES(status) = status AND VALUES(projection_event_id) > COALESCE(projection_event_id, ''))))), VALUES(status), status),
+			    event_timestamp = IF(fulfilled_at IS NULL, GREATEST(event_timestamp, VALUES(event_timestamp)), event_timestamp)`,
 			input.Source, input.Chain, strings.ToLower(input.OrderHash), input.Version, status,
 			input.CollectionSlug, strings.ToLower(input.ContractAddress), input.TokenID,
 			strings.ToLower(input.MakerAddress), input.Price, strings.ToLower(input.PaymentTokenAddress),
-			input.PaymentSymbol, input.MarketplaceURL, eventTimestamp, payload)
+			input.PaymentSymbol, input.MarketplaceURL, eventTimestamp, payload, eventID)
 		if err != nil {
-			return 0, err
+			return 0, "", err
 		}
 	}
 	if input.EventFamily == "sale" && input.OrderHash != "" {
@@ -276,19 +367,16 @@ func (service *rwaService) persistMarketEvent(request *http.Request, input marke
 			input.PaymentSymbol, input.MarketplaceURL, eventTimestamp, eventTimestamp,
 			strings.ToLower(input.TransactionHash), payload)
 		if err != nil {
-			return 0, err
+			return 0, "", err
 		}
 	}
 	if err := reconcileMarketIntents(tx, input, eventTimestamp); err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if err := tx.Commit(); err != nil {
-		return 0, err
+		return 0, "", err
 	}
-	if rows == 0 {
-		return http.StatusOK, nil
-	}
-	return http.StatusCreated, nil
+	return http.StatusCreated, eventID, nil
 }
 
 func marketOrderStatus(eventType string) string {
@@ -329,11 +417,30 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid contract", "Contract must be a 20-byte Ethereum address.")
 		return
 	}
+	chain := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("chain")))
+	if chain != "" && !marketChainPattern.MatchString(chain) {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid chain", "Chain must be a supported marketplace chain name.")
+		return
+	}
+	tokenID := strings.TrimSpace(request.URL.Query().Get("tokenId"))
+	if tokenID != "" && !marketUint256(tokenID) {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid token ID", "Token ID must be an unsigned 256-bit decimal value.")
+		return
+	}
+	var cursor marketActivityCursor
+	if raw := request.URL.Query().Get("cursor"); raw != "" {
+		var err error
+		cursor, err = decodeMarketActivityCursor(raw, source, chain, contract, tokenID)
+		if err != nil {
+			writeProblem(writer, request, http.StatusBadRequest, "Invalid cursor", err.Error())
+			return
+		}
+	}
 	response := marketActivityResponse{
 		Data: []marketActivity{}, SchemaVersion: "1", Source: source,
-		Execution: "external-deeplink-only", Custody: false,
+		Execution: "external-deeplink-only", Custody: false, Runtime: true,
 	}
-	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "market", request.URL.Query().Encode(), &response)
+	cacheToken, cacheHit := service.loadCachedJSON(request.Context(), "market", "activity:v2:"+request.URL.Query().Encode(), &response)
 	if cacheHit {
 		writeJSON(writer, http.StatusOK, response)
 		return
@@ -351,8 +458,21 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		query += " AND contract_address = ?"
 		args = append(args, contract)
 	}
-	query += " ORDER BY event_timestamp DESC, received_at DESC LIMIT ?"
-	args = append(args, limit)
+	if chain != "" {
+		query += " AND chain_name = ?"
+		args = append(args, chain)
+	}
+	if tokenID != "" {
+		query += " AND token_id = ?"
+		args = append(args, tokenID)
+	}
+	if cursor.EventID != "" {
+		query += " AND (event_timestamp < ? OR (event_timestamp = ? AND event_id < ?))"
+		position := strings.Replace(cursor.Timestamp[:26], "T", " ", 1)
+		args = append(args, position, position, cursor.EventID)
+	}
+	query += " ORDER BY event_timestamp DESC, event_id DESC LIMIT ?"
+	args = append(args, limit+1)
 	rows, err := service.db.QueryContext(request.Context(), query, args...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity could not be queried.")
@@ -380,6 +500,10 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 	if err := rows.Err(); err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity query was interrupted.")
 		return
+	}
+	if len(items) > limit {
+		response.NextCursor = encodeMarketActivityCursor(items[limit-1], source, chain, contract, tokenID)
+		items = items[:limit]
 	}
 	response.Data = items
 	service.storeCachedJSON(request.Context(), cacheToken, response)
