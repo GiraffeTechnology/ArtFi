@@ -7,7 +7,7 @@ import {
   type NftRequest,
   type NftOperationHistory,
 } from "./model";
-export type NftOperation = {
+export type NftOperation<Plan = NftPlan> = {
   id: string;
   wallet: string;
   chainId: number;
@@ -15,7 +15,7 @@ export type NftOperation = {
   revision: number;
   status: string;
   walletStarted?: boolean;
-  plan: NftPlan;
+  plan: Plan;
   transactionHash?: string;
   orderHash?: string;
   updatedAt: string;
