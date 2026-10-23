@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import {
   mkdtemp,
@@ -15,8 +16,10 @@ import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { emitTaskRuntimeSources } from "./emit-task-runtime-sources.mjs";
 
-const root = process.env.ARTFI_RUNTIME_SOURCE_ROOT;
-const original = process.env.ARTFI_RUNTIME_ORIGINAL_WEB;
+const root =
+  process.env.ARTFI_RUNTIME_SOURCE_ROOT ??
+  fileURLToPath(new URL("../../", import.meta.url));
+const original = process.env.ARTFI_RUNTIME_ORIGINAL_WEB ?? join(root, "apps/web");
 const require = createRequire(join(original, "package.json"));
 const ts = require("typescript");
 const template = JSON.parse(

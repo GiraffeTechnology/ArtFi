@@ -24,7 +24,27 @@ export type NftOperation = {
   updatedAt: string;
 };
 export function nftRequestHash(request: NftRequest) {
-  return createHash("sha256").update(JSON.stringify(request)).digest("hex");
+  // Keep the original readNftRequest wire order after MySQL JSON key normalization.
+  // Values and expired review terms are retained, never reauthorized or rewritten.
+  const required = [
+    "action", "collection", "tokenId", "account", "quantity", "priceWei", "expiresAt",
+  ];
+  if (
+    required.some((key) => !Object.hasOwn(request, key)) ||
+    Object.keys(request).some((key) => ![...required, "orderHash"].includes(key))
+  )
+    throw new NftError(503, "The NFT journal request fields changed.");
+  const ordered: NftRequest = {
+    action: request.action,
+    collection: request.collection,
+    tokenId: request.tokenId,
+    account: request.account,
+    quantity: request.quantity,
+    priceWei: request.priceWei,
+    expiresAt: request.expiresAt,
+    ...(Object.hasOwn(request, "orderHash") ? { orderHash: request.orderHash } : {}),
+  };
+  return createHash("sha256").update(JSON.stringify(ordered)).digest("hex");
 }
 const journalStatuses = new Set([
   "awaiting-wallet",
