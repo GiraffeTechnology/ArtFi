@@ -64,6 +64,9 @@ async function inventory(path, base = path, files = {}, links = {}) {
   return { files, links };
 }
 try {
+  const webBundler = opts["web-bundler"] || "turbopack";
+  if (!["turbopack", "webpack"].includes(webBundler))
+    throw new Error("Unsupported web bundler; use turbopack or webpack.");
   if (process.platform !== "linux" || !env.GOARCH)
     throw new Error(
       "Build this native Linux artifact on supported Linux x64 or arm64.",
@@ -110,7 +113,11 @@ try {
   const license = await readFile(nodeLicense);
   run(
     node,
-    [join(root, "apps/web/node_modules/next/dist/bin/next"), "build"],
+    [
+      join(root, "apps/web/node_modules/next/dist/bin/next"),
+      "build",
+      ...(webBundler === "webpack" ? ["--webpack"] : []),
+    ],
     join(root, "apps/web"),
   );
   run(
@@ -308,6 +315,7 @@ try {
     platform: process.platform,
     architecture: process.arch,
     node: suppliedNode.version,
+    webBundler,
     go: execFileSync(go, ["version"], { encoding: "utf8", env }).trim(),
     foundry: execFileSync(forge, ["--version"], { encoding: "utf8", env })
       .trim()
