@@ -12,7 +12,7 @@ export function ArtworkVisual({
     <div
       className={`artwork-visual${compact ? " artwork-visual--compact" : ""}`}
       role="img"
-      aria-label={`Rights-cleared artwork area for ${label}`}
+      aria-label={`Illustrative artwork placeholder for ${label}`}
     >
       <Image
         alt=""
@@ -21,7 +21,9 @@ export function ArtworkVisual({
         src="/brand/artwork-a.svg"
         width={160}
       />
-      <span className="artwork-visual__label">Rights-cleared artwork</span>
+      <span className="artwork-visual__label">
+        Illustrative artwork placeholder
+      </span>
     </div>
   );
 }

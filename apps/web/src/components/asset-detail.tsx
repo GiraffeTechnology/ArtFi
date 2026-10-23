@@ -21,6 +21,11 @@ export function AssetDetail({
         <span aria-hidden="true">/</span>
         <span>{artwork.title}</span>
       </nav>
+      <p className="module-banner" role="note">
+        Illustrative catalog fixture, not a live token or listing. Values,
+        availability, status and provenance below are examples, not verified
+        ownership, custody or judicial-rights evidence.
+      </p>
       <section className="asset-hero">
         <ArtworkVisual accent={artwork.accent} label={artwork.title} />
         <div className="asset-summary">
@@ -35,7 +40,9 @@ export function AssetDetail({
           <p className="asset-description">{artwork.description}</p>
           <dl className="asset-metrics">
             <div>
-              <dt>{fractional ? "Reference price" : "Valuation"}</dt>
+              <dt>
+                {fractional ? "Illustrative price" : "Illustrative value"}
+              </dt>
               <dd>
                 {formatUsd(
                   fractional ? artwork.fractionPriceUsd : artwork.valuationUsd,
@@ -49,7 +56,9 @@ export function AssetDetail({
             <div>
               <dt>{fractional ? "Total fractions" : "Network"}</dt>
               <dd>
-                {fractional ? artwork.totalFractions.toLocaleString() : "Hoodi"}
+                {fractional
+                  ? artwork.totalFractions.toLocaleString()
+                  : "No chain binding (example)"}
               </dd>
             </div>
           </dl>

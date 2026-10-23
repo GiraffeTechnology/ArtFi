@@ -8,10 +8,12 @@ export function MarketMirrorCard({ artwork }: Readonly<{ artwork: Artwork }>) {
     <article className="market-mirror-card">
       <div className="market-mirror-card__artwork">
         <Image alt="" height={180} src="/brand/artwork-a.svg" width={160} />
-        <span>Rights-cleared artwork</span>
+        <span>Illustrative artwork placeholder</span>
       </div>
       <div className="market-mirror-card__body">
-        <span className="mirror-badge">External market mirror</span>
+        <span className="mirror-badge">
+          Example artwork · not live market data
+        </span>
         <h3>
           <Link href={`/market/rwa/${artwork.slug}`}>{artwork.title}</Link>
         </h3>
@@ -20,14 +22,20 @@ export function MarketMirrorCard({ artwork }: Readonly<{ artwork: Artwork }>) {
         </p>
         <dl>
           <div>
-            <dt>Reference value</dt>
+            <dt>Illustrative value</dt>
             <dd>{formatUsd(artwork.valuationUsd)}</dd>
           </div>
           <div>
             <dt>Source</dt>
-            <dd>OpenSea</dd>
+            <dd>Local example · no provider lookup</dd>
           </div>
         </dl>
+        <p>
+          This example has no verified token, listing or judicial-rights
+          binding.{" "}
+          <Link href="/market/rwa">View attributed market records</Link> for
+          runtime observations.
+        </p>
       </div>
     </article>
   );

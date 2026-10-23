@@ -1,0 +1,12 @@
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!apps/
+!apps/market-mirror/
+!apps/market-mirror/package.json
+!apps/market-mirror/tsconfig.json
+!apps/market-mirror/tsconfig.build.json
+!apps/market-mirror/src/
+!apps/market-mirror/src/**
+apps/market-mirror/src/**/*.test.ts

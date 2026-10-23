@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  encodeFunctionData,
+  formatUnits,
   isAddress,
   parseEventLogs,
   parseUnits,
@@ -28,12 +30,16 @@ type OperatorStatus =
 type Stage =
   | "configure"
   | "creating"
+  | "submission-pending"
+  | "reconciling"
   | "created"
   | "approving"
   | "approved"
   | "depositing"
   | "deposited"
   | "fractionalizing"
+  | "action-pending"
+  | "action-reconciling"
   | "complete";
 
 type VaultIntent = {
@@ -50,6 +56,7 @@ type VaultIntent = {
 };
 
 type Configuration = {
+  ownerAddress: Address;
   collectionAddress: Address;
   tokenId: bigint;
   vaultName: string;
@@ -62,14 +69,38 @@ type Configuration = {
   recipient: Address;
 };
 
+type CreationAttempt = {
+  intent: VaultIntent;
+  configuration: Configuration;
+  transactionHash: Hex;
+};
+
+type VaultActionKind = "approval" | "deposit" | "fractionalization";
+type VaultActionAttempt = {
+  kind: VaultActionKind;
+  configuration: Configuration;
+  vaultAddress: Address;
+  transactionHash: Hex;
+};
+
+// ArtFiVault.MAX_FRACTION_SUPPLY / 10**18; preserve the source contract limit.
+const maxWholeFractionSupply = 1_000_000_000_000n;
+
 export function DaoCreationFlow() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: supportedChain.id });
   const { signMessageAsync } = useSignMessage();
   const { writeContractAsync } = useWriteContract();
   const [operatorStatus, setOperatorStatus] =
     useState<OperatorStatus>("checking");
+  const [authenticatedAddress, setAuthenticatedAddress] = useState<string>();
+  const operatorAuthenticated =
+    isConnected &&
+    chainId === supportedChain.id &&
+    operatorStatus === "authenticated" &&
+    Boolean(address) &&
+    authenticatedAddress === address?.toLowerCase();
   const [stage, setStage] = useState<Stage>("configure");
   const [message, setMessage] = useState(
     "Create the Vault first. Exact-token approval, deposit and fractionalization remain separate wallet confirmations.",
@@ -77,7 +108,16 @@ export function DaoCreationFlow() {
   const [configuration, setConfiguration] = useState<Configuration>();
   const [vaultAddress, setVaultAddress] = useState<Address>();
   const [fractionToken, setFractionToken] = useState<Address>();
-  const idempotencyKey = useRef(crypto.randomUUID());
+  const [creationAttempt, setCreationAttempt] = useState<CreationAttempt>();
+  const pendingCreation = useRef<CreationAttempt | undefined>(undefined);
+  const creationBusy = useRef(false);
+  const [vaultActionAttempt, setVaultActionAttempt] =
+    useState<VaultActionAttempt>();
+  const pendingVaultAction = useRef<VaultActionAttempt | undefined>(undefined);
+  const vaultActionBusy = useRef(false);
+  const preparedRequest = useRef<
+    { identity: string; idempotencyKey: string } | undefined
+  >(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +135,13 @@ export function DaoCreationFlow() {
           address?: string;
         };
         if (!cancelled) {
+          setAuthenticatedAddress(
+            response.ok &&
+              session.authenticated === true &&
+              session.address?.toLowerCase() === address.toLowerCase()
+              ? address.toLowerCase()
+              : undefined,
+          );
           setOperatorStatus(
             response.ok &&
               session.authenticated === true &&
@@ -124,7 +171,10 @@ export function DaoCreationFlow() {
       if (challenge.address.toLowerCase() !== address.toLowerCase()) {
         throw new Error("The operator challenge address did not match.");
       }
-      const signature = await signMessageAsync({ message: challenge.message });
+      const signature = await signMessageAsync({
+        account: address,
+        message: challenge.message,
+      });
       const session = await fetchJSON<{
         authenticated: boolean;
         address: string;
@@ -138,9 +188,18 @@ export function DaoCreationFlow() {
       )
         throw new Error("Operator verification failed.");
       setOperatorStatus("authenticated");
+      setAuthenticatedAddress(address.toLowerCase());
       setMessage("Operator wallet verified. Review every Vault parameter.");
     } catch (error) {
-      fail(error, "The operator wallet could not be verified.", "configure");
+      fail(
+        error,
+        "The operator wallet could not be verified.",
+        pendingCreation.current
+          ? "submission-pending"
+          : pendingVaultAction.current
+            ? "action-pending"
+            : stage,
+      );
       setOperatorStatus("unauthenticated");
     }
   }
@@ -149,12 +208,39 @@ export function DaoCreationFlow() {
     if (
       !address ||
       !publicClient ||
-      operatorStatus !== "authenticated" ||
-      chainId !== supportedChain.id
+      !operatorAuthenticated ||
+      chainId !== supportedChain.id ||
+      stage !== "configure" ||
+      creationBusy.current ||
+      pendingCreation.current ||
+      vaultActionBusy.current ||
+      pendingVaultAction.current
     )
       return;
+    creationBusy.current = true;
     try {
       const value = readConfiguration(formData, address);
+      const requestBody = JSON.stringify({
+        collectionAddress: value.collectionAddress,
+        tokenId: value.tokenId.toString(),
+        vaultName: value.vaultName,
+        adminAddress: value.adminAddress,
+        pauserAddress: value.pauserAddress,
+        fractionalizerAddress: value.fractionalizerAddress,
+      });
+      // Keep an ambiguous API retry idempotent. A changed, unsubmitted review
+      // needs a different key; pendingCreation prevents this after submission.
+      const requestIdentity = JSON.stringify([
+        supportedChain.id,
+        value.ownerAddress.toLowerCase(),
+        requestBody,
+      ]);
+      if (preparedRequest.current?.identity !== requestIdentity) {
+        preparedRequest.current = {
+          identity: requestIdentity,
+          idempotencyKey: crypto.randomUUID(),
+        };
+      }
       setStage("creating");
       setMessage(
         "Preparing a deterministic Vault intent and checking live ownership and roles.",
@@ -163,24 +249,16 @@ export function DaoCreationFlow() {
         "/api/operator/v1/vault/intents",
         {
           method: "POST",
-          headers: { "Idempotency-Key": idempotencyKey.current },
-          body: JSON.stringify({
-            collectionAddress: value.collectionAddress,
-            tokenId: value.tokenId.toString(),
-            vaultName: value.vaultName,
-            adminAddress: value.adminAddress,
-            pauserAddress: value.pauserAddress,
-            fractionalizerAddress: value.fractionalizerAddress,
-          }),
+          headers: {
+            "Idempotency-Key": preparedRequest.current.idempotencyKey,
+          },
+          body: requestBody,
         },
       );
-      if (
-        prepared.chainId !== supportedChain.id ||
-        prepared.collectionAddress.toLowerCase() !==
-          value.collectionAddress.toLowerCase() ||
-        prepared.tokenId !== value.tokenId.toString()
-      ) {
-        throw new Error("The Vault intent did not match the reviewed asset.");
+      if (!matchesReviewedVaultIntent(prepared, value)) {
+        throw new Error(
+          "The Vault intent did not match the reviewed asset, name and roles.",
+        );
       }
       const [creatorRole, paused, owner] = await Promise.all([
         publicClient.readContract({
@@ -219,157 +297,271 @@ export function DaoCreationFlow() {
         "Confirm one VaultFactory createVault call. No ETH or NFT approval is included.",
       );
       const hash = await writeContractAsync({
+        account: address,
         abi: vaultFactoryAbi,
         address: prepared.factoryAddress,
         chainId: supportedChain.id,
         functionName: "createVault",
         args: [
           prepared.requestId,
-          prepared.vaultName,
-          prepared.collectionAddress,
-          BigInt(prepared.tokenId),
-          prepared.adminAddress,
-          prepared.pauserAddress,
-          prepared.fractionalizerAddress,
+          value.vaultName,
+          value.collectionAddress,
+          value.tokenId,
+          value.adminAddress,
+          value.pauserAddress,
+          value.fractionalizerAddress,
         ],
       });
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1,
-      });
-      if (receipt.status !== "success")
-        throw new Error("Vault creation reverted.");
-      const event = parseEventLogs({
-        abi: vaultFactoryAbi,
-        eventName: "VaultCreated",
-        logs: receipt.logs.filter(
-          (log) =>
-            log.address.toLowerCase() === prepared.factoryAddress.toLowerCase(),
-        ),
-        strict: true,
-      }).find(
-        (entry) =>
-          entry.args.requestId.toLowerCase() ===
-            prepared.requestId.toLowerCase() &&
-          entry.args.collection.toLowerCase() ===
-            value.collectionAddress.toLowerCase() &&
-          entry.args.tokenId === value.tokenId,
-      );
-      if (!event)
-        throw new Error("The VaultCreated receipt was missing or mismatched.");
-      await fetchJSON(
-        `/api/operator/v1/vault/intents/${prepared.intentId}/submission`,
-        {
-          method: "POST",
-          body: JSON.stringify({ transactionHash: hash }),
-        },
-      );
-      setConfiguration(value);
-      setVaultAddress(event.args.vault);
-      setStage("created");
-      setMessage(
-        "Vault created. The next action approves only this token ID, never the collection.",
-      );
+      const attempt = {
+        intent: prepared,
+        configuration: value,
+        transactionHash: hash,
+      };
+      pendingCreation.current = attempt;
+      setCreationAttempt(attempt);
+      await reconcileCreation(attempt);
     } catch (error) {
-      fail(error, "The Vault could not be created.", "configure");
+      fail(
+        error,
+        "The Vault could not be created.",
+        pendingCreation.current ? "submission-pending" : "configure",
+      );
+    } finally {
+      creationBusy.current = false;
+    }
+  }
+
+  async function reconcileCreation(attempt: CreationAttempt) {
+    if (!publicClient) throw new Error("Hoodi reader unavailable.");
+    const {
+      intent: prepared,
+      configuration: value,
+      transactionHash: hash,
+    } = attempt;
+    setStage("reconciling");
+    setMessage(
+      "Checking the existing creation transaction. No new wallet transaction is requested.",
+    );
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash,
+      confirmations: 1,
+      timeout: 60_000,
+    });
+    if (receipt.transactionHash.toLowerCase() !== hash.toLowerCase()) {
+      throw new Error(
+        "The creation transaction was replaced; its outcome requires review. Do not resubmit.",
+      );
+    }
+    const [transaction, block] = await Promise.all([
+      publicClient.getTransaction({ hash }),
+      publicClient.getBlock({ blockNumber: receipt.blockNumber }),
+    ]);
+    const expectedInput = encodeFunctionData({
+      abi: vaultFactoryAbi,
+      functionName: "createVault",
+      args: [
+        prepared.requestId,
+        value.vaultName,
+        value.collectionAddress,
+        value.tokenId,
+        value.adminAddress,
+        value.pauserAddress,
+        value.fractionalizerAddress,
+      ],
+    });
+    if (
+      transaction.to?.toLowerCase() !== prepared.factoryAddress.toLowerCase() ||
+      transaction.from.toLowerCase() !== value.ownerAddress.toLowerCase() ||
+      transaction.value !== 0n ||
+      transaction.input.toLowerCase() !== expectedInput.toLowerCase() ||
+      transaction.blockHash !== receipt.blockHash ||
+      block.hash !== receipt.blockHash
+    ) {
+      throw new Error(
+        "Creation transaction evidence does not match the reviewed intent.",
+      );
+    }
+    if (receipt.status !== "success") {
+      pendingCreation.current = undefined;
+      setCreationAttempt(undefined);
+      throw new Error("Vault creation reverted.");
+    }
+    const events = parseEventLogs({
+      abi: vaultFactoryAbi,
+      eventName: "VaultCreated",
+      logs: receipt.logs.filter(
+        (log) =>
+          log.address.toLowerCase() === prepared.factoryAddress.toLowerCase() &&
+          !log.removed &&
+          log.transactionHash === receipt.transactionHash &&
+          log.blockHash === receipt.blockHash &&
+          log.blockNumber === receipt.blockNumber,
+      ),
+      strict: true,
+    }).filter(
+      (entry) =>
+        entry.args.requestId.toLowerCase() ===
+          prepared.requestId.toLowerCase() &&
+        entry.args.collection.toLowerCase() ===
+          value.collectionAddress.toLowerCase() &&
+        entry.args.tokenId === value.tokenId &&
+        entry.args.vaultName === value.vaultName &&
+        nonzeroAddress(entry.args.vault),
+    );
+    if (events.length !== 1)
+      throw new Error("The VaultCreated receipt was missing or mismatched.");
+    const event = events[0];
+    await fetchJSON(
+      `/api/operator/v1/vault/intents/${prepared.intentId}/submission`,
+      {
+        method: "POST",
+        body: JSON.stringify({ transactionHash: hash }),
+      },
+    );
+    setConfiguration(value);
+    setVaultAddress(event.args.vault);
+    pendingCreation.current = undefined;
+    setCreationAttempt(undefined);
+    setStage("created");
+    setMessage(
+      "Vault created. The next action approves only this token ID, never the collection.",
+    );
+  }
+
+  async function retryCreationReconciliation() {
+    const attempt = pendingCreation.current;
+    if (
+      !attempt ||
+      creationBusy.current ||
+      !operatorAuthenticated ||
+      address?.toLowerCase() !==
+        attempt.configuration.ownerAddress.toLowerCase()
+    )
+      return;
+    creationBusy.current = true;
+    try {
+      await reconcileCreation(attempt);
+    } catch {
+      setStage(pendingCreation.current ? "submission-pending" : "configure");
+      setMessage(
+        pendingCreation.current
+          ? "The submitted transaction or API record is still unconfirmed. Retry this check only; no new creation will be sent."
+          : "The creation transaction reverted. Review before a new attempt.",
+      );
+    } finally {
+      creationBusy.current = false;
     }
   }
 
   async function approveExactToken() {
-    if (!publicClient || !configuration || !vaultAddress) return;
+    if (
+      !publicClient ||
+      !configuration ||
+      !vaultAddress ||
+      !canOwnerAct ||
+      stage !== "created" ||
+      vaultActionBusy.current ||
+      pendingVaultAction.current
+    )
+      return;
+    vaultActionBusy.current = true;
     try {
       setStage("approving");
-      setMessage(
-        `Approve only token #${configuration.tokenId.toString()} for the new Vault.`,
-      );
-      const hash = await writeContractAsync({
-        abi: erc721VaultApprovalAbi,
-        address: configuration.collectionAddress,
-        chainId: supportedChain.id,
-        functionName: "approve",
-        args: [vaultAddress, configuration.tokenId],
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1,
-      });
-      if (receipt.status !== "success")
-        throw new Error("Exact-token approval reverted.");
-      const approved = await publicClient.readContract({
-        abi: erc721VaultApprovalAbi,
-        address: configuration.collectionAddress,
-        functionName: "getApproved",
-        args: [configuration.tokenId],
-      });
-      if (approved.toLowerCase() !== vaultAddress.toLowerCase()) {
-        throw new Error(
-          "The exact-token approval did not resolve to this Vault.",
-        );
-      }
-      setStage("approved");
-      setMessage(
-        "Exact-token approval confirmed. Deposit remains a separate transaction.",
-      );
-    } catch (error) {
-      fail(error, "The exact-token approval failed.", "created");
-    }
-  }
-
-  async function deposit() {
-    if (!publicClient || !configuration || !vaultAddress || !address) return;
-    try {
-      setStage("depositing");
-      setMessage("Deposit the selected ERC-721 into the exact Vault address.");
-      const hash = await writeContractAsync({
-        abi: artFiVaultAbi,
-        address: vaultAddress,
-        chainId: supportedChain.id,
-        functionName: "deposit",
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1,
-      });
-      if (receipt.status !== "success")
-        throw new Error("Vault deposit reverted.");
-      const deposited = parseEventLogs({
-        abi: artFiVaultAbi,
-        eventName: "NFTDeposited",
-        logs: receipt.logs.filter(
-          (log) => log.address.toLowerCase() === vaultAddress.toLowerCase(),
-        ),
-        strict: true,
-      }).some(
-        (entry) =>
-          entry.args.collection.toLowerCase() ===
-            configuration.collectionAddress.toLowerCase() &&
-          entry.args.tokenId === configuration.tokenId &&
-          entry.args.owner.toLowerCase() === address.toLowerCase(),
-      );
       const owner = await publicClient.readContract({
         abi: erc721VaultApprovalAbi,
         address: configuration.collectionAddress,
         functionName: "ownerOf",
         args: [configuration.tokenId],
       });
-      if (!deposited || owner.toLowerCase() !== vaultAddress.toLowerCase()) {
-        throw new Error("Vault custody could not be independently confirmed.");
+      if (owner.toLowerCase() !== configuration.ownerAddress.toLowerCase()) {
+        throw new Error(
+          "The reviewed wallet no longer owns this NFT. No approval was requested.",
+        );
       }
-      setStage("deposited");
       setMessage(
-        "Vault custody confirmed. Review the fixed fraction supply before issuance.",
+        `Approve only token #${configuration.tokenId.toString()} for the new Vault.`,
+      );
+      const hash = await writeContractAsync({
+        account: configuration.ownerAddress,
+        abi: erc721VaultApprovalAbi,
+        address: configuration.collectionAddress,
+        chainId: supportedChain.id,
+        functionName: "approve",
+        args: [vaultAddress, configuration.tokenId],
+      });
+      await recordAndReconcileVaultAction(
+        "approval",
+        configuration,
+        vaultAddress,
+        hash,
       );
     } catch (error) {
-      fail(error, "The NFT deposit failed.", "approved");
+      fail(
+        error,
+        "The exact-token approval could not be confirmed.",
+        pendingVaultAction.current ? "action-pending" : "created",
+      );
+    } finally {
+      vaultActionBusy.current = false;
+    }
+  }
+
+  async function deposit() {
+    if (
+      !publicClient ||
+      !configuration ||
+      !vaultAddress ||
+      !canOwnerAct ||
+      stage !== "approved" ||
+      vaultActionBusy.current ||
+      pendingVaultAction.current
+    )
+      return;
+    vaultActionBusy.current = true;
+    try {
+      setStage("depositing");
+      setMessage("Deposit the selected ERC-721 into the exact Vault address.");
+      const hash = await writeContractAsync({
+        account: configuration.ownerAddress,
+        abi: artFiVaultAbi,
+        address: vaultAddress,
+        chainId: supportedChain.id,
+        functionName: "deposit",
+      });
+      await recordAndReconcileVaultAction(
+        "deposit",
+        configuration,
+        vaultAddress,
+        hash,
+      );
+    } catch (error) {
+      fail(
+        error,
+        "The NFT deposit could not be confirmed.",
+        pendingVaultAction.current ? "action-pending" : "approved",
+      );
+    } finally {
+      vaultActionBusy.current = false;
     }
   }
 
   async function fractionalize() {
-    if (!publicClient || !configuration || !vaultAddress) return;
+    if (
+      !publicClient ||
+      !configuration ||
+      !vaultAddress ||
+      !canIssue ||
+      stage !== "deposited" ||
+      vaultActionBusy.current ||
+      pendingVaultAction.current
+    )
+      return;
+    vaultActionBusy.current = true;
     try {
       setStage("fractionalizing");
       setMessage("Issue the reviewed fixed supply to the selected recipient.");
       const hash = await writeContractAsync({
+        account: configuration.fractionalizerAddress,
         abi: artFiVaultAbi,
         address: vaultAddress,
         chainId: supportedChain.id,
@@ -381,37 +573,215 @@ export function DaoCreationFlow() {
           configuration.recipient,
         ],
       });
-      const receipt = await publicClient.waitForTransactionReceipt({
+      await recordAndReconcileVaultAction(
+        "fractionalization",
+        configuration,
+        vaultAddress,
         hash,
-        confirmations: 1,
+      );
+    } catch (error) {
+      fail(
+        error,
+        "Fractionalization could not be confirmed.",
+        pendingVaultAction.current ? "action-pending" : "deposited",
+      );
+    } finally {
+      vaultActionBusy.current = false;
+    }
+  }
+
+  async function recordAndReconcileVaultAction(
+    kind: VaultActionKind,
+    reviewed: Configuration,
+    vault: Address,
+    hash: Hex,
+  ) {
+    const attempt = {
+      kind,
+      configuration: reviewed,
+      vaultAddress: vault,
+      transactionHash: hash,
+    };
+    pendingVaultAction.current = attempt;
+    setVaultActionAttempt(attempt);
+    await reconcileVaultAction(attempt);
+  }
+
+  async function reconcileVaultAction(attempt: VaultActionAttempt) {
+    if (!publicClient) throw new Error("Hoodi reader unavailable.");
+    const { kind, configuration: reviewed, vaultAddress: vault } = attempt;
+    const hash = attempt.transactionHash;
+    setStage("action-reconciling");
+    setMessage(
+      "Checking the submitted transaction without another wallet request.",
+    );
+    const receipt = await publicClient.waitForTransactionReceipt({
+      hash,
+      confirmations: 1,
+      timeout: 60_000,
+    });
+    if (receipt.transactionHash.toLowerCase() !== hash.toLowerCase()) {
+      throw new Error(
+        "The transaction was replaced. Do not resubmit this action.",
+      );
+    }
+    const [transaction, block] = await Promise.all([
+      publicClient.getTransaction({ hash }),
+      publicClient.getBlock({ blockNumber: receipt.blockNumber }),
+    ]);
+    const target = kind === "approval" ? reviewed.collectionAddress : vault;
+    if (
+      transaction.hash.toLowerCase() !== hash.toLowerCase() ||
+      transaction.to?.toLowerCase() !== target.toLowerCase() ||
+      transaction.from.toLowerCase() !==
+        vaultActionSender(attempt).toLowerCase() ||
+      transaction.value !== 0n ||
+      transaction.input.toLowerCase() !==
+        vaultActionCalldata(attempt).toLowerCase() ||
+      transaction.blockHash !== receipt.blockHash ||
+      block.hash !== receipt.blockHash
+    ) {
+      throw new Error(
+        "Transaction evidence does not match the reviewed Vault action.",
+      );
+    }
+    if (receipt.status !== "success") {
+      pendingVaultAction.current = undefined;
+      setVaultActionAttempt(undefined);
+      throw new Error(
+        "The reviewed transaction reverted. Review before retrying.",
+      );
+    }
+
+    const logs = receipt.logs.filter(
+      (log) =>
+        log.address.toLowerCase() === vault.toLowerCase() &&
+        !log.removed &&
+        log.transactionHash === receipt.transactionHash &&
+        log.blockHash === receipt.blockHash &&
+        log.blockNumber === receipt.blockNumber,
+    );
+    let issuedToken: Address | undefined;
+    if (kind === "approval") {
+      const [approved, owner] = await Promise.all([
+        publicClient.readContract({
+          abi: erc721VaultApprovalAbi,
+          address: reviewed.collectionAddress,
+          functionName: "getApproved",
+          args: [reviewed.tokenId],
+        }),
+        publicClient.readContract({
+          abi: erc721VaultApprovalAbi,
+          address: reviewed.collectionAddress,
+          functionName: "ownerOf",
+          args: [reviewed.tokenId],
+        }),
+      ]);
+      if (
+        approved.toLowerCase() !== vault.toLowerCase() ||
+        owner.toLowerCase() !== reviewed.ownerAddress.toLowerCase()
+      ) {
+        throw new Error(
+          "The NFT owner or exact-token approval no longer matches.",
+        );
+      }
+    } else if (kind === "deposit") {
+      const events = parseEventLogs({
+        abi: artFiVaultAbi,
+        eventName: "NFTDeposited",
+        logs,
+        strict: true,
+      }).filter(
+        (entry) =>
+          entry.args.collection.toLowerCase() ===
+            reviewed.collectionAddress.toLowerCase() &&
+          entry.args.tokenId === reviewed.tokenId &&
+          entry.args.owner.toLowerCase() ===
+            reviewed.ownerAddress.toLowerCase(),
+      );
+      const owner = await publicClient.readContract({
+        abi: erc721VaultApprovalAbi,
+        address: reviewed.collectionAddress,
+        functionName: "ownerOf",
+        args: [reviewed.tokenId],
       });
-      if (receipt.status !== "success")
-        throw new Error("Fractionalization reverted.");
-      const event = parseEventLogs({
+      if (events.length !== 1 || owner.toLowerCase() !== vault.toLowerCase()) {
+        throw new Error(
+          "The deposit event or current Vault custody does not match.",
+        );
+      }
+    } else {
+      const events = parseEventLogs({
         abi: artFiVaultAbi,
         eventName: "Fractionalized",
-        logs: receipt.logs.filter(
-          (log) => log.address.toLowerCase() === vaultAddress.toLowerCase(),
-        ),
+        logs,
         strict: true,
-      }).find(
+      }).filter(
         (entry) =>
           entry.args.recipient.toLowerCase() ===
-            configuration.recipient.toLowerCase() &&
-          entry.args.supply === configuration.tokenSupply,
+            reviewed.recipient.toLowerCase() &&
+          entry.args.supply === reviewed.tokenSupply &&
+          nonzeroAddress(entry.args.token),
       );
-      if (!event)
-        throw new Error(
-          "The Fractionalized receipt was missing or mismatched.",
-        );
-      setFractionToken(event.args.token);
-      setStage("complete");
+      if (events.length !== 1) {
+        throw new Error("The Fractionalized receipt is missing or mismatched.");
+      }
+      issuedToken = events[0].args.token;
+    }
+    const currentBlock = await publicClient.getBlock({
+      blockNumber: receipt.blockNumber,
+    });
+    if (currentBlock.hash !== receipt.blockHash) {
+      throw new Error(
+        "The transaction block changed while checking the action.",
+      );
+    }
+    pendingVaultAction.current = undefined;
+    setVaultActionAttempt(undefined);
+    if (kind === "approval") {
+      setStage("approved");
       setMessage(
-        "Vault custody and fixed fraction issuance are confirmed on Hoodi.",
+        "Exact-token approval confirmed. Deposit is a separate transaction.",
       );
-      idempotencyKey.current = crypto.randomUUID();
-    } catch (error) {
-      fail(error, "Fractionalization failed.", "deposited");
+    } else if (kind === "deposit") {
+      setStage("deposited");
+      setMessage(
+        "Vault custody confirmed. Review the fixed supply before issuance.",
+      );
+    } else {
+      setFractionToken(issuedToken);
+      setStage("complete");
+      setMessage("The reviewed fixed fraction issuance is confirmed on Hoodi.");
+      preparedRequest.current = undefined;
+    }
+  }
+
+  async function retryVaultActionReconciliation() {
+    const attempt = pendingVaultAction.current;
+    if (
+      !attempt ||
+      vaultActionBusy.current ||
+      !isConnected ||
+      chainId !== supportedChain.id ||
+      address?.toLowerCase() !== vaultActionSender(attempt).toLowerCase()
+    )
+      return;
+    vaultActionBusy.current = true;
+    try {
+      await reconcileVaultAction(attempt);
+    } catch {
+      setStage(
+        pendingVaultAction.current
+          ? "action-pending"
+          : vaultActionRetryStage(attempt.kind),
+      );
+      setMessage(
+        pendingVaultAction.current
+          ? "The submitted action is still unconfirmed or its evidence mismatches. Check this transaction only; do not resubmit."
+          : "The reviewed transaction reverted. You can review and retry that step.",
+      );
+    } finally {
+      vaultActionBusy.current = false;
     }
   }
 
@@ -420,22 +790,36 @@ export function DaoCreationFlow() {
     setMessage(error instanceof Error ? error.message : fallback);
   }
 
+  const correctWalletChain = isConnected && chainId === supportedChain.id;
+  const canOwnerAct =
+    correctWalletChain &&
+    Boolean(configuration) &&
+    address?.toLowerCase() === configuration?.ownerAddress.toLowerCase();
+  const canIssue =
+    correctWalletChain &&
+    Boolean(configuration) &&
+    address?.toLowerCase() ===
+      configuration?.fractionalizerAddress.toLowerCase();
   const canConfigure =
-    isConnected &&
-    chainId === supportedChain.id &&
-    operatorStatus === "authenticated" &&
-    stage === "configure";
+    operatorAuthenticated &&
+    stage === "configure" &&
+    !creationAttempt &&
+    !vaultActionAttempt;
+  const completedStage = vaultActionAttempt
+    ? vaultActionRetryStage(vaultActionAttempt.kind)
+    : stage;
 
   return (
     <section className="dao-create" aria-labelledby="dao-create-title">
       <header className="section-heading">
         <p className="approved-eyebrow">Vault and fraction setup</p>
         <h2 id="dao-create-title">
-          Create the asset DAO in four controlled steps.
+          Create the fund Vault and fixed fractions in four controlled steps.
         </h2>
         <p>
           Create Vault → approve one token → deposit → issue fixed fractions. No
-          collection-wide approval is requested.
+          collection-wide approval is requested. This flow does not deploy a
+          Governor or establish governance authority.
         </p>
       </header>
       <div className="create-layout">
@@ -467,18 +851,18 @@ export function DaoCreationFlow() {
                 />
               </label>
               <label>
-                Vault / DAO name
-                <input name="vaultName" minLength={2} maxLength={80} required />
+                Vault / fund name (2–80 UTF-8 bytes)
+                <input name="vaultName" minLength={1} maxLength={80} required />
               </label>
               <label>
-                Fraction token name
-                <input name="tokenName" minLength={2} maxLength={80} required />
+                Fraction token name (2–80 UTF-8 bytes)
+                <input name="tokenName" minLength={1} maxLength={80} required />
               </label>
               <label>
-                Symbol
+                Symbol (2–12 UTF-8 bytes)
                 <input
                   name="tokenSymbol"
-                  minLength={2}
+                  minLength={1}
                   maxLength={12}
                   required
                 />
@@ -489,7 +873,8 @@ export function DaoCreationFlow() {
                   name="tokenSupply"
                   type="number"
                   min="1"
-                  max="1000000000000"
+                  max={maxWholeFractionSupply.toString()}
+                  step="1"
                   required
                 />
               </label>
@@ -515,10 +900,10 @@ export function DaoCreationFlow() {
             <button
               className="secondary"
               type="button"
-              disabled={operatorStatus !== "unauthenticated"}
+              disabled={operatorAuthenticated || operatorStatus === "verifying"}
               onClick={() => void verifyOperator()}
             >
-              {operatorStatus === "authenticated"
+              {operatorAuthenticated
                 ? "Operator wallet verified"
                 : operatorStatus === "verifying"
                   ? "Verifying operator wallet…"
@@ -537,12 +922,14 @@ export function DaoCreationFlow() {
             <li data-complete={Boolean(vaultAddress)}>Create named Vault</li>
             <li
               data-complete={["approved", "deposited", "complete"].includes(
-                stage,
+                completedStage,
               )}
             >
               Approve exact token ID
             </li>
-            <li data-complete={["deposited", "complete"].includes(stage)}>
+            <li
+              data-complete={["deposited", "complete"].includes(completedStage)}
+            >
               Transfer NFT into Vault custody
             </li>
             <li data-complete={stage === "complete"}>
@@ -551,18 +938,126 @@ export function DaoCreationFlow() {
           </ol>
           {vaultAddress ? <p>Vault: {vaultAddress}</p> : null}
           {fractionToken ? <p>Fraction token: {fractionToken}</p> : null}
+          {configuration ? (
+            <dl
+              aria-label="Reviewed fixed issuance"
+              style={{ overflowWrap: "anywhere" }}
+            >
+              <div>
+                <dt>Reviewed NFT identity</dt>
+                <dd data-no-translate>
+                  Hoodi {supportedChain.id} · {configuration.collectionAddress}{" "}
+                  / {configuration.tokenId.toString()}
+                </dd>
+              </div>
+              <div>
+                <dt>Reviewed token name / symbol</dt>
+                <dd data-no-translate>
+                  {configuration.tokenName} / {configuration.tokenSymbol}
+                </dd>
+              </div>
+              <div>
+                <dt>Fixed supply (18 decimals)</dt>
+                <dd data-no-translate>
+                  {formatUnits(configuration.tokenSupply, 18)} whole tokens ·{" "}
+                  {configuration.tokenSupply.toString()} raw units
+                </dd>
+              </div>
+              <div>
+                <dt>Reviewed issuance recipient</dt>
+                <dd data-no-translate>{configuration.recipient}</dd>
+              </div>
+            </dl>
+          ) : null}
+          {creationAttempt ? (
+            <div>
+              <p data-no-translate style={{ overflowWrap: "anywhere" }}>
+                Submitted creation: {creationAttempt.transactionHash}
+              </p>
+              <p>
+                Do not create again while this outcome is unresolved. This page
+                retains the public transaction reference only for this session;
+                keep the hash before leaving.
+              </p>
+              <button
+                type="button"
+                disabled={
+                  stage !== "submission-pending" ||
+                  !operatorAuthenticated ||
+                  address?.toLowerCase() !==
+                    creationAttempt.configuration.ownerAddress.toLowerCase()
+                }
+                onClick={() => void retryCreationReconciliation()}
+              >
+                Check existing transaction and retry API record
+              </button>
+            </div>
+          ) : null}
+          {vaultActionAttempt ? (
+            <div>
+              <p data-no-translate style={{ overflowWrap: "anywhere" }}>
+                Submitted {vaultActionAttempt.kind}:{" "}
+                {vaultActionAttempt.transactionHash}
+              </p>
+              <p>
+                Keep this public hash before leaving. Recovery here is limited
+                to this page session; checking it never requests another
+                transaction.
+              </p>
+              <button
+                type="button"
+                disabled={
+                  stage !== "action-pending" ||
+                  !correctWalletChain ||
+                  address?.toLowerCase() !==
+                    vaultActionSender(vaultActionAttempt).toLowerCase()
+                }
+                onClick={() => void retryVaultActionReconciliation()}
+              >
+                Check submitted action without resending
+              </button>
+            </div>
+          ) : null}
+          {configuration && stage !== "complete" ? (
+            <p>
+              Continue on Hoodi using the reviewed NFT owner for
+              approval/deposit, or the reviewed fractionalizer for issuance.
+              Switching wallets does not transfer the earlier wallet's
+              verification or change the reviewed recipient.
+              <br />
+              NFT owner:{" "}
+              <span data-no-translate>{configuration.ownerAddress}</span>
+              <br />
+              Fractionalizer:{" "}
+              <span data-no-translate>
+                {configuration.fractionalizerAddress}
+              </span>
+            </p>
+          ) : null}
           {stage === "created" ? (
-            <button type="button" onClick={() => void approveExactToken()}>
+            <button
+              type="button"
+              disabled={!canOwnerAct}
+              onClick={() => void approveExactToken()}
+            >
               Step 2 · Approve this token only
             </button>
           ) : null}
           {stage === "approved" ? (
-            <button type="button" onClick={() => void deposit()}>
+            <button
+              type="button"
+              disabled={!canOwnerAct}
+              onClick={() => void deposit()}
+            >
               Step 3 · Deposit into Vault
             </button>
           ) : null}
           {stage === "deposited" ? (
-            <button type="button" onClick={() => void fractionalize()}>
+            <button
+              type="button"
+              disabled={!canIssue}
+              onClick={() => void fractionalize()}
+            >
               Step 4 · Issue fixed fractions
             </button>
           ) : null}
@@ -572,28 +1067,120 @@ export function DaoCreationFlow() {
   );
 }
 
+function nonzeroAddress(value: unknown): value is Address {
+  return (
+    typeof value === "string" &&
+    isAddress(value) &&
+    value.toLowerCase() !== "0x0000000000000000000000000000000000000000"
+  );
+}
+
+function vaultActionSender(attempt: VaultActionAttempt): Address {
+  return attempt.kind === "fractionalization"
+    ? attempt.configuration.fractionalizerAddress
+    : attempt.configuration.ownerAddress;
+}
+
+function vaultActionRetryStage(kind: VaultActionKind): Stage {
+  return kind === "approval"
+    ? "created"
+    : kind === "deposit"
+      ? "approved"
+      : "deposited";
+}
+
+function vaultActionCalldata(attempt: VaultActionAttempt): Hex {
+  const { kind, configuration: reviewed, vaultAddress: vault } = attempt;
+  if (kind === "approval") {
+    return encodeFunctionData({
+      abi: erc721VaultApprovalAbi,
+      functionName: "approve",
+      args: [vault, reviewed.tokenId],
+    });
+  }
+  if (kind === "deposit") {
+    return encodeFunctionData({ abi: artFiVaultAbi, functionName: "deposit" });
+  }
+  return encodeFunctionData({
+    abi: artFiVaultAbi,
+    functionName: "fractionalize",
+    args: [
+      reviewed.tokenName,
+      reviewed.tokenSymbol,
+      reviewed.tokenSupply,
+      reviewed.recipient,
+    ],
+  });
+}
+
+function matchesReviewedVaultIntent(
+  intent: VaultIntent,
+  reviewed: Configuration,
+): boolean {
+  return (
+    Boolean(intent) &&
+    typeof intent.intentId === "string" &&
+    /^[0-9a-f]{32}$/.test(intent.intentId) &&
+    typeof intent.requestId === "string" &&
+    /^0x[0-9a-fA-F]{64}$/.test(intent.requestId) &&
+    intent.requestId.toLowerCase() !== `0x${"0".repeat(64)}` &&
+    nonzeroAddress(intent.factoryAddress) &&
+    intent.chainId === supportedChain.id &&
+    intent.vaultName === reviewed.vaultName &&
+    intent.tokenId === reviewed.tokenId.toString() &&
+    (
+      [
+        "collectionAddress",
+        "adminAddress",
+        "pauserAddress",
+        "fractionalizerAddress",
+      ] as const
+    ).every(
+      (key) =>
+        nonzeroAddress(intent[key]) &&
+        intent[key].toLowerCase() === reviewed[key].toLowerCase(),
+    )
+  );
+}
+
 function readConfiguration(form: FormData, address: Address): Configuration {
   const requiredAddress = (name: string, fallback?: Address) => {
     const candidate = String(form.get(name) || fallback || "").trim();
-    if (!isAddress(candidate))
-      throw new Error(`${name} must be an Ethereum address.`);
+    if (!nonzeroAddress(candidate))
+      throw new Error(`${name} must be a nonzero Ethereum address.`);
     return candidate;
   };
   const tokenIdText = String(form.get("tokenId") || "");
-  if (!/^(0|[1-9][0-9]{0,77})$/.test(tokenIdText)) {
+  if (
+    !/^(0|[1-9][0-9]{0,77})$/.test(tokenIdText) ||
+    BigInt(tokenIdText) >= 2n ** 256n
+  ) {
     throw new Error("Token ID must be a canonical uint256 value.");
   }
-  const vaultName = String(form.get("vaultName") || "").trim();
-  const tokenName = String(form.get("tokenName") || "").trim();
-  const tokenSymbol = String(form.get("tokenSymbol") || "").trim();
-  if (vaultName.length < 2 || tokenName.length < 2 || tokenSymbol.length < 2) {
-    throw new Error("Vault and token names and symbol are required.");
-  }
+  // HTML maxLength measures UTF-16 units, while the contracts use bytes(string).
+  // Validate every issuance parameter before preparing or submitting a Vault.
+  const boundedText = (name: string, maximum: number) => {
+    const value = String(form.get(name) || "").trim();
+    const length = new TextEncoder().encode(value).byteLength;
+    if (length < 2 || length > maximum) {
+      throw new Error(`${name} must contain 2–${maximum} UTF-8 bytes.`);
+    }
+    return value;
+  };
+  const vaultName = boundedText("vaultName", 80);
+  const tokenName = boundedText("tokenName", 80);
+  const tokenSymbol = boundedText("tokenSymbol", 12);
   const rawSupply = String(form.get("tokenSupply") || "");
   if (!/^[1-9][0-9]{0,12}$/.test(rawSupply)) {
     throw new Error("Supply must be a positive whole-token amount.");
   }
+  if (BigInt(rawSupply) > maxWholeFractionSupply) {
+    throw new Error(
+      "Supply exceeds the Vault limit of 1,000,000,000,000 whole tokens.",
+    );
+  }
   return {
+    ownerAddress: address,
     collectionAddress: requiredAddress("collectionAddress"),
     tokenId: BigInt(tokenIdText),
     vaultName,
@@ -611,13 +1198,17 @@ function stageLabel(stage: Stage) {
   return {
     configure: "Review configuration",
     creating: "Creating Vault",
+    "submission-pending": "Creation outcome or API record pending",
+    reconciling: "Checking the existing creation transaction",
     created: "Vault created",
     approving: "Approving exact token",
     approved: "Exact token approved",
     depositing: "Depositing NFT",
     deposited: "Vault custody confirmed",
     fractionalizing: "Issuing fixed fractions",
-    complete: "DAO asset setup confirmed",
+    "action-pending": "Submitted Vault action is awaiting confirmation",
+    "action-reconciling": "Checking the submitted Vault action",
+    complete: "Vault and fixed fraction issuance confirmed",
   }[stage];
 }
 
@@ -627,6 +1218,7 @@ async function fetchJSON<T = unknown>(
 ): Promise<T> {
   const response = await fetch(path, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(15_000),
     headers: { "Content-Type": "application/json", ...init.headers },
   });
   if (!response.ok) {

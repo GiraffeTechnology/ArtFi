@@ -108,6 +108,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** @description Read-only Hoodi index projection, not an authoritative wallet balance or complete acquisition history. Only confirmed, non-removed transfer events contribute to positions. Missing persistence or inconsistent retained events return an unavailable response rather than an empty portfolio. */
     get: operations["getPortfolio"];
     put?: never;
     post?: never;
@@ -150,6 +151,108 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/indexer/market-observations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Record collection history coverage only after all pages have been durably ingested. This is not live order validation or proof of a healthy stream. */
+    post: operations["recordMarketObservation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/market/observations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Uncached collection history synchronization observations. Missing collections have unknown freshness; recent history does not validate current listings. */
+    get: operations["getMarketObservations"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/indexer/market-streams": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Credential-gated transport snapshot for configured collection scopes. Open transport is not proof of channel subscription, delivery or complete history. Newer observation time wins; equal and older writes do not refresh receipt time. */
+    post: operations["recordMarketStream"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/market/streams": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Uncached transport observations, aged independently of REST coverage. Empty data means unknown; a fresh observation may report disconnection. Never infer actual subscription delivery from transportState. */
+    get: operations["getMarketStreams"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/indexer/market-listings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Credential-gated normalized public listing observations from the SIN collector. No raw provider payloads, signatures or execution plans are accepted. Older or equal observation times do not replace the stored row. */
+    post: operations["recordCurrentMarketListing"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/market/listing": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Uncached provider observation bound to an exact token. Missing or stale observations do not prove absence of listings. This endpoint never creates a transaction. */
+    get: operations["getCurrentMarketListing"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/market/activity": {
     parameters: {
       query?: never;
@@ -157,7 +260,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** @description Read-only activity mirrored from approved external marketplaces; execution remains external. */
+    /** @description Read-only, cursor-paginated activity mirrored from approved external marketplaces; execution remains external. Follow nextCursor until absent for the complete retained history. */
     get: operations["getExternalMarketActivity"];
     put?: never;
     post?: never;
@@ -364,6 +467,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/fractionals": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Read-only Hoodi issuance records from confirmed non-removed Fractionalized events linked to VaultCreated by the configured factory. Indexed evidence only, not live custody, holdings, price or judicial-rights verification. No fixture fallback. */
+    get: operations["getFractionalCatalog"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/vault/intents": {
     parameters: {
       query?: never;
@@ -416,6 +536,35 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    FractionalCatalogPage: {
+      data: components["schemas"]["FractionalCatalogRecord"][];
+      nextCursor: string;
+      /** @constant */
+      chainId: 560048;
+      factoryAddress: string;
+      /** @constant */
+      runtime: true;
+      /** @constant */
+      readOnly: true;
+      /** @constant */
+      evidence: "indexed-confirmed-events";
+    };
+    FractionalCatalogRecord: {
+      eventId: string;
+      vaultAddress: string;
+      collectionAddress: string;
+      tokenId: string;
+      vaultName: string;
+      fractionTokenAddress: string;
+      supply: string;
+      issuanceRecipient: string;
+      transactionHash: string;
+      blockHash: string;
+      blockNumber: string;
+      logIndex: number;
+      /** Format: date-time */
+      observedAt: string;
+    };
     Status: {
       service: string;
       status: string;
@@ -682,6 +831,80 @@ export interface components {
       /** Format: date-time */
       eventTimestamp: string;
       payload: Record<string, never>;
+    };
+    /** @description Public token-bound observation. Active/inactive/fulfilled/expired/cancelled require orderHash, price, currency, decimals and validUntilMs; not-found/unavailable must omit them. Token and price decimals must fit uint256. These are provider reports, not execution or ownership guarantees. */
+    CurrentMarketListing: {
+      /** @constant */
+      schemaVersion: "1";
+      /** @constant */
+      source: "opensea";
+      chain: string;
+      contractAddress: string;
+      tokenId: string;
+      collectionSlug?: string;
+      observedAtMs: number;
+      /** @enum {string} */
+      status:
+        | "active"
+        | "inactive"
+        | "fulfilled"
+        | "expired"
+        | "cancelled"
+        | "not-found"
+        | "unavailable";
+      orderHash?: string;
+      price?: string;
+      currency?: string;
+      decimals?: number;
+      validUntilMs?: number;
+    };
+    MarketStreamRequest: {
+      /** @constant */
+      schemaVersion: "1";
+      source: string;
+      collections: string[];
+      /** @enum {string} */
+      transportState: "connecting" | "connected" | "disconnected" | "stopped";
+      /** @description Collector UTC epoch milliseconds, within five minutes behind and five seconds ahead of the API clock. */
+      observedAtMs: number;
+    };
+    MarketStreamObservation: {
+      source: string;
+      collectionSlug: string;
+      /** @enum {string} */
+      transportState: "connecting" | "connected" | "disconnected" | "stopped";
+      /** @enum {string} */
+      freshness: "fresh" | "stale";
+      /** Format: date-time */
+      observedAt: string;
+      /** Format: date-time */
+      receivedAt: string;
+    };
+    MarketObservationRequest: {
+      /** @constant */
+      schemaVersion: "1";
+      source: string;
+      collections: string[];
+      /** @enum {string} */
+      status: "complete" | "unavailable";
+      /** @description Collector UTC epoch milliseconds, within five minutes behind and five seconds ahead of the API clock. */
+      observedAtMs: number;
+      /** @description Required positive UTC epoch seconds for complete, no later than observedAtMs. Omit or use zero for unavailable. */
+      completedThrough?: number;
+    };
+    MarketObservation: {
+      source: string;
+      collectionSlug: string;
+      /** @enum {string} */
+      status: "fresh" | "stale" | "unavailable";
+      /** Format: date-time */
+      observedAt: string;
+      /** Format: date-time */
+      receivedAt: string;
+      /** Format: date-time */
+      lastSuccessAt?: string;
+      /** Format: date-time */
+      completedThrough?: string;
     };
     ExternalMarketActivity: components["schemas"]["ExternalMarketEventRequest"] & {
       eventId: string;
@@ -951,6 +1174,7 @@ export interface operations {
         };
       };
       400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
     };
   };
   ingestChainEvent: {
@@ -1016,7 +1240,227 @@ export interface operations {
         content?: never;
       };
       401: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
       422: components["responses"]["Problem"];
+    };
+  };
+  recordMarketObservation: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Indexer-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarketObservationRequest"];
+      };
+    };
+    responses: {
+      /** @description Observation recorded without regressing a newer observation */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @constant */
+            status: "recorded";
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getMarketObservations: {
+    parameters: {
+      query?: {
+        source?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Source history observations evaluated at asOf */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @constant */
+            schemaVersion: "1";
+            source: string;
+            /** @constant */
+            runtime: true;
+            data: components["schemas"]["MarketObservation"][];
+            /** Format: date-time */
+            asOf: string;
+            /** @constant */
+            maxAgeSeconds: 90;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  recordMarketStream: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Indexer-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MarketStreamRequest"];
+      };
+    };
+    responses: {
+      /** @description Transport snapshot recorded */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @constant */
+            status: "recorded";
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getMarketStreams: {
+    parameters: {
+      query?: {
+        source?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Per-collection transport observations */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @constant */
+            schemaVersion: "1";
+            source: string;
+            /** @constant */
+            runtime: true;
+            /** @constant */
+            scope: "transport-only";
+            data: components["schemas"]["MarketStreamObservation"][];
+            /** Format: date-time */
+            asOf: string;
+            /** @constant */
+            maxAgeSeconds: 90;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  recordCurrentMarketListing: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Indexer-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CurrentMarketListing"];
+      };
+    };
+    responses: {
+      /** @description Listing observation recorded */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @constant */
+            status: "recorded";
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getCurrentMarketListing: {
+    parameters: {
+      query: {
+        source?: "opensea";
+        chain: string;
+        contract: string;
+        tokenId: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current provider observation or an explicit unknown result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @constant */
+            schemaVersion: "1";
+            /** @constant */
+            source: "opensea";
+            chain: string;
+            contractAddress: string;
+            tokenId: string;
+            /** @constant */
+            runtime: true;
+            /** @constant */
+            custody: false;
+            /** @constant */
+            execution: "disabled";
+            data: components["schemas"]["CurrentMarketListing"] | null;
+            /** @enum {string} */
+            freshness: "fresh" | "stale" | "unknown";
+            /** Format: date-time */
+            asOf: string;
+            /** @constant */
+            maxAgeSeconds: 90;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
     };
   };
   getExternalMarketActivity: {
@@ -1024,7 +1468,13 @@ export interface operations {
       query?: {
         source?: string;
         contract?: string;
+        /** @description Marketplace chain name for an exact asset-history query. */
+        chain?: string;
+        /** @description Decimal token ID for an exact asset-history query. */
+        tokenId?: string;
         limit?: number;
+        /** @description Opaque nextCursor from the preceding page; bound to the same source, chain, contract and token ID. */
+        cursor?: string;
       };
       header?: never;
       path?: never;
@@ -1047,6 +1497,10 @@ export interface operations {
             execution: "external-deeplink-only";
             /** @constant */
             custody: false;
+            /** @constant */
+            runtime: true;
+            /** @description Present only when another page of the same query is available. */
+            nextCursor?: string;
           };
         };
       };
@@ -1059,6 +1513,10 @@ export interface operations {
       query?: {
         source?: string;
         contract?: string;
+        /** @description Bind the catalog lookup to the marketplace chain name. */
+        chain?: string;
+        /** @description Canonical decimal uint256 token ID; use with chain and contract for exact-token lookup. */
+        tokenId?: string;
         page?: number;
         pageSize?: number;
       };
@@ -1400,6 +1858,31 @@ export interface operations {
       401: components["responses"]["Problem"];
       422: components["responses"]["Problem"];
       502: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getFractionalCatalog: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Indexed fund-token issuance page; empty nextCursor means no further retained rows. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FractionalCatalogPage"];
+        };
+      };
+      400: components["responses"]["Problem"];
       503: components["responses"]["Problem"];
     };
   };
