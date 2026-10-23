@@ -8,6 +8,8 @@ import {
   type MarketEventFamily,
   type MarketEventSink,
   type MarketplaceAdapter,
+  MarketplaceHealthTracker,
+  type MarketplaceHealthSnapshot,
   type NormalizedMarketEvent,
 } from "./adapter.js";
 
@@ -172,6 +174,15 @@ export interface OpenSeaAdapterConfig {
   collectionSlugs: string[];
   backfillPages: number;
   fetchImpl?: typeof fetch;
+  retryAttempts?: number;
+  retryBaseDelayMs?: number;
+  requestTimeoutMs?: number;
+  sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
+  staleAfterMs?: number;
+  now?: () => Date;
+  streamClientFactory?: (
+    options: ConstructorParameters<typeof OpenSeaStreamClient>[0],
+  ) => Pick<OpenSeaStreamClient, "onEvents" | "connect" | "disconnect">;
 }
 
 export class OpenSeaAdapter implements MarketplaceAdapter {
@@ -186,6 +197,11 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
 
   readonly #config: OpenSeaAdapterConfig;
   readonly #fetch: typeof fetch;
+  readonly #retryAttempts: number;
+  readonly #retryBaseDelayMs: number;
+  readonly #requestTimeoutMs: number;
+  readonly #sleep: (delayMs: number, signal?: AbortSignal) => Promise<void>;
+  readonly #health: MarketplaceHealthTracker;
 
   constructor(config: OpenSeaAdapterConfig) {
     if (!config.apiKey || config.collectionSlugs.length === 0) {
@@ -195,58 +211,202 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     }
     this.#config = config;
     this.#fetch = config.fetchImpl ?? fetch;
+    this.#retryAttempts = config.retryAttempts ?? 3;
+    this.#retryBaseDelayMs = config.retryBaseDelayMs ?? 500;
+    this.#requestTimeoutMs = config.requestTimeoutMs ?? 10_000;
+    if (
+      !Number.isSafeInteger(this.#retryAttempts) ||
+      this.#retryAttempts < 1 ||
+      this.#retryAttempts > 5 ||
+      !Number.isSafeInteger(this.#retryBaseDelayMs) ||
+      this.#retryBaseDelayMs < 1 ||
+      this.#retryBaseDelayMs > 30_000 ||
+      !Number.isSafeInteger(this.#requestTimeoutMs) ||
+      this.#requestTimeoutMs < 1 ||
+      this.#requestTimeoutMs > 120_000
+    ) {
+      throw new Error("OpenSea retry configuration is invalid");
+    }
+    this.#sleep = config.sleep ?? sleepWithAbort;
+    this.#health = new MarketplaceHealthTracker(
+      this.source,
+      config.staleAfterMs ?? 60_000,
+      config.now,
+    );
+  }
+
+  health(now?: Date): MarketplaceHealthSnapshot {
+    return this.#health.snapshot(now);
   }
 
   async backfill(sink: MarketEventSink, signal?: AbortSignal): Promise<void> {
-    for (const slug of this.#config.collectionSlugs) {
-      let cursor: string | undefined;
-      for (let page = 0; page < this.#config.backfillPages; page += 1) {
-        const url = new URL(
-          `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
-        );
-        url.searchParams.set("limit", "200");
-        if (cursor) url.searchParams.set("next", cursor);
-        const response = await this.#fetch(url, {
-          headers: { "x-api-key": this.#config.apiKey },
-          signal,
-        });
-        if (!response.ok) {
-          throw new Error(
-            `OpenSea backfill failed with HTTP ${response.status}`,
+    try {
+      for (const slug of this.#config.collectionSlugs) {
+        let cursor: string | undefined;
+        const observedCursors = new Set<string>();
+        for (let page = 0; page < this.#config.backfillPages; page += 1) {
+          const url = new URL(
+            `https://api.opensea.io/api/v2/events/collection/${encodeURIComponent(slug)}`,
           );
+          url.searchParams.set("limit", "200");
+          if (cursor) url.searchParams.set("next", cursor);
+          const response = await this.#fetchBackfillPage(url, signal);
+          if (!response.ok) {
+            throw new Error(
+              `OpenSea backfill failed with HTTP ${response.status}`,
+            );
+          }
+          const body = record(await response.json());
+          const events = Array.isArray(body.asset_events)
+            ? body.asset_events
+            : [];
+          for (const event of events) await sink(normalizeOpenSeaEvent(event));
+          const nextCursor = text(body.next);
+          if (nextCursor && observedCursors.has(nextCursor)) {
+            throw new Error("OpenSea backfill cursor did not advance");
+          }
+          if (nextCursor) observedCursors.add(nextCursor);
+          cursor = nextCursor;
+          if (!cursor) break;
+          if (page === this.#config.backfillPages - 1) {
+            throw new Error(
+              "OpenSea backfill is incomplete at the configured page limit",
+            );
+          }
         }
-        const body = record(await response.json());
-        const events = Array.isArray(body.asset_events)
-          ? body.asset_events
-          : [];
-        for (const event of events) await sink(normalizeOpenSeaEvent(event));
-        cursor = text(body.next);
-        if (!cursor) break;
       }
+      this.#health.markBackfillSuccess();
+    } catch (error) {
+      if (!signal?.aborted) this.#health.markFailure();
+      throw error;
     }
   }
 
   async start(sink: MarketEventSink): Promise<() => void> {
+    this.#health.start();
     const storagePath =
       process.env.OPENSEA_STREAM_STORAGE_PATH ?? ".opensea-stream";
-    const client = new OpenSeaStreamClient({
-      token: this.#config.apiKey,
-      connectOptions: { transport: WebSocket, sessionStorage: LocalStorage },
-    });
+    const clientOptions: ConstructorParameters<typeof OpenSeaStreamClient>[0] =
+      {
+        token: this.#config.apiKey,
+        connectOptions: { transport: WebSocket, sessionStorage: LocalStorage },
+        onError: (error: unknown) => {
+          this.#health.markRealtimeFailure();
+          console.error("OpenSea mirror transport failed", error);
+        },
+      };
+    const client = this.#config.streamClientFactory
+      ? this.#config.streamClientFactory(clientOptions)
+      : new OpenSeaStreamClient(clientOptions);
     // The SDK constructs LocalStorage internally; an explicit path keeps session state out of
     // source directories when the implementation requests it.
     process.env.NODE_LOCALSTORAGE = storagePath;
     const unsubscribe = this.#config.collectionSlugs.map((slug) =>
       client.onEvents(slug, [...STREAM_EVENTS], (event) => {
-        void sink(normalizeOpenSeaEvent(event)).catch((error: unknown) => {
+        let normalized: NormalizedMarketEvent;
+        try {
+          normalized = normalizeOpenSeaEvent(event);
+        } catch (error) {
+          this.#health.markFailure();
           console.error("OpenSea mirror event rejected", error);
-        });
+          return;
+        }
+        void sink(normalized)
+          .then(() => this.#health.markEvent())
+          .catch((error: unknown) => {
+            this.#health.markFailure();
+            console.error("OpenSea mirror event rejected", error);
+          });
       }),
     );
-    client.connect();
+    try {
+      client.connect();
+    } catch (error) {
+      this.#health.markRealtimeFailure();
+      for (const stop of unsubscribe) stop();
+      throw error;
+    }
     return () => {
       for (const stop of unsubscribe) stop();
       client.disconnect();
+      this.#health.stop();
     };
   }
+
+  async #fetchBackfillPage(url: URL, signal?: AbortSignal): Promise<Response> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= this.#retryAttempts; attempt += 1) {
+      let retryDelayMs = this.#retryBaseDelayMs * 2 ** (attempt - 1);
+      const requestController = new AbortController();
+      const timeout = setTimeout(() => {
+        requestController.abort(
+          new Error("OpenSea backfill request timed out"),
+        );
+      }, this.#requestTimeoutMs);
+      const onAbort = () => {
+        requestController.abort(
+          signal?.reason ?? new Error("OpenSea backfill aborted"),
+        );
+      };
+      if (signal?.aborted) onAbort();
+      else signal?.addEventListener("abort", onAbort, { once: true });
+      try {
+        const response = await this.#fetch(url, {
+          headers: { "x-api-key": this.#config.apiKey },
+          signal: requestController.signal,
+        });
+        if (response.ok || !isRetryableStatus(response.status)) return response;
+        lastError = new Error(
+          `OpenSea backfill retryable HTTP ${response.status}`,
+        );
+        retryDelayMs = Math.max(
+          retryDelayMs,
+          retryAfterDelayMs(response.headers.get("retry-after")),
+        );
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        lastError = requestController.signal.aborted
+          ? new Error("OpenSea backfill request timed out")
+          : error;
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener("abort", onAbort);
+      }
+      if (attempt < this.#retryAttempts) {
+        await this.#sleep(retryDelayMs, signal);
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("OpenSea backfill failed");
+  }
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function retryAfterDelayMs(value: string | null): number {
+  if (value === null || !/^(0|[1-9][0-9]*)$/.test(value)) return 0;
+  const seconds = Number(value);
+  if (!Number.isSafeInteger(seconds)) return 0;
+  return Math.min(seconds * 1_000, 30_000);
+}
+
+function sleepWithAbort(delayMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new Error("OpenSea backfill aborted"));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new Error("OpenSea backfill aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
