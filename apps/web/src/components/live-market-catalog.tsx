@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import localFont from "next/font/local";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const recoveryFont = localFont({
+  src: "../fonts/InterVariable.woff2",
+  display: "swap",
+  weight: "100 900",
+  fallback: [],
+});
 
 const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
@@ -48,9 +56,13 @@ export function LiveMarketCatalog() {
   const [listingStatus, setListingStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [page, setPage] = useState(1);
+  const requestInFlight = useRef(false);
   const pageSize = 12;
 
   const loadCatalog = useCallback(async () => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
+    setLoading(true);
     const catalogRequest = async () => {
       const collected: MarketAsset[] = [];
       let sourcePage = 1;
@@ -97,6 +109,7 @@ export function LiveMarketCatalog() {
       setAssets(catalogResult.value);
       setCatalogError(undefined);
     } else {
+      setAssets([]);
       setCatalogError(
         catalogResult.reason instanceof Error
           ? catalogResult.reason.message
@@ -114,6 +127,7 @@ export function LiveMarketCatalog() {
           : "Provider health is unavailable.",
       );
     }
+    requestInFlight.current = false;
     setLoading(false);
   }, []);
 
@@ -234,20 +248,38 @@ export function LiveMarketCatalog() {
         <span>
           {loading
             ? "Loading…"
-            : `${visibleAssets.length} shown · ${filteredAssets.length} matched · ${assets.length} total`}
+            : catalogError
+              ? "Market data unavailable"
+              : `${visibleAssets.length} shown · ${filteredAssets.length} matched · ${assets.length} total`}
         </span>
         <span>
           {lastObserved
             ? `Observed ${formatObserved(lastObserved)}`
-            : "Awaiting source events"}
+            : catalogError
+              ? "Awaiting a successful refresh"
+              : "Awaiting source events"}
         </span>
         <span>{providerStatusLabel(providerHealth, loading)}</span>
       </div>
 
       {catalogError ? (
-        <div className="market-runtime-state" role="alert">
+        <div
+          className={`market-runtime-state ${recoveryFont.className}`}
+          role="alert"
+        >
           <strong>Live mirror unavailable</strong>
           <span>{catalogError} No fixture is shown as live data.</span>
+          <span>
+            Previous results are hidden until the market refresh succeeds.
+          </span>
+          <button
+            type="button"
+            className="wallet-button"
+            disabled={loading}
+            onClick={() => void loadCatalog()}
+          >
+            {loading ? "Retrying…" : "Retry market data"}
+          </button>
         </div>
       ) : null}
       {!loading && (!providerHealth || !providerHealth.available) ? (
