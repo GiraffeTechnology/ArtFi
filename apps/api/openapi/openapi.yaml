@@ -219,6 +219,27 @@ paths:
         - name: contract
           in: query
           schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        - name: chain
+          in: query
+          schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,31}$" }
+        - name: tokenId
+          in: query
+          description: Canonical decimal token identifier in the inclusive uint256 range.
+          schema: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+        - name: eventFamily
+          in: query
+          schema: { type: string, enum: [order, sale, transfer, metadata] }
+        - name: status
+          in: query
+          schema:
+            {
+              type: string,
+              enum: [active, cancelled, invalidated, fulfilled, observed],
+            }
+        - name: cursor
+          in: query
+          description: Opaque cursor returned by the previous page. It is bound to the stable event ordering and exact filter set.
+          schema: { type: string, maxLength: 512 }
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
@@ -229,7 +250,8 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [data, schemaVersion, source, execution, custody]
+                required:
+                  [data, schemaVersion, source, execution, custody, hasMore]
                 properties:
                   data:
                     type: array
@@ -239,6 +261,10 @@ paths:
                   source: { type: string }
                   execution: { type: string, const: external-deeplink-only }
                   custody: { type: boolean, const: false }
+                  hasMore: { type: boolean }
+                  nextCursor:
+                    type: string
+                    description: Opaque cursor for the next page; absent on the final page.
         "400": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
   /v1/market/assets:
@@ -788,7 +814,10 @@ components:
         source: { type: string, const: opensea }
         chain: { type: string }
         contractAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
-        tokenId: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+        tokenId:
+          type: string
+          pattern: "^(0|[1-9][0-9]{0,77})$"
+          description: Canonical decimal token identifier in the inclusive uint256 range.
         result:
           { type: string, enum: [discovered, not-found, unsupported-chain] }
         discovered: { type: boolean }
@@ -1031,9 +1060,14 @@ components:
       allOf:
         - $ref: "#/components/schemas/ExternalMarketEventRequest"
         - type: object
-          required: [eventId]
+          required: [eventId, status]
           properties:
             eventId: { type: string, pattern: "^[0-9a-f]{64}$" }
+            status:
+              {
+                type: string,
+                enum: [active, cancelled, invalidated, fulfilled, observed],
+              }
     ExternalMarketAsset:
       type: object
       required:

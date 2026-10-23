@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { MarketActivityHistory } from "./market-activity-history";
+
 const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
 type MarketAsset = {
@@ -259,6 +261,12 @@ export function LiveMarketCatalog() {
                   Source attributed to OpenSea · no external link or trade
                   action
                 </p>
+                <MarketActivityHistory
+                  chain={asset.chain}
+                  contractAddress={asset.contractAddress}
+                  source={asset.source}
+                  tokenId={asset.tokenId}
+                />
               </div>
             </article>
           );

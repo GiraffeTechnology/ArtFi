@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -323,6 +324,54 @@ func TestMySQLExternalMarketMirrorDedupeAndOrdering(t *testing.T) {
 	activity := requestWithHandler(t, handler, http.MethodGet, "/v1/market/activity?source=opensea&limit=10")
 	if activity.Code != http.StatusOK || !strings.Contains(activity.Body.String(), "external-deeplink-only") {
 		t.Fatalf("market activity boundary missing: status=%d body=%s", activity.Code, activity.Body.String())
+	}
+	firstPage := requestWithHandler(t, handler, http.MethodGet,
+		"/v1/market/activity?source=opensea&chain=ethereum&contract=0x1111111111111111111111111111111111111111&tokenId=42&limit=2")
+	if firstPage.Code != http.StatusOK {
+		t.Fatalf("first activity page: status=%d body=%s", firstPage.Code, firstPage.Body.String())
+	}
+	var first marketActivityResponse
+	decode(t, firstPage, &first)
+	if len(first.Data) != 2 || !first.HasMore || first.NextCursor == "" {
+		t.Fatalf("first activity page is not resumable: %+v", first)
+	}
+	secondPage := requestWithHandler(t, handler, http.MethodGet,
+		"/v1/market/activity?source=opensea&chain=ethereum&contract=0x1111111111111111111111111111111111111111&tokenId=42&limit=2&cursor="+
+			url.QueryEscape(first.NextCursor))
+	if secondPage.Code != http.StatusOK {
+		t.Fatalf("second activity page: status=%d body=%s", secondPage.Code, secondPage.Body.String())
+	}
+	var second marketActivityResponse
+	decode(t, secondPage, &second)
+	if len(second.Data) == 0 {
+		t.Fatal("second activity page unexpectedly empty")
+	}
+	seen := map[string]struct{}{}
+	for _, item := range first.Data {
+		seen[item.EventID] = struct{}{}
+	}
+	for _, item := range second.Data {
+		if _, duplicate := seen[item.EventID]; duplicate {
+			t.Fatalf("activity cursor returned duplicate event %s", item.EventID)
+		}
+	}
+	fulfilled := requestWithHandler(t, handler, http.MethodGet,
+		"/v1/market/activity?source=opensea&eventFamily=sale&status=fulfilled&limit=10")
+	var fulfilledPage marketActivityResponse
+	decode(t, fulfilled, &fulfilledPage)
+	if fulfilled.Code != http.StatusOK || len(fulfilledPage.Data) != 1 || fulfilledPage.Data[0].Status != "fulfilled" {
+		t.Fatalf("fulfilled history filter drifted: status=%d body=%s", fulfilled.Code, fulfilled.Body.String())
+	}
+	invalidCursor := requestWithHandler(t, handler, http.MethodGet,
+		"/v1/market/activity?source=opensea&cursor=not-base64!")
+	if invalidCursor.Code != http.StatusBadRequest {
+		t.Fatalf("invalid activity cursor was accepted: status=%d body=%s", invalidCursor.Code, invalidCursor.Body.String())
+	}
+	filterDrift := requestWithHandler(t, handler, http.MethodGet,
+		"/v1/market/activity?source=opensea&chain=ethereum&contract=0x1111111111111111111111111111111111111111&tokenId=43&limit=2&cursor="+
+			url.QueryEscape(first.NextCursor))
+	if filterDrift.Code != http.StatusBadRequest {
+		t.Fatalf("activity cursor was accepted for a different asset: status=%d body=%s", filterDrift.Code, filterDrift.Body.String())
 	}
 }
 

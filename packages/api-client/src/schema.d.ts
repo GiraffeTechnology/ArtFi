@@ -545,6 +545,7 @@ export interface components {
       source: "opensea";
       chain: string;
       contractAddress: string;
+      /** @description Canonical decimal token identifier in the inclusive uint256 range. */
       tokenId: string;
       /** @enum {string} */
       result: "discovered" | "not-found" | "unsupported-chain";
@@ -685,6 +686,8 @@ export interface components {
     };
     ExternalMarketActivity: components["schemas"]["ExternalMarketEventRequest"] & {
       eventId: string;
+      /** @enum {string} */
+      status: "active" | "cancelled" | "invalidated" | "fulfilled" | "observed";
     };
     ExternalMarketAsset: {
       source: string;
@@ -1024,6 +1027,14 @@ export interface operations {
       query?: {
         source?: string;
         contract?: string;
+        chain?: string;
+        /** @description Canonical decimal token identifier in the inclusive uint256 range. */
+        tokenId?: string;
+        eventFamily?: "order" | "sale" | "transfer" | "metadata";
+        status?:
+          "active" | "cancelled" | "invalidated" | "fulfilled" | "observed";
+        /** @description Opaque cursor returned by the previous page. It is bound to the stable event ordering and exact filter set. */
+        cursor?: string;
         limit?: number;
       };
       header?: never;
@@ -1047,6 +1058,9 @@ export interface operations {
             execution: "external-deeplink-only";
             /** @constant */
             custody: false;
+            hasMore: boolean;
+            /** @description Opaque cursor for the next page; absent on the final page. */
+            nextCursor?: string;
           };
         };
       };
