@@ -685,6 +685,8 @@ export interface components {
     };
     ExternalMarketActivity: components["schemas"]["ExternalMarketEventRequest"] & {
       eventId: string;
+      /** Format: date-time */
+      receivedAt: string;
     };
     ExternalMarketAsset: {
       source: string;
@@ -1024,6 +1026,12 @@ export interface operations {
       query?: {
         source?: string;
         contract?: string;
+        chain?: string;
+        tokenId?: string;
+        eventFamily?: "order" | "sale" | "transfer" | "metadata";
+        eventType?: string;
+        /** @description Opaque cursor returned by the previous response. */
+        cursor?: string;
         limit?: number;
       };
       header?: never;
@@ -1042,6 +1050,9 @@ export interface operations {
             data: components["schemas"]["ExternalMarketActivity"][];
             /** @constant */
             schemaVersion: "1";
+            /** @description Opaque cursor for the next page; absent at exhaustion */
+            nextCursor?: string;
+            hasMore: boolean;
             source: string;
             /** @constant */
             execution: "external-deeplink-only";
