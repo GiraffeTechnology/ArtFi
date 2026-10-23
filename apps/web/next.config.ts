@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(process.cwd(), "../.."),
   poweredByHeader: false,
   reactStrictMode: true,
+  experimental: {
+    webpackMemoryOptimizations: true,
+  },
 };
 
 export default nextConfig;
