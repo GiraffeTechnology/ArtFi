@@ -1,11 +1,15 @@
 package httpapi
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -15,9 +19,10 @@ import (
 )
 
 var (
-	marketSourcePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-	marketChainPattern  = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-	marketEntityPattern = regexp.MustCompile(`^[A-Za-z0-9:/_.-]{1,196}$`)
+	marketSourcePattern  = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+	marketChainPattern   = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+	marketEntityPattern  = regexp.MustCompile(`^[A-Za-z0-9:/_.-]{1,196}$`)
+	marketEventIDPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
 var marketEventTypes = map[string]struct{}{
@@ -75,6 +80,7 @@ type marketActivity struct {
 	MarketplaceURL      string         `json:"marketplaceUrl,omitempty"`
 	EventTimestamp      string         `json:"eventTimestamp"`
 	Payload             map[string]any `json:"payload"`
+	Status              string         `json:"status"`
 }
 
 type marketActivityResponse struct {
@@ -83,6 +89,83 @@ type marketActivityResponse struct {
 	Source        string           `json:"source"`
 	Execution     string           `json:"execution"`
 	Custody       bool             `json:"custody"`
+	NextCursor    string           `json:"nextCursor,omitempty"`
+	HasMore       bool             `json:"hasMore"`
+}
+
+type marketActivityCursor struct {
+	SchemaVersion  int    `json:"v"`
+	EventTimestamp string `json:"t"`
+	ReceivedAt     string `json:"r"`
+	EventID        string `json:"i"`
+	FilterHash     string `json:"f"`
+}
+
+func marketActivityFilterHash(source, chain, contract, tokenID, eventFamily, status string) string {
+	material := strings.Join([]string{source, chain, contract, tokenID, eventFamily, status}, "\x00")
+	digest := sha256.Sum256([]byte(material))
+	return hex.EncodeToString(digest[:])
+}
+
+func validMarketUint256(value string) bool {
+	if !uint256Pattern.MatchString(value) {
+		return false
+	}
+	parsed, ok := new(big.Int).SetString(value, 10)
+	return ok && parsed.Sign() >= 0 && parsed.BitLen() <= 256
+}
+
+func encodeMarketActivityCursor(eventTimestamp, receivedAt, eventID, filterHash string) string {
+	payload, _ := json.Marshal(marketActivityCursor{
+		SchemaVersion:  1,
+		EventTimestamp: eventTimestamp,
+		ReceivedAt:     receivedAt,
+		EventID:        eventID,
+		FilterHash:     filterHash,
+	})
+	return base64.RawURLEncoding.EncodeToString(payload)
+}
+
+func decodeMarketActivityCursor(value, expectedFilterHash string) (time.Time, time.Time, string, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil || len(raw) > 512 {
+		return time.Time{}, time.Time{}, "", fmt.Errorf("invalid activity cursor")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var cursor marketActivityCursor
+	if err := decoder.Decode(&cursor); err != nil {
+		return time.Time{}, time.Time{}, "", fmt.Errorf("invalid activity cursor")
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return time.Time{}, time.Time{}, "", fmt.Errorf("invalid activity cursor")
+	}
+	eventTimestamp, eventErr := time.Parse(time.RFC3339Nano, cursor.EventTimestamp)
+	receivedAt, receivedErr := time.Parse(time.RFC3339Nano, cursor.ReceivedAt)
+	if cursor.SchemaVersion != 1 || eventErr != nil || receivedErr != nil ||
+		!marketEventIDPattern.MatchString(cursor.EventID) ||
+		!marketEventIDPattern.MatchString(cursor.FilterHash) ||
+		subtle.ConstantTimeCompare([]byte(cursor.FilterHash), []byte(expectedFilterHash)) != 1 {
+		return time.Time{}, time.Time{}, "", fmt.Errorf("invalid activity cursor")
+	}
+	return eventTimestamp, receivedAt, cursor.EventID, nil
+}
+
+func marketActivityStatus(family, eventType string) string {
+	switch eventType {
+	case "item_cancelled":
+		return "cancelled"
+	case "order_invalidate":
+		return "invalidated"
+	}
+	switch family {
+	case "order":
+		return "active"
+	case "sale":
+		return "fulfilled"
+	default:
+		return "observed"
+	}
 }
 
 func parseMarketplaceSources(value string) map[string]struct{} {
@@ -169,10 +252,10 @@ func (service *rwaService) validateMarketEvent(input marketEventRequest) error {
 			return fmt.Errorf("marketplace addresses must be 20-byte hexadecimal values")
 		}
 	}
-	if input.TokenID != "" && !uint256Pattern.MatchString(input.TokenID) {
+	if input.TokenID != "" && !validMarketUint256(input.TokenID) {
 		return fmt.Errorf("token id must be an unsigned 256-bit decimal value")
 	}
-	if input.Price != "" && !uint256Pattern.MatchString(input.Price) {
+	if input.Price != "" && !validMarketUint256(input.Price) {
 		return fmt.Errorf("price must be an unsigned 256-bit decimal value")
 	}
 	if len(input.CollectionSlug) > 160 || len(input.PaymentSymbol) > 16 {
@@ -329,6 +412,39 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid contract", "Contract must be a 20-byte Ethereum address.")
 		return
 	}
+	chain := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("chain")))
+	if chain != "" && !marketChainPattern.MatchString(chain) {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid chain", "Chain must be a normalized marketplace chain name.")
+		return
+	}
+	tokenID := strings.TrimSpace(request.URL.Query().Get("tokenId"))
+	if tokenID != "" && !validMarketUint256(tokenID) {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid token ID", "Token ID must be an unsigned 256-bit decimal value.")
+		return
+	}
+	eventFamily := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("eventFamily")))
+	if eventFamily != "" {
+		if _, ok := marketEventFamilies[eventFamily]; !ok {
+			writeProblem(writer, request, http.StatusBadRequest, "Invalid event family", "Event family is not supported.")
+			return
+		}
+	}
+	status := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("status")))
+	if status != "" && status != "active" && status != "cancelled" && status != "invalidated" && status != "fulfilled" && status != "observed" {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid activity status", "Status is not supported.")
+		return
+	}
+	var cursorEventTimestamp, cursorReceivedAt time.Time
+	var cursorEventID string
+	filterHash := marketActivityFilterHash(source, chain, contract, tokenID, eventFamily, status)
+	if cursor := strings.TrimSpace(request.URL.Query().Get("cursor")); cursor != "" {
+		var err error
+		cursorEventTimestamp, cursorReceivedAt, cursorEventID, err = decodeMarketActivityCursor(cursor, filterHash)
+		if err != nil {
+			writeProblem(writer, request, http.StatusBadRequest, "Invalid cursor", "Cursor is malformed or unsupported.")
+			return
+		}
+	}
 	response := marketActivityResponse{
 		Data: []marketActivity{}, SchemaVersion: "1", Source: source,
 		Execution: "external-deeplink-only", Custody: false,
@@ -344,15 +460,47 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 		       COALESCE(transaction_hash, ''), COALESCE(contract_address, ''), COALESCE(token_id, ''),
 		       COALESCE(maker_address, ''), COALESCE(price, ''), COALESCE(payment_token_address, ''),
 		       COALESCE(payment_symbol, ''), COALESCE(marketplace_url, ''),
-		       DATE_FORMAT(event_timestamp, '%Y-%m-%dT%H:%i:%s.%fZ'), payload
+		       DATE_FORMAT(event_timestamp, '%Y-%m-%dT%H:%i:%s.%fZ'), payload,
+		       DATE_FORMAT(received_at, '%Y-%m-%dT%H:%i:%s.%fZ')
 		FROM external_market_events WHERE source = ?`
 	args := []any{source}
 	if contract != "" {
 		query += " AND contract_address = ?"
 		args = append(args, contract)
 	}
-	query += " ORDER BY event_timestamp DESC, received_at DESC LIMIT ?"
-	args = append(args, limit)
+	if chain != "" {
+		query += " AND chain_name = ?"
+		args = append(args, chain)
+	}
+	if tokenID != "" {
+		query += " AND token_id = ?"
+		args = append(args, tokenID)
+	}
+	if eventFamily != "" {
+		query += " AND event_family = ?"
+		args = append(args, eventFamily)
+	}
+	switch status {
+	case "active":
+		query += " AND event_family = 'order' AND event_type NOT IN ('item_cancelled', 'order_invalidate')"
+	case "cancelled":
+		query += " AND event_type = 'item_cancelled'"
+	case "invalidated":
+		query += " AND event_type = 'order_invalidate'"
+	case "fulfilled":
+		query += " AND event_family = 'sale'"
+	case "observed":
+		query += " AND event_family IN ('transfer', 'metadata')"
+	}
+	if cursorEventID != "" {
+		query += ` AND (event_timestamp < ? OR
+			(event_timestamp = ? AND received_at < ?) OR
+			(event_timestamp = ? AND received_at = ? AND event_id < ?))`
+		args = append(args, cursorEventTimestamp, cursorEventTimestamp, cursorReceivedAt,
+			cursorEventTimestamp, cursorReceivedAt, cursorEventID)
+	}
+	query += " ORDER BY event_timestamp DESC, received_at DESC, event_id DESC LIMIT ?"
+	args = append(args, limit+1)
 	rows, err := service.db.QueryContext(request.Context(), query, args...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity could not be queried.")
@@ -360,14 +508,16 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 	}
 	defer rows.Close()
 	items := make([]marketActivity, 0)
+	receivedAtValues := make([]string, 0)
 	for rows.Next() {
 		var item marketActivity
 		var payload []byte
+		var receivedAt string
 		if err := rows.Scan(&item.EventID, &item.SchemaVersion, &item.Source, &item.EventType,
 			&item.EventFamily, &item.EntityKey, &item.Version, &item.Chain, &item.CollectionSlug,
 			&item.OrderHash, &item.TransactionHash, &item.ContractAddress, &item.TokenID,
 			&item.MakerAddress, &item.Price, &item.PaymentTokenAddress, &item.PaymentSymbol,
-			&item.MarketplaceURL, &item.EventTimestamp, &payload); err != nil {
+			&item.MarketplaceURL, &item.EventTimestamp, &payload, &receivedAt); err != nil {
 			writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity could not be decoded.")
 			return
 		}
@@ -375,11 +525,25 @@ func (service *rwaService) getMarketActivity(writer http.ResponseWriter, request
 			writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored source payload is invalid.")
 			return
 		}
+		item.Status = marketActivityStatus(item.EventFamily, item.EventType)
 		items = append(items, item)
+		receivedAtValues = append(receivedAtValues, receivedAt)
 	}
 	if err := rows.Err(); err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market mirror unavailable", "The mirrored activity query was interrupted.")
 		return
+	}
+	if len(items) > limit {
+		response.HasMore = true
+		items = items[:limit]
+		receivedAtValues = receivedAtValues[:limit]
+		last := items[len(items)-1]
+		response.NextCursor = encodeMarketActivityCursor(
+			last.EventTimestamp,
+			receivedAtValues[len(receivedAtValues)-1],
+			last.EventID,
+			filterHash,
+		)
 	}
 	response.Data = items
 	service.storeCachedJSON(request.Context(), cacheToken, response)
