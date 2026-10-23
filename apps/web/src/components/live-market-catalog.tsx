@@ -1,8 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import localFont from "next/font/local";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { MarketActivityHistory } from "./market-activity-history";
+
+const recoveryFont = localFont({
+  src: "../fonts/InterVariable.woff2",
+  display: "swap",
+  weight: "100 900",
+  fallback: [],
+});
 
 const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
@@ -26,18 +34,38 @@ type MarketCatalogResponse = {
   runtime: true;
 };
 
+type MarketProviderHealth = {
+  source: string;
+  state: "starting" | "healthy" | "degraded" | "stale" | "stopped";
+  stale: boolean;
+  realtimeConnected: boolean;
+  lastBackfillSuccessAt?: string;
+  lastEventAt?: string;
+  lastFailureAt?: string;
+  receivedAt: string;
+  reportLagSeconds: number;
+  reportingStale: boolean;
+  available: boolean;
+};
+
 export function LiveMarketCatalog() {
   const [assets, setAssets] = useState<MarketAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string>();
+  const [providerHealth, setProviderHealth] = useState<MarketProviderHealth>();
+  const [providerHealthError, setProviderHealthError] = useState<string>();
   const [query, setQuery] = useState("");
   const [listingStatus, setListingStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [page, setPage] = useState(1);
+  const requestInFlight = useRef(false);
   const pageSize = 12;
 
   const loadCatalog = useCallback(async () => {
-    try {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
+    setLoading(true);
+    const catalogRequest = async () => {
       const collected: MarketAsset[] = [];
       let sourcePage = 1;
       let total = 0;
@@ -55,17 +83,54 @@ export function LiveMarketCatalog() {
         total = body.total;
         sourcePage += 1;
       } while (collected.length < total && sourcePage <= 100);
-      setAssets(collected);
+      return collected;
+    };
+    const healthRequest = async () => {
+      const response = await fetch(
+        `${apiURL}/v1/market/health?source=opensea`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw await responseError(response);
+      const body = (await response.json()) as MarketProviderHealth;
+      if (
+        body.source !== "opensea" ||
+        typeof body.available !== "boolean" ||
+        typeof body.reportingStale !== "boolean" ||
+        typeof body.reportLagSeconds !== "number"
+      ) {
+        throw new Error("The provider health response is invalid.");
+      }
+      return body;
+    };
+
+    const [catalogResult, healthResult] = await Promise.allSettled([
+      catalogRequest(),
+      healthRequest(),
+    ]);
+    if (catalogResult.status === "fulfilled") {
+      setAssets(catalogResult.value);
       setCatalogError(undefined);
-    } catch (error) {
+    } else {
+      setAssets([]);
       setCatalogError(
-        error instanceof Error
-          ? error.message
+        catalogResult.reason instanceof Error
+          ? catalogResult.reason.message
           : "Live market data is unavailable.",
       );
-    } finally {
-      setLoading(false);
     }
+    if (healthResult.status === "fulfilled") {
+      setProviderHealth(healthResult.value);
+      setProviderHealthError(undefined);
+    } else {
+      setProviderHealth(undefined);
+      setProviderHealthError(
+        healthResult.reason instanceof Error
+          ? healthResult.reason.message
+          : "Provider health is unavailable.",
+      );
+    }
+    requestInFlight.current = false;
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -185,19 +250,46 @@ export function LiveMarketCatalog() {
         <span>
           {loading
             ? "Loading…"
-            : `${visibleAssets.length} shown · ${filteredAssets.length} matched · ${assets.length} total`}
+            : catalogError
+              ? "Market data unavailable"
+              : `${visibleAssets.length} shown · ${filteredAssets.length} matched · ${assets.length} total`}
         </span>
         <span>
           {lastObserved
             ? `Observed ${formatObserved(lastObserved)}`
-            : "Awaiting source events"}
+            : catalogError
+              ? "Awaiting a successful refresh"
+              : "Awaiting source events"}
         </span>
+        <span>{providerStatusLabel(providerHealth, loading)}</span>
       </div>
 
       {catalogError ? (
-        <div className="market-runtime-state" role="alert">
+        <div
+          className={`market-runtime-state ${recoveryFont.className}`}
+          role="alert"
+        >
           <strong>Live mirror unavailable</strong>
           <span>{catalogError} No fixture is shown as live data.</span>
+          <span>
+            Previous results are hidden until the market refresh succeeds.
+          </span>
+          <button
+            type="button"
+            className="wallet-button"
+            disabled={loading}
+            onClick={() => void loadCatalog()}
+          >
+            {loading ? "Retrying…" : "Retry market data"}
+          </button>
+        </div>
+      ) : null}
+      {!loading && (!providerHealth || !providerHealth.available) ? (
+        <div className="market-runtime-state" role="alert">
+          <strong>{providerWarningTitle(providerHealth)}</strong>
+          <span>
+            {providerWarningDetail(providerHealth, providerHealthError)}
+          </span>
         </div>
       ) : null}
       {!loading && !catalogError && assets.length === 0 ? (
@@ -315,4 +407,40 @@ function shortAddress(value: string) {
 function formatObserved(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? "Unknown" : parsed.toLocaleString();
+}
+
+function providerStatusLabel(
+  health: MarketProviderHealth | undefined,
+  loading: boolean,
+) {
+  if (loading) return "Checking provider status…";
+  if (!health) return "Provider status unavailable";
+  if (health.available) {
+    return `Provider live · report ${health.reportLagSeconds}s old`;
+  }
+  if (health.reportingStale) return "Provider report stale";
+  if (health.stale) return "Provider data stale";
+  return `Provider ${health.state}`;
+}
+
+function providerWarningTitle(health: MarketProviderHealth | undefined) {
+  if (!health) return "Provider status unavailable";
+  if (health.reportingStale) return "Provider report stale";
+  if (health.stale) return "Provider data stale";
+  if (!health.realtimeConnected) return "Provider stream disconnected";
+  return `Provider ${health.state}`;
+}
+
+function providerWarningDetail(
+  health: MarketProviderHealth | undefined,
+  error: string | undefined,
+) {
+  if (!health) {
+    return `${error || "No durable provider report is available."} Mirrored records remain read-only and are not presented as current.`;
+  }
+  const latest = health.lastEventAt || health.lastBackfillSuccessAt;
+  const observed = latest
+    ? ` Last source success: ${formatObserved(latest)}.`
+    : "";
+  return `OpenSea availability is not current.${observed} Mirrored records remain read-only and may be out of date.`;
 }

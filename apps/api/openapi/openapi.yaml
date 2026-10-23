@@ -208,6 +208,27 @@ paths:
         "200": { description: Idempotent replay accepted }
         "401": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /v1/indexer/market-health:
+    post:
+      operationId: ingestExternalMarketProviderHealth
+      description: Credential-gated durable runtime health reports from an approved read-only marketplace mirror.
+      parameters:
+        - name: X-Indexer-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExternalMarketProviderHealthReport"
+      responses:
+        "201": { description: First durable provider health report created }
+        "200": { description: Newer report or exact replay accepted }
+        "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
   /v1/market/activity:
     get:
       operationId: getExternalMarketActivity
@@ -304,6 +325,24 @@ paths:
                   source: { type: string }
                   runtime: { type: boolean, const: true }
         "400": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+  /v1/market/health:
+    get:
+      operationId: getExternalMarketProviderHealth
+      description: Read-only durable provider health with server-computed report staleness; it never implies transaction execution or custody.
+      parameters:
+        - name: source
+          in: query
+          schema: { type: string, default: opensea }
+      responses:
+        "200":
+          description: Latest durable health report for the approved provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalMarketProviderHealth"
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
   /v1/market/intents:
     post:
@@ -793,7 +832,10 @@ components:
         source: { type: string, const: opensea }
         chain: { type: string, pattern: "^[a-z0-9][a-z0-9-]{1,31}$" }
         contractAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
-        tokenId: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
+        tokenId:
+          type: string
+          pattern: "^(0|[1-9][0-9]{0,77})$"
+          description: Canonical decimal token identifier in the inclusive uint256 range.
     OpenSeaDiscoveryResult:
       type: object
       required:
@@ -814,10 +856,7 @@ components:
         source: { type: string, const: opensea }
         chain: { type: string }
         contractAddress: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
-        tokenId:
-          type: string
-          pattern: "^(0|[1-9][0-9]{0,77})$"
-          description: Canonical decimal token identifier in the inclusive uint256 range.
+        tokenId: { type: string, pattern: "^(0|[1-9][0-9]{0,77})$" }
         result:
           { type: string, enum: [discovered, not-found, unsupported-chain] }
         discovered: { type: boolean }
@@ -1068,6 +1107,44 @@ components:
                 type: string,
                 enum: [active, cancelled, invalidated, fulfilled, observed],
               }
+    ExternalMarketProviderHealthReport:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          schemaVersion,
+          source,
+          state,
+          stale,
+          realtimeConnected,
+          consecutiveFailures,
+          observedAt,
+          staleAfterSeconds,
+        ]
+      properties:
+        schemaVersion: { type: string, const: "1" }
+        source: { type: string, pattern: "^[a-z][a-z0-9-]{1,31}$" }
+        state:
+          { type: string, enum: [starting, healthy, degraded, stale, stopped] }
+        stale: { type: boolean }
+        realtimeConnected: { type: boolean }
+        consecutiveFailures: { type: integer, minimum: 0, maximum: 1000000 }
+        observedAt: { type: string, format: date-time }
+        lastBackfillSuccessAt: { type: string, format: date-time }
+        lastEventAt: { type: string, format: date-time }
+        lastFailureAt: { type: string, format: date-time }
+        freshnessLagSeconds: { type: integer, minimum: 0 }
+        staleAfterSeconds: { type: integer, minimum: 1, maximum: 86400 }
+    ExternalMarketProviderHealth:
+      allOf:
+        - $ref: "#/components/schemas/ExternalMarketProviderHealthReport"
+        - type: object
+          required: [receivedAt, reportLagSeconds, reportingStale, available]
+          properties:
+            receivedAt: { type: string, format: date-time }
+            reportLagSeconds: { type: integer, minimum: 0 }
+            reportingStale: { type: boolean }
+            available: { type: boolean }
     ExternalMarketAsset:
       type: object
       required:
