@@ -1,0 +1,30 @@
+# Deliberately independent of the historical root Compose database services.
+# Use a unique project name for isolated tests; never reuse a shared volume.
+services:
+  market-mirror:
+    image: ${ARTFI_MARKET_MIRROR_IMAGE:?Set the exact tested collector image digest}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ${ARTFI_MARKET_MIRROR_ENV_FILE:?Set the protected collector environment file}
+    environment:
+      NODE_ENV: production
+      OPENSEA_STREAM_STORAGE_PATH: /var/lib/artfi/market-mirror
+    volumes:
+      - market-mirror-state:/var/lib/artfi/market-mirror
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    stop_grace_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  market-mirror-state:
