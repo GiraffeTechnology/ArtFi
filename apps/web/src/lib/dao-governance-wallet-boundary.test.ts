@@ -74,6 +74,7 @@ function fixture() {
     rwaEligible: true,
     balanceOf: 1n,
     state: 1,
+    proposalSnapshot: 90n,
     getVotes: 10n,
     proposalThreshold: 10n,
   };

@@ -1,4 +1,5 @@
 "use client";
+import { DaoSnapshotWeight } from "./dao-snapshot-weight";
 
 import styles from "./dao-governance.module.css";
 
@@ -299,6 +300,37 @@ function DaoGovernanceSession({
     query: { enabled: proposalEnabled },
   });
 
+  const {
+    data: proposalSnapshot,
+    isSuccess: snapshotKnown,
+    refetch: refetchSnapshot,
+  } = useReadContract({
+    chainId: supportedChain.id,
+    abi: daoGovernorAbi,
+    address: governor,
+    functionName: "proposalSnapshot",
+    args: [proposalId ?? 0n],
+    query: { enabled: proposalEnabled },
+  });
+  const {
+    data: snapshotVotes,
+    isSuccess: snapshotVotesKnown,
+    refetch: refetchSnapshotVotes,
+  } = useReadContract({
+    chainId: supportedChain.id,
+    abi: daoGovernorAbi,
+    address: governor,
+    functionName: "getVotes",
+    args: [
+      address ?? "0x0000000000000000000000000000000000000000",
+      proposalSnapshot ?? 0n,
+    ],
+    query: {
+      enabled:
+        enabled && proposalEnabled && snapshotKnown && proposalState === 1,
+    },
+  });
+
   const { signMessageAsync, isPending: signaturePending } = useSignMessage();
   const { writeContractAsync } = useWriteContract();
   const transactionPending =
@@ -320,6 +352,15 @@ function DaoGovernanceSession({
   );
   const member =
     authenticated && verified && balanceKnown && balance > 0n && rwaEligible;
+  const canVote =
+    authenticated &&
+    verified &&
+    rwaEligible &&
+    proposalState === 1 &&
+    snapshotKnown &&
+    snapshotVotesKnown &&
+    typeof snapshotVotes === "bigint" &&
+    snapshotVotes > 0n;
   const canPropose =
     member &&
     votesKnown &&
@@ -437,6 +478,8 @@ function DaoGovernanceSession({
       ...(enabled ? [refetchBalance(), refetchVotes()] : []),
       refetchProposalState(),
       refetchProposalVotes(),
+      refetchSnapshot(),
+      refetchSnapshotVotes(),
     ]);
   }, [
     transaction?.phase,
@@ -446,6 +489,8 @@ function DaoGovernanceSession({
     refetchVotes,
     refetchProposalState,
     refetchProposalVotes,
+    refetchSnapshot,
+    refetchSnapshotVotes,
   ]);
 
   async function submitWrite(
@@ -456,7 +501,9 @@ function DaoGovernanceSession({
     verifySelection?: () => Promise<unknown>,
   ) {
     if (!active.current || !session.isCurrent(lease)) return;
-    if (!member || !correctChain || !address || !publicClient)
+    const eligibleForCall =
+      request.functionName === "castVote" ? canVote : member;
+    if (!eligibleForCall || !correctChain || !address || !publicClient)
       throw new Error("DAO ownership verification on Hoodi is required.");
     const boundRequest = {
       target: request.address,
@@ -860,6 +907,13 @@ function DaoGovernanceSession({
           </label>
           {proposalEnabled ? (
             <dl className="dao-metrics">
+              <DaoSnapshotWeight
+                snapshot={proposalSnapshot}
+                snapshotKnown={snapshotKnown}
+                weight={snapshotVotes}
+                weightKnown={snapshotVotesKnown}
+                authenticated={authenticated}
+              />
               <div>
                 <dt>Class</dt>
                 <dd>{proposalKinds[Number(proposalKind ?? 0)] ?? "Unknown"}</dd>
@@ -885,7 +939,7 @@ function DaoGovernanceSession({
           <div className="dao-actions-row">
             <button
               disabled={
-                !member ||
+                !canVote ||
                 !correctChain ||
                 proposalId === null ||
                 transactionPending
@@ -897,7 +951,7 @@ function DaoGovernanceSession({
             </button>
             <button
               disabled={
-                !member ||
+                !canVote ||
                 !correctChain ||
                 proposalId === null ||
                 transactionPending
@@ -909,7 +963,7 @@ function DaoGovernanceSession({
             </button>
             <button
               disabled={
-                !member ||
+                !canVote ||
                 !correctChain ||
                 proposalId === null ||
                 transactionPending
@@ -929,7 +983,8 @@ function DaoGovernanceSession({
           </p>
           <p className="dao-note">
             Voting weight comes from the proposal snapshot, preventing transfers
-            or temporary borrowing from being counted twice.
+            or temporary borrowing from being counted twice. A later transfer
+            does not remove voting power already recorded at that snapshot.
           </p>
         </article>
       </div>
