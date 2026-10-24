@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import { nftJournal, nftRequestHash, type NftOperation } from "./journal";
 const wallet = "0x1111111111111111111111111111111111111111";
 const id = "TEST_ONLY-operation-001";
@@ -274,5 +275,59 @@ describe("native NFT session journal response admission", () => {
       nftJournal("get", { id }, "TEST_ONLY-access"),
     ).rejects.toMatchObject({ status: 503 });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+function mysqlJsonOrdering(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(mysqlJsonOrdering);
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.length - b.length || a.localeCompare(b))
+        .map(([key, item]) => [key, mysqlJsonOrdering(item)]),
+    );
+  return value;
+}
+describe("native journal MySQL JSON round-trip", () => {
+  it.each(["get", "create", "update"] as const)(
+    "retains the original digest and terms after persisted key reordering for %s",
+    async (action) => {
+      const input = record();
+      const wireHash = createHash("sha256")
+        .update(JSON.stringify(input.plan.request))
+        .digest("hex");
+      const stored = record();
+      if (action === "update") stored.revision += 1;
+      reply(mysqlJsonOrdering(stored));
+      const result = await nftJournal(
+        action,
+        action === "get" ? { id } : input,
+        "TEST_ONLY-access",
+      );
+      expect(result.requestHash).toBe(wireHash);
+      expect(result.plan.request).toEqual(input.plan.request);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    },
+  );
+  it("does not revalidate an expired original listing against the current clock", async () => {
+    const stored = record();
+    stored.plan.request.action = "list";
+    stored.plan.request.expiresAt = 1;
+    delete stored.plan.request.orderHash;
+    stored.requestHash = createHash("sha256")
+      .update(JSON.stringify(stored.plan.request))
+      .digest("hex");
+    reply(mysqlJsonOrdering(stored));
+    expect(
+      (await nftJournal("get", { id }, "TEST_ONLY-access")).requestHash,
+    ).toBe(stored.requestHash);
+  });
+  it("does not discard unknown fields while reconstructing the original wire", async () => {
+    const stored = record();
+    Reflect.set(stored.plan.request, "unexpected", "unreviewed");
+    reply(mysqlJsonOrdering(stored));
+    await expect(
+      nftJournal("get", { id }, "TEST_ONLY-access"),
+    ).rejects.toMatchObject({ status: 503 });
   });
 });
