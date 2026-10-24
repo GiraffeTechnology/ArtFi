@@ -37,7 +37,9 @@ export function nftRequestHash(request: NftRequest) {
   ];
   if (
     required.some((key) => !Object.hasOwn(request, key)) ||
-    Object.keys(request).some((key) => ![...required, "orderHash"].includes(key))
+    Object.keys(request).some(
+      (key) => ![...required, "orderHash"].includes(key),
+    )
   )
     throw new NftError(503, "The NFT journal request fields changed.");
   const ordered: NftRequest = {
@@ -48,7 +50,9 @@ export function nftRequestHash(request: NftRequest) {
     quantity: request.quantity,
     priceWei: request.priceWei,
     expiresAt: request.expiresAt,
-    ...(request.orderHash !== undefined ? { orderHash: request.orderHash } : {}),
+    ...(request.orderHash !== undefined
+      ? { orderHash: request.orderHash }
+      : {}),
   };
   return createHash("sha256").update(JSON.stringify(ordered)).digest("hex");
 }
