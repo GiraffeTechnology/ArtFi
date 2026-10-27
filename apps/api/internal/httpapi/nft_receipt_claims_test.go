@@ -13,9 +13,9 @@ import (
 
 func syntheticReceiptClaims() NFTReceiptCapabilityClaims {
 	return NFTReceiptCapabilityClaims{
-		ReceiptPhase: "funded",
-		ReceiptNonce: "0",
-		ReceiptPlanDigest: "0x" + strings.Repeat("3", 64),
+		ReceiptPhase:              "funded",
+		ReceiptNonce:              "0",
+		ReceiptPlanDigest:         "0x" + strings.Repeat("3", 64),
 		ReceiptJournalBindingHash: "0x" + strings.Repeat("4", 64),
 	}
 }
@@ -82,29 +82,29 @@ func TestNFTReceiptCapabilityRejectsMalformedAtomicClaimGroups(t *testing.T) {
 		}
 	}
 	cases := map[string]string{
-		"phase alias": strings.Replace(string(valid), `"funded"`, `"Funded"`, 1),
-		"foreign phase": strings.Replace(string(valid), `"funded"`, `"confirmed"`, 1),
-		"leading zero": strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"00"`, 1),
-		"negative": strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"-1"`, 1),
-		"fraction": strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"1.0"`, 1),
-		"exponent": strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"1e3"`, 1),
-		"slot overflow": strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"9007199254740992"`, 1),
-		"uint256 overflow": strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"`+strings.Repeat("9", 79)+`"`, 1),
-		"duplicate nonce": strings.TrimSuffix(string(valid), "}") + `,"receiptNonce":"1"}`,
+		"phase alias":          strings.Replace(string(valid), `"funded"`, `"Funded"`, 1),
+		"foreign phase":        strings.Replace(string(valid), `"funded"`, `"confirmed"`, 1),
+		"leading zero":         strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"00"`, 1),
+		"negative":             strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"-1"`, 1),
+		"fraction":             strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"1.0"`, 1),
+		"exponent":             strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"1e3"`, 1),
+		"slot overflow":        strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"9007199254740992"`, 1),
+		"uint256 overflow":     strings.Replace(string(valid), `"receiptNonce":"0"`, `"receiptNonce":"`+strings.Repeat("9", 79)+`"`, 1),
+		"duplicate nonce":      strings.TrimSuffix(string(valid), "}") + `,"receiptNonce":"1"}`,
 		"duplicate same phase": strings.TrimSuffix(string(valid), "}") + `,"receiptPhase":"funded"}`,
-		"case alias": strings.Replace(string(valid), `"receiptPhase"`, `"ReceiptPhase"`, 1),
-		"unknown field": strings.TrimSuffix(string(valid), "}") + `,"receiptPurpose":"read"}`,
-		"trailing object": string(valid) + "{}",
-		"null capability": "null",
+		"case alias":           strings.Replace(string(valid), `"receiptPhase"`, `"ReceiptPhase"`, 1),
+		"unknown field":        strings.TrimSuffix(string(valid), "}") + `,"receiptPurpose":"read"}`,
+		"trailing object":      string(valid) + "{}",
+		"null capability":      "null",
 	}
 	for _, field := range []string{"receiptPlanDigest", "receiptJournalBindingHash"} {
 		var values map[string]json.RawMessage
 		_ = json.Unmarshal(valid, &values)
 		for name, digest := range map[string]string{
-			"zero": "0x"+strings.Repeat("0", 64),
-			"bare": strings.Repeat("a", 64),
-			"uppercase": "0x"+strings.Repeat("A", 64),
-			"short": "0x01",
+			"zero":      "0x" + strings.Repeat("0", 64),
+			"bare":      strings.Repeat("a", 64),
+			"uppercase": "0x" + strings.Repeat("A", 64),
+			"short":     "0x01",
 		} {
 			values[field], _ = json.Marshal(digest)
 			raw, _ := json.Marshal(values)

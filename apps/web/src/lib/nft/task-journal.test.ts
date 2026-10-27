@@ -224,8 +224,9 @@ describe("fixed authenticated task journal adapter", () => {
           mode === "empty"
             ? null
             : new ReadableStream<Uint8Array>({ cancel: cleanup });
-        const reader = mode === "locked" ? body!.getReader() : undefined;
         const response = new Response(body, { status });
+        const reader =
+          mode === "locked" ? response.body!.getReader() : undefined;
         const transport = vi.fn(async () => {
           expect(f.isGateHeld()).toBe(true);
           return response;

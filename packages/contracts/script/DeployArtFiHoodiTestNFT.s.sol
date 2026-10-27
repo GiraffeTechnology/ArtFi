@@ -13,7 +13,8 @@ interface VmHoodiTestNFT {
 /// @notice Optional isolated test deployment; an existing controlled signer is supplied to Forge.
 /// @dev This source reads no key and supplies no default issuer, task identity or endpoint.
 contract DeployArtFiHoodiTestNFT {
-    VmHoodiTestNFT private constant VM = VmHoodiTestNFT(address(uint160(uint256(keccak256("hevm cheat code")))));
+    VmHoodiTestNFT private constant VM =
+        VmHoodiTestNFT(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     error UnsupportedChain(uint256 chainId);
     error InvalidBinding();

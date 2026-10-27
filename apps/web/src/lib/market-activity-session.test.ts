@@ -53,6 +53,26 @@ afterEach(() => {
 });
 
 describe("contract-filtered market history", () => {
+  it.each([[[]], [[event("a")]]])(
+    "clears a previous read error after successful retry",
+    async (rows) => {
+      let calls = 0;
+      const session = createMarketHistorySession(async () => {
+        if (++calls === 1) throw new Error("TEST_ONLY unavailable");
+        return page(rows);
+      });
+      session.activate();
+      await flush();
+      expect(session.getSnapshot().error).toBeTruthy();
+      await session.loadMore();
+      expect(session.getSnapshot().error).toBeUndefined();
+      expect(session.getSnapshot().events).toHaveLength(rows.length);
+      expect(session.getSnapshot().finished).toBe(true);
+      expect(calls).toBe(2);
+      session.deactivate();
+    },
+  );
+
   it("encodes the exact supported API filter and opaque cursor", () => {
     expect(normalizeHistoryContract(" " + contractA.toUpperCase() + " ")).toBe(
       contractA,
@@ -329,13 +349,11 @@ describe("attributed history page validation", () => {
 
 describe("bounded activity transport", () => {
   it("uses no-store GET and a cancellation signal", async () => {
-    const fetcher = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify(page()), {
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-        }),
-      );
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(page()), {
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      }),
+    );
     vi.stubGlobal("fetch", fetcher);
     expect(
       await readMarketHistoryPage(
@@ -375,13 +393,11 @@ describe("bounded activity transport", () => {
   it("rejects oversized streamed data", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(" ".repeat(2 * 1024 * 1024 + 1), {
-            headers: { "Content-Type": "application/json" },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response(" ".repeat(2 * 1024 * 1024 + 1), {
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
     );
     await expect(
       readMarketHistoryPage("", "", new AbortController().signal),

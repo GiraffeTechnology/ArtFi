@@ -1,3 +1,4 @@
+import { testReceipt, testReceiptClient } from "./market-receipt-test-client";
 import { describe, expect, it, vi } from "vitest";
 import type { PublicClient, Hash } from "viem";
 import {
@@ -439,13 +440,11 @@ describe.each(["whole", "fraction"] as const)(
           });
           changeAfterApproval?.(mock);
         }
-        return { status: "success", transactionHash: hash };
+        return testReceipt(hash);
       });
       const run = () =>
         settleConfirmedSale({
-          client: {
-            waitForTransactionReceipt: wait,
-          } as unknown as PublicClient,
+          client: testReceiptClient(wait),
           approvePayment: approve,
           settle: fill,
           onStage: () => {},

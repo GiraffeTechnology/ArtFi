@@ -122,13 +122,20 @@ async function holderFixture(page: Page, expiresIn = 600_000) {
   let verifyRequests = 0;
   await page.route("**/api/charity/holder/challenge", (route) =>
     route.fulfill({
-      json: { message: "Test-only edition 1 ownership challenge" },
+      json: {
+        address: walletA,
+        tokenId: "1",
+        message: "Test-only edition 1 ownership challenge",
+        expiresAt: new Date(Date.now() + expiresIn).toISOString(),
+      },
     }),
   );
   await page.route("**/api/charity/holder/verify", (route) => {
     verifyRequests++;
     return route.fulfill({
       json: {
+        verified: true,
+        holderBenefit: "watermarked-copy-after-ownership-verification",
         address: walletA,
         tokenId: "1",
         expiresAt: new Date(Date.now() + expiresIn).toISOString(),
@@ -138,9 +145,15 @@ async function holderFixture(page: Page, expiresIn = 600_000) {
   await page.route("**/api/charity/editions/1/holder-asset", (route) =>
     route.fulfill({
       json: {
+        tokenId: "1",
+        class: "watermarked-holder",
         contentType: "image/png",
         byteLength: 20,
         sha256: "a".repeat(64),
+        objectKey: "TEST_ONLY-watermarked-copy",
+        artworkPreview: "not-provided",
+        rights:
+          "This edition conveys no copyright, physical title, possession, redemption, commercial-use or reproduction right.",
       },
     }),
   );
@@ -282,22 +295,25 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
                 ? "WALLET_A_ONLY"
                 : "WALLET_B_ONLY",
             balance: "2",
-            updatedAt: "2026-10-02",
+            updatedAt: "2026-10-02T00:00:00Z",
           },
         ],
         transactions: [],
         offers: [],
         notifications: [
           {
-            id: `${address}:1`,
+            id: `560048:0x${"1".repeat(64)}:1`,
             transactionHash: `0x${"1".repeat(64)}`,
             logIndex: 1,
             contractAddress: address,
-            eventName: "BidPlaced",
+            eventName:
+              address.toLowerCase() === walletA.toLowerCase()
+                ? "WalletABidPlaced"
+                : "WalletBBidPlaced",
             blockNumber: 10,
             status: notificationStatus,
             observedAt: "2026-10-05T12:00:00Z",
-            message: `${address.toLowerCase() === walletA.toLowerCase() ? "WALLET_A_NOTICE" : "WALLET_B_NOTICE"}: ${notificationStatus === "removed" ? "Previous confirmation no longer applies." : "Confirmed indexed bid."}`,
+            message: `${address.toLowerCase() === walletA.toLowerCase() ? "WalletABidPlaced" : "WalletBBidPlaced"} ${notificationStatus === "removed" ? "was removed from the canonical chain. Any previous confirmation no longer applies." : "is confirmed in the indexed chain history."}`,
           },
         ],
         performance: {
@@ -358,18 +374,21 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
     }),
   ).toBeVisible();
   await expect(
-    page.getByText("WALLET_A_NOTICE: Confirmed indexed bid.", { exact: true }),
+    page.getByText(
+      "WalletABidPlaced is confirmed in the indexed chain history.",
+      { exact: true },
+    ),
   ).toBeVisible();
   notificationStatus = "removed";
   await page
     .getByRole("button", { name: "Refresh positions, P&L and notifications" })
     .click();
   await expect(
-    page.getByText("BidPlaced · removed", { exact: true }),
+    page.getByText("WalletABidPlaced · removed", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText(
-      "WALLET_A_NOTICE: Previous confirmation no longer applies.",
+      "WalletABidPlaced was removed from the canonical chain. Any previous confirmation no longer applies.",
       { exact: true },
     ),
   ).toBeVisible();
@@ -384,7 +403,7 @@ test("portfolio retry and wallet switch never display another wallet's holdings"
   ).toBeEnabled();
   await expect(
     page.getByText(
-      "WALLET_A_NOTICE: Previous confirmation no longer applies.",
+      "WalletABidPlaced was removed from the canonical chain. Any previous confirmation no longer applies.",
       { exact: true },
     ),
   ).toHaveCount(0);

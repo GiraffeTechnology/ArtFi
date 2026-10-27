@@ -103,6 +103,22 @@ describe("TEST_ONLY session read-only chain fixture", () => {
     );
   });
 
+  it("keeps a pinned block stable when wall time advances", () => {
+    const read = (tag: string, time: number) =>
+      sessionRPCResult(
+        { id: 1, method: "eth_getBlockByNumber", params: [tag, false] },
+        seller,
+        () => time,
+      );
+    const initial = read("latest", 100_000);
+    expect(read("0x64", 101_000)).toEqual(initial);
+    expect(read("latest", 101_000)).not.toEqual(initial);
+    expect(() => read("pending", 101_000)).toThrow(
+      "Unsupported TEST_ONLY block tag",
+    );
+    expect(() => read("0x66", 101_000)).toThrow("Future TEST_ONLY block");
+  });
+
   it("rejects blockchain writes and unimplemented RPC instead of reporting success", () => {
     for (const method of [
       "eth_sendTransaction",
