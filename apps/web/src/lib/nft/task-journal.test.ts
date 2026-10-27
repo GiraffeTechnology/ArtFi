@@ -79,7 +79,13 @@ function fixture(result = record()) {
       }
     },
   };
-  return { config, requests, scopes, journal: createNftTaskJournal(config) };
+  return {
+    config,
+    requests,
+    scopes,
+    isGateHeld: () => gateHeld,
+    journal: createNftTaskJournal(config),
+  };
 }
 describe("fixed authenticated task journal adapter", () => {
   it("fails closed without configuration or on an insecure endpoint", async () => {
@@ -203,6 +209,67 @@ describe("fixed authenticated task journal adapter", () => {
       ).rejects.toMatchObject({ status: response ? 409 : 503 });
       expect(transport).toHaveBeenCalledTimes(1);
     }
+  });
+  describe.each([403, 409, 429])("HTTP %s response cleanup", (status) => {
+    it.each(["pending", "rejected", "locked", "empty"] as const)(
+      "releases the capability gate with a %s body without retrying",
+      async (mode) => {
+        const f = fixture();
+        const cleanup = vi.fn(() => {
+          if (mode === "pending") return new Promise<void>(() => {});
+          if (mode === "rejected")
+            return Promise.reject(new Error("Synthetic cleanup failure"));
+        });
+        const body =
+          mode === "empty"
+            ? null
+            : new ReadableStream<Uint8Array>({ cancel: cleanup });
+        const reader = mode === "locked" ? body!.getReader() : undefined;
+        const response = new Response(body, { status });
+        const transport = vi.fn(async () => {
+          expect(f.isGateHeld()).toBe(true);
+          return response;
+        });
+        f.config.transport = transport;
+        const gate = vi.spyOn(f.config, "withCapability");
+        const journal = createNftTaskJournal(f.config);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const result = await Promise.race([
+            journal(principal, "update", record()).then(
+              () => ({ kind: "unexpected-success" as const }),
+              (error: unknown) => ({ kind: "error" as const, error }),
+            ),
+            new Promise<{ kind: "cleanup-timeout" }>((resolve) => {
+              timer = setTimeout(
+                () => resolve({ kind: "cleanup-timeout" }),
+                1000,
+              );
+            }),
+          ]);
+          expect(result.kind).toBe("error");
+          if (result.kind !== "error")
+            throw new Error("The HTTP failure did not release the gate.");
+          expect(result.error).toMatchObject({
+            status: status === 429 ? 503 : status,
+            message:
+              "The task operation could not be verified. Read its durable state before retrying.",
+          });
+          expect(f.isGateHeld()).toBe(false);
+          expect(transport).toHaveBeenCalledTimes(1);
+          expect(gate).toHaveBeenCalledTimes(1);
+          expect(f.scopes).toHaveLength(1);
+          expect(cleanup).toHaveBeenCalledTimes(
+            mode === "locked" || mode === "empty" ? 0 : 1,
+          );
+          // Let a rejected cancellation settle so Vitest can detect unhandled errors.
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        } finally {
+          clearTimeout(timer);
+          reader?.releaseLock();
+        }
+      },
+    );
   });
   it("pins dependencies and snapshots operation before capability awaits", async () => {
     const f = fixture();
