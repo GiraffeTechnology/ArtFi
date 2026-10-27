@@ -22,49 +22,49 @@ type notificationService struct {
 
 type notificationEvent struct {
 	TransactionHash string `json:"transactionHash"`
-	LogIndex uint32 `json:"logIndex"`
+	LogIndex        uint32 `json:"logIndex"`
 	ContractAddress string `json:"contractAddress"`
-	EventName string `json:"eventName"`
-	BlockNumber string `json:"blockNumber"`
+	EventName       string `json:"eventName"`
+	BlockNumber     string `json:"blockNumber"`
 }
 
 type inboxNotification struct {
-	ID string `json:"id"`
-	SourceKey string `json:"sourceKey"`
-	SourceKind string `json:"sourceKind"`
-	SourceRevision string `json:"sourceRevision"`
-	State string `json:"state"`
-	Read bool `json:"read"`
-	ReadAt *string `json:"readAt"`
-	MessageCode string `json:"messageCode"`
-	Event *notificationEvent `json:"event"`
-	Text *string `json:"text"`
+	ID             string             `json:"id"`
+	SourceKey      string             `json:"sourceKey"`
+	SourceKind     string             `json:"sourceKind"`
+	SourceRevision string             `json:"sourceRevision"`
+	State          string             `json:"state"`
+	Read           bool               `json:"read"`
+	ReadAt         *string            `json:"readAt"`
+	MessageCode    string             `json:"messageCode"`
+	Event          *notificationEvent `json:"event"`
+	Text           *string            `json:"text"`
 }
 
 type notificationPreferences struct {
-	Revision string `json:"revision"`
-	TransactionAlerts bool `json:"transactionAlerts"`
-	SystemMessageAlerts bool `json:"systemMessageAlerts"`
+	Revision            string `json:"revision"`
+	TransactionAlerts   bool   `json:"transactionAlerts"`
+	SystemMessageAlerts bool   `json:"systemMessageAlerts"`
 }
 
 type notificationPage struct {
-	allNotifications []inboxNotification
-	Address string `json:"address"`
-	ChainID int `json:"chainId"`
-	Notifications []inboxNotification `json:"notifications"`
-	Preferences notificationPreferences `json:"preferences"`
-	ChainEventsAvailable bool `json:"chainEventsAvailable"`
+	allNotifications     []inboxNotification
+	Address              string                  `json:"address"`
+	ChainID              int                     `json:"chainId"`
+	Notifications        []inboxNotification     `json:"notifications"`
+	Preferences          notificationPreferences `json:"preferences"`
+	ChainEventsAvailable bool                    `json:"chainEventsAvailable"`
 }
 
 type notificationReadInput struct {
-	ID string `json:"id"`
+	ID                     string `json:"id"`
 	ExpectedSourceRevision string `json:"expectedSourceRevision"`
 }
 
 type notificationPreferenceInput struct {
-	Revision string `json:"revision"`
-	TransactionAlerts *bool `json:"transactionAlerts"`
-	SystemMessageAlerts *bool `json:"systemMessageAlerts"`
+	Revision            string `json:"revision"`
+	TransactionAlerts   *bool  `json:"transactionAlerts"`
+	SystemMessageAlerts *bool  `json:"systemMessageAlerts"`
 }
 
 var notificationRevisionPattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,19})$`)
@@ -227,7 +227,7 @@ func (service *notificationService) sources(ctx context.Context, tx *sql.Tx, s *
 			e := new(notificationEvent)
 			var removed, confirmed bool
 			var revision uint64
-			if err := rows.Scan(&e.TransactionHash,&e.LogIndex,&e.ContractAddress,&e.EventName,&e.BlockNumber,&removed,&confirmed,&revision); err != nil {
+			if err := rows.Scan(&e.TransactionHash, &e.LogIndex, &e.ContractAddress, &e.EventName, &e.BlockNumber, &removed, &confirmed, &revision); err != nil {
 				rows.Close()
 				return nil, err
 			}
@@ -242,9 +242,9 @@ func (service *notificationService) sources(ctx context.Context, tx *sql.Tx, s *
 			} else if confirmed {
 				state = "confirmed"
 			}
-			result = append(result, inboxNotification{SourceKind:"chain_event",
-				SourceKey:portfolioEventID(s.ChainID,e.TransactionHash,e.LogIndex),
-				SourceRevision:strconv.FormatUint(revision,10),State:state,MessageCode:"event_"+state,Event:e})
+			result = append(result, inboxNotification{SourceKind: "chain_event",
+				SourceKey:      portfolioEventID(s.ChainID, e.TransactionHash, e.LogIndex),
+				SourceRevision: strconv.FormatUint(revision, 10), State: state, MessageCode: "event_" + state, Event: e})
 		}
 		err = rows.Err()
 		rows.Close()
@@ -256,17 +256,17 @@ func (service *notificationService) sources(ctx context.Context, tx *sql.Tx, s *
 	var text string
 	var revision uint64
 	err := tx.QueryRowContext(ctx, `SELECT revision,notice_enabled,notice_text
-		FROM platform_configuration WHERE configuration_id=1 FOR SHARE`).Scan(&revision,&enabled,&text)
+		FROM platform_configuration WHERE configuration_id=1 FOR SHARE`).Scan(&revision, &enabled, &text)
 	if err != nil || revision == 0 {
 		if err == nil {
 			err = errors.New("invalid published notice revision")
 		}
 		return nil, err
 	}
-	notice := inboxNotification{SourceKind:"system_notice",SourceKey:"platform:service_notice",
-		SourceRevision:strconv.FormatUint(revision,10),State:"withdrawn",MessageCode:"service_notice"}
+	notice := inboxNotification{SourceKind: "system_notice", SourceKey: "platform:service_notice",
+		SourceRevision: strconv.FormatUint(revision, 10), State: "withdrawn", MessageCode: "service_notice"}
 	if enabled {
-		if !adminText(text,1,500) {
+		if !adminText(text, 1, 500) {
 			return nil, errors.New("invalid public service notice")
 		}
 		notice.State, notice.Text = "published", &text
@@ -274,7 +274,7 @@ func (service *notificationService) sources(ctx context.Context, tx *sql.Tx, s *
 	return append(result, notice), nil
 }
 
-func (service *notificationService) materialize(ctx context.Context, tx *sql.Tx, s *userAuthSession, item inboxNotification) (*inboxNotification,error) {
+func (service *notificationService) materialize(ctx context.Context, tx *sql.Tx, s *userAuthSession, item inboxNotification) (*inboxNotification, error) {
 	var id string
 	var oldRevision uint64
 	var readRevision sql.NullString
@@ -282,284 +282,284 @@ func (service *notificationService) materialize(ctx context.Context, tx *sql.Tx,
 	err := tx.QueryRowContext(ctx, `SELECT notification_id,source_revision,
 		CAST(read_revision AS CHAR),read_at FROM notifications
 		WHERE owner_address=? AND chain_id=? AND source_kind=? AND source_key=? FOR UPDATE`,
-		s.Address,s.ChainID,item.SourceKind,item.SourceKey).Scan(&id,&oldRevision,&readRevision,&readAt)
-	missing := errors.Is(err,sql.ErrNoRows)
+		s.Address, s.ChainID, item.SourceKind, item.SourceKey).Scan(&id, &oldRevision, &readRevision, &readAt)
+	missing := errors.Is(err, sql.ErrNoRows)
 	if err != nil && !missing {
-		return nil,err
+		return nil, err
 	}
 	if missing && item.State == "withdrawn" {
-		return nil,nil
+		return nil, nil
 	}
-	current, _ := notificationRevision(item.SourceRevision,false)
+	current, _ := notificationRevision(item.SourceRevision, false)
 	if !missing && current < oldRevision {
-		return nil,errors.New("canonical notification revision moved backwards")
+		return nil, errors.New("canonical notification revision moved backwards")
 	}
-	payload, err := json.Marshal(map[string]any{"state":item.State,"messageCode":item.MessageCode,"event":item.Event,"text":item.Text})
+	payload, err := json.Marshal(map[string]any{"state": item.State, "messageCode": item.MessageCode, "event": item.Event, "text": item.Text})
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	now := service.auth.now().UTC().Truncate(time.Microsecond)
 	if missing {
 		id, err = userRandomToken(16)
 		if err != nil {
-			return nil,err
+			return nil, err
 		}
-		_,err = tx.ExecContext(ctx,`INSERT INTO notifications
+		_, err = tx.ExecContext(ctx, `INSERT INTO notifications
 			(notification_id,owner_address,notification_type,payload,chain_id,source_kind,
 			source_key,source_revision,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
-			id,s.Address,item.SourceKind,payload,s.ChainID,item.SourceKind,item.SourceKey,current,now)
+			id, s.Address, item.SourceKind, payload, s.ChainID, item.SourceKind, item.SourceKey, current, now)
 	} else {
-		_,err = tx.ExecContext(ctx,`UPDATE notifications SET payload=?,
+		_, err = tx.ExecContext(ctx, `UPDATE notifications SET payload=?,
 			read_revision=IF(source_revision<>? OR ?='withdrawn',NULL,read_revision),
 			read_at=IF(source_revision<>? OR ?='withdrawn',NULL,read_at),
 			source_revision=?,updated_at=? WHERE notification_id=? AND owner_address=? AND chain_id=?`,
-			payload,current,item.State,current,item.State,current,now,id,s.Address,s.ChainID)
+			payload, current, item.State, current, item.State, current, now, id, s.Address, s.ChainID)
 	}
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	item.ID = id
 	if !adminIDPattern.MatchString(id) {
-		return nil,errors.New("invalid notification storage identity")
+		return nil, errors.New("invalid notification storage identity")
 	}
 	if !missing && current == oldRevision && item.State != "withdrawn" && readRevision.Valid &&
 		readRevision.String == item.SourceRevision && readAt.Valid {
 		value := readAt.Time.UTC().Format(time.RFC3339Nano)
 		item.Read, item.ReadAt = true, &value
 	}
-	return &item,nil
+	return &item, nil
 }
 
-func (service *notificationService) page(ctx context.Context, tx *sql.Tx, s *userAuthSession) (notificationPage,error) {
-	out := notificationPage{Address:s.Address,ChainID:s.ChainID,Notifications:[]inboxNotification{},
-		ChainEventsAvailable:s.ChainID==hoodiChainID}
-	if err := service.lockSession(ctx,tx,s); err != nil {
-		return out,err
+func (service *notificationService) page(ctx context.Context, tx *sql.Tx, s *userAuthSession) (notificationPage, error) {
+	out := notificationPage{Address: s.Address, ChainID: s.ChainID, Notifications: []inboxNotification{},
+		ChainEventsAvailable: s.ChainID == hoodiChainID}
+	if err := service.lockSession(ctx, tx, s); err != nil {
+		return out, err
 	}
-	sources,err := service.sources(ctx,tx,s)
+	sources, err := service.sources(ctx, tx, s)
 	if err != nil {
-		return out,err
+		return out, err
 	}
-	out.Preferences,err = service.preferences(ctx,tx,s)
+	out.Preferences, err = service.preferences(ctx, tx, s)
 	if err != nil {
-		return out,err
+		return out, err
 	}
 	for _, source := range sources {
-		item,err := service.materialize(ctx,tx,s,source)
+		item, err := service.materialize(ctx, tx, s, source)
 		if err != nil {
-			return out,err
+			return out, err
 		}
 		if item != nil {
-			out.allNotifications = append(out.allNotifications,*item)
+			out.allNotifications = append(out.allNotifications, *item)
 		}
-		if item != nil && ((item.SourceKind=="chain_event" && out.Preferences.TransactionAlerts) ||
-			(item.SourceKind=="system_notice" && out.Preferences.SystemMessageAlerts)) {
-			out.Notifications = append(out.Notifications,*item)
+		if item != nil && ((item.SourceKind == "chain_event" && out.Preferences.TransactionAlerts) ||
+			(item.SourceKind == "system_notice" && out.Preferences.SystemMessageAlerts)) {
+			out.Notifications = append(out.Notifications, *item)
 		}
 	}
-	return out,nil
+	return out, nil
 }
 
-func (service *notificationService) readPage(w http.ResponseWriter,r *http.Request,s *userAuthSession,preferencesOnly bool) {
-	tx,err := service.auth.db.BeginTx(r.Context(),&sql.TxOptions{Isolation:sql.LevelReadCommitted})
+func (service *notificationService) readPage(w http.ResponseWriter, r *http.Request, s *userAuthSession, preferencesOnly bool) {
+	tx, err := service.auth.db.BeginTx(r.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
-		service.fail(w,r,err)
+		service.fail(w, r, err)
 		return
 	}
 	defer tx.Rollback()
-	page,err := service.page(r.Context(),tx,s)
+	page, err := service.page(r.Context(), tx, s)
 	if err == nil {
-		err = service.lockSession(r.Context(),tx,s)
+		err = service.lockSession(r.Context(), tx, s)
 	}
 	if err == nil {
 		err = tx.Commit()
 	}
 	if err != nil {
-		service.fail(w,r,err)
+		service.fail(w, r, err)
 		return
 	}
 	if preferencesOnly {
-		writeJSON(w,200,page.Preferences)
+		writeJSON(w, 200, page.Preferences)
 	} else {
-		writeJSON(w,200,page)
+		writeJSON(w, 200, page)
 	}
 }
 
-func (service *notificationService) list(w http.ResponseWriter,r *http.Request,s *userAuthSession) {
-	service.readPage(w,r,s,false)
+func (service *notificationService) list(w http.ResponseWriter, r *http.Request, s *userAuthSession) {
+	service.readPage(w, r, s, false)
 }
 
-func (service *notificationService) getPreferences(w http.ResponseWriter,r *http.Request,s *userAuthSession) {
-	service.readPage(w,r,s,true)
+func (service *notificationService) getPreferences(w http.ResponseWriter, r *http.Request, s *userAuthSession) {
+	service.readPage(w, r, s, true)
 }
 
-type notificationChange func(*sql.Tx,*notificationPage,bool) error
+type notificationChange func(*sql.Tx, *notificationPage, bool) error
 
 // Reuse administration_requests and its existing actor/key/exact-payload SHA256
 // scheme. This is an application idempotency record, never a grant/receipt digest.
 // Replays revalidate current sources and state instead of serving a cached page.
-func (service *notificationService) mutate(w http.ResponseWriter,r *http.Request,s *userAuthSession,input any,change notificationChange) {
+func (service *notificationService) mutate(w http.ResponseWriter, r *http.Request, s *userAuthSession, input any, change notificationChange) {
 	key := r.Header.Get("Idempotency-Key")
 	if !adminKeyPattern.MatchString(key) {
-		service.fail(w,r,adminError(400,"A 16-128 character Idempotency-Key is required."))
+		service.fail(w, r, adminError(400, "A 16-128 character Idempotency-Key is required."))
 		return
 	}
-	payload,err := json.Marshal(struct {
+	payload, err := json.Marshal(struct {
 		ChainID int `json:"chainId"`
-		Input any `json:"input"`
-	}{s.ChainID,input})
+		Input   any `json:"input"`
+	}{s.ChainID, input})
 	if err != nil {
-		service.fail(w,r,err)
+		service.fail(w, r, err)
 		return
 	}
-	hash := sha256.Sum256(append([]byte(r.Method+" "+r.URL.Path+"\n"),payload...))
-	actorHash,keyHash := sha256.Sum256([]byte(s.Address)),sha256.Sum256([]byte(key))
-	tx,err := service.auth.db.BeginTx(r.Context(),&sql.TxOptions{Isolation:sql.LevelReadCommitted})
+	hash := sha256.Sum256(append([]byte(r.Method+" "+r.URL.Path+"\n"), payload...))
+	actorHash, keyHash := sha256.Sum256([]byte(s.Address)), sha256.Sum256([]byte(key))
+	tx, err := service.auth.db.BeginTx(r.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
-		service.fail(w,r,err)
+		service.fail(w, r, err)
 		return
 	}
 	defer tx.Rollback()
-	page,err := service.page(r.Context(),tx,s)
+	page, err := service.page(r.Context(), tx, s)
 	if err != nil {
-		service.fail(w,r,err)
+		service.fail(w, r, err)
 		return
 	}
-	_,err = tx.ExecContext(r.Context(),`INSERT INTO administration_requests
+	_, err = tx.ExecContext(r.Context(), `INSERT INTO administration_requests
 		(actor_hash,key_hash,payload_hash,created_at) VALUES (?,?,?,?)
-		ON DUPLICATE KEY UPDATE key_hash=key_hash`,actorHash[:],keyHash[:],hash[:],service.auth.now().UTC().Truncate(time.Microsecond))
+		ON DUPLICATE KEY UPDATE key_hash=key_hash`, actorHash[:], keyHash[:], hash[:], service.auth.now().UTC().Truncate(time.Microsecond))
 	if err != nil {
-		service.fail(w,r,err)
+		service.fail(w, r, err)
 		return
 	}
 	var stored []byte
 	var code sql.NullInt64
-	err = tx.QueryRowContext(r.Context(),`SELECT payload_hash,response_status FROM administration_requests
-		WHERE actor_hash=? AND key_hash=? FOR UPDATE`,actorHash[:],keyHash[:]).Scan(&stored,&code)
-	if err == nil && !bytes.Equal(stored,hash[:]) {
-		err = adminError(409,"This idempotency key belongs to a different exact request.")
+	err = tx.QueryRowContext(r.Context(), `SELECT payload_hash,response_status FROM administration_requests
+		WHERE actor_hash=? AND key_hash=? FOR UPDATE`, actorHash[:], keyHash[:]).Scan(&stored, &code)
+	if err == nil && !bytes.Equal(stored, hash[:]) {
+		err = adminError(409, "This idempotency key belongs to a different exact request.")
 	}
 	if err == nil && code.Valid && code.Int64 != 200 {
 		err = errors.New("invalid notification mutation record")
 	}
 	if err == nil {
-		err = change(tx,&page,code.Valid)
+		err = change(tx, &page, code.Valid)
 	}
 	if err == nil && !code.Valid {
-		_,err = tx.ExecContext(r.Context(),`UPDATE administration_requests SET response=?,response_status=200
-			WHERE actor_hash=? AND key_hash=?`,[]byte(`{"committed":true}`),actorHash[:],keyHash[:])
+		_, err = tx.ExecContext(r.Context(), `UPDATE administration_requests SET response=?,response_status=200
+			WHERE actor_hash=? AND key_hash=?`, []byte(`{"committed":true}`), actorHash[:], keyHash[:])
 	}
 	if err == nil {
-		err = service.lockSession(r.Context(),tx,s)
+		err = service.lockSession(r.Context(), tx, s)
 	}
 	if err == nil {
 		err = tx.Commit()
 	}
 	if err != nil {
-		service.fail(w,r,err)
+		service.fail(w, r, err)
 		return
 	}
-	writeJSON(w,200,page)
+	writeJSON(w, 200, page)
 }
 
-func (service *notificationService) markRead(w http.ResponseWriter,r *http.Request,s *userAuthSession) {
+func (service *notificationService) markRead(w http.ResponseWriter, r *http.Request, s *userAuthSession) {
 	var input notificationReadInput
-	if err := notificationReadJSON(r,&input); err != nil {
-		service.fail(w,r,err)
+	if err := notificationReadJSON(r, &input); err != nil {
+		service.fail(w, r, err)
 		return
 	}
-	revision,valid := notificationRevision(input.ExpectedSourceRevision,false)
+	revision, valid := notificationRevision(input.ExpectedSourceRevision, false)
 	if !adminIDPattern.MatchString(input.ID) {
-		service.fail(w,r,adminError(404,"The notification was not found."))
+		service.fail(w, r, adminError(404, "The notification was not found."))
 		return
 	}
 	if !valid {
-		service.fail(w,r,adminError(422,"A canonical current source revision is required."))
+		service.fail(w, r, adminError(422, "A canonical current source revision is required."))
 		return
 	}
-	service.mutate(w,r,s,input,func(tx *sql.Tx,page *notificationPage,replay bool) error {
+	service.mutate(w, r, s, input, func(tx *sql.Tx, page *notificationPage, replay bool) error {
 		for i := range page.Notifications {
 			item := &page.Notifications[i]
 			if item.ID != input.ID {
 				continue
 			}
-			if item.SourceRevision != input.ExpectedSourceRevision || item.State=="withdrawn" {
-				return adminError(409,"This notification source has changed. Refresh before acting.")
+			if item.SourceRevision != input.ExpectedSourceRevision || item.State == "withdrawn" {
+				return adminError(409, "This notification source has changed. Refresh before acting.")
 			}
 			if replay && !item.Read {
-				return adminError(409,"The prior acknowledgement no longer matches current state.")
+				return adminError(409, "The prior acknowledgement no longer matches current state.")
 			}
 			if !item.Read {
 				now := service.auth.now().UTC().Truncate(time.Microsecond)
-				result,err := tx.ExecContext(r.Context(),`UPDATE notifications SET read_revision=?,read_at=?
+				result, err := tx.ExecContext(r.Context(), `UPDATE notifications SET read_revision=?,read_at=?
 					WHERE notification_id=? AND owner_address=? AND chain_id=? AND source_revision=?`,
-					revision,now,input.ID,s.Address,s.ChainID,revision)
+					revision, now, input.ID, s.Address, s.ChainID, revision)
 				if err != nil {
 					return err
 				}
-				affected,err := result.RowsAffected()
+				affected, err := result.RowsAffected()
 				if err != nil {
 					return err
 				}
 				if affected != 1 {
-					return adminError(409,"The notification changed before acknowledgement.")
+					return adminError(409, "The notification changed before acknowledgement.")
 				}
 				value := now.Format(time.RFC3339Nano)
-				item.Read,item.ReadAt = true,&value
+				item.Read, item.ReadAt = true, &value
 			}
 			return nil
 		}
-		return adminError(404,"The notification was not found.")
+		return adminError(404, "The notification was not found.")
 	})
 }
 
-func (service *notificationService) savePreferences(w http.ResponseWriter,r *http.Request,s *userAuthSession) {
+func (service *notificationService) savePreferences(w http.ResponseWriter, r *http.Request, s *userAuthSession) {
 	var input notificationPreferenceInput
-	if err := notificationReadJSON(r,&input); err != nil {
-		service.fail(w,r,err)
+	if err := notificationReadJSON(r, &input); err != nil {
+		service.fail(w, r, err)
 		return
 	}
-	expected,valid := notificationRevision(input.Revision,true)
-	if !valid || input.TransactionAlerts==nil || input.SystemMessageAlerts==nil || expected==math.MaxUint64 {
-		service.fail(w,r,adminError(422,"Current revision and both explicit alert preferences are required."))
+	expected, valid := notificationRevision(input.Revision, true)
+	if !valid || input.TransactionAlerts == nil || input.SystemMessageAlerts == nil || expected == math.MaxUint64 {
+		service.fail(w, r, adminError(422, "Current revision and both explicit alert preferences are required."))
 		return
 	}
-	service.mutate(w,r,s,input,func(tx *sql.Tx,page *notificationPage,replay bool) error {
-		current,valid := notificationRevision(page.Preferences.Revision,true)
+	service.mutate(w, r, s, input, func(tx *sql.Tx, page *notificationPage, replay bool) error {
+		current, valid := notificationRevision(page.Preferences.Revision, true)
 		if !valid {
 			return errors.New("invalid stored preference revision")
 		}
 		if replay {
-			if current!=expected+1 || page.Preferences.TransactionAlerts!=*input.TransactionAlerts ||
-				page.Preferences.SystemMessageAlerts!=*input.SystemMessageAlerts {
-				return adminError(409,"The preference receipt is no longer current. Refresh before acting.")
+			if current != expected+1 || page.Preferences.TransactionAlerts != *input.TransactionAlerts ||
+				page.Preferences.SystemMessageAlerts != *input.SystemMessageAlerts {
+				return adminError(409, "The preference receipt is no longer current. Refresh before acting.")
 			}
 			return nil
 		}
-		if current!=expected {
-			return adminError(409,"The preferences have changed. Refresh before saving.")
+		if current != expected {
+			return adminError(409, "The preferences have changed. Refresh before saving.")
 		}
-		result,err := tx.ExecContext(r.Context(),`UPDATE notification_preferences SET
+		result, err := tx.ExecContext(r.Context(), `UPDATE notification_preferences SET
 			transaction_alerts=?,system_message_alerts=?,revision=revision+1,updated_at=?
 			WHERE owner_address=? AND chain_id=? AND revision=?`,
-			*input.TransactionAlerts,*input.SystemMessageAlerts,service.auth.now().UTC().Truncate(time.Microsecond),s.Address,s.ChainID,expected)
+			*input.TransactionAlerts, *input.SystemMessageAlerts, service.auth.now().UTC().Truncate(time.Microsecond), s.Address, s.ChainID, expected)
 		if err != nil {
 			return err
 		}
-		affected,err := result.RowsAffected()
+		affected, err := result.RowsAffected()
 		if err != nil {
 			return err
 		}
-		if affected!=1 {
-			return adminError(409,"The preferences have changed. Refresh before saving.")
+		if affected != 1 {
+			return adminError(409, "The preferences have changed. Refresh before saving.")
 		}
-		page.Preferences = notificationPreferences{Revision:strconv.FormatUint(expected+1,10),
-			TransactionAlerts:*input.TransactionAlerts,SystemMessageAlerts:*input.SystemMessageAlerts}
+		page.Preferences = notificationPreferences{Revision: strconv.FormatUint(expected+1, 10),
+			TransactionAlerts: *input.TransactionAlerts, SystemMessageAlerts: *input.SystemMessageAlerts}
 		filtered := []inboxNotification{}
-		for _,item := range page.allNotifications {
-			if (item.SourceKind=="chain_event" && *input.TransactionAlerts) ||
-				(item.SourceKind=="system_notice" && *input.SystemMessageAlerts) {
-				filtered = append(filtered,item)
+		for _, item := range page.allNotifications {
+			if (item.SourceKind == "chain_event" && *input.TransactionAlerts) ||
+				(item.SourceKind == "system_notice" && *input.SystemMessageAlerts) {
+				filtered = append(filtered, item)
 			}
 		}
 		page.Notifications = filtered

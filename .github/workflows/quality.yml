@@ -109,41 +109,71 @@ jobs:
       - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "39"
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000014_agent_runtime.up.sql
       - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "48"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000015_notification_inbox.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000016_dao_presentation.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000017_whole_receipt_principal_observations.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000018_charity_holder_challenges.up.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "52"
       - name: MySQL restart, replay, conflict, reorg, and projection tests
         working-directory: apps/api
         env:
           ARTFI_INTEGRATION_MYSQL_DSN: root:local-root-only@tcp(127.0.0.1:3306)/artfi?parseTime=true
           ARTFI_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+          ARTFI_NOTIFICATION_MYSQL_REQUIRED: "1"
+          ARTFI_PRINCIPAL_JOURNAL_MYSQL_REQUIRED: "1"
           ARTFI_EXPORT_RWA_FIXTURE: ${{ runner.temp }}/artfi-public-source-fixture.json
         run: go test -race -v ./...
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000014_agent_runtime.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "39"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000013_rwa_source_grounding.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "35"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000012_moderation_admin.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "32"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000011_nft_operations.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "31"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000010_wallet_user_sessions.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "28"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000009_native_signed_orders.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000008_hoodi_test_chain.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000007_external_trade_orchestration.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "25"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000006_dao_rwa_governance.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "22"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000005_stage6_compliance_operations.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "14"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000004_stage4_market_governance.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "7"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000003_stage3_vault_fractional.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "5"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000002_stage2_rwa_mint.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "2"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000001_stage1_catalog.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "0"
+      - name: Verify forward-only refusal and preserve current data
+        run: |
+          snapshot='CHECKSUM TABLE notifications,notification_preferences,chain_events,vaults,whole_receipt_principal_observations,whole_receipt_principal_observation_events EXTENDED;'
+          before="$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e "$snapshot")"
+          [[ -n "$before" && "$before" != *NULL* ]] || exit 1
+          for migration in 000015_notification_inbox 000016_dao_presentation 000017_whole_receipt_principal_observations; do
+            if output="$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < "apps/api/migrations/$migration.down.sql" 2>&1)"; then
+              echo 'Forward-only migration unexpectedly allowed downgrade' >&2
+              exit 1
+            fi
+            grep -Eq '^ERROR [0-9]+ [(]45000[)]' <<< "$output" || exit 1
+          done
+          after="$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e "$snapshot")"
+          test "$before" = "$after"
+      - name: Prepare separate legacy rollback database
+        run: |
+          docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot -e 'CREATE DATABASE artfi_legacy_rollback_test;'
+          for file in apps/api/migrations/*.up.sql; do
+            [[ "$(basename "$file")" < "000015" ]] || break
+            docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < "$file"
+          done
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000018_charity_holder_challenges.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000018_charity_holder_challenges.down.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000014_agent_runtime.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "39"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000013_rwa_source_grounding.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "35"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000012_moderation_admin.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "32"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000011_nft_operations.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "31"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000010_wallet_user_sessions.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "28"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000009_native_signed_orders.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000008_hoodi_test_chain.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000007_external_trade_orchestration.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "25"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000006_dao_rwa_governance.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "22"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000005_stage6_compliance_operations.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "14"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000004_stage4_market_governance.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "7"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000003_stage3_vault_fractional.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "5"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000002_stage2_rwa_mint.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "2"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000001_stage1_catalog.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "0"
       - if: always()
         run: docker compose down -v
 

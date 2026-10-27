@@ -354,7 +354,13 @@ test(
           (await stat(join(backupPath, "database.sql"))).mode & 0o777,
           0o600,
         );
+        assert.equal(manifest.schema.triggers.length, 1);
+        assert.equal(
+          manifest.schema.triggers[0].name,
+          "chain_event_notification_revision",
+        );
         const dump = await readFile(join(backupPath, "database.sql"), "utf8");
+        assert.match(dump, /TRIGGER.*chain_event_notification_revision/);
         assert.doesNotMatch(
           dump,
           /^(?:DROP |CREATE DATABASE|USE |CHANGE REPLICATION|RESET )/m,
@@ -427,6 +433,64 @@ test(
           ),
           "2",
         );
+      },
+    );
+
+    await step(
+      "restored notification trigger preserves change-only revision semantics",
+      async () => {
+        const tx = `0x${"a1".repeat(32)}`;
+        const block = `0x${"b2".repeat(32)}`;
+        const address = `0x${"c3".repeat(20)}`;
+        await sql(
+          primary,
+          `INSERT INTO chain_events (chain_id,contract_address,transaction_hash,log_index,block_number,block_hash,event_name,payload) VALUES (560048,'${address}','${tx}',0,1,'${block}','TEST_ONLY_NOTIFICATION','{}')`,
+          restored,
+        );
+        const revision = () =>
+          sql(
+            primary,
+            `SELECT notification_revision FROM chain_events WHERE transaction_hash='${tx}'`,
+            restored,
+          );
+        assert.equal(await revision(), "1");
+        await sql(
+          primary,
+          `UPDATE chain_events SET confirmed=1 WHERE transaction_hash='${tx}'`,
+          restored,
+        );
+        assert.equal(await revision(), "2");
+        await sql(
+          primary,
+          `UPDATE chain_events SET confirmed=1 WHERE transaction_hash='${tx}'`,
+          restored,
+        );
+        assert.equal(await revision(), "2");
+        await sql(
+          primary,
+          `UPDATE chain_events SET removed=1 WHERE transaction_hash='${tx}'`,
+          restored,
+        );
+        assert.equal(await revision(), "3");
+        await sql(
+          primary,
+          `DELETE FROM chain_events WHERE transaction_hash='${tx}'`,
+          restored,
+        );
+        await sql(
+          primary,
+          "CREATE TRIGGER test_only_unknown BEFORE UPDATE ON chain_events FOR EACH ROW SET NEW.notification_revision=NEW.notification_revision",
+          restored,
+        );
+        try {
+          await expectCliFailure(
+            "backup",
+            backupArgs(primary, join(run, "unknown-trigger-backup"), restored),
+            /Unsupported schema trigger/,
+          );
+        } finally {
+          await sql(primary, "DROP TRIGGER test_only_unknown", restored);
+        }
       },
     );
 

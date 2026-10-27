@@ -2,7 +2,9 @@
 pragma solidity 0.8.30;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import {ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {
+    ERC721URIStorage
+} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @notice Valueless Hoodi mechanics inputs, never an institutional warehouse receipt.
@@ -49,7 +51,9 @@ contract ArtFiHoodiTestNFT is ERC721URIStorage, ReentrancyGuard {
         string metadataURI
     );
 
-    constructor(address issuer_, bytes32 taskId_) ERC721("TESTNET ArtFi - NO REAL-WORLD VALUE", "ARTFI-TEST") {
+    constructor(address issuer_, bytes32 taskId_)
+        ERC721("TESTNET ArtFi - NO REAL-WORLD VALUE", "ARTFI-TEST")
+    {
         if (block.chainid != TEST_CHAIN_ID) revert UnsupportedChain(block.chainid);
         if (issuer_ == address(0)) revert InvalidIssuer();
         if (taskId_ == bytes32(0)) revert InvalidTaskId();
@@ -60,12 +64,15 @@ contract ArtFiHoodiTestNFT is ERC721URIStorage, ReentrancyGuard {
     /// @notice One test token for an explicitly hashed test source, minted to the fixed issuer.
     /// @dev Hashes are caller-supplied byte commitments, not verified external authority.
     ///      Wallet policy must bind the actual deployment, issuer, task, source and metadata.
-    function mintTestNFT(bytes32 sourceHash, uint8 assetKind, bytes32 metadataHash, string calldata metadataURI)
-        external
-        nonReentrant
-        returns (uint256 tokenId)
-    {
-        if (block.chainid != TEST_CHAIN_ID) revert UnsupportedChain(block.chainid);
+    function mintTestNFT(
+        bytes32 sourceHash,
+        uint8 assetKind,
+        bytes32 metadataHash,
+        string calldata metadataURI
+    ) external nonReentrant returns (uint256 tokenId) {
+        if (block.chainid != TEST_CHAIN_ID) {
+            revert UnsupportedChain(block.chainid);
+        }
         if (msg.sender != issuer) revert UnauthorizedIssuer(msg.sender);
         if (sourceHash == bytes32(0)) revert EmptySourceHash();
         if (metadataHash == bytes32(0)) revert EmptyMetadataHash();
@@ -78,7 +85,9 @@ contract ArtFiHoodiTestNFT is ERC721URIStorage, ReentrancyGuard {
         _sources[tokenId] = TestSource(sourceHash, metadataHash, assetKind);
         _safeMint(issuer, tokenId);
         _setTokenURI(tokenId, metadataURI);
-        emit TestNFTMinted(tokenId, taskId, sourceHash, issuer, assetKind, metadataHash, metadataURI);
+        emit TestNFTMinted(
+            tokenId, taskId, sourceHash, issuer, assetKind, metadataHash, metadataURI
+        );
     }
 
     function testSource(uint256 tokenId) external view returns (TestSource memory) {
