@@ -75,19 +75,22 @@ function fixture() {
     maxFeePerGasWei: "2",
     maxPriorityFeePerGasWei: "1",
   };
-  const approval = createWholeReceiptApprovalCommitments({
-    kind: native.kind,
-    chainId: native.chainId,
-    request: native.request,
-    wholeReceipt: native.wholeReceipt,
-  }, {
-    tenant: "artfi",
-    origin: "https://artfi.example:9445",
-    taskId: principal.taskId,
-    actor: native.request.account,
-    escrow: native.wholeReceipt.domain.verifyingContract,
-    runtimeCodeHash: h("e"),
-  });
+  const approval = createWholeReceiptApprovalCommitments(
+    {
+      kind: native.kind,
+      chainId: native.chainId,
+      request: native.request,
+      wholeReceipt: native.wholeReceipt,
+    },
+    {
+      tenant: "artfi",
+      origin: "https://artfi.example:9445",
+      taskId: principal.taskId,
+      actor: native.request.account,
+      escrow: native.wholeReceipt.domain.verifyingContract,
+      runtimeCodeHash: h("e"),
+    },
+  );
   const slot = {
     phase: "paid",
     nonce: "2",
@@ -230,11 +233,23 @@ function fixture() {
 describe("receipt preparation and non-send native journal port", () => {
   it("refuses legacy opaque commitments before writing the native journal", async () => {
     const f = fixture();
-    Object.assign(f.policy.intent.phases[0]!, { planDigest: h("c"), journalBindingHash: h("d") });
-    Object.assign(f.claimed, { planDigest: h("c"), journalBindingHash: h("d") });
-    Object.assign(f.snapshot.scope, { planDigest: h("c"), journalBindingHash: h("d") });
+    Object.assign(f.policy.intent.phases[0]!, {
+      planDigest: h("c"),
+      journalBindingHash: h("d"),
+    });
+    Object.assign(f.claimed, {
+      planDigest: h("c"),
+      journalBindingHash: h("d"),
+    });
+    Object.assign(f.snapshot.scope, {
+      planDigest: h("c"),
+      journalBindingHash: h("d"),
+    });
     const port = createWholeReceiptPreparedJournal({
-      runtime: f.runtime, claimed: f.claimed, journal: f.journal, now: () => f.state.now,
+      runtime: f.runtime,
+      claimed: f.claimed,
+      journal: f.journal,
+      now: () => f.state.now,
     });
     await expect(port.create(f.native, f.wire)).rejects.toThrow(
       "RECEIPT_JOURNAL_APPROVAL_COMMITMENT_REFUSED",
@@ -248,7 +263,9 @@ describe("receipt preparation and non-send native journal port", () => {
       if (key === "runtimeCodeHash") {
         f.policy.intent.runtimeCodeHash = h("6");
         f.snapshot.scope.runtimeCodeHash = h("6");
-      } else f.policy[key] = key === "tenant" ? "another-artfi" : "https://another.example:9445";
+      } else
+        f.policy[key] =
+          key === "tenant" ? "another-artfi" : "https://another.example:9445";
       await expect(f.port.create(f.native, f.wire)).rejects.toThrow(
         "RECEIPT_JOURNAL_APPROVAL_COMMITMENT_REFUSED",
       );

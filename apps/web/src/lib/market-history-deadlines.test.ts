@@ -126,13 +126,11 @@ it("discards an incorrect MIME response and redacts transport rejection", async 
   const cancel = vi.fn(() => new Promise<void>(() => {}));
   vi.stubGlobal(
     "fetch",
-    vi
-      .fn()
-      .mockResolvedValue(
-        new Response(new ReadableStream({ cancel }), {
-          headers: { "content-type": "text/html" },
-        }),
-      ),
+    vi.fn().mockResolvedValue(
+      new Response(new ReadableStream({ cancel }), {
+        headers: { "content-type": "text/html" },
+      }),
+    ),
   );
   await expect(
     readMarketHistoryPage("", "", new AbortController().signal),

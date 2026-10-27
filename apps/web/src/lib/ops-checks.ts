@@ -41,7 +41,11 @@ export function classifyWebRuntime(
   payload: unknown,
   expectedChainId?: number,
 ): CheckVerdict {
-  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
     return { state: "unavailable", detail: "The web runtime did not answer." };
   }
   const body = payload as { status?: unknown; chainId?: unknown };
@@ -69,9 +73,10 @@ export function classifyWebRuntime(
   }
   return {
     state: "ok",
-    detail: expectedChainId === undefined
-      ? "Serving, and reporting its chain identity."
-      : "Serving, and reporting its configured chain.",
+    detail:
+      expectedChainId === undefined
+        ? "Serving, and reporting its chain identity."
+        : "Serving, and reporting its configured chain.",
   };
 }
 
@@ -113,11 +118,7 @@ export function classifyChain(
   expectedChainId: number,
   nowSeconds: number,
 ): CheckVerdict {
-  if (
-    !observed ||
-    typeof observed !== "object" ||
-    Array.isArray(observed)
-  ) {
+  if (!observed || typeof observed !== "object" || Array.isArray(observed)) {
     return {
       state: "unavailable",
       detail: "No chain endpoint answered, so no block was read.",
@@ -133,7 +134,8 @@ export function classifyChain(
   ) {
     return {
       state: "unavailable",
-      detail: "The chain observation has no valid chain, block or time identity.",
+      detail:
+        "The chain observation has no valid chain, block or time identity.",
     };
   }
   if (observed.chainId !== expectedChainId) {
@@ -181,9 +183,10 @@ export function classifyMirror(
       detail: "No mirrored observation exists to measure freshness against.",
     };
   }
-  const observed = typeof newestObservationISO === "string"
-    ? Date.parse(newestObservationISO)
-    : NaN;
+  const observed =
+    typeof newestObservationISO === "string"
+      ? Date.parse(newestObservationISO)
+      : NaN;
   if (!Number.isFinite(observed) || observed < 0) {
     return {
       state: "unavailable",
