@@ -300,7 +300,12 @@ export function createNftTaskJournal<P extends NftTaskJournalPlan = NftPlan>(
             signal: AbortSignal.timeout(8000),
           });
           if (!response.ok) {
-            await response.body?.cancel();
+            // Cleanup must not hold the capability gate or replace the HTTP error.
+            try {
+              void response.body?.cancel().catch(() => undefined);
+            } catch {
+              // A locked or otherwise unavailable body is already unusable here.
+            }
             throw new NftError(
               [400, 401, 403, 404, 409, 413, 422].includes(response.status)
                 ? response.status
