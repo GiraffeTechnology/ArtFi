@@ -119,12 +119,15 @@ for (const recovery of ["manual", "polling"] as const) {
     const failedRequests = requests;
     unavailable = false;
     if (recovery === "manual") {
+      // Start between poll ticks: crossing the next tick must not also expire
+      // the independent 15-second request deadline while this fixture is held.
+      await page.clock.fastForward(5_000);
       await page.getByRole("button", { name: "Retry market data" }).click();
       await expect(
         page.getByRole("button", { name: "Retrying…" }),
       ).toBeDisabled();
       await expect.poll(() => requests).toBe(failedRequests + 1);
-      await page.clock.fastForward(15_000);
+      await page.clock.fastForward(10_000);
       expect(requests).toBe(failedRequests + 1);
       await expect(cards).toHaveCount(0);
       releaseRetry?.();

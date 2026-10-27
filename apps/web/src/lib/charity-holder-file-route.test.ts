@@ -214,7 +214,7 @@ describe("holder file original grant at delivery", () => {
     "holder-grant regression expiry during %s read returns no file",
     async (phase) => {
       const issued = await currentRealGrant();
-      let release!: (value: any) => void;
+      let release!: (value: unknown) => void;
       if (phase === "descriptor")
         mocks.resolve.mockImplementation(
           () =>

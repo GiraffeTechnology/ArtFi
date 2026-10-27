@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { waitForFinishedJson } from "../src/test/finished-json-response";
 import { sourceOracleAsset } from "../src/test/rwa-oracle-source-fixture";
 
 for (const section of ["whole", "fractional"] as const) {
@@ -18,19 +19,16 @@ for (const section of ["whole", "fractional"] as const) {
     // No page.route mock: list, detail, and both wrappers reach the Next server.
     // The catalog loads after hydration; wait for its real response before the
     // DOM assertion, including when the development route is still compiling.
-    const catalogResponse = page
-      .waitForResponse((response) => {
-        const url = new URL(response.url());
-        return (
-          response.request().method() === "GET" &&
-          url.pathname === "/api/rwa/assets" &&
-          url.searchParams.get("section") === section
-        );
-      })
-      .then(async (response) => ({
-        status: response.status(),
-        body: await response.json(),
-      }));
+    // StrictMode may abort an earlier mount after headers; only a completed
+    // request has body evidence. No request is retried or fabricated here.
+    const catalogResponse = waitForFinishedJson(page, (request) => {
+      const url = new URL(request.url());
+      return (
+        request.method() === "GET" &&
+        url.pathname === "/api/rwa/assets" &&
+        url.searchParams.get("section") === section
+      );
+    });
     await page.goto(section === "whole" ? "/rwa" : "/market/fractionals");
     const catalogResult = await catalogResponse;
     expect(catalogResult.status).toBe(200);

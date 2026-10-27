@@ -1,3 +1,4 @@
+import { fixtureMining } from "../src/test/fixture-mining";
 import { isolatedSourceCatalog } from "./rwa-catalog-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import {
@@ -29,6 +30,7 @@ const blockHash = `0x${"33".repeat(32)}`;
 
 type Submitted = { to: string; data: `0x${string}` };
 async function fixture(page: Page, wallet = buyer) {
+  const mining = fixtureMining(blockHash);
   const sourceCatalog = await isolatedSourceCatalog(page);
   const state = {
     sourceCatalog,
@@ -311,8 +313,7 @@ async function fixture(page: Page, wallet = buyer) {
         value = `0x${(state.block++).toString(16)}`;
       else if (method === "eth_getBlockByNumber")
         value = {
-          number: `0x${state.block.toString(16)}`,
-          hash: blockHash,
+          ...mining.block(params[0], state.block),
           parentHash: blockHash,
           transactions: [],
           gasLimit: "0x1000000",
@@ -368,8 +369,10 @@ async function fixture(page: Page, wallet = buyer) {
             /* A payment approval is a different ABI. */
           }
         }
+        if (outcome !== "pending" && state.requests[index])
+          mining.observeReceipt(String(params[0]));
         value =
-          outcome === "pending"
+          outcome === "pending" || !state.requests[index]
             ? null
             : {
                 transactionHash: params[0],
@@ -389,6 +392,8 @@ async function fixture(page: Page, wallet = buyer) {
               };
       } else if (method === "eth_getTransactionByHash") {
         const index = hashes.indexOf(String(params[0]));
+        if (!state.requests[index])
+          return { jsonrpc: "2.0", id: request.id, result: null };
         value = {
           hash: params[0],
           from: buyer,
@@ -398,9 +403,7 @@ async function fixture(page: Page, wallet = buyer) {
           value: "0x0",
           gas: "0x5208",
           gasPrice: "0x1",
-          blockHash: null,
-          blockNumber: null,
-          transactionIndex: null,
+          ...mining.inclusion(String(params[0])),
           type: "0x2",
           chainId: "0x88bb0",
           v: "0x0",

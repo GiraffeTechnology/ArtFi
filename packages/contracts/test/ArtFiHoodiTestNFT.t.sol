@@ -80,9 +80,8 @@ contract ArtFiHoodiTestNFTTest is IERC721Receiver {
         VM.prank(address(0xBEEF));
         (bool ok, bytes memory returned) = address(nft).call(input);
         require(!ok && nft.mintedCount() == 0, "unbound caller minted");
-        bytes memory expected = abi.encodeWithSelector(
-            ArtFiHoodiTestNFT.UnauthorizedIssuer.selector, address(0xBEEF)
-        );
+        bytes memory expected =
+            abi.encodeWithSelector(ArtFiHoodiTestNFT.UnauthorizedIssuer.selector, address(0xBEEF));
         require(keccak256(returned) == keccak256(expected), "wrong unauthorized issuer refusal");
     }
 
