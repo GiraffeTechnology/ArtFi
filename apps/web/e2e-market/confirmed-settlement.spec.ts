@@ -493,6 +493,10 @@ for (const kind of ["whole", "fraction"] as const) {
   test(`${kind}: approval and settlement remain pending until successful receipts`, async ({
     page,
   }) => {
+    const confirmedLabel =
+      kind === "whole"
+        ? "Legacy token transfer confirmed; registration not established"
+        : "Settled on chain";
     const state = await fixture(page);
     await page.goto(
       `/market/${kind === "whole" ? "rwa" : "fractionals"}/blue-hour-archive`,
@@ -517,9 +521,9 @@ for (const kind of ["whole", "fraction"] as const) {
     expect(approval.args?.[1]).toBe(123n);
     expect(state.requests[0].to.toLowerCase()).toBe(paymentToken);
     await expect(button).toBeDisabled();
-    await expect(
-      page.getByText("Settled on chain", { exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByText(confirmedLabel, { exact: true })).toHaveCount(
+      0,
+    );
     state.approve = "success";
     await expect.poll(() => state.requests.length, { timeout: 20_000 }).toBe(2);
     const settled = decodeFunctionData({
@@ -527,13 +531,24 @@ for (const kind of ["whole", "fraction"] as const) {
       data: state.requests[1].data,
     });
     expect(settled.functionName).toBe("fillIntent");
-    await expect(
-      page.getByText("Settled on chain", { exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByText(confirmedLabel, { exact: true })).toHaveCount(
+      0,
+    );
     state.fill = "success";
-    await expect(
-      page.getByText("Settled on chain", { exact: true }),
-    ).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(confirmedLabel, { exact: true })).toBeVisible({
+      timeout: 20_000,
+    });
+    if (kind === "whole") {
+      await expect(
+        page.getByText("Settled on chain", { exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByText(
+          "The legacy token-transfer transaction was confirmed. This does not establish Oracle registration or release of previously frozen funds. Registered holdership is shown separately in the Oracle record.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+    }
   });
 }
 
