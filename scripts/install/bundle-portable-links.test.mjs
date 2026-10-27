@@ -10,8 +10,14 @@ async function fixture(run) {
   try {
     const root = join(scratch, "artifact");
     await mkdir(join(root, "node_modules/.store/example"), { recursive: true });
-    await writeFile(join(root, "node_modules/.store/example/index.mjs"), "export const value = 1;\n");
-    await writeFile(join(scratch, "outside.txt"), "SYNTHETIC_PRIVATE_BOUNDARY\n");
+    await writeFile(
+      join(root, "node_modules/.store/example/index.mjs"),
+      "export const value = 1;\n",
+    );
+    await writeFile(
+      join(scratch, "outside.txt"),
+      "SYNTHETIC_PRIVATE_BOUNDARY\n",
+    );
     return await run({ root, scratch });
   } finally {
     await rm(scratch, { recursive: true, force: true });
@@ -22,13 +28,19 @@ test("retains relative dependency and package self-reference links inside the ar
   await fixture(async ({ root }) => {
     await symlink(".store/example", join(root, "node_modules/example"));
     await symlink(".", join(root, "node_modules/.store/example/self"));
-    assert.deepEqual(await assertPortableBundleLinks(root), { links: 2, status: "PORTABLE_WITHIN_BUILD_ROOT" });
+    assert.deepEqual(await assertPortableBundleLinks(root), {
+      links: 2,
+      status: "PORTABLE_WITHIN_BUILD_ROOT",
+    });
   });
 });
 
 test("refuses absolute links even when their current target is internal", async () => {
   await fixture(async ({ root }) => {
-    await symlink(join(root, "node_modules/.store/example"), join(root, "absolute"));
+    await symlink(
+      join(root, "node_modules/.store/example"),
+      join(root, "absolute"),
+    );
     await assert.rejects(assertPortableBundleLinks(root), /non-portable/);
   });
 });
@@ -57,7 +69,10 @@ test("refuses a lexically internal link whose intermediate directory resolves ou
 test("refuses broken targets and symbolic-link cycles", async () => {
   for (const mode of ["broken", "cycle"]) {
     await fixture(async ({ root }) => {
-      await symlink(mode === "broken" ? "missing" : "second", join(root, "first"));
+      await symlink(
+        mode === "broken" ? "missing" : "second",
+        join(root, "first"),
+      );
       if (mode === "cycle") await symlink("first", join(root, "second"));
       await assert.rejects(assertPortableBundleLinks(root), /non-portable/);
     });

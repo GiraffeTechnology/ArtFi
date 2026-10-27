@@ -245,12 +245,10 @@ describe("auction bid write-boundary read safety", () => {
     "refuses a mismatched canonical %s even with the same hash",
     async (field) => {
       const reviewed = await loadAuction(client, market, "1");
-      getBlock
-        .mockResolvedValueOnce(block)
-        .mockResolvedValueOnce({
-          ...block,
-          [field]: field === "number" ? 101n : 1001n,
-        });
+      getBlock.mockResolvedValueOnce(block).mockResolvedValueOnce({
+        ...block,
+        [field]: field === "number" ? 101n : 1001n,
+      });
       await expect(
         auctionBidPreflight(client, reviewed, buyer, 100n),
       ).rejects.toThrow("reorganized");

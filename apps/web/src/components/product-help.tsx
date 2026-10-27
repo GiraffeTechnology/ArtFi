@@ -50,8 +50,8 @@ export function ProductHelp() {
       ))}
       <p className={styles.muted}>
         This public guide does not read wallet data, grant authority or confirm
-        an operation's outcome. Use the corresponding protected workflow for
-        current account and transaction information.
+        an operation&apos;s outcome. Use the corresponding protected workflow
+        for current account and transaction information.
       </p>
     </div>
   );

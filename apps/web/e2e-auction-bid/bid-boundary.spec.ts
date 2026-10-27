@@ -344,7 +344,7 @@ for (const mode of [
     await expect(checkAuction(page)).toBeVisible();
     await expect(bid(page)).toBeDisabled();
     expect(await methods(page)).toEqual(["approve"]);
-    let saved = await pendingAuctionRecords(page);
+    const saved = await pendingAuctionRecords(page);
     expect(saved).toHaveLength(1);
     expect(saved[0]).toMatchObject({
       kind: "approval",

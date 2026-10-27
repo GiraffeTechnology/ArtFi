@@ -101,12 +101,10 @@ describe("portfolio API complete projection and finite reads", () => {
   beforeEach(() => {
     vi.stubEnv("ARTFI_API_URL", "https://api.example");
     vi.stubGlobal("fetch", upstream);
-    session
-      .mockReset()
-      .mockResolvedValue({
-        session: { address },
-        accessToken: "unused-test-token",
-      });
+    session.mockReset().mockResolvedValue({
+      session: { address },
+      accessToken: "unused-test-token",
+    });
     upstream.mockReset().mockResolvedValue(Response.json(records));
   });
   afterEach(() => {

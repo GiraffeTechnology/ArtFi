@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { type RwaCatalogPage, type RwaSection } from "@/lib/rwa-catalog";
 import {
   catalogFilterQuery,
@@ -11,6 +11,8 @@ export function RwaCatalog({ section }: { section: RwaSection }) {
   return <CatalogSection key={section} section={section} />;
 }
 function CatalogSection({ section }: { section: RwaSection }) {
+  const chainSelectId = useId();
+  const chainLabelId = `${chainSelectId}-label`;
   const [page, setPage] = useState(1),
     [query, setQuery] = useState(""),
     [draft, setDraft] = useState(""),
@@ -132,9 +134,11 @@ function CatalogSection({ section }: { section: RwaSection }) {
             <option value="title">Title</option>
           </select>
         </label>
-        <label>
-          Chain{" "}
+        <label htmlFor={chainSelectId}>
+          <span id={chainLabelId}>Chain</span>{" "}
           <select
+            id={chainSelectId}
+            aria-labelledby={chainLabelId}
             value={filterDraft.chainId}
             onChange={(event) =>
               setFilterDraft({ ...filterDraft, chainId: event.target.value })
