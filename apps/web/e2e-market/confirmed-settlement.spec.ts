@@ -35,6 +35,7 @@ async function fixture(page: Page, wallet = buyer) {
   const state = {
     sourceCatalog,
     bookMode: false,
+    buyerPaymentBalance: 100000n,
     fractionFilled: {} as Record<string, bigint>,
     approve: "pending",
     fill: "pending",
@@ -275,9 +276,7 @@ async function fixture(page: Page, wallet = buyer) {
           [
             data.toLowerCase().endsWith(seller.slice(2).toLowerCase())
               ? 10n
-              : state.bookMode
-                ? 100000n
-                : 0n,
+              : state.buyerPaymentBalance,
           ],
         );
       if (signature === "intentFilled(bytes32)")

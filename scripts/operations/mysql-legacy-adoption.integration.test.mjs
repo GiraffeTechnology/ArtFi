@@ -862,7 +862,25 @@ test(
           await sql(source, "SELECT COUNT(*) FROM artfi_schema_migrations", db),
           "18",
         );
-        await rejected("apply", applyArgs(), /drifted/);
+        assert.equal(
+          await sql(
+            source,
+            "SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME='chain_event_notification_revision'",
+            db,
+          ),
+          "1",
+        );
+        const ledgerSQL =
+          "SELECT name,checksum,dirty,applied_at FROM artfi_schema_migrations ORDER BY name";
+        const beforeRefusal = await sql(source, ledgerSQL, db);
+        // Migration 15 introduces a trigger, which the legacy-only adoption tool
+        // rejects before its later drift comparison. Keep that fail-closed guard.
+        await rejected(
+          "apply",
+          applyArgs(),
+          /Legacy adoption error: Unsupported schema object: only nonpartitioned InnoDB base tables, without views, triggers, routines or events, are supported\./,
+        );
+        assert.equal(await sql(source, ledgerSQL, db), beforeRefusal);
       },
     );
   },
