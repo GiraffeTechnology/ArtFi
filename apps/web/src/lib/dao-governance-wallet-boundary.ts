@@ -105,7 +105,7 @@ export async function verifyDaoGovernanceAtWallet({
       address: deployment.governorAddress,
       blockNumber: block.number,
     } as const;
-    const [token, registry, vault, eligible, balance] = await Promise.all([
+    const [token, registry, vault, eligible] = await Promise.all([
       client.readContract({ ...at, abi: bindingsAbi, functionName: "token" }),
       client.readContract({
         ...at,
@@ -122,26 +122,29 @@ export async function verifyDaoGovernanceAtWallet({
         abi: daoGovernorAbi,
         functionName: "rwaEligible",
       }),
-      client.readContract({
-        address: deployment.tokenAddress,
-        blockNumber: block.number,
-        abi: daoVotingTokenAbi,
-        functionName: "balanceOf",
-        args: [account],
-      }),
     ]);
     assertCurrent();
     if (
       !same(token, deployment.tokenAddress) ||
       !same(registry, deployment.actionRegistryAddress) ||
       !same(vault, deployment.vaultAddress) ||
-      eligible !== true ||
-      !uint(balance) ||
-      balance === 0n
+      eligible !== true
     )
       stop(
         "Corresponding holder membership and the original RWA binding are required.",
       );
+    if (decoded.functionName !== "castVote") {
+      const balance = await client.readContract({
+        address: deployment.tokenAddress,
+        blockNumber: block.number,
+        abi: daoVotingTokenAbi,
+        functionName: "balanceOf",
+        args: [account],
+      });
+      assertCurrent();
+      if (!uint(balance) || balance === 0n)
+        stop("Corresponding current holder membership is required.");
+    }
     if (decoded.functionName === "castVote") {
       if (!uint(args[0]) || ![0, 1, 2].includes(args[1] as number))
         stop("The vote selection is invalid.");
@@ -154,6 +157,28 @@ export async function verifyDaoGovernanceAtWallet({
       assertCurrent();
       if (state !== 1)
         stop("Only the selected active proposal can receive a vote.");
+      const snapshot = await client.readContract({
+        ...at,
+        abi: daoGovernorAbi,
+        functionName: "proposalSnapshot",
+        args: [args[0] as bigint],
+      });
+      assertCurrent();
+      if (!uint(snapshot) || snapshot >= block.number)
+        stop(
+          "The selected proposal snapshot must be a mined historical block.",
+        );
+      const weight = await client.readContract({
+        ...at,
+        abi: daoGovernorAbi,
+        functionName: "getVotes",
+        args: [account, snapshot],
+      });
+      assertCurrent();
+      if (!uint(weight) || weight === 0n)
+        stop(
+          "The corresponding account has no voting power at this proposal snapshot.",
+        );
     }
     if (decoded.functionName === "proposeWithKind") {
       const [votes, threshold] = await Promise.all([
