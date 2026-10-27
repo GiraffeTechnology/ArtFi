@@ -444,6 +444,22 @@ test("charity safe submission, independent confirmation, revocation, timelock an
     .getByRole("button", { name: "Execute confirmed proposal" })
     .click();
   await expect(panel(page).getByText(/Proposal 1: executed/)).toBeVisible();
+  // The other safe owner executes, but the reviewed creation record remains
+  // scoped to the original wallet. Recover that record without sharing it.
+  const executionHash = state.chain.state.transactions.at(-1)!.hash;
+  await expect(
+    page.getByRole("heading", { name: "ERC-1155 series confirmed" }),
+  ).toHaveCount(0);
+  await switchOwner(page, state, a.wallet);
+  await panel(page)
+    .getByRole("button", { name: "Refresh safe status" })
+    .click();
+  await panel(page)
+    .getByLabel("Execution transaction hash (any owner)")
+    .fill(executionHash);
+  await panel(page)
+    .getByRole("button", { name: "Check execution receipt" })
+    .click();
   await panel(page)
     .getByRole("button", { name: "Recover creation result" })
     .click();

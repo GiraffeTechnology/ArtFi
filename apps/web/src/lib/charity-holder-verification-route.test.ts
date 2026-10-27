@@ -26,7 +26,9 @@ vi.mock("./charity-holder-challenge-store", () => ({
 import { POST } from "../app/api/charity/holder/verify/route";
 const holder = "0x1111111111111111111111111111111111111111";
 const signature = `0x${"11".repeat(65)}`;
-let issued: any;
+let issued: ReturnType<
+  (typeof import("./charity-holder-auth"))["createHolderChallenge"]
+>;
 let auth: typeof import("./charity-holder-auth");
 let cookieToken: string | undefined;
 function request(
@@ -114,7 +116,10 @@ describe("holder verification original challenge and finite return", () => {
     "missing-address",
     "invalid-signature",
   ])("refuses original invalid challenge input: %s", async (mode) => {
-    let body: any = { address: holder, signature };
+    const body: { address?: string; signature: string } = {
+      address: holder,
+      signature,
+    };
     if (mode === "missing-cookie") cookieToken = undefined;
     if (mode === "tampered-cookie") cookieToken += "bad";
     if (mode === "expired-cookie") vi.setSystemTime(issued.challenge.expiresAt);
@@ -180,7 +185,7 @@ describe("holder verification original challenge and finite return", () => {
   it.each(["body", "cookie", "ownership"])(
     "holder-verification regression bounded %s with no late grant",
     async (phase) => {
-      let finish: undefined | ((value: any) => void);
+      let finish: undefined | ((value: unknown) => void);
       let req = request();
       if (phase === "body")
         req = new Request(req.url, {

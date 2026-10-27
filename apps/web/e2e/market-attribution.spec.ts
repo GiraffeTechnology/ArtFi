@@ -30,7 +30,12 @@ function catalog(marketplaceUrl: string | undefined) {
     ],
     total: 1,
     page: 1,
-    pageSize: 100,
+    pageSize: 12,
+    schemaVersion: "1",
+    source: "opensea",
+    q: "",
+    listingStatus: "all",
+    sort: "newest",
     runtime: true,
   };
 }

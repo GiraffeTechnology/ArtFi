@@ -1,5 +1,5 @@
 import "../../src/app/globals.css";
-import { useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -91,13 +91,23 @@ function App() {
   const { switchChainAsync } = useSwitchChain();
   const [tokenId, setTokenId] = useState("7");
   const [visible, setVisible] = useState(true);
-  const connect = async (index: number) => {
-    if (wallet.isConnected) await disconnectAsync();
-    await connectAsync({ connector: connectors[index]!, chainId: hoodi.id });
-  };
-  window.charityHolderFixture.connect = () => {
-    void connect(0);
-  };
+  const connect = useCallback(
+    async (index: number) => {
+      if (wallet.isConnected) await disconnectAsync();
+      await connectAsync({ connector: connectors[index]!, chainId: hoodi.id });
+    },
+    [wallet.isConnected, disconnectAsync, connectAsync, connectors],
+  );
+  useLayoutEffect(() => {
+    const connectFirst = () => {
+      void connect(0);
+    };
+    window.charityHolderFixture.connect = connectFirst;
+    return () => {
+      if (window.charityHolderFixture.connect === connectFirst)
+        delete window.charityHolderFixture.connect;
+    };
+  }, [connect]);
   return (
     <main className="approved-page page-shell">
       <header>

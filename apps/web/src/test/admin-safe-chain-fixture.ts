@@ -353,6 +353,11 @@ export function createAdminSafeChainFixture() {
         if (baseResult.error) throw Error(baseResult.error.message);
         result = {
           ...(baseResult.result as object),
+          // The safe ledger has its own canonical block identity.
+          hash:
+            (baseResult.result as { hash: Hex | null }).hash === null
+              ? null
+              : blockHash,
           timestamp: `0x${state.now.toString(16)}`,
         };
       } else if (

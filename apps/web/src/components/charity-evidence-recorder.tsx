@@ -90,7 +90,6 @@ function ConnectedRecorder({
 }) {
   const client = usePublicClient({ chainId: supportedChain.id });
   const { writeContractAsync } = useWriteContract();
-  const [storageReady, setStorageReady] = useState(false);
   const [action, setAction] = useState<CharityEvidenceAction>("sellout");
   const [evidenceHash, setEvidenceHash] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
@@ -123,7 +122,6 @@ function ConnectedRecorder({
   const view = useRef(currentOperation());
   useLayoutEffect(() => {
     session.restore(() => sessionStorage);
-    setStorageReady(true);
     view.current = currentOperation();
     const retire = () => view.current.retire();
     window.addEventListener("pagehide", retire);
@@ -135,7 +133,7 @@ function ConnectedRecorder({
     };
   }, [session]);
   const ready = Boolean(
-    storageReady && account && client && chainId === supportedChain.id,
+    snapshot.ready && account && client && chainId === supportedChain.id,
   );
   const writable =
     ready && !snapshot.busy && !snapshot.blocked && !snapshot.record?.pending;

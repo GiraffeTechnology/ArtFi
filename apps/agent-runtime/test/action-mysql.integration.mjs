@@ -325,7 +325,14 @@ test("an unconfirmed cancellation holds its open-order slot; canonical proof rel
   );
   const second = f.compile(await f.order({ owner: f.user, salt: "2" }));
   await store.prepare(f.verified, second);
-  assert.equal((await run.tick(second.operationId)).state, "REJECTED");
+  const refused = await run.tick(second.operationId);
+  assert.equal(
+    refused.state,
+    "REJECTED",
+    refused.state === "REJECTED"
+      ? undefined
+      : await actionFailureDiagnostics(refused, second.operationId),
+  );
   const cancel = f.compile(original, { action: "CANCEL_ORDER" });
   await store.prepare(f.verified, cancel);
   const lost = runtime(f, { loseResponse: true });
@@ -406,6 +413,8 @@ test("recovery during source failure preserves historical settlement and blocks 
     observePatch: { groundingCurrent: true },
   });
   assert.equal((await run.tick(a.operationId)).state, "SAFE_DEGRADED");
+  assert.equal(run.sends(), 1);
+  assert.ok(run.evidence.has(`${a.operationId}:0`));
   const b = f.compile({ ...quote, quantity: "1" });
   await store.prepare(f.verified, b);
   const unavailable = runtime(f, {
@@ -418,7 +427,7 @@ test("recovery during source failure preserves historical settlement and blocks 
     0,
     run.evidence.get(`${a.operationId}:0`),
   );
-  assert.equal((await unavailable.tick(a.operationId)).state, "COMPLETED");
+  await assertCompleted(unavailable.tick, a.operationId);
   assert.equal(unavailable.sends(), 0);
 });
 
@@ -466,7 +475,7 @@ test("autonomous planner resumes from durable intent, rejects unsafe advice, and
     next = pending.find((row) => row.authorityKey === f.verified.authorityKey);
   assert.ok(next);
   assert.match(next.id, /^auto-/);
-  assert.equal((await run.tick(next.id)).state, "COMPLETED");
+  await assertCompleted(run.tick, next.id);
   assert.equal(run.sends(), 2);
   assert.equal((await store.getBudgets(next.id)).authority.executions, "2");
   for (let i = 0; i < 4; i++)

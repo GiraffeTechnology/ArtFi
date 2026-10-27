@@ -210,10 +210,10 @@ function fixture() {
   >[0]["journalConfig"] = {
     url: "https://journal.fixture.invalid/internal/v1/nft/operations",
     peerId: "spiffe://fixture.invalid/artfi",
-    async withCapability(scope, use) {
+    async withCapability(scope, consumeCapability) {
       expect(state.held).toBe(true);
       scopes.push(structuredClone(scope));
-      return use("fixture-only-not-a-live-capability-token");
+      return consumeCapability("fixture-only-not-a-live-capability-token");
     },
     async transport(_url, init) {
       expect(state.held).toBe(true);

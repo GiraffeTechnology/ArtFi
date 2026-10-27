@@ -91,19 +91,22 @@ function fixture() {
     }),
     value: 0n,
   };
-  const approval = createWholeReceiptApprovalCommitments({
-    kind: native.kind,
-    chainId: native.chainId,
-    request: native.request,
-    wholeReceipt: native.wholeReceipt,
-  }, {
-    tenant: "artfi",
-    origin: "https://artfi.example:9445",
-    taskId: principal.taskId,
-    actor: native.request.account,
-    escrow: native.wholeReceipt.domain.verifyingContract,
-    runtimeCodeHash: h("e"),
-  });
+  const approval = createWholeReceiptApprovalCommitments(
+    {
+      kind: native.kind,
+      chainId: native.chainId,
+      request: native.request,
+      wholeReceipt: native.wholeReceipt,
+    },
+    {
+      tenant: "artfi",
+      origin: "https://artfi.example:9445",
+      taskId: principal.taskId,
+      actor: native.request.account,
+      escrow: native.wholeReceipt.domain.verifyingContract,
+      runtimeCodeHash: h("e"),
+    },
+  );
   const slot = {
     phase: "paid" as const,
     nonce: "2",
@@ -249,12 +252,21 @@ describe("ArtFi single held receipt action composition", () => {
   it("refuses a coherent but opaque legacy slot before reserving or invoking the action", async () => {
     const f = fixture();
     Object.assign(f.slot, { planDigest: h("c"), journalBindingHash: h("d") });
-    Object.assign(f.options.claimed, { planDigest: h("c"), journalBindingHash: h("d") });
-    Object.assign(f.snapshot.scope, { planDigest: h("c"), journalBindingHash: h("d") });
+    Object.assign(f.options.claimed, {
+      planDigest: h("c"),
+      journalBindingHash: h("d"),
+    });
+    Object.assign(f.snapshot.scope, {
+      planDigest: h("c"),
+      journalBindingHash: h("d"),
+    });
     const action = vi.fn(async () => undefined);
     await expect(
       createWholeReceiptHeldAction(f.options).authorize(
-        f.principal, f.native, action, f.request,
+        f.principal,
+        f.native,
+        action,
+        f.request,
       ),
     ).rejects.toThrow("RECEIPT_APPROVAL_COMMITMENT_REFUSED");
     expect(f.state.gates).toBe(0);
@@ -266,11 +278,16 @@ describe("ArtFi single held receipt action composition", () => {
     async (key) => {
       const f = fixture();
       if (key === "runtimeCodeHash") f.policy.intent.runtimeCodeHash = h("6");
-      else f.policy[key] = key === "tenant" ? "another-artfi" : "https://another.example:9445";
+      else
+        f.policy[key] =
+          key === "tenant" ? "another-artfi" : "https://another.example:9445";
       const action = vi.fn(async () => undefined);
       await expect(
         createWholeReceiptHeldAction(f.options).authorize(
-          f.principal, f.native, action, f.request,
+          f.principal,
+          f.native,
+          action,
+          f.request,
         ),
       ).rejects.toThrow("RECEIPT_APPROVAL_COMMITMENT_REFUSED");
       expect(f.state.gates).toBe(0);
@@ -286,7 +303,10 @@ describe("ArtFi single held receipt action composition", () => {
     const action = vi.fn(async () => undefined);
     await expect(
       createWholeReceiptHeldAction(f.options).authorize(
-        f.principal, f.native, action, f.request,
+        f.principal,
+        f.native,
+        action,
+        f.request,
       ),
     ).rejects.toThrow("RECEIPT_APPROVAL_COMMITMENT_REFUSED");
     expect(f.state.gates).toBe(1);
@@ -300,7 +320,10 @@ describe("ArtFi single held receipt action composition", () => {
     const action = vi.fn(async () => undefined);
     await expect(
       createWholeReceiptHeldAction(f.options).authorize(
-        f.principal, f.native, action, f.request,
+        f.principal,
+        f.native,
+        action,
+        f.request,
       ),
     ).rejects.toThrow("RECEIPT_APPROVAL_COMMITMENT_REFUSED");
     expect(f.state.gates).toBe(0);

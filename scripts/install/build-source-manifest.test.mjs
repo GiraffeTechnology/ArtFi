@@ -72,7 +72,10 @@ test("refuses changed bytes on the same commit", async (t) => {
   assert.equal(after.revision, before.revision);
   assert.equal(after.tree, before.tree);
   assert.notEqual(after.fingerprint, before.fingerprint);
-  assert.throws(() => assertBuildSourceUnchanged(before, after), /Source changed/);
+  assert.throws(
+    () => assertBuildSourceUnchanged(before, after),
+    /Source changed/,
+  );
 });
 
 test("detects modes when Git ignores file modes", async (t) => {
@@ -85,7 +88,10 @@ test("detects modes when Git ignores file modes", async (t) => {
   assert.equal(after.files["entry.mjs"], before.files["entry.mjs"]);
   assert.equal(after.modes["entry.mjs"], "100755");
   assert.notEqual(after.fingerprint, before.fingerprint);
-  assert.throws(() => assertBuildSourceUnchanged(before, after), /Source changed/);
+  assert.throws(
+    () => assertBuildSourceUnchanged(before, after),
+    /Source changed/,
+  );
 });
 
 test("detects dirty-only source drift", async (t) => {
@@ -100,7 +106,10 @@ test("detects dirty-only source drift", async (t) => {
   assert.equal(after.fingerprint, before.fingerprint);
   assert.deepEqual(after.files, before.files);
   assert.deepEqual(after.modes, before.modes);
-  assert.throws(() => assertBuildSourceUnchanged(before, after), /Source changed/);
+  assert.throws(
+    () => assertBuildSourceUnchanged(before, after),
+    /Source changed/,
+  );
 });
 
 test("includes untracked build inputs", async (t) => {
@@ -110,7 +119,10 @@ test("includes untracked build inputs", async (t) => {
   const after = await captureBuildSource(root);
   assert.equal(after.dirty, true);
   assert.ok(Object.hasOwn(after.files, "new-input.json"));
-  assert.throws(() => assertBuildSourceUnchanged(before, after), /Source changed/);
+  assert.throws(
+    () => assertBuildSourceUnchanged(before, after),
+    /Source changed/,
+  );
 });
 
 test("ignores generated output", async (t) => {
@@ -137,9 +149,15 @@ test("ignores generated output", async (t) => {
 
 test("refuses source symlinks", async (t) => {
   const { root, parent } = await fixture(t);
-  await writeFile(join(parent, "outside.mjs"), "export const outside = true;\n");
+  await writeFile(
+    join(parent, "outside.mjs"),
+    "export const outside = true;\n",
+  );
   await symlink(join(parent, "outside.mjs"), join(root, "alias.mjs"));
-  await assert.rejects(captureBuildSource(root), /source links are unsupported/);
+  await assert.rejects(
+    captureBuildSource(root),
+    /source links are unsupported/,
+  );
 });
 
 test("refuses a replaced source parent", async (t) => {
@@ -161,7 +179,10 @@ test("refuses a replaced source parent", async (t) => {
   await mkdir(join(parent, "outside"));
   await writeFile(join(parent, "outside", "input.mjs"), "replacement\n");
   await symlink(join(parent, "outside"), join(root, "nested"));
-  await assert.rejects(captureBuildSource(root), /source links are unsupported/);
+  await assert.rejects(
+    captureBuildSource(root),
+    /source links are unsupported/,
+  );
 });
 
 test("includes special source names", async (t) => {
@@ -174,5 +195,8 @@ test("includes special source names", async (t) => {
   assert.ok(Object.hasOwn(after.files, "__proto__"));
   assert.equal(after.modes.__proto__, "100644");
   assert.notEqual(after.fingerprint, before.fingerprint);
-  assert.throws(() => assertBuildSourceUnchanged(before, after), /Source changed/);
+  assert.throws(
+    () => assertBuildSourceUnchanged(before, after),
+    /Source changed/,
+  );
 });
