@@ -56,9 +56,9 @@ export class ReceiptInstallationError extends Error {
     this.name = "ReceiptInstallationError";
   }
 }
-const fail = (code = "RECEIPT_INSTALLATION_CONFIG_REFUSED"): never => {
+function fail(code = "RECEIPT_INSTALLATION_CONFIG_REFUSED"): never {
   throw new ReceiptInstallationError(code);
-};
+}
 function fields(raw: unknown, required: string[], optional: string[] = []) {
   if (!raw || Object.getPrototypeOf(raw) !== Object.prototype) fail();
   const descriptors = Object.getOwnPropertyDescriptors(raw);
