@@ -24,10 +24,7 @@ export const wholeReceiptProjectionReadAbi: Abi = parseAbi([
   "function isFinalAsOf(uint256 tokenId,uint64 instant) view returns (bool)",
 ]);
 type ReadMethod =
-  | "eth_chainId"
-  | "eth_getBlockByNumber"
-  | "eth_getCode"
-  | "eth_call";
+  "eth_chainId" | "eth_getBlockByNumber" | "eth_getCode" | "eth_call";
 export type ReceiptChainReadRequest = (input: {
   method: ReadMethod;
   params: unknown[];
@@ -47,19 +44,32 @@ function fail(code: ReceiptChainVerificationCode): never {
   throw new ChainReadError(code);
 }
 function fields(raw: unknown, keys: readonly string[], exact = true) {
-  if (!raw || typeof raw !== "object" ||
-      Object.getPrototypeOf(raw) !== Object.prototype)
+  if (
+    !raw ||
+    typeof raw !== "object" ||
+    Object.getPrototypeOf(raw) !== Object.prototype
+  )
     fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
   const descriptors = Object.getOwnPropertyDescriptors(raw);
-  if ((exact && Reflect.ownKeys(descriptors).length !== keys.length) ||
-      keys.some((key) => !Object.hasOwn(descriptors, key) ||
-        !descriptors[key]!.enumerable || !Object.hasOwn(descriptors[key]!, "value")))
+  if (
+    (exact && Reflect.ownKeys(descriptors).length !== keys.length) ||
+    keys.some(
+      (key) =>
+        !Object.hasOwn(descriptors, key) ||
+        !descriptors[key]!.enumerable ||
+        !Object.hasOwn(descriptors[key]!, "value"),
+    )
+  )
     fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
   return Object.fromEntries(keys.map((key) => [key, descriptors[key]!.value]));
 }
 function hex(raw: unknown, bytes?: number): Hex {
-  if (typeof raw !== "string" || !/^0x(?:[0-9a-fA-F]{2})+$/.test(raw) ||
-      raw.length > 262146 || (bytes !== undefined && raw.length !== 2 + bytes * 2))
+  if (
+    typeof raw !== "string" ||
+    !/^0x(?:[0-9a-fA-F]{2})+$/.test(raw) ||
+    raw.length > 262146 ||
+    (bytes !== undefined && raw.length !== 2 + bytes * 2)
+  )
     fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
   return raw.toLowerCase() as Hex;
 }
@@ -69,8 +79,11 @@ function nonzeroHash(raw: unknown): Hex {
   return value;
 }
 function quantity(raw: unknown): bigint {
-  if (typeof raw !== "string" || !/^0x(?:0|[1-9a-f][0-9a-f]*)$/.test(raw) ||
-      raw.length > 66)
+  if (
+    typeof raw !== "string" ||
+    !/^0x(?:0|[1-9a-f][0-9a-f]*)$/.test(raw) ||
+    raw.length > 66
+  )
     fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
   return BigInt(raw);
 }
@@ -109,12 +122,19 @@ export function createWholeReceiptChainVerifier(options: {
 }) {
   let installed: Record<string, unknown>;
   try {
-    installed = fields(options, ["chainId", "contract", "runtimeCodeHash", "request"]);
-    if (!["31337", "560048"].includes(installed.chainId as string) ||
-        typeof installed.contract !== "string" ||
-        !/^0x[0-9a-fA-F]{40}$/.test(installed.contract) ||
-        /^0x0{40}$/i.test(installed.contract) ||
-        typeof installed.request !== "function")
+    installed = fields(options, [
+      "chainId",
+      "contract",
+      "runtimeCodeHash",
+      "request",
+    ]);
+    if (
+      !["31337", "560048"].includes(installed.chainId as string) ||
+      typeof installed.contract !== "string" ||
+      !/^0x[0-9a-fA-F]{40}$/.test(installed.contract) ||
+      /^0x0{40}$/i.test(installed.contract) ||
+      typeof installed.request !== "function"
+    )
       throw Error("invalid");
     nonzeroHash(installed.runtimeCodeHash);
   } catch {
@@ -125,7 +145,11 @@ export function createWholeReceiptChainVerifier(options: {
     codeHash = (installed.runtimeCodeHash as string).toLowerCase(),
     request = installed.request as ReceiptChainReadRequest;
   return Object.freeze({
-    async verify(expectedInput: unknown, snapshotInput: unknown, signal?: AbortSignal) {
+    async verify(
+      expectedInput: unknown,
+      snapshotInput: unknown,
+      signal?: AbortSignal,
+    ) {
       let live = true;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let cancel = () => {};
@@ -136,8 +160,10 @@ export function createWholeReceiptChainVerifier(options: {
         const expected = snapshotWholeReceiptExpectation(expectedInput);
         const observation = observeWholeReceiptSource(expected, snapshotInput);
         const anchor = observation.snapshot.block;
-        if (expected.source.chainId !== chainId ||
-            expected.source.contract.toLowerCase() !== contract)
+        if (
+          expected.source.chainId !== chainId ||
+          expected.source.contract.toLowerCase() !== contract
+        )
           fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
         stopped();
         const read = async (method: ReadMethod, params: unknown[]) => {
@@ -150,9 +176,13 @@ export function createWholeReceiptChainVerifier(options: {
           if (quantity(await read("eth_chainId", [])) !== BigInt(chainId))
             fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
           const height = "0x" + BigInt(anchor.number).toString(16);
-          const initial = block(await read("eth_getBlockByNumber", [height, false]));
-          if (initial.number !== BigInt(anchor.number) ||
-              initial.hash !== anchor.hash.toLowerCase())
+          const initial = block(
+            await read("eth_getBlockByNumber", [height, false]),
+          );
+          if (
+            initial.number !== BigInt(anchor.number) ||
+            initial.hash !== anchor.hash.toLowerCase()
+          )
             fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
           // EIP-1898 binds every code/state read to this exact canonical block.
           // Unsupported providers fail rather than silently falling back to latest.
@@ -160,18 +190,31 @@ export function createWholeReceiptChainVerifier(options: {
           const code = hex(await read("eth_getCode", [contract, { ...at }]));
           if (keccak256(code) !== codeHash)
             fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
-          const call = async (functionName: string, args: readonly unknown[] = []) => {
+          const call = async (
+            functionName: string,
+            args: readonly unknown[] = [],
+          ) => {
             const data = encodeFunctionData({
-              abi: wholeReceiptProjectionReadAbi, functionName, args,
+              abi: wholeReceiptProjectionReadAbi,
+              functionName,
+              args,
             });
-            const raw = hex(await read("eth_call", [{ to: contract, data }, { ...at }]));
+            const raw = hex(
+              await read("eth_call", [{ to: contract, data }, { ...at }]),
+            );
             const result = decodeFunctionResult({
-              abi: wholeReceiptProjectionReadAbi, functionName, data: raw,
+              abi: wholeReceiptProjectionReadAbi,
+              functionName,
+              data: raw,
             });
             // Refuse extra ABI bytes/noncanonical return encodings.
-            if (encodeFunctionResult({
-              abi: wholeReceiptProjectionReadAbi, functionName, result,
-            }).toLowerCase() !== raw)
+            if (
+              encodeFunctionResult({
+                abi: wholeReceiptProjectionReadAbi,
+                functionName,
+                result,
+              }).toLowerCase() !== raw
+            )
               fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
             return result;
           };
@@ -181,14 +224,27 @@ export function createWholeReceiptChainVerifier(options: {
           const sourceAuthority = word(await call("sourceAuthority"));
           const mintPolicyHash = word(await call("mintPolicyHash", [tokenId]));
           const entry = fields(await call("entryAt", [tokenId, version]), [
-            "recordCommitment", "previousCommitment", "registryReference",
-            "holder", "version", "effectiveAt", "supersededAt",
+            "recordCommitment",
+            "previousCommitment",
+            "registryReference",
+            "holder",
+            "version",
+            "effectiveAt",
+            "supersededAt",
           ]);
-          const binding = fields(await call("receiptBinding", [tokenId, version]), [
-            "schemaId", "mintPolicyHash", "segmentDigest", "requestHash", "receiptDocumentHash",
-          ]);
+          const binding = fields(
+            await call("receiptBinding", [tokenId, version]),
+            [
+              "schemaId",
+              "mintPolicyHash",
+              "segmentDigest",
+              "requestHash",
+              "receiptDocumentHash",
+            ],
+          );
           const temporalFinal = await call("isFinalAsOf", [
-            tokenId, BigInt(expected.entry.effectiveAt),
+            tokenId,
+            BigInt(expected.entry.effectiveAt),
           ]);
           if (typeof temporalFinal !== "boolean")
             fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
@@ -213,25 +269,45 @@ export function createWholeReceiptChainVerifier(options: {
           });
           // A source HTTP snapshot must agree with this exact on-chain interval,
           // including later closure of the requested historical entry.
-          if (checked.snapshot.entry.supersededAt !== observation.snapshot.entry.supersededAt)
+          if (
+            checked.snapshot.entry.supersededAt !==
+            observation.snapshot.entry.supersededAt
+          )
             fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
-          const finalized = block(await read("eth_getBlockByNumber", ["finalized", false]));
-          const finalAnchor = block(await read("eth_getBlockByNumber", [
-            "0x" + finalized.number.toString(16), false,
-          ]));
-          const current = block(await read("eth_getBlockByNumber", [height, false]));
-          if ((finalized.number === initial.number && finalized.hash !== initial.hash) ||
-              finalAnchor.number !== finalized.number || finalAnchor.hash !== finalized.hash ||
-              current.number !== initial.number || current.hash !== initial.hash ||
-              quantity(await read("eth_chainId", [])) !== BigInt(chainId))
+          const finalized = block(
+            await read("eth_getBlockByNumber", ["finalized", false]),
+          );
+          const finalAnchor = block(
+            await read("eth_getBlockByNumber", [
+              "0x" + finalized.number.toString(16),
+              false,
+            ]),
+          );
+          const current = block(
+            await read("eth_getBlockByNumber", [height, false]),
+          );
+          if (
+            (finalized.number === initial.number &&
+              finalized.hash !== initial.hash) ||
+            finalAnchor.number !== finalized.number ||
+            finalAnchor.hash !== finalized.hash ||
+            current.number !== initial.number ||
+            current.hash !== initial.hash ||
+            quantity(await read("eth_chainId", [])) !== BigInt(chainId)
+          )
             fail("RECEIPT_CHAIN_SNAPSHOT_REFUSED");
           return freeze({
             kind: "canonical-oracle-receipt-source" as const,
             authorization: "NOT_ESTABLISHED" as const,
             originalDocumentVerification: "NOT_ESTABLISHED" as const,
-            chainFinality: finalized.number >= initial.number
-              ? "FINALIZED" as const : "NOT_FINALIZED" as const,
-            finalizedBlock: { number: String(finalized.number), hash: finalized.hash },
+            chainFinality:
+              finalized.number >= initial.number
+                ? ("FINALIZED" as const)
+                : ("NOT_FINALIZED" as const),
+            finalizedBlock: {
+              number: String(finalized.number),
+              hash: finalized.hash,
+            },
             projectionFinalAsOf: temporalFinal,
             projectionInstant: expected.entry.effectiveAt,
             runtimeCodeHash: codeHash,
@@ -255,11 +331,18 @@ export function createWholeReceiptChainVerifier(options: {
       } catch (error) {
         return {
           ok: false as const,
-          code: error instanceof ChainReadError ? error.code
-            : error instanceof Error &&
-              ["RECEIPT_EXPECTATION_INVALID", "RECEIPT_SOURCE_MALFORMED", "RECEIPT_BINDING_MISMATCH", "RECEIPT_NOT_AVAILABLE"].includes(error.message)
-              ? "RECEIPT_CHAIN_SNAPSHOT_REFUSED" as const
-              : "RECEIPT_CHAIN_UNAVAILABLE" as const,
+          code:
+            error instanceof ChainReadError
+              ? error.code
+              : error instanceof Error &&
+                  [
+                    "RECEIPT_EXPECTATION_INVALID",
+                    "RECEIPT_SOURCE_MALFORMED",
+                    "RECEIPT_BINDING_MISMATCH",
+                    "RECEIPT_NOT_AVAILABLE",
+                  ].includes(error.message)
+                ? ("RECEIPT_CHAIN_SNAPSHOT_REFUSED" as const)
+                : ("RECEIPT_CHAIN_UNAVAILABLE" as const),
         };
       } finally {
         live = false;

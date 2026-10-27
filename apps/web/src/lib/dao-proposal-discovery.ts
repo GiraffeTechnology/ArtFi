@@ -130,7 +130,7 @@ export async function readPublicProposalPage(
     if (signal.aborted)
       throw new Error("The proposal read was cancelled or timed out.");
   };
-  const step = <T,>(action: () => Promise<T>): Promise<T> => {
+  const step = <T>(action: () => Promise<T>): Promise<T> => {
     check();
     return new Promise((resolve, reject) => {
       const cleanup = () => signal.removeEventListener("abort", abort);

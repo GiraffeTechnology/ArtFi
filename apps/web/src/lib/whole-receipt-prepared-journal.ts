@@ -334,17 +334,21 @@ export function createWholeReceiptPreparedJournal(options: {
     )
       fail();
     try {
-      assertWholeReceiptApprovalPlan(p, {
-        tenant: policy.tenant,
-        origin: policy.origin,
-        taskId: policy.taskId,
-        actor: policy.actor,
-        escrow: intent.escrow,
-        runtimeCodeHash: intent.runtimeCodeHash,
-      }, {
-        receiptPlanDigest: scope.planDigest,
-        receiptJournalBindingHash: scope.journalBindingHash,
-      });
+      assertWholeReceiptApprovalPlan(
+        p,
+        {
+          tenant: policy.tenant,
+          origin: policy.origin,
+          taskId: policy.taskId,
+          actor: policy.actor,
+          escrow: intent.escrow,
+          runtimeCodeHash: intent.runtimeCodeHash,
+        },
+        {
+          receiptPlanDigest: scope.planDigest,
+          receiptJournalBindingHash: scope.journalBindingHash,
+        },
+      );
     } catch {
       fail("RECEIPT_JOURNAL_APPROVAL_COMMITMENT_REFUSED");
     }

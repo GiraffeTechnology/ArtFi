@@ -25,10 +25,17 @@ const fs = require('node:fs'), crypto = require('node:crypto');
 const args = process.argv.slice(2), sql = fs.readFileSync(0, 'utf8');
 fs.appendFileSync(process.env.TEST_ONLY_COMMAND_LOG, JSON.stringify({args, sqlHash:crypto.createHash('sha256').update(sql).digest('hex'), sql})+'\\n');
 if (process.env.TEST_ONLY_FAIL_SQL && sql.includes(process.env.TEST_ONLY_FAIL_SQL)) process.exit(19);
+if (sql.includes("SIGNAL SQLSTATE '45000'")) { if (process.env.TEST_ONLY_ALLOW_FORWARD_DOWN === '1') process.exit(0); console.error(process.env.TEST_ONLY_WRONG_REFUSAL === '1' ? 'ERROR 1045 (28000): denied' : 'ERROR 1644 (45000): forward-only'); process.exit(1); }
 if (args[0] === 'run' && process.env.TEST_ONLY_FAIL_GO === '1') process.exit(23);
+if (args.some((arg) => arg.includes('CHECKSUM TABLE'))) {
+ const state = process.env.TEST_ONLY_SCHEMA_STATE + '.checksum';
+ const subsequent = fs.existsSync(state); fs.writeFileSync(state, 'checked');
+ const mode = process.env.TEST_ONLY_CHECKSUM;
+ if (mode !== 'missing') console.log('test_only\\t' + (mode === 'null' ? 'NULL' : mode === 'changed' && subsequent ? '54321' : '12345'));
+}
 if (sql.includes('COUNT(*)') || args.some((arg) => arg.includes('COUNT(*)'))) {
  const state = process.env.TEST_ONLY_SCHEMA_STATE;
- if (!fs.existsSync(state)) { fs.writeFileSync(state, 'checked'); console.log(process.env.TEST_ONLY_TABLE_COUNT || '51'); }
+ if (!fs.existsSync(state)) { fs.writeFileSync(state, 'checked'); console.log(process.env.TEST_ONLY_TABLE_COUNT || '52'); }
  else console.log('0');
 }
 `;
@@ -97,12 +104,14 @@ function cleanupScope(commands) {
     (entry) =>
       entry.sql === "" &&
       entry.args.some((arg) =>
-        /^DROP DATABASE IF EXISTS `artfi_codex_test_[0-9]+_[0-9]+`;$/.test(arg),
+        /^DROP DATABASE IF EXISTS `artfi_codex_test_[0-9]+_[0-9]+`; DROP DATABASE IF EXISTS `artfi_codex_test_[0-9]+_[0-9]+_legacy`;$/.test(
+          arg,
+        ),
       ),
   );
   assert.ok(drop, "cleanup must drop only its generated isolated test DB");
 }
-test("MySQL runner applies all current migration bytes and rolls back in reverse order", async (t) => {
+test("MySQL runner preserves current forward-only schema and separately rolls back legacy schema", async (t) => {
   const f = await fixture(t),
     result = f.run();
   assert.equal(result.status, 0, result.stderr);
@@ -110,7 +119,7 @@ test("MySQL runner applies all current migration bytes and rolls back in reverse
   const names = (await readdir(join(repository, "apps/api/migrations")))
     .filter((name) => name.endsWith(".up.sql"))
     .sort();
-  assert.equal(names.length, 17);
+  assert.equal(names.length, 18);
   const up = await Promise.all(
     names.map((name) =>
       readFile(join(repository, "apps/api/migrations", name), "utf8"),
@@ -118,6 +127,7 @@ test("MySQL runner applies all current migration bytes and rolls back in reverse
   );
   const down = await Promise.all(
     names
+      .slice(0, 14)
       .toReversed()
       .map((name) =>
         readFile(
@@ -132,7 +142,33 @@ test("MySQL runner applies all current migration bytes and rolls back in reverse
   );
   assert.deepEqual(
     commands.filter((entry) => entry.sql !== "").map((entry) => entry.sqlHash),
-    [...up, ...down].map(hash),
+    [
+      ...up,
+      ...(await Promise.all(
+        names
+          .slice(14, 17)
+          .map((name) =>
+            readFile(
+              join(
+                repository,
+                "apps/api/migrations",
+                name.replace(".up.sql", ".down.sql"),
+              ),
+              "utf8",
+            ),
+          ),
+      )),
+      ...up.slice(0, 14),
+      up[17],
+      await readFile(
+        join(
+          repository,
+          "apps/api/migrations/000018_charity_holder_challenges.down.sql",
+        ),
+        "utf8",
+      ),
+      ...down,
+    ].map(hash),
   );
   assert.equal(
     up.reduce(
@@ -142,7 +178,7 @@ test("MySQL runner applies all current migration bytes and rolls back in reverse
           .length,
       0,
     ),
-    51,
+    52,
   );
   const go = commands.find((entry) => entry.args[0] === "run");
   assert.ok(go.args.includes("ARTFI_NOTIFICATION_MYSQL_REQUIRED=1"));
@@ -215,4 +251,43 @@ test("MySQL runner rejects malformed port before touching Docker", async (t) => 
     result = f.run({ ARTFI_MYSQL_TEST_PORT: "33306;ignored" });
   assert.notEqual(result.status, 0);
   assert.deepEqual(await f.commands(), []);
+});
+
+test("MySQL runner rejects successful or unrelated failed forward-only downgrade", async (t) => {
+  for (const extra of [
+    { TEST_ONLY_ALLOW_FORWARD_DOWN: "1" },
+    { TEST_ONLY_WRONG_REFUSAL: "1" },
+  ]) {
+    const f = await fixture(t),
+      result = f.run(extra);
+    assert.notEqual(result.status, 0);
+    assert.match(
+      result.stderr,
+      /Forward-only migration unexpectedly|Expected forward-only SQLSTATE/,
+    );
+    const commands = await f.commands();
+    assert.equal(
+      commands.some((entry) => entry.sql.includes("DROP TABLE")),
+      false,
+    );
+    cleanupScope(commands);
+  }
+});
+
+test("MySQL runner refuses unavailable or changed preservation checksums", async (t) => {
+  for (const mode of ["missing", "null", "changed"]) {
+    const f = await fixture(t),
+      result = f.run({ TEST_ONLY_CHECKSUM: mode });
+    assert.notEqual(result.status, 0);
+    assert.match(
+      result.stderr,
+      /Unavailable preservation checksum|Forward-only refusal changed data/,
+    );
+    const commands = await f.commands();
+    assert.equal(
+      commands.some((entry) => entry.sql.includes("DROP TABLE")),
+      false,
+    );
+    cleanupScope(commands);
+  }
 });

@@ -25,12 +25,10 @@ function evidence() {
   const wait = vi.fn().mockResolvedValue(testReceipt(original));
   const client = testReceiptClient(wait);
   client.getChainId = vi.fn().mockResolvedValue(560048);
-  client.getBlock = vi
-    .fn()
-    .mockResolvedValue({
-      hash: testBlockHash,
-      number: 12n,
-    }) as MarketReceiptClient["getBlock"];
+  client.getBlock = vi.fn().mockResolvedValue({
+    hash: testBlockHash,
+    number: 12n,
+  }) as MarketReceiptClient["getBlock"];
   client.getTransaction = vi
     .fn()
     .mockImplementation(async ({ hash }) =>
@@ -83,12 +81,10 @@ describe("canonical shared market receipts", () => {
     async (status) => {
       const { client, wait } = evidence();
       wait.mockResolvedValue(testReceipt(original, status));
-      client.getBlock = vi
-        .fn()
-        .mockResolvedValue({
-          hash: wrong,
-          number: 12n,
-        }) as MarketReceiptClient["getBlock"];
+      client.getBlock = vi.fn().mockResolvedValue({
+        hash: wrong,
+        number: 12n,
+      }) as MarketReceiptClient["getBlock"];
       await expect(retainUnlessProven(client)).rejects.toMatchObject({
         retained: { hash: original, kind: "fill" },
       });
@@ -182,12 +178,10 @@ describe("canonical shared market receipts", () => {
   ])("retains a changed settled %s", async (field, value) => {
     const { client } = evidence();
     let reads = 0;
-    client.getTransaction = vi
-      .fn()
-      .mockImplementation(async ({ hash }) => ({
-        ...testTransaction(hash),
-        ...(++reads === 2 ? { [field]: value } : {}),
-      })) as MarketReceiptClient["getTransaction"];
+    client.getTransaction = vi.fn().mockImplementation(async ({ hash }) => ({
+      ...testTransaction(hash),
+      ...(++reads === 2 ? { [field]: value } : {}),
+    })) as MarketReceiptClient["getTransaction"];
     await expect(retainUnlessProven(client)).rejects.toMatchObject({
       retained: { hash: original },
     });
@@ -217,23 +211,21 @@ describe("canonical shared market receipts", () => {
         });
         return testReceipt(next);
       });
-      client.getTransaction = vi
-        .fn()
-        .mockImplementation(async ({ hash }) => ({
-          ...testTransaction(hash),
-          ...(hash === next
-            ? {
-                [field]:
-                  field === "nonce"
-                    ? 8
-                    : field === "value"
-                      ? 1n
-                      : field === "input"
-                        ? "0xabcd"
-                        : "0x3000000000000000000000000000000000000003",
-              }
-            : {}),
-        })) as MarketReceiptClient["getTransaction"];
+      client.getTransaction = vi.fn().mockImplementation(async ({ hash }) => ({
+        ...testTransaction(hash),
+        ...(hash === next
+          ? {
+              [field]:
+                field === "nonce"
+                  ? 8
+                  : field === "value"
+                    ? 1n
+                    : field === "input"
+                      ? "0xabcd"
+                      : "0x3000000000000000000000000000000000000003",
+            }
+          : {}),
+      })) as MarketReceiptClient["getTransaction"];
       await expect(
         confirmMarketReceipt(client, original, publish),
       ).rejects.toBeInstanceOf(MarketReceiptPendingError);
@@ -249,12 +241,10 @@ describe("canonical shared market receipts", () => {
         onReplaced({ reason, transactionReceipt: testReceipt(next) });
         return testReceipt(next);
       });
-      client.getTransaction = vi
-        .fn()
-        .mockImplementation(async ({ hash }) => ({
-          ...testTransaction(hash),
-          ...(hash === next ? { input: "0xabcd", value: 1n } : {}),
-        })) as MarketReceiptClient["getTransaction"];
+      client.getTransaction = vi.fn().mockImplementation(async ({ hash }) => ({
+        ...testTransaction(hash),
+        ...(hash === next ? { input: "0xabcd", value: 1n } : {}),
+      })) as MarketReceiptClient["getTransaction"];
       await expect(
         confirmMarketReceipt(client, original, publish),
       ).rejects.toBeInstanceOf(MarketReceiptFinalError);
@@ -271,12 +261,10 @@ describe("canonical shared market receipts", () => {
       });
       return testReceipt(next);
     });
-    client.getTransaction = vi
-      .fn()
-      .mockImplementation(async ({ hash }) => ({
-        ...testTransaction(hash),
-        nonce: hash === next ? 8 : 7,
-      })) as MarketReceiptClient["getTransaction"];
+    client.getTransaction = vi.fn().mockImplementation(async ({ hash }) => ({
+      ...testTransaction(hash),
+      nonce: hash === next ? 8 : 7,
+    })) as MarketReceiptClient["getTransaction"];
     await expect(retainUnlessProven(client)).rejects.toMatchObject({
       retained: { hash: original },
     });

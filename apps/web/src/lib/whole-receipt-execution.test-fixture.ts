@@ -350,10 +350,12 @@ export function createExecutionFixture(
   const journalConfig: ReceiptExecutionCompositionOptions["journalConfig"] = {
     url: "https://journal.invalid/internal/v1/nft/operations",
     peerId: "spiffe://test.invalid/artfi",
-    async withCapability(scope, use) {
+    async withCapability(scope, consumeCapability) {
       if (!state.held) throw Error("TEST_ONLY_CAPABILITY_OUTSIDE_GATE");
       state.scopes.push(structuredClone(scope));
-      return use("TEST_ONLY_EPHEMERAL_CAPABILITY_00000000000000000000");
+      return consumeCapability(
+        "TEST_ONLY_EPHEMERAL_CAPABILITY_00000000000000000000",
+      );
     },
     async transport(_url, init) {
       if (!state.held) throw Error("TEST_ONLY_TRANSPORT_OUTSIDE_GATE");
