@@ -47,9 +47,9 @@ describe("browser page translation transport bounds", () => {
     const fetcher = transport(response);
     const signal = new AbortController().signal;
     const removeListener = vi.spyOn(signal, "removeEventListener");
-    await expect(requestPageTranslations("fr", source, signal)).resolves.toEqual(
-      value,
-    );
+    await expect(
+      requestPageTranslations("fr", source, signal),
+    ).resolves.toEqual(value);
     expect(json).not.toHaveBeenCalled();
     expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher).toHaveBeenCalledWith(
