@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import {
   LanguageProvider,
@@ -18,7 +18,9 @@ declare global {
 
 function Fixture() {
   const { setLocale, status } = useLanguage();
-  window.fixture = { ...window.fixture, locale: setLocale };
+  useLayoutEffect(() => {
+    window.fixture = { ...window.fixture, locale: setLocale };
+  }, [setLocale]);
   return (
     <>
       <output id="status" data-no-translate>

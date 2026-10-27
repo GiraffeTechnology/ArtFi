@@ -80,7 +80,7 @@ test("contract filtering walks the API cursor and clearing returns to the full s
   const calls = queries.length;
   await page.getByRole("textbox", { name: "Contract address" }).fill("invalid");
   await page.getByRole("button", { name: "Apply contract filter" }).click();
-  await expect(page.getByRole("alert")).toContainText(
+  await expect(page.locator("main").getByRole("alert")).toContainText(
     "complete 20-byte contract address",
   );
   expect(queries).toHaveLength(calls);

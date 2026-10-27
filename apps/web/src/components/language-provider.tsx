@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -296,6 +297,8 @@ function restoreOriginals(root: HTMLElement) {
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [locale, updateLocale] = useState<UiLocale>("en");
+  // A delayed saved preference must not overwrite an explicit current choice.
+  const explicitLocaleChoice = useRef(false);
   const [status, setStatus] = useState<TranslationStatus>("idle");
 
   useEffect(() => {
@@ -303,11 +306,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       const saved = window.localStorage.getItem(languageStorageKey);
       if (saved === "zh-Hant") {
         window.localStorage.setItem(languageStorageKey, "zht");
-        const timer = window.setTimeout(() => updateLocale("zht"), 0);
+        const timer = window.setTimeout(() => {
+          if (!explicitLocaleChoice.current) updateLocale("zht");
+        }, 0);
         return () => window.clearTimeout(timer);
       }
       if (isUiLocale(saved)) {
-        const timer = window.setTimeout(() => updateLocale(saved), 0);
+        const timer = window.setTimeout(() => {
+          if (!explicitLocaleChoice.current) updateLocale(saved);
+        }, 0);
         return () => window.clearTimeout(timer);
       }
     } catch {
@@ -316,6 +323,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setLocale = useCallback((nextLocale: UiLocale) => {
+    explicitLocaleChoice.current = true;
     updateLocale(nextLocale);
     try {
       window.localStorage.setItem(languageStorageKey, nextLocale);

@@ -227,6 +227,11 @@ test("head and attribute changes retain their new authoritative source", async (
   const source = "Receipt pending Dogwood",
     updated = "Receipt confirmed Dogwood";
   await setup(page, source);
+  // Settle the locale-driven React metadata commit before installing the
+  // external authoritative head mutation this case is intended to exercise.
+  await page.locator(selector).selectOption("fr");
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr");
+  await expect(page.locator("body")).not.toHaveAttribute("aria-busy", "true");
   await page.evaluate(() => {
     document.title = "ArtFi pending Dogwood";
     document.querySelector('meta[name="description"]')?.remove();
@@ -235,7 +240,6 @@ test("head and attribute changes retain their new authoritative source", async (
     meta.content = "Artwork pending Dogwood";
     document.head.append(meta);
   });
-  await page.locator(selector).selectOption("fr");
   await expect(page).toHaveTitle("[fr] ArtFi pending Dogwood");
   await page.evaluate(() => {
     document.title = "ArtFi confirmed Dogwood";

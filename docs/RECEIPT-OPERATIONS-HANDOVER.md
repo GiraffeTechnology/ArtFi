@@ -25,15 +25,15 @@ another writer on a submitted file.
 
 Before using a candidate, bind these existing records to the same release:
 
-| Record | Required observed identity |
-| --- | --- |
-| Source | Full commit, tree, lockfile, source fingerprint and any preserved dirty inputs |
-| Independent validation | Exact tested source, commands, UTC times, exits, applicable failures/skips and raw evidence hashes |
-| Package | Actual archive bytes/SHA-256, per-file manifest, runtime/dependency versions and contract ABI/bytecode |
-| Installation | Actual current release/process identity, protected configuration reference, original complete public URL and served build revision |
-| Persistence | Existing primary/schema and migration ledger identity, source journals, operation records and verified recovery inputs |
-| Chain | Exact chain/genesis, collection/register/Safe identities, runtime code hashes and existing role assignments |
-| Authority | Actual existing authenticated session or bounded delegated capability, principal, scope, nonce, expiry and revocation state |
+| Record                 | Required observed identity                                                                                                         |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Source                 | Full commit, tree, lockfile, source fingerprint and any preserved dirty inputs                                                     |
+| Independent validation | Exact tested source, commands, UTC times, exits, applicable failures/skips and raw evidence hashes                                 |
+| Package                | Actual archive bytes/SHA-256, per-file manifest, runtime/dependency versions and contract ABI/bytecode                             |
+| Installation           | Actual current release/process identity, protected configuration reference, original complete public URL and served build revision |
+| Persistence            | Existing primary/schema and migration ledger identity, source journals, operation records and verified recovery inputs             |
+| Chain                  | Exact chain/genesis, collection/register/Safe identities, runtime code hashes and existing role assignments                        |
+| Authority              | Actual existing authenticated session or bounded delegated capability, principal, scope, nonce, expiry and revocation state        |
 
 Hashes establish byte identity, not publisher authenticity or permission. Verify
 the release channel and configuration provenance independently. A merge that
@@ -64,16 +64,16 @@ running service or install a new runtime to make a path appear.
 
 The existing installer distinguishes these operations:
 
-| Operation | Effect and limit |
-| --- | --- |
-| check-bundle | Checks listed package bytes/links and rejects unlisted files; does not authenticate the release publisher |
-| install | Stages a verified version and reports activated:false |
-| migrate | Applies forward schema through the existing migrator and ledger; it is a database mutation |
-| activate | Checks schema status and switches the current release; managed services must already be stopped |
-| start / stop | Manages only the process records owned by that installer |
-| verify | Writes its installation report and makes bounded reads; it is not a business transaction test |
-| upgrade | Stages, checks migrations, stops, switches, starts and verifies; may attempt to restart the previous application on failure |
-| rollback | Restarts a recorded previous application release after checks; preserves the schema and business history |
+| Operation    | Effect and limit                                                                                                            |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| check-bundle | Checks listed package bytes/links and rejects unlisted files; does not authenticate the release publisher                   |
+| install      | Stages a verified version and reports activated:false                                                                       |
+| migrate      | Applies forward schema through the existing migrator and ledger; it is a database mutation                                  |
+| activate     | Checks schema status and switches the current release; managed services must already be stopped                             |
+| start / stop | Manages only the process records owned by that installer                                                                    |
+| verify       | Writes its installation report and makes bounded reads; it is not a business transaction test                               |
+| upgrade      | Stages, checks migrations, stops, switches, starts and verifies; may attempt to restart the previous application on failure |
+| rollback     | Restarts a recorded previous application release after checks; preserves the schema and business history                    |
 
 Use the deployment's existing service manager. A utility-managed process record
 does not control an independently managed system service. Do not mix lifecycle
@@ -122,15 +122,15 @@ Their encoding and authority must come from the agreed installed interfaces.
 The business comparison, Wallet held context, source observation, Kit proof
 and native journal each have a different job:
 
-| Surface | What must actually be established |
-| --- | --- |
-| Business comparison | Exact native plan, frozen policy and phase wire correspond; opaque producer commitments are not newly recomputed |
-| Wallet context | The real installed held authorization and its one-use lease govern the exact action/send, with peer/principal/TTL/revocation checks |
-| Source admission | The approved original-document format/profile and fixed authenticated source verify the full signed intent and mint policy |
-| Source observation | A complete expected token/source/register/authority/policy/entry/five-word binding matches one historical snapshot |
-| Native journal / Kit | Authoritative source, asset, segment, version, proof and durable one-consumption state bind the real operation |
-| Chain evidence | The exact transaction, canonical block, events and state satisfy the applicable confirmation/finality rules |
-| Product outcome | The installed UI and original product's funds/ownership/holdership semantics agree with the reconciled operation |
+| Surface              | What must actually be established                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Business comparison  | Exact native plan, frozen policy and phase wire correspond; opaque producer commitments are not newly recomputed                    |
+| Wallet context       | The real installed held authorization and its one-use lease govern the exact action/send, with peer/principal/TTL/revocation checks |
+| Source admission     | The approved original-document format/profile and fixed authenticated source verify the full signed intent and mint policy          |
+| Source observation   | A complete expected token/source/register/authority/policy/entry/five-word binding matches one historical snapshot                  |
+| Native journal / Kit | Authoritative source, asset, segment, version, proof and durable one-consumption state bind the real operation                      |
+| Chain evidence       | The exact transaction, canonical block, events and state satisfy the applicable confirmation/finality rules                         |
+| Product outcome      | The installed UI and original product's funds/ownership/holdership semantics agree with the reconciled operation                    |
 
 A passing earlier row does not establish a later row. A fixed TLS peer or an
 authenticated transport flag alone is not original-document verification.
@@ -196,8 +196,7 @@ must never be rewritten, replayed, migrated or relabelled to satisfy this check.
 
 ## Isolated Hoodi inputs and evidence
 
-Use the separate AI test namespace and the current approved Hoodi chain,
-560048. Every asset's metadata, deployment/series description, relevant screen
+Use the separate AI test namespace and the current approved Hoodi chain, 560048. Every asset's metadata, deployment/series description, relevant screen
 and top-level batch manifest must display TESTNET, NO REAL-WORLD VALUE and
 NO LEGAL EFFECT. Keep the payload out of the frozen charity directory and any
 production/mainnet manifest. It carries no real artist, donation, valuation,
@@ -235,16 +234,16 @@ Start with the original operation and transaction identity. Route navigation,
 process restart, lease expiry, a new package or a missing browser record does
 not cancel an already dispatched operation.
 
-| Observation | Required continuation |
-| --- | --- |
-| Wallet request dispatched, no hash returned | Reconcile that original wallet/provider operation; do not issue another write |
-| Hash known, RPC timed out | Query the same transaction and durable operation; preserve the known hash |
-| Candidate recovery hash does not match | Refuse it and retain the unresolved original operation |
-| Canonical failure proven | Apply the installed product's explicit failure/retry semantics; never silently replay the original intent |
-| Source/journal observation changed revision | Reject stale work and reconcile the exact current revision |
-| Source, principal or grant revoked/expired | Block new authority and reconcile any already dispatched result |
-| Prior block/event removed or reorged | Preserve old evidence, remove its current acceptance and reconcile canonical state before continuing |
-| Unknown commit or archive write outcome | Read the exact original identity/key before another mutation |
+| Observation                                 | Required continuation                                                                                     |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Wallet request dispatched, no hash returned | Reconcile that original wallet/provider operation; do not issue another write                             |
+| Hash known, RPC timed out                   | Query the same transaction and durable operation; preserve the known hash                                 |
+| Candidate recovery hash does not match      | Refuse it and retain the unresolved original operation                                                    |
+| Canonical failure proven                    | Apply the installed product's explicit failure/retry semantics; never silently replay the original intent |
+| Source/journal observation changed revision | Reject stale work and reconcile the exact current revision                                                |
+| Source, principal or grant revoked/expired  | Block new authority and reconcile any already dispatched result                                           |
+| Prior block/event removed or reorged        | Preserve old evidence, remove its current acceptance and reconcile canonical state before continuing      |
+| Unknown commit or archive write outcome     | Read the exact original identity/key before another mutation                                              |
 
 Oracle source-ingress journal states and ArtFi native-operation states are
 different component contracts. Use the installed component's enum and revision/
@@ -313,4 +312,3 @@ or an archived test input is not the final product delivery.
 This handover neither creates a periodic inspection/reporting schedule nor
 changes existing communications. Product verification and final archival follow
 their assigned owners and the user's current instructions.
-

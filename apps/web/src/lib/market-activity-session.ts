@@ -350,6 +350,7 @@ export function createMarketHistorySession(
       publish({
         ...before,
         events: Object.freeze(events),
+        error: undefined,
         cursor: page.cursor,
         finished: page.cursor === undefined,
         loading: false,

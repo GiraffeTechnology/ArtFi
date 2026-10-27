@@ -48,7 +48,8 @@ contract TestNFTReceiver is IERC721Receiver {
 }
 
 contract ArtFiHoodiTestNFTTest is IERC721Receiver {
-    VmTestNFT private constant VM = VmTestNFT(address(uint160(uint256(keccak256("hevm cheat code")))));
+    VmTestNFT private constant VM =
+        VmTestNFT(address(uint160(uint256(keccak256("hevm cheat code")))));
     bytes32 private constant TASK = bytes32(uint256(91));
     bytes32 private constant SOURCE = sha256("simulated input bytes");
     bytes32 private constant META = sha256("test metadata bytes");
@@ -73,9 +74,15 @@ contract ArtFiHoodiTestNFTTest is IERC721Receiver {
     }
 
     function testOnlyOriginalIssuerCanMint() public {
+        // Evaluate hash precompiles before prank so it binds the intended NFT call.
+        bytes memory input =
+            abi.encodeCall(nft.mintTestNFT, (SOURCE, uint8(0), META, "ipfs://metadata"));
         VM.prank(address(0xBEEF));
-        (bool ok,) = address(nft).call(abi.encodeCall(nft.mintTestNFT, (SOURCE, uint8(0), META, "ipfs://metadata")));
+        (bool ok, bytes memory returned) = address(nft).call(input);
         require(!ok && nft.mintedCount() == 0, "unbound caller minted");
+        bytes memory expected =
+            abi.encodeWithSelector(ArtFiHoodiTestNFT.UnauthorizedIssuer.selector, address(0xBEEF));
+        require(keccak256(returned) == keccak256(expected), "wrong unauthorized issuer refusal");
     }
 
     function testRejectsChainChangeBeforeMint() public {
@@ -100,7 +107,9 @@ contract ArtFiHoodiTestNFTTest is IERC721Receiver {
     function testRejectsSourceReplayAcrossKinds() public {
         uint256 id = nft.mintTestNFT(SOURCE, 0, META, "ipfs://warehouse");
         _reject(SOURCE, 1, META, "ipfs://artwork");
-        require(nft.mintedCount() == 1 && nft.tokenBySourceHash(SOURCE) == id, "replay mutated state");
+        require(
+            nft.mintedCount() == 1 && nft.tokenBySourceHash(SOURCE) == id, "replay mutated state"
+        );
         require(keccak256(bytes(nft.tokenURI(id))) == keccak256("ipfs://warehouse"), "uri changed");
     }
 
@@ -116,20 +125,33 @@ contract ArtFiHoodiTestNFTTest is IERC721Receiver {
             if (entry.topics[0] == keccak256("Transfer(address,address,uint256)")) {
                 require(entry.topics.length == 4, "transfer topic count");
                 require(entry.topics[1] == bytes32(0), "not a mint transfer");
-                require(entry.topics[2] == bytes32(uint256(uint160(address(this)))), "wrong recipient");
+                require(
+                    entry.topics[2] == bytes32(uint256(uint160(address(this)))), "wrong recipient"
+                );
                 require(entry.topics[3] == bytes32(id), "wrong transfer token");
                 transferSeen = true;
             }
-            if (entry.topics[0] == keccak256("TestNFTMinted(uint256,bytes32,bytes32,address,uint8,bytes32,string)")) {
+            if (
+                entry.topics[0]
+                    == keccak256(
+                        "TestNFTMinted(uint256,bytes32,bytes32,address,uint8,bytes32,string)"
+                    )
+            ) {
                 require(entry.topics.length == 4, "source topic count");
                 require(
-                    entry.topics[1] == bytes32(id) && entry.topics[2] == TASK && entry.topics[3] == SOURCE,
+                    entry.topics[1] == bytes32(id) && entry.topics[2] == TASK
+                        && entry.topics[3] == SOURCE,
                     "source topic mismatch"
                 );
                 (address actualIssuer, uint8 kind, bytes32 metadataHash, string memory uri) =
                     abi.decode(entry.data, (address, uint8, bytes32, string));
-                require(actualIssuer == address(this) && kind == 0 && metadataHash == META, "source data mismatch");
-                require(keccak256(bytes(uri)) == keccak256("ipfs://test-receipt"), "source URI mismatch");
+                require(
+                    actualIssuer == address(this) && kind == 0 && metadataHash == META,
+                    "source data mismatch"
+                );
+                require(
+                    keccak256(bytes(uri)) == keccak256("ipfs://test-receipt"), "source URI mismatch"
+                );
                 sourceSeen = true;
             }
         }
@@ -141,7 +163,9 @@ contract ArtFiHoodiTestNFTTest is IERC721Receiver {
         _reject(SOURCE, 0, bytes32(0), "ipfs://metadata");
         _reject(SOURCE, 2, META, "ipfs://metadata");
         _reject(SOURCE, 255, META, "ipfs://metadata");
-        require(nft.mintedCount() == 0 && nft.tokenBySourceHash(SOURCE) == 0, "invalid input consumed");
+        require(
+            nft.mintedCount() == 0 && nft.tokenBySourceHash(SOURCE) == 0, "invalid input consumed"
+        );
     }
 
     function testRejectsInvalidMetadataReferences() public {
@@ -171,8 +195,11 @@ contract ArtFiHoodiTestNFTTest is IERC721Receiver {
         require(bytes(nft.tokenURI(id)).length == 512, "maximum URI rejected");
         bytes memory oversized = bytes.concat(uri, bytes("a"));
         _reject(sha256("another source"), 1, META, string(oversized));
-        (bool changed,) = address(nft).call(abi.encodeWithSignature("setTokenURI(uint256,string)", id, "ipfs://new"));
-        require(!changed && keccak256(bytes(nft.tokenURI(id))) == keccak256(uri), "metadata changed");
+        (bool changed,) = address(nft)
+            .call(abi.encodeWithSignature("setTokenURI(uint256,string)", id, "ipfs://new"));
+        require(
+            !changed && keccak256(bytes(nft.tokenURI(id))) == keccak256(uri), "metadata changed"
+        );
     }
 
     function testRejectedReceiverRollsBackSourceAndCount() public {
@@ -202,7 +229,10 @@ contract ArtFiHoodiTestNFTTest is IERC721Receiver {
         require(nft.ownerOf(id) == address(0xBEEF), "holder transfer blocked");
         ArtFiHoodiTestNFT.TestSource memory entry = nft.testSource(id);
         require(entry.sourceHash == SOURCE && entry.metadataHash == META, "transfer changed source");
-        require(keccak256(bytes(nft.tokenURI(id))) == keccak256("ipfs://immutable"), "transfer changed URI");
+        require(
+            keccak256(bytes(nft.tokenURI(id))) == keccak256("ipfs://immutable"),
+            "transfer changed URI"
+        );
     }
 
     function testCannotReadInventedTokenAndSupportsERC721() public {
@@ -219,11 +249,16 @@ contract ArtFiHoodiTestNFTTest is IERC721Receiver {
     }
 
     function _reject(bytes32 source, uint8 kind, bytes32 metadataHash, string memory uri) private {
-        (bool ok,) = address(nft).call(abi.encodeCall(nft.mintTestNFT, (source, kind, metadataHash, uri)));
+        (bool ok,) =
+            address(nft).call(abi.encodeCall(nft.mintTestNFT, (source, kind, metadataHash, uri)));
         require(!ok, "invalid mint accepted");
     }
 
-    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
+    function onERC721Received(address, address, uint256, bytes calldata)
+        external
+        pure
+        returns (bytes4)
+    {
         return IERC721Receiver.onERC721Received.selector;
     }
 }

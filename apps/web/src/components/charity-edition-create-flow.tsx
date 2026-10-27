@@ -129,12 +129,10 @@ function CharityEditionCreateForm() {
     session.getSnapshot,
     session.getServerSnapshot,
   );
-  const [recoveryReady, setRecoveryReady] = useState(false);
   const [checked, setChecked] = useState(false);
   const view = useRef(currentOperation());
   useEffect(() => {
     session.restore(() => sessionStorage);
-    setRecoveryReady(true);
   }, [session]);
   useLayoutEffect(() => {
     const active = currentOperation();
@@ -246,7 +244,7 @@ function CharityEditionCreateForm() {
     editionsPerArtwork === 100n && primaryPriceWei === 10_000_000_000_000_000n;
   const canSubmit =
     configured &&
-    recoveryReady &&
+    snapshot.ready &&
     !snapshot.busy &&
     !snapshot.blocked &&
     !snapshot.record?.pending &&
