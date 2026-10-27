@@ -160,6 +160,7 @@ export function createActionStore(options) {
     mode,
     leaseDurationMs: base.leaseDurationMs,
     operationTimeoutMs: base.operationTimeoutMs,
+    totalOperationTimeoutMs: base.totalOperationTimeoutMs,
     async listPlannable({ after = "", limit = 4 } = {}) {
       if (
         (after !== "" && !/^[0-9a-f]{64}$/.test(after)) ||
