@@ -18,18 +18,23 @@ for (const section of ["whole", "fractional"] as const) {
     // No page.route mock: list, detail, and both wrappers reach the Next server.
     // The catalog loads after hydration; wait for its real response before the
     // DOM assertion, including when the development route is still compiling.
-    const catalogResponse = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        response.request().method() === "GET" &&
-        url.pathname === "/api/rwa/assets" &&
-        url.searchParams.get("section") === section
-      );
-    });
+    const catalogResponse = page
+      .waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === "GET" &&
+          url.pathname === "/api/rwa/assets" &&
+          url.searchParams.get("section") === section
+        );
+      })
+      .then(async (response) => ({
+        status: response.status(),
+        body: await response.json(),
+      }));
     await page.goto(section === "whole" ? "/rwa" : "/market/fractionals");
     const catalogResult = await catalogResponse;
-    expect(catalogResult.status()).toBe(200);
-    expect((await catalogResult.json()).data).toEqual([asset]);
+    expect(catalogResult.status).toBe(200);
+    expect(catalogResult.body.data).toEqual([asset]);
     const catalog = page.getByRole("region", {
       name:
         section === "whole"

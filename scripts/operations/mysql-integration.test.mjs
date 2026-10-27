@@ -444,7 +444,7 @@ test(
         const address = `0x${"c3".repeat(20)}`;
         await sql(
           primary,
-          `INSERT INTO chain_events (chain_id,contract_address,transaction_hash,log_index,block_number,block_hash,event_name,payload) VALUES (560048,'${address}','${tx}',0,1,'${block}','TEST_ONLY_NOTIFICATION','{}')`,
+          `INSERT INTO chain_events (chain_id,contract_address,transaction_hash,log_index,block_number,block_hash,event_name,payload,payload_hash) VALUES (560048,'${address}','${tx}',0,1,'${block}','TEST_ONLY_NOTIFICATION','{}',UNHEX(SHA2('{}',256)))`,
           restored,
         );
         const revision = () =>

@@ -322,6 +322,7 @@ jobs:
             --mysql-basedir "$RUNNER_TEMP/artfi-mysql-runtime/mysql-8.4.11-linux-glibc2.28-x86_64-minimal" \
             --playwright-module "$GITHUB_WORKSPACE/apps/web/node_modules/@playwright/test/index.mjs" \
             --evidence-dir "$RUNNER_TEMP/artfi-installed-acceptance" \
+            --expected-migrations 18 \
             --require-browser
       - name: Verify existing conditional agent and charity browser cases
         timeout-minutes: 8

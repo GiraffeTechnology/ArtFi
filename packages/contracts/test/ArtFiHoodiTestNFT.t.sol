@@ -74,10 +74,16 @@ contract ArtFiHoodiTestNFTTest is IERC721Receiver {
     }
 
     function testOnlyOriginalIssuerCanMint() public {
+        // Evaluate hash precompiles before prank so it binds the intended NFT call.
+        bytes memory input =
+            abi.encodeCall(nft.mintTestNFT, (SOURCE, uint8(0), META, "ipfs://metadata"));
         VM.prank(address(0xBEEF));
-        (bool ok,) = address(nft)
-            .call(abi.encodeCall(nft.mintTestNFT, (SOURCE, uint8(0), META, "ipfs://metadata")));
+        (bool ok, bytes memory returned) = address(nft).call(input);
         require(!ok && nft.mintedCount() == 0, "unbound caller minted");
+        bytes memory expected = abi.encodeWithSelector(
+            ArtFiHoodiTestNFT.UnauthorizedIssuer.selector, address(0xBEEF)
+        );
+        require(keccak256(returned) == keccak256(expected), "wrong unauthorized issuer refusal");
     }
 
     function testRejectsChainChangeBeforeMint() public {
