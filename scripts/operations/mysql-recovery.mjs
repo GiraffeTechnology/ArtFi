@@ -236,6 +236,59 @@ class Session {
   }
 }
 
+// Exact application-owned trigger support; this is not a general SQL allowlist.
+const notificationBody = `SET NEW.notification_revision = OLD.notification_revision + IF(
+    OLD.block_number <> NEW.block_number
+    OR LOWER(OLD.block_hash) <> LOWER(NEW.block_hash)
+    OR OLD.removed <> NEW.removed
+    OR OLD.confirmed <> NEW.confirmed, 1, 0)`;
+const normalized = (value) => value.replace(/\s+/g, "").toLowerCase();
+
+export const triggerSchemaQuery =
+  "SELECT JSON_OBJECT('name',TRIGGER_NAME,'event',EVENT_MANIPULATION,'table',EVENT_OBJECT_TABLE,'order',ACTION_ORDER,'body',ACTION_STATEMENT,'orientation',ACTION_ORIENTATION,'timing',ACTION_TIMING,'sqlMode',SQL_MODE,'definer',DEFINER,'characterSet',CHARACTER_SET_CLIENT,'connectionCollation',COLLATION_CONNECTION,'databaseCollation',DATABASE_COLLATION) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME";
+
+export function validateApplicationTriggers(triggers, ledger = []) {
+  if (!Array.isArray(triggers) || triggers.length > 1)
+    throw new Error(
+      "Unsupported schema trigger: only the exact application notification revision trigger is supported.",
+    );
+  for (const trigger of triggers) {
+    if (
+      !trigger ||
+      trigger.name !== "chain_event_notification_revision" ||
+      trigger.event !== "UPDATE" ||
+      trigger.table !== "chain_events" ||
+      trigger.order !== 1 ||
+      trigger.orientation !== "ROW" ||
+      trigger.timing !== "BEFORE" ||
+      typeof trigger.body !== "string" ||
+      normalized(trigger.body) !== normalized(notificationBody) ||
+      ![
+        "sqlMode",
+        "definer",
+        "characterSet",
+        "connectionCollation",
+        "databaseCollation",
+      ].every(
+        (key) =>
+          typeof trigger[key] === "string" &&
+          (key === "sqlMode" || trigger[key].length > 0),
+      )
+    )
+      throw new Error(
+        "Unsupported schema trigger: notification revision definition or execution metadata does not match.",
+      );
+  }
+  if (
+    ledger.some((entry) => entry.name === "000015_notification_inbox.up.sql") &&
+    triggers.length !== 1
+  )
+    throw new Error(
+      "Unsupported schema trigger: applied notification migration requires its revision trigger.",
+    );
+  return triggers;
+}
+
 const schemaQueries = {
   database:
     "SELECT JSON_OBJECT('characterSet',DEFAULT_CHARACTER_SET_NAME,'collation',DEFAULT_COLLATION_NAME) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=DATABASE()",
@@ -264,18 +317,20 @@ async function objectCounts(session) {
 
 async function snapshot(session) {
   const counts = await objectCounts(session);
-  if (
-    counts.unsupportedTables ||
-    counts.triggers ||
-    counts.routines ||
-    counts.events
-  )
+  if (counts.unsupportedTables || counts.routines || counts.events)
     throw fail(
-      "Unsupported schema: backup requires only InnoDB base tables and no views, triggers, routines or events; nothing was omitted silently.",
+      "Unsupported schema: backup requires only InnoDB base tables, the exact application notification trigger, and no views, routines or events; nothing was omitted silently.",
     );
+  const triggers = validateApplicationTriggers(
+    await session.json(triggerSchemaQuery),
+  );
+  if (triggers.length !== counts.triggers)
+    throw fail("Schema trigger count changed during snapshot.");
   const schema = {};
   for (const [key, sql] of Object.entries(schemaQueries))
     schema[key] = await session.json(sql);
+  // Keep the historical no-trigger schema digest unchanged.
+  if (triggers.length) schema.triggers = triggers;
   if (!schema.tables.some((table) => table.name === "artfi_schema_migrations"))
     throw fail(
       "Migration ledger is missing; backup requires an installer-managed application database.",
@@ -295,6 +350,7 @@ async function snapshot(session) {
     throw fail(
       "Migration ledger is empty, dirty or invalid; recover the schema before backup.",
     );
+  validateApplicationTriggers(triggers, ledger);
   return { schema, ledger, schemaSha256: hash(JSON.stringify(schema)) };
 }
 
@@ -510,7 +566,7 @@ export async function backup(options) {
           "--skip-add-locks",
           "--skip-disable-keys",
           "--skip-comments",
-          "--skip-triggers",
+          "--triggers",
           "--hex-blob",
           "--tz-utc",
           "--column-statistics=0",

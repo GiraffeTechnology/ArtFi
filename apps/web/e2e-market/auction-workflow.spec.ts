@@ -1,3 +1,4 @@
+import { fixtureMining } from "../src/test/fixture-mining";
 import { isolatedSourceCatalog } from "./rwa-catalog-fixture";
 import { expect, test, type Page } from "@playwright/test";
 import {
@@ -18,6 +19,7 @@ const buyer = "0x1000000000000000000000000000000000000010",
   payment = "0x1000000000000000000000000000000000000005";
 const blockHash = `0x${"33".repeat(32)}` as Hex;
 async function fixture(page: Page, wallet = buyer) {
+  const mining = fixtureMining(blockHash);
   await isolatedSourceCatalog(page);
   const state = {
     block: 102,
@@ -220,8 +222,7 @@ async function fixture(page: Page, wallet = buyer) {
         result = `0x${(state.block++).toString(16)}`;
       else if (method === "eth_getBlockByNumber")
         result = {
-          number: "0x66",
-          hash: blockHash,
+          ...mining.block(params[0], state.block),
           parentHash: blockHash,
           transactions: [],
           gasLimit: "0x1000000",
@@ -249,8 +250,9 @@ async function fixture(page: Page, wallet = buyer) {
         result = contractResult((params[0] as { data: Hex }).data);
       else if (method === "eth_getTransactionReceipt") {
         const index = Number(BigInt(String(params[0])));
-        if (!receiptsReady) result = null;
+        if (!receiptsReady || !state.requests[index - 1]) result = null;
         else {
+          mining.observeReceipt(String(params[0]));
           confirm(index);
           const tx = state.requests[index - 1];
           const logs =
@@ -296,6 +298,8 @@ async function fixture(page: Page, wallet = buyer) {
         }
       } else if (method === "eth_getTransactionByHash") {
         const index = Number(BigInt(String(params[0]))) - 1;
+        if (!state.requests[index])
+          return { jsonrpc: "2.0", id: rpc.id, result: null };
         result = {
           hash: params[0],
           from: wallet,
@@ -305,9 +309,7 @@ async function fixture(page: Page, wallet = buyer) {
           value: "0x0",
           gas: "0x5208",
           gasPrice: "0x1",
-          blockHash: null,
-          blockNumber: null,
-          transactionIndex: null,
+          ...mining.inclusion(String(params[0])),
           type: "0x2",
           chainId: "0x88bb0",
           v: "0x0",

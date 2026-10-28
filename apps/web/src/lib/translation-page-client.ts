@@ -8,11 +8,7 @@ export const maximumTranslationPageBytes = 64 * 1024;
 export class TranslationPageError extends Error {
   constructor(
     readonly reason:
-      | "timeout"
-      | "aborted"
-      | "unavailable"
-      | "invalid"
-      | "too-large",
+      "timeout" | "aborted" | "unavailable" | "invalid" | "too-large",
   ) {
     super("TRANSLATION_UNAVAILABLE");
   }

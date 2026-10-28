@@ -14,38 +14,57 @@ export const WHOLE_RECEIPT_BUSINESS_SCHEMA =
 export const WHOLE_RECEIPT_ASSOCIATION_SCHEMA =
   "artfi-whole-receipt-journal-binding/1";
 
-const address = z.string()
+const address = z
+  .string()
   .refine((x) => isAddress(x) && !/^0x0{40}$/i.test(x))
   .transform((x) => x.toLowerCase());
-const hash = z.string().regex(/^0x[0-9a-fA-F]{64}$/)
+const hash = z
+  .string()
+  .regex(/^0x[0-9a-fA-F]{64}$/)
   .refine((x) => !/^0x0{64}$/i.test(x))
   .transform((x) => x.toLowerCase());
-const bindingSchema = z.object({
-  tenant: z.string().regex(/^[a-z][a-z0-9-]{0,47}$/),
-  origin: z.string().max(2048).refine((value) => {
-    try {
-      const origin = new URL(value);
-      return origin.origin === value && (
-        origin.protocol === "https:" ||
-        origin.protocol === "http:" &&
-        ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname)
-      );
-    } catch {
-      return false;
-    }
-  }),
-  taskId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
-  actor: address,
-  escrow: address,
-  runtimeCodeHash: hash,
-}).strict();
+const bindingSchema = z
+  .object({
+    tenant: z.string().regex(/^[a-z][a-z0-9-]{0,47}$/),
+    origin: z
+      .string()
+      .max(2048)
+      .refine((value) => {
+        try {
+          const origin = new URL(value);
+          return (
+            origin.origin === value &&
+            (origin.protocol === "https:" ||
+              (origin.protocol === "http:" &&
+                ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname)))
+          );
+        } catch {
+          return false;
+        }
+      }),
+    taskId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+    actor: address,
+    escrow: address,
+    runtimeCodeHash: hash,
+  })
+  .strict();
 export type WholeReceiptApprovalBinding = z.infer<typeof bindingSchema>;
 const bindingKeys = [
-  "tenant", "origin", "taskId", "actor", "escrow", "runtimeCodeHash",
+  "tenant",
+  "origin",
+  "taskId",
+  "actor",
+  "escrow",
+  "runtimeCodeHash",
 ];
 const correspondenceKeys = [
-  "settlementId", "assetRecordHash", "oracleSourceId", "requestHash",
-  "executionReferenceHash", "previousSegment", "oldCertificateHash",
+  "settlementId",
+  "assetRecordHash",
+  "oracleSourceId",
+  "requestHash",
+  "executionReferenceHash",
+  "previousSegment",
+  "oldCertificateHash",
   "warehouseReceiptHash",
 ] as const;
 
@@ -54,23 +73,23 @@ function refuse(): never {
 }
 function fields(raw: unknown, keys: readonly string[]) {
   if (
-    !raw || typeof raw !== "object" ||
+    !raw ||
+    typeof raw !== "object" ||
     Object.getPrototypeOf(raw) !== Object.prototype
   )
     refuse();
   const descriptors = Object.getOwnPropertyDescriptors(raw);
   if (
     Reflect.ownKeys(descriptors).length !== keys.length ||
-    keys.some((key) =>
-      !Object.hasOwn(descriptors, key) ||
-      !descriptors[key]!.enumerable ||
-      !Object.hasOwn(descriptors[key]!, "value")
+    keys.some(
+      (key) =>
+        !Object.hasOwn(descriptors, key) ||
+        !descriptors[key]!.enumerable ||
+        !Object.hasOwn(descriptors[key]!, "value"),
     )
   )
     refuse();
-  return Object.fromEntries(
-    keys.map((key) => [key, descriptors[key]!.value]),
-  );
+  return Object.fromEntries(keys.map((key) => [key, descriptors[key]!.value]));
 }
 function freeze<T>(value: T): Readonly<T> {
   if (value && typeof value === "object") {
@@ -103,15 +122,18 @@ function canonicalBusiness(rawBusiness: unknown) {
       },
       correspondence: Object.fromEntries(
         correspondenceKeys.map((key) => [
-          key, r.correspondence[key].toLowerCase(),
+          key,
+          r.correspondence[key].toLowerCase(),
         ]),
       ),
-      ...(r.kitRegistration ? {
-        kitRegistration: {
-          version: r.kitRegistration.version,
-          proofHash: r.kitRegistration.proofHash.toLowerCase(),
-        },
-      } : {}),
+      ...(r.kitRegistration
+        ? {
+            kitRegistration: {
+              version: r.kitRegistration.version,
+              proofHash: r.kitRegistration.proofHash.toLowerCase(),
+            },
+          }
+        : {}),
     },
   };
 }
@@ -132,10 +154,12 @@ export function createWholeReceiptApprovalCommitments(
       binding.escrow !== receipt.domain.verifyingContract
     )
       refuse();
-    const receiptPlanDigest = "0x" + nftTaskJournalDigest({
-      schema: WHOLE_RECEIPT_BUSINESS_SCHEMA,
-      business,
-    });
+    const receiptPlanDigest =
+      "0x" +
+      nftTaskJournalDigest({
+        schema: WHOLE_RECEIPT_BUSINESS_SCHEMA,
+        business,
+      });
     const association = {
       schema: WHOLE_RECEIPT_ASSOCIATION_SCHEMA,
       tenant: binding.tenant,
@@ -148,8 +172,7 @@ export function createWholeReceiptApprovalCommitments(
       segmentId: receipt.segmentId,
       businessDigest: receiptPlanDigest,
     };
-    const receiptJournalBindingHash =
-      "0x" + nftTaskJournalDigest(association);
+    const receiptJournalBindingHash = "0x" + nftTaskJournalDigest(association);
     return freeze({
       business,
       binding,
@@ -176,7 +199,8 @@ export function assertWholeReceiptApprovalPlan(
   try {
     const projected = projectWholeReceiptBusiness(rawPlan);
     const expected = fields(rawExpected, [
-      "receiptPlanDigest", "receiptJournalBindingHash",
+      "receiptPlanDigest",
+      "receiptJournalBindingHash",
     ]);
     const result = createWholeReceiptApprovalCommitments(
       projected.business,

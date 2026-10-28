@@ -854,15 +854,33 @@ test(
       },
     );
     await step(
-      "unchanged installer sees exactly four pending migrations, then safely applies 11–14",
+      "unchanged installer sees exactly eight pending migrations, then safely applies 11–18",
       async () => {
-        assert.equal(JSON.parse((await migrated("status")).stdout).pending, 4);
+        assert.equal(JSON.parse((await migrated("status")).stdout).pending, 8);
         assert.equal(JSON.parse((await migrated("up")).stdout).pending, 0);
         assert.equal(
           await sql(source, "SELECT COUNT(*) FROM artfi_schema_migrations", db),
-          "14",
+          "18",
         );
-        await rejected("apply", applyArgs(), /drifted/);
+        assert.equal(
+          await sql(
+            source,
+            "SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME='chain_event_notification_revision'",
+            db,
+          ),
+          "1",
+        );
+        const ledgerSQL =
+          "SELECT name,checksum,dirty,applied_at FROM artfi_schema_migrations ORDER BY name";
+        const beforeRefusal = await sql(source, ledgerSQL, db);
+        // Migration 15 introduces a trigger, which the legacy-only adoption tool
+        // rejects before its later drift comparison. Keep that fail-closed guard.
+        await rejected(
+          "apply",
+          applyArgs(),
+          /Legacy adoption error: Unsupported schema object: only nonpartitioned InnoDB base tables, without views, triggers, routines or events, are supported\./,
+        );
+        assert.equal(await sql(source, ledgerSQL, db), beforeRefusal);
       },
     );
   },
