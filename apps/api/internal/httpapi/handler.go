@@ -110,6 +110,7 @@ func newHandler(rwa *rwaService) http.Handler {
 	mux.HandleFunc("GET /v1/nfts", rwa.getMintedNFTs)
 	mux.HandleFunc("GET /v1/projects", getProjects)
 	mux.HandleFunc("GET /v1/portfolio/{address}", protectedPortfolio(rwa, userAuth))
+	mux.HandleFunc("GET /v1/portfolio/{address}/history", protectedPortfolioHistory(rwa, userAuth))
 	mux.HandleFunc("POST /v1/uploads/intents", rwa.createUploadIntent)
 	mux.HandleFunc("PUT /v1/uploads/{uploadID}", rwa.uploadObject)
 	mux.HandleFunc("POST /v1/rwa/metadata-preparations", rwa.prepareRWAMetadata)

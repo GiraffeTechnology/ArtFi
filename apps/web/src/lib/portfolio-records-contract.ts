@@ -229,3 +229,8 @@ export function parsePortfolioRecords(
       : { performance: performance(input.performance) }),
   };
 }
+
+/** The paged history endpoint uses the same canonical indexed-event decoder. */
+export function parsePortfolioHistoryEntry(value: unknown): PortfolioEntry {
+  return entry(value);
+}

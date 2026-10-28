@@ -6,6 +6,7 @@ import { hoodi } from "wagmi/chains";
 import { useUserSession } from "@/components/user-session-provider";
 import { portfolioSessionKey } from "@/lib/portfolio-session";
 import { PortfolioHistory } from "./portfolio-history";
+import { PortfolioIndexedHistory } from "./portfolio-indexed-history";
 
 import {
   loadPortfolioRecords,
@@ -88,6 +89,7 @@ function ConnectedPortfolioRecords({ address }: { address: string }) {
       {!loading && !error && portfolio ? (
         <PortfolioDetails portfolio={portfolio} />
       ) : null}
+      <PortfolioIndexedHistory key={address} address={address} />
     </section>
   );
 }
