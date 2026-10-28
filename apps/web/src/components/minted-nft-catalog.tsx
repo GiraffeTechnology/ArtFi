@@ -1,76 +1,81 @@
 "use client";
-
 import { publicSetting } from "@/lib/public-runtime-config";
-
-import { useCallback, useEffect, useState } from "react";
-
+import { useEffect, useState, type FormEvent } from "react";
+import {
+  emptyMintFilters,
+  mintCatalogQuery,
+  readMintCatalogPage,
+  type MintCatalogPage,
+} from "@/lib/minted-nft-query";
 const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
-
-type MintedNFT = {
-  standard: "ERC-721" | "ERC-1155";
-  collectionAddress: string;
-  tokenId: string;
-  holderAddress?: string;
-  metadataUri?: string;
-  transactionHash: string;
-  blockNumber: number;
-  observedAt: string;
-};
-
-type Catalog = {
-  data: MintedNFT[];
-  total: number;
-  page: number;
-  pageSize: number;
-  chainId: 560048;
-  runtime: true;
-};
-
 export function MintedNFTCatalog() {
-  const [catalog, setCatalog] = useState<Catalog>();
-  const [page, setPage] = useState(1);
-  const [error, setError] = useState<string>();
-  const [loading, setLoading] = useState(true);
-  const pageSize = 24;
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `${apiURL}/v1/nfts?page=${page}&pageSize=${pageSize}`,
-        { cache: "no-store" },
-      );
-      if (!response.ok)
-        throw new Error(`NFT catalog API returned ${response.status}.`);
-      const value = (await response.json()) as Catalog;
-      if (
-        value.runtime !== true ||
-        value.chainId !== 560048 ||
-        !Array.isArray(value.data)
-      ) {
-        throw new Error(
-          "The NFT catalog response was not canonical Hoodi runtime data.",
-        );
-      }
-      setCatalog(value);
-      setError(undefined);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The NFT catalog is unavailable.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [page]);
-
+  const [catalog, setCatalog] = useState<MintCatalogPage>(),
+    [page, setPage] = useState(1),
+    [draft, setDraft] = useState(emptyMintFilters),
+    [filters, setFilters] = useState(emptyMintFilters),
+    [attempt, setAttempt] = useState(0),
+    [error, setError] = useState(""),
+    [inputError, setInputError] = useState(""),
+    [loading, setLoading] = useState(true);
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
-  }, [load]);
-
-  const totalPages = Math.max(1, Math.ceil((catalog?.total ?? 0) / pageSize));
+    let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+    void (async () => {
+      const query = mintCatalogQuery(filters, page);
+      const response = await fetch(`${apiURL}/v1/nfts?${query}`, {
+        cache: "no-store",
+        credentials: "omit",
+        redirect: "error",
+        signal: controller.signal,
+      });
+      if (!response.ok)
+        throw new Error(
+          "The canonical mint index is unavailable. No fixture is substituted.",
+        );
+      const result = readMintCatalogPage(await response.json(), query);
+      if (active) {
+        setCatalog(result);
+        setError("");
+      }
+    })()
+      .catch(() => {
+        if (active) {
+          setCatalog(undefined);
+          setError(
+            "The canonical mint index could not be read for these filters. Retry without treating old results as current inventory.",
+          );
+        }
+      })
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [filters, page, attempt]);
+  function apply(event: FormEvent) {
+    event.preventDefault();
+    try {
+      mintCatalogQuery(draft, 1);
+    } catch (reason) {
+      setInputError(
+        reason instanceof Error ? reason.message : "Invalid mint filters.",
+      );
+      return;
+    }
+    setFilters({ ...draft });
+    setPage(1);
+    setCatalog(undefined);
+    setError("");
+    setInputError("");
+    setLoading(true);
+    setAttempt((v) => v + 1);
+  }
+  const totalPages = Math.max(1, Math.ceil((catalog?.total ?? 0) / 24));
   return (
     <section
       className="minted-catalog"
@@ -84,29 +89,120 @@ export function MintedNFTCatalog() {
         </h2>
         <p>
           This list is projected from confirmed Hoodi mint events and does not
-          wait for OpenSea discovery. No fixture is substituted for a missing
-          runtime record.
+          wait for OpenSea discovery. Mint observations do not establish the
+          current holder, sale availability or physical rights. No preview or
+          holder file is fetched.
         </p>
       </header>
-      {loading ? <p>Loading indexed NFTs…</p> : null}
-      {error ? (
-        <p role="alert">{error} No runtime acceptance is claimed.</p>
-      ) : null}
-      {!loading && !error && catalog?.data.length === 0 ? (
-        <p>No canonical mint event has been indexed yet.</p>
-      ) : null}
-      {catalog && catalog.data.length > 0 ? (
+      <form
+        className="product-actions"
+        aria-label="Filter indexed NFT mint records"
+        onSubmit={apply}
+      >
+        <label>
+          Token standard{" "}
+          <select
+            value={draft.standard}
+            onChange={(e) => setDraft({ ...draft, standard: e.target.value })}
+          >
+            <option value="">All standards</option>
+            <option value="ERC-721">ERC-721</option>
+            <option value="ERC-1155">ERC-1155</option>
+          </select>
+        </label>
+        <label>
+          Collection address{" "}
+          <input
+            value={draft.collectionAddress}
+            maxLength={42}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) =>
+              setDraft({ ...draft, collectionAddress: e.target.value })
+            }
+          />
+        </label>
+        <label>
+          Token ID{" "}
+          <input
+            value={draft.tokenId}
+            maxLength={78}
+            inputMode="numeric"
+            onChange={(e) => setDraft({ ...draft, tokenId: e.target.value })}
+          />
+        </label>
+        <label>
+          Mint order{" "}
+          <select
+            value={draft.sort}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                sort: e.target.value as "newest" | "oldest",
+              })
+            }
+          >
+            <option value="newest">Newest block first</option>
+            <option value="oldest">Oldest block first</option>
+          </select>
+        </label>
+        <button disabled={loading}>Apply mint filters</button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setDraft(emptyMintFilters());
+            setFilters(emptyMintFilters());
+            setPage(1);
+            setCatalog(undefined);
+            setError("");
+            setInputError("");
+            setLoading(true);
+            setAttempt((v) => v + 1);
+          }}
+        >
+          Clear mint filters
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setCatalog(undefined);
+            setError("");
+            setLoading(true);
+            setAttempt((v) => v + 1);
+          }}
+        >
+          Refresh mint index
+        </button>
+      </form>
+      <p data-no-translate>
+        Applied: {filters.standard || "all standards"} · collection{" "}
+        {filters.collectionAddress.trim() || "all"} · token{" "}
+        {filters.tokenId.trim() || "all"} · {filters.sort}
+      </p>
+      {inputError && <p role="alert">{inputError}</p>}
+      {loading && <p role="status">Loading indexed NFTs…</p>}
+      {error && <p role="alert">{error} No runtime acceptance is claimed.</p>}
+      {!loading && !error && catalog?.data.length === 0 && (
+        <p>No canonical mint event matches these filters.</p>
+      )}
+      {!loading && !error && catalog && catalog.data.length > 0 && (
         <div className="minted-catalog__grid">
           {catalog.data.map((item) => (
             <article
-              key={`${item.standard}:${item.collectionAddress}:${item.tokenId}`}
+              key={JSON.stringify([
+                item.standard,
+                item.collectionAddress.toLowerCase(),
+                item.tokenId,
+              ])}
             >
               <span className="mirror-badge">{item.standard}</span>
               <h3>Token #{item.tokenId}</h3>
               <dl>
                 <div>
                   <dt>Collection</dt>
-                  <dd>{short(item.collectionAddress)}</dd>
+                  <dd data-no-translate>{item.collectionAddress}</dd>
                 </div>
                 <div>
                   <dt>Block</dt>
@@ -127,32 +223,36 @@ export function MintedNFTCatalog() {
             </article>
           ))}
         </div>
-      ) : null}
-      {totalPages > 1 ? (
+      )}
+      {!loading && !error && catalog && (
         <nav className="market-pagination" aria-label="Indexed NFT pages">
           <button
             type="button"
             disabled={page === 1}
-            onClick={() => setPage((value) => value - 1)}
+            onClick={() => {
+              setCatalog(undefined);
+              setLoading(true);
+              setPage((v) => v - 1);
+            }}
           >
             Previous
           </button>
           <span>
-            Page {page} of {totalPages}
+            Page {page} of {totalPages} · {catalog.total} matching mint records
           </span>
           <button
             type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage((value) => value + 1)}
+            disabled={page >= totalPages || page >= 1000000}
+            onClick={() => {
+              setCatalog(undefined);
+              setLoading(true);
+              setPage((v) => v + 1);
+            }}
           >
             Next
           </button>
         </nav>
-      ) : null}
+      )}
     </section>
   );
-}
-
-function short(value: string) {
-  return `${value.slice(0, 8)}…${value.slice(-6)}`;
 }

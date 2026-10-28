@@ -331,8 +331,11 @@ async function setupFixture(page: Page, shortEvidence = false) {
       await route.fulfill({ json: mintIntent() });
     },
   );
-  const vaultIntent = () => ({
+  const vaultIntent = (
+    body: Record<string, unknown> = state.vaultIntents.at(-1)?.body ?? {},
+  ) => ({
     intentId: "TEST-ONLY-vault-intent",
+    presentation: body.presentation,
     requestId: setupRequestIds.vault,
     factoryAddress: addresses.factory,
     collectionAddress: addresses.collection,
@@ -370,7 +373,7 @@ async function setupFixture(page: Page, shortEvidence = false) {
             }
           : {
               status: 201,
-              json: kind === "rwa" ? mintIntent() : vaultIntent(),
+              json: kind === "rwa" ? mintIntent() : vaultIntent(value.body),
             },
       );
     });

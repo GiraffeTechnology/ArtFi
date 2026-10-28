@@ -1,3 +1,4 @@
+import { decodeNativeOrder } from "@/lib/native-order";
 import { isAddress } from "viem";
 import {
   nativeOrderAPIURL,
@@ -26,13 +27,29 @@ export async function GET(
     const upstream = nativeOrderAPIURL(
       `/v1/orders/${intentHash.toLowerCase()}?${query.toString()}`,
     );
-    return await nativeOrderResponse(
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(5000)]);
+    const response = await nativeOrderResponse(
       await fetch(upstream, {
         cache: "no-store",
         redirect: "error",
-        signal: AbortSignal.timeout(5000),
+        signal,
       }),
+      { signal, timeoutMs: 5000 },
     );
+    if (!response.ok) return response;
+    const raw: unknown = await response.json();
+    const { order } = decodeNativeOrder(raw);
+    if (
+      order.intentHash.toLowerCase() !== intentHash.toLowerCase() ||
+      order.chainId !== Number(query.get("chainId")) ||
+      order.marketAddress.toLowerCase() !==
+        query.get("marketAddress")!.toLowerCase()
+    )
+      throw new Error("The linked order response belongs to a different sale.");
+    return Response.json(order, {
+      status: response.status,
+      headers: { "cache-control": "no-store" },
+    });
   } catch {
     return Response.json(
       { detail: "The order service is unavailable." },

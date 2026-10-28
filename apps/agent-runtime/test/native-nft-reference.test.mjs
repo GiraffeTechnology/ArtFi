@@ -1,3 +1,4 @@
+import { nftPaymentAddress } from "../../../scripts/native-nft-currency.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as ethers from "ethers";
@@ -16,7 +17,10 @@ export async function nftFixture(nativeAction = "accept", chainId = "1") {
   const user = ethers.Wallet.createRandom(),
     market = ethers.Wallet.createRandom().address,
     asset = ethers.Wallet.createRandom().address,
-    payment = ethers.Wallet.createRandom().address,
+    payment = nftPaymentAddress(
+      chainId,
+      ["buy", "list"].includes(nativeAction) ? "ETH" : "WETH",
+    ),
     executor = ethers.Wallet.createRandom().address;
   const action = {
       accept: "ACCEPT_OFFER",

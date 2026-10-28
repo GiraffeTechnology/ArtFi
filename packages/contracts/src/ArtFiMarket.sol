@@ -562,12 +562,12 @@ contract ArtFiMarket is AccessControl, EIP712, Pausable, ReentrancyGuard {
                 credits[listing.highestBidder][address(listing.paymentToken)] += listing.highestBid;
                 emit AuctionReserveNotMet(listingId, listing.highestBidder, listing.highestBid);
             }
-            listing.assetToken.safeTransfer(listing.seller, amount);
+            _pushExact(listing.assetToken, listing.seller, amount);
             emit ListingSettled(listingId, address(0), 0);
             return;
         }
         credits[listing.seller][address(listing.paymentToken)] += listing.highestBid;
-        listing.assetToken.safeTransfer(listing.highestBidder, amount);
+        _pushExact(listing.assetToken, listing.highestBidder, amount);
         emit ListingSettled(listingId, listing.highestBidder, listing.highestBid);
     }
 
@@ -584,7 +584,7 @@ contract ArtFiMarket is AccessControl, EIP712, Pausable, ReentrancyGuard {
         listing.state = State.Cancelled;
         uint256 amount = listing.amountRemaining;
         listing.amountRemaining = 0;
-        listing.assetToken.safeTransfer(listing.seller, amount);
+        _pushExact(listing.assetToken, listing.seller, amount);
         emit ListingCancelled(listingId);
     }
 
@@ -673,9 +673,9 @@ contract ArtFiMarket is AccessControl, EIP712, Pausable, ReentrancyGuard {
         if (offering.successful) {
             credits[offering.seller][address(offering.paymentToken)] += offering.raised;
             uint256 unsold = offering.tokenAmount - offering.allocatedTokens;
-            if (unsold != 0) offering.assetToken.safeTransfer(offering.seller, unsold);
+            if (unsold != 0) _pushExact(offering.assetToken, offering.seller, unsold);
         } else {
-            offering.assetToken.safeTransfer(offering.seller, offering.tokenAmount);
+            _pushExact(offering.assetToken, offering.seller, offering.tokenAmount);
         }
         emit OfferingFinalized(offeringId, offering.successful, offering.raised);
     }
@@ -688,7 +688,7 @@ contract ArtFiMarket is AccessControl, EIP712, Pausable, ReentrancyGuard {
         uint256 amount = allocations[offeringId][msg.sender];
         if (amount == 0) revert AmountUnavailable();
         allocations[offeringId][msg.sender] = 0;
-        offering.assetToken.safeTransfer(msg.sender, amount);
+        _pushExact(offering.assetToken, msg.sender, amount);
         emit OfferingClaimed(offeringId, msg.sender, amount);
     }
 
@@ -698,7 +698,7 @@ contract ArtFiMarket is AccessControl, EIP712, Pausable, ReentrancyGuard {
         uint256 amount = contributions[offeringId][msg.sender];
         if (amount == 0) revert AmountUnavailable();
         contributions[offeringId][msg.sender] = 0;
-        offering.paymentToken.safeTransfer(msg.sender, amount);
+        _pushExact(offering.paymentToken, msg.sender, amount);
         emit OfferingRefunded(offeringId, msg.sender, amount);
     }
 
@@ -706,7 +706,7 @@ contract ArtFiMarket is AccessControl, EIP712, Pausable, ReentrancyGuard {
         uint256 amount = credits[msg.sender][address(token)];
         if (amount == 0) revert AmountUnavailable();
         credits[msg.sender][address(token)] = 0;
-        token.safeTransfer(msg.sender, amount);
+        _pushExact(token, msg.sender, amount);
         emit CreditWithdrawn(msg.sender, address(token), amount);
     }
 
@@ -726,19 +726,41 @@ contract ArtFiMarket is AccessControl, EIP712, Pausable, ReentrancyGuard {
     }
 
     function _pullExact(IERC20 token, address from, uint256 amount) private {
-        uint256 beforeBalance = token.balanceOf(address(this));
-        token.safeTransferFrom(from, address(this), amount);
-        if (token.balanceOf(address(this)) - beforeBalance != amount) {
-            revert TransferAmountMismatch();
-        }
+        _moveExact(token, from, address(this), amount);
     }
 
     /// @dev Moves `amount` directly between two parties, never through this contract, and rejects a
     ///      fee-on-transfer token rather than settling on terms the seller did not sign.
     function _moveExact(IERC20 token, address from, address to, uint256 amount) private {
-        uint256 beforeBalance = token.balanceOf(to);
+        uint256 senderBefore = token.balanceOf(from);
+        uint256 recipientBefore = token.balanceOf(to);
         token.safeTransferFrom(from, to, amount);
-        if (token.balanceOf(to) - beforeBalance != amount) revert TransferAmountMismatch();
+        _requireExactBalances(token, from, to, amount, senderBefore, recipientBefore);
+    }
+
+    function _pushExact(IERC20 token, address recipient, uint256 amount) private {
+        uint256 senderBefore = token.balanceOf(address(this));
+        uint256 recipientBefore = token.balanceOf(recipient);
+        token.safeTransfer(recipient, amount);
+        _requireExactBalances(
+            token, address(this), recipient, amount, senderBefore, recipientBefore
+        );
+    }
+
+    function _requireExactBalances(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 amount,
+        uint256 senderBefore,
+        uint256 recipientBefore
+    ) private view {
+        uint256 senderAfter = token.balanceOf(from);
+        uint256 recipientAfter = token.balanceOf(to);
+        if (
+            senderAfter > senderBefore || senderBefore - senderAfter != amount
+                || recipientAfter < recipientBefore || recipientAfter - recipientBefore != amount
+        ) revert TransferAmountMismatch();
     }
 
     function _intentStructHash(SaleIntent calldata intent) private pure returns (bytes32) {

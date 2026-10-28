@@ -5,6 +5,7 @@ import { formatUsd, type Artwork } from "@/lib/catalog";
 import { ArtworkVisual } from "./artwork-visual";
 import { AssetHolderAuthority } from "./asset-holder-authority";
 import { FractionListing } from "./fraction-listing";
+import { MarketAnalyticsAvailability } from "./market-analytics-availability";
 import { PrototypeDataNotice } from "./prototype-data-notice";
 import { WholeArtworkListing } from "./whole-artwork-listing";
 
@@ -107,6 +108,7 @@ export function AssetDetail({
           </dl>
         </aside>
       </section>
+      <MarketAnalyticsAvailability />
       {fractional ? (
         <FractionListing slug={artwork.slug} />
       ) : (

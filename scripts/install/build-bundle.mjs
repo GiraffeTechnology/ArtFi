@@ -1,8 +1,15 @@
 #!/usr/bin/env node
+import { bundleAgentSources } from "./bundle-agent-sources.mjs";
+import { assertPortableBundleLinks } from "./bundle-portable-links.mjs";
 import { bundleNodePackage } from "./bundle-node-package.mjs";
+import {
+  captureBuildSource,
+  assertBuildSourceUnchanged,
+} from "./build-source-manifest.mjs";
 import { buildTaskListingRuntime } from "./build-task-listing-runtime.mjs";
 import { collectLicenses, copyProjectNotices } from "./licenses.mjs";
 import { bundleContracts } from "./bundle-contracts.mjs";
+import { bundleMonitor } from "./bundle-monitor.mjs";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -45,34 +52,6 @@ function run(exe, args, cwd = root) {
     throw new Error(`Build command failed: ${exe} ${args.join(" ")}`);
 }
 const digest = (body) => createHash("sha256").update(body).digest("hex");
-async function sourceManifest() {
-  const files = execFileSync(
-      "git",
-      ["ls-files", "-co", "--exclude-standard", "-z"],
-      { cwd: root },
-    )
-      .toString()
-      .split("\0")
-      .filter(Boolean)
-      .sort(),
-    hashes = {};
-  for (const file of files) {
-    const st = await lstat(join(root, file));
-    if (st.isFile()) hashes[file] = digest(await readFile(join(root, file)));
-  }
-  return {
-    revision: execFileSync("git", ["rev-parse", "HEAD"], {
-      cwd: root,
-      encoding: "utf8",
-    }).trim(),
-    dirty: !!execFileSync("git", ["status", "--porcelain"], {
-      cwd: root,
-      encoding: "utf8",
-    }).trim(),
-    fingerprint: digest(JSON.stringify(hashes)),
-    files: hashes,
-  };
-}
 async function inventory(path, base = path, files = {}, links = {}) {
   for (const name of (await readdir(path)).sort()) {
     const file = join(path, name),
@@ -85,6 +64,9 @@ async function inventory(path, base = path, files = {}, links = {}) {
   return { files, links };
 }
 try {
+  const webBundler = opts["web-bundler"] || "turbopack";
+  if (!["turbopack", "webpack"].includes(webBundler))
+    throw new Error("Unsupported web bundler; use turbopack or webpack.");
   if (process.platform !== "linux" || !env.GOARCH)
     throw new Error(
       "Build this native Linux artifact on supported Linux x64 or arm64.",
@@ -118,7 +100,7 @@ try {
         throw new Error(
           "Remove local .env files from the build checkout; deployment secrets must not enter the artifact.",
         );
-  const source = await sourceManifest(),
+  const source = await captureBuildSource(root),
     release =
       opts.release ||
       `artfi-${source.revision.slice(0, 12)}-${source.fingerprint.slice(0, 12)}-${process.platform}-${process.arch}`;
@@ -131,7 +113,11 @@ try {
   const license = await readFile(nodeLicense);
   run(
     node,
-    [join(root, "apps/web/node_modules/next/dist/bin/next"), "build"],
+    [
+      join(root, "apps/web/node_modules/next/dist/bin/next"),
+      "build",
+      ...(webBundler === "webpack" ? ["--webpack"] : []),
+    ],
     join(root, "apps/web"),
   );
   run(
@@ -237,12 +223,11 @@ try {
     destination: join(bundle, "runtime/task-listing"),
     node,
   });
-  await cp(join(root, "scripts/agent"), join(bundle, "scripts/agent"), {
-    recursive: true,
-  });
+  await bundleAgentSources(root, bundle);
   await cp(join(root, "scripts/operations"), join(bundle, "tools/operations"), {
     recursive: true,
   });
+  await bundleMonitor(root, join(bundle, "tools/ops"));
   for (const directory of [
     join(bundle, "tools/operations"),
     join(bundle, "scripts/agent"),
@@ -255,12 +240,20 @@ try {
         await rm(join(directory, name));
     }
   }
+  // Refuse escaped or private host links before importing packaged code.
+  await assertPortableBundleLinks(bundle);
   // Exercise the packaged production dependency graph before sealing an artifact.
   // The guarded server module is imported only; no listener, configuration or signer starts.
   run(node, [
     "--input-type=module",
     "-e",
     `await import(${JSON.stringify(pathToFileURL(join(bundle, "runtime/agent/src/server.mjs")).href)});`,
+  ]);
+  // Import the complete packaged monitor graph without starting a listener or tick.
+  run(node, [
+    "--input-type=module",
+    "-e",
+    `await import(${JSON.stringify(pathToFileURL(join(bundle, "tools/ops/monitor-service.mjs")).href)}); await import(${JSON.stringify(pathToFileURL(join(bundle, "tools/ops/monitor-status.mjs")).href)});`,
   ]);
   await mkdir(join(bundle, "tools/acceptance"), { recursive: true });
   for (const name of [
@@ -280,6 +273,7 @@ try {
   });
   for (const name of [
     "INSTALLATION.md",
+    "MONITOR_PACKAGE.md",
     "TASK_LISTING_RUNTIME.md",
     "NFT-TASK-JOURNAL.md",
     "DELIVERY_CANDIDATE_2026-10-06.md",
@@ -312,14 +306,7 @@ try {
     join(bundle, "source-manifest.json"),
     JSON.stringify(source, null, 2) + "\n",
   );
-  const after = await sourceManifest();
-  if (
-    after.fingerprint !== source.fingerprint ||
-    after.revision !== source.revision
-  )
-    throw new Error(
-      "Source changed during build; do not ship this artifact. Rebuild from a stable source snapshot.",
-    );
+  assertBuildSourceUnchanged(source, await captureBuildSource(root));
   const { files, links } = await inventory(bundle);
   const manifest = {
     format: 1,
@@ -328,6 +315,7 @@ try {
     platform: process.platform,
     architecture: process.arch,
     node: suppliedNode.version,
+    webBundler,
     go: execFileSync(go, ["version"], { encoding: "utf8", env }).trim(),
     foundry: execFileSync(forge, ["--version"], { encoding: "utf8", env })
       .trim()
@@ -335,6 +323,7 @@ try {
     solidity: "0.8.30",
     source: {
       revision: source.revision,
+      tree: source.tree,
       dirty: source.dirty,
       fingerprint: source.fingerprint,
     },
@@ -348,6 +337,8 @@ try {
     JSON.stringify(manifest, null, 2) + "\n",
   );
   run(node, [join(bundle, "tools/install/artfi.mjs"), "check-bundle"]);
+  // Recheck the completed payload immediately before archiving.
+  await assertPortableBundleLinks(bundle);
   const archive = `${release}.tar.gz`;
   run("tar", ["-czf", join(output, archive), "-C", output, release]);
   const checksum = digest(await readFile(join(output, archive)));

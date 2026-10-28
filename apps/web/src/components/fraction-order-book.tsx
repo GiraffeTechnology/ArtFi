@@ -226,22 +226,24 @@ export function FractionOrderBook({
               domain: { chainId: 560048, verifyingContract: market },
             });
           };
-          await check();
-          operation.assertCurrent();
           await operation.settle({
             onStage: (stage) =>
               setProgress(
                 `${count + 1} of ${reviewed.matches.length}: ${stage === "approving" ? "confirm the exact payment allowance" : "confirm this signed fill"}`,
               ),
-            approvePayment: () =>
-              writeContractAsync({
+            approvePayment: async () => {
+              // The session gate can wait; revalidate the order only after it completes.
+              await check();
+              operation.assertCurrent();
+              return writeContractAsync({
                 address: match.intent.paymentToken,
                 abi: fractionTokenAbi,
                 functionName: "approve",
                 args: [market, match.payment],
                 chainId: 560048,
                 account: buyer,
-              }),
+              });
+            },
             settle: async () => {
               // Revocation, partial fills, or loss of allowance while approving must stop execution.
               await check();

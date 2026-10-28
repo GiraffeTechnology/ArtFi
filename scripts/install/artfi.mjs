@@ -201,7 +201,7 @@ async function serviceEnv(root) {
     OPENSEA_BACKFILL_STATE_DIRECTORY: join(shared, "mirror", "backfill"),
   };
 }
-function serviceSpec(root, name, env = {}) {
+async function serviceSpec(root, name, env = {}) {
   if (name === "api") return [join(root, "runtime/bin/artfi-api"), []];
   if (name === "web")
     return [
@@ -218,15 +218,13 @@ function serviceSpec(root, name, env = {}) {
       join(root, "runtime/bin/node"),
       [join(root, "runtime/agent/src/server.mjs")],
     ];
-  if (name === "monitor")
+  if (name === "monitor") {
+    const { readMonitorArguments } = await import("./monitor-entry.mjs");
     return [
       join(root, "runtime/bin/node"),
-      [
-        join(root, "tools/operations/monitor.mjs"),
-        env.ARTFI_MONITOR_CONFIG_FILE,
-        "--watch",
-      ],
+      await readMonitorArguments(root, env.ARTFI_MONITOR_CONFIG_FILE),
     ];
+  }
   throw new Error("Service must be api, web, mirror, agent or monitor.");
 }
 async function migrate(root, action) {
@@ -333,7 +331,7 @@ async function start(root) {
       );
   }
   for (const name of names) {
-    const [exe, argv] = serviceSpec(root, name, env),
+    const [exe, argv] = await serviceSpec(root, name, env),
       log = await open(join(shared, "logs", `${name}.log`), "a", 0o600);
     const child = spawn(exe, argv, {
       env,
@@ -630,7 +628,7 @@ async function main() {
       throw new Error("Agent runtime is disabled.");
     if (name === "monitor" && env.ARTFI_MONITOR_ENABLED !== "true")
       throw new Error("Operations monitor is disabled.");
-    const [exe, argv] = serviceSpec(root, name, env);
+    const [exe, argv] = await serviceSpec(root, name, env);
     const child = spawn(exe, argv, { env, cwd: root, stdio: "inherit" });
     for (const signal of ["SIGTERM", "SIGINT"])
       process.on(signal, () => child.kill(signal));

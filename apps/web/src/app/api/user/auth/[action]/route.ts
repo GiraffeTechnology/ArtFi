@@ -115,14 +115,17 @@ export async function GET(request: Request, context: Context) {
   }
 }
 
-export async function POST(request: Request, context: Context) {
+async function post(request: Request, context: Context, signal?: AbortSignal) {
   try {
+    signal?.throwIfAborted();
     const origin = assertUserRequestOrigin(request);
     const { action } = await context.params;
     if (!["challenge", "verify", "refresh", "logout"].includes(action))
       return output({ detail: "Unknown sign-in action." }, 404);
     const body = object(await readBoundedJSON(request));
+    signal?.throwIfAborted();
     const jar = await cookies();
+    signal?.throwIfAborted();
     if (action === "challenge") {
       exactKeys(body, ["address", "chainId"]);
       if (
@@ -163,10 +166,8 @@ export async function POST(request: Request, context: Context) {
     }
     if (action === "verify") {
       exactKeys(body, ["address", "chainId", "signature"]);
-      const challenge = readUserChallenge(
-        jar.get(userChallengeCookie)?.value,
-        origin,
-      );
+      const originalChallengeToken = jar.get(userChallengeCookie)?.value;
+      const challenge = readUserChallenge(originalChallengeToken, origin);
       if (
         !challenge ||
         body.address !== challenge.address ||
@@ -190,6 +191,13 @@ export async function POST(request: Request, context: Context) {
           401,
           "The wallet signature could not be verified.",
         );
+      signal?.throwIfAborted();
+      // A successful asynchronous proof does not extend the original challenge.
+      if (!readUserChallenge(originalChallengeToken, origin))
+        throw new UserAuthError(
+          401,
+          "The sign-in challenge expired or changed. Start again.",
+        );
       const tokens = validateUserTokens(
         await userAuthRequest("verify", {
           challengeId: challenge.id,
@@ -199,6 +207,13 @@ export async function POST(request: Request, context: Context) {
           message: challenge.message,
         }),
       );
+      signal?.throwIfAborted();
+      // A successful asynchronous proof does not extend the original challenge.
+      if (!readUserChallenge(originalChallengeToken, origin))
+        throw new UserAuthError(
+          401,
+          "The sign-in challenge expired or changed. Start again.",
+        );
       if (
         tokens.session.address.toLowerCase() !==
           challenge.address.toLowerCase() ||
@@ -235,5 +250,37 @@ export async function POST(request: Request, context: Context) {
     return clearAll(output({ session: null }), request);
   } catch (error) {
     return errorResponse(error);
+  }
+}
+
+/** One finite verification attempt; late proof or bridge results cannot set cookies. */
+export async function POST(request: Request, context: Context) {
+  if ((await context.params).action !== "verify") return post(request, context);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  let onAbort: (() => void) | undefined;
+  const stopped = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new Error("Sign-in verification interrupted."));
+    controller.signal.addEventListener("abort", onAbort, { once: true });
+  });
+  const timer = setTimeout(abort, 8000);
+  request.signal.addEventListener("abort", abort, { once: true });
+  if (request.signal.aborted) abort();
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => {
+        controller.signal.throwIfAborted();
+        return post(request, context, controller.signal);
+      }),
+      stopped,
+    ]);
+  } catch {
+    return errorResponse(
+      new UserAuthError(503, "Wallet sign-in is unavailable."),
+    );
+  } finally {
+    clearTimeout(timer);
+    request.signal.removeEventListener("abort", abort);
+    if (onAbort) controller.signal.removeEventListener("abort", onAbort);
   }
 }

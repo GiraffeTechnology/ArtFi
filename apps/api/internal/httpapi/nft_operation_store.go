@@ -111,6 +111,14 @@ func (p verifiedNFTPrincipal) owns(operation nftOperation) bool {
 		_, hasTask := plan["taskPrincipal"]
 		return !hasTask
 	}
+	// A receipt plan needs its own verified business/association binding. Keep
+	// this check before get and idempotent-create returns under the row lock.
+	// A missing claim group must never downgrade a receipt to an NFT listing.
+	for key := range plan {
+		if strings.EqualFold(key, "wholeReceipt") {
+			return false
+		}
+	}
 	if _, hasSession := plan["sessionId"]; hasSession {
 		return false
 	}

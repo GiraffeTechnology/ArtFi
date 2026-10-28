@@ -12,6 +12,7 @@ import {
   subscribeToUserSessionChanges,
   userSessionController,
 } from "@/lib/user-session-client";
+import { watchUserSessionDeadlines } from "@/lib/user-session-deadlines";
 import type { UserSessionState } from "@/lib/user-session-client-state";
 
 type UserSessionContextValue = UserSessionState & {
@@ -54,19 +55,7 @@ export function UserSessionProvider({
       document.removeEventListener("visibilitychange", recheck);
     };
   }, []);
-  useEffect(() => {
-    const session = state.session;
-    if (!session) return;
-    let timer: ReturnType<typeof setTimeout>;
-    const check = () => {
-      const remaining = session.expiresAt - Date.now();
-      if (remaining <= 0)
-        userSessionController.expireSession(session.id, session.expiresAt);
-      else timer = setTimeout(check, Math.min(remaining, 2_147_483_647));
-    };
-    check();
-    return () => clearTimeout(timer);
-  }, [state.session]);
+  useEffect(() => watchUserSessionDeadlines(userSessionController), []);
   const value = useMemo(
     () => ({
       ...state,

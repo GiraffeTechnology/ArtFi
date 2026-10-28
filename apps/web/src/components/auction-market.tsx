@@ -16,6 +16,9 @@ import {
 } from "@/lib/rwa-catalog";
 import { publicSetting } from "@/lib/public-runtime-config";
 import { supportedChain } from "@/lib/wagmi";
+import { AuctionLiveObservation } from "./auction-live-observation";
+import { AuctionHistoryBrowser } from "./auction-history-browser";
+import { AuctionDiscoveryBrowser } from "./auction-discovery-browser";
 import { useUserSession } from "./user-session-provider";
 import {
   assertTradingSession,
@@ -58,7 +61,6 @@ function AuctionWorkbench() {
   const [sourceRecord, setSourceRecord] = useState<RwaAsset | null>(null);
   const [id, setID] = useState("1"),
     [snapshot, setSnapshot] = useState<AuctionSnapshot | null>(null),
-    [history, setHistory] = useState<string[]>([]),
     [recent, setRecent] = useState<string[]>([]),
     [credit, setCredit] = useState<bigint | null>(null);
   const [paymentMeta, setPaymentMeta] = useState<Metadata>({
@@ -191,18 +193,6 @@ function AuctionWorkbench() {
       metadata(observed.payment),
       metadata(observed.asset),
     ]);
-    let entries: string[];
-    try {
-      const events = await auctionEvents(client, market, selected);
-      entries = events.logs.map(
-        (log) =>
-          `${log.eventName} · block ${log.blockNumber} · ${log.transactionHash}`,
-      );
-    } catch {
-      entries = [
-        "Bid history is unavailable. Current on-chain auction terms are shown separately.",
-      ];
-    }
     const available = privateReady
       ? await client.readContract({
           address: market,
@@ -219,7 +209,6 @@ function AuctionWorkbench() {
     setPaymentMeta(pm);
     setAssetMeta(am);
     setCredit(available);
-    setHistory(entries);
     setBid(formatUnits(auctionMinimumBid(observed), pm.decimals ?? 0));
     setDetail(`Auction observed at block ${observed.blockNumber}.`);
   }
@@ -249,16 +238,18 @@ function AuctionWorkbench() {
     const reviewed = snapshot;
     const value = auctionAmount(bid, paymentMeta.decimals ?? 0);
     const action = transactions.begin();
-    await assertRwaTradingEvidence({
-      section: "fractional",
-      chainId: 560048,
-      marketAddress: market,
-      fractionTokenAddress: reviewed.asset,
-      slug: sourceRecord.slug,
-      identity: rwaAssetIdentity(sourceRecord),
-    });
-    await auctionBidPreflight(client, reviewed, address, value);
-    action.assertCurrent();
+    const checkBid = async () => {
+      await assertRwaTradingEvidence({
+        section: "fractional",
+        chainId: 560048,
+        marketAddress: market,
+        fractionTokenAddress: reviewed.asset,
+        slug: sourceRecord.slug,
+        identity: rwaAssetIdentity(sourceRecord),
+      });
+      await auctionBidPreflight(client, reviewed, address, value);
+      action.assertCurrent();
+    };
     const allowance = await client.readContract({
       address: reviewed.payment,
       abi: auctionTokenAbi,
@@ -267,41 +258,35 @@ function AuctionWorkbench() {
     });
     if (allowance < value) {
       setDetail("Confirm the exact payment-token allowance in your wallet.");
-      await action.write("approval", () =>
-        writeContractAsync({
+      await action.write("approval", async () => {
+        await checkBid();
+        return writeContractAsync({
           address: reviewed.payment,
           abi: auctionTokenAbi,
           functionName: "approve",
           args: [market, value],
           chainId: 560048,
           account: address,
-        }),
-      );
+        });
+      });
     }
-    await assertRwaTradingEvidence({
-      section: "fractional",
-      chainId: 560048,
-      marketAddress: market,
-      fractionTokenAddress: reviewed.asset,
-      slug: sourceRecord.slug,
-      identity: rwaAssetIdentity(sourceRecord),
-    });
-    await auctionBidPreflight(client, reviewed, address, value);
-    action.assertCurrent();
-    const prepared = await client.simulateContract({
-      address: market,
-      abi: auctionAbi,
-      functionName: "placeBid",
-      args: [auctionID(reviewed.id), value],
-      account: address,
-    });
-    action.assertCurrent();
     setDetail(
       "Confirm the escrowed bid in your wallet. A late bid may extend the end time.",
     );
-    await action.write("fill", () =>
-      writeContractAsync({ ...prepared.request, chainId: 560048 }),
-    );
+    await action.write("fill", async () => {
+      await checkBid();
+      const prepared = await client.simulateContract({
+        address: market,
+        abi: auctionAbi,
+        functionName: "placeBid",
+        args: [auctionID(reviewed.id), value],
+        account: address,
+      });
+      // Simulation is asynchronous too. Revalidate current bid state and chain
+      // before handing its original, unchanged request to the wallet.
+      await checkBid();
+      return writeContractAsync({ ...prepared.request, chainId: 560048 });
+    });
     action.assertCurrent();
     await refresh(reviewed.id);
     if (action.isCurrent())
@@ -612,9 +597,21 @@ function AuctionWorkbench() {
           ))}
         </nav>
       )}
+      {market && (
+        <AuctionDiscoveryBrowser
+          market={market}
+          disabled={blocked}
+          onInspect={(value) => run(() => refresh(value))}
+        />
+      )}
       {snapshot && (
         <article className="nft-market-card">
           <h3>Auction {snapshot.id}</h3>
+          <p>
+            Reviewed terms at block {snapshot.blockNumber.toString()}. The live
+            observation below may show newer bids or an extended end. Reload the
+            auction to review changed terms before acting.
+          </p>
           {sourceRecord ? (
             <p>
               {sourceRecord.grounding.mode} · source-bound asset:{" "}
@@ -696,19 +693,11 @@ function AuctionWorkbench() {
               </button>
             </p>
           )}
-          <h4>Attributed bid and auction history</h4>
-          {history.length ? (
-            <ol>
-              {history.map((entry, index) => (
-                <li key={index} className="nft-market-hash">
-                  {entry}
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p>
-              No auction event was observed in the selected recent block window.
-            </p>
+          {market && (
+            <AuctionLiveObservation market={market} listingId={snapshot.id} />
+          )}
+          {market && (
+            <AuctionHistoryBrowser market={market} listingId={snapshot.id} />
           )}
         </article>
       )}

@@ -91,12 +91,18 @@ export type SessionRPCRequest = {
   params?: unknown[];
 };
 
-export function sessionRPCResult(request: SessionRPCRequest, seller: Address) {
+export function sessionRPCResult(
+  request: SessionRPCRequest,
+  seller: Address,
+  now: () => number = Date.now,
+) {
+  // One synthetic block per second; an explicit number always retains its timestamp.
+  const latest = BigInt(Math.floor(now() / 1000));
   switch (request.method) {
     case "eth_chainId":
       return "0x88bb0";
     case "eth_blockNumber":
-      return "0x64";
+      return `0x${latest.toString(16)}`;
     case "eth_getBalance":
       return "0xde0b6b3a7640000";
     case "eth_getCode":
@@ -106,15 +112,24 @@ export function sessionRPCResult(request: SessionRPCRequest, seller: Address) {
       if (!data) throw new Error("Missing TEST_ONLY contract calldata.");
       return sessionContractRead(data, seller);
     }
-    case "eth_getBlockByNumber":
+    case "eth_getBlockByNumber": {
+      const tag = request.params?.[0];
+      if (
+        tag !== "latest" &&
+        (typeof tag !== "string" || !/^0x[0-9a-fA-F]+$/.test(tag))
+      )
+        throw new Error("Unsupported TEST_ONLY block tag.");
+      const number = tag === "latest" ? latest : BigInt(tag);
+      if (number > latest)
+        throw new Error("Future TEST_ONLY block is unavailable.");
       return {
-        number: "0x64",
-        hash: zeroHash,
+        number: `0x${number.toString(16)}`,
+        hash: `0x${number.toString(16).padStart(64, "0")}`,
         parentHash: zeroHash,
         transactions: [],
         gasLimit: "0x1000000",
         gasUsed: "0x0",
-        timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}`,
+        timestamp: `0x${number.toString(16)}`,
         extraData: "0x",
         difficulty: "0x0",
         totalDifficulty: "0x0",
@@ -130,6 +145,7 @@ export function sessionRPCResult(request: SessionRPCRequest, seller: Address) {
         logsBloom: `0x${"00".repeat(256)}`,
         baseFeePerGas: "0x1",
       };
+    }
     default:
       throw new Error("Unsupported TEST_ONLY RPC method.");
   }

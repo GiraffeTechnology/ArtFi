@@ -6,12 +6,8 @@ import {
   type Address,
   type Hash,
   type Hex,
-  type PublicClient,
 } from "viem";
-import {
-  confirmMarketReceipt,
-  MarketReceiptFinalError,
-} from "./market-transaction";
+export { checkDaoTransaction } from "./dao-transaction-receipt";
 
 export type ProposalPackage = {
   calldatas: readonly [Hex];
@@ -21,8 +17,30 @@ export type ProposalPackage = {
   targets: readonly [Address];
   values: readonly [bigint];
 };
+export type DaoCallBinding = { target: Address; input: Hex; value: "0" };
+export function isDaoCallBinding(value: unknown): value is DaoCallBinding {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const v = value as DaoCallBinding;
+  return (
+    Object.keys(v).length === 3 &&
+    Object.keys(v).every((key) => ["target", "input", "value"].includes(key)) &&
+    isAddress(v.target) &&
+    !/^0x0{40}$/i.test(v.target) &&
+    typeof v.input === "string" &&
+    /^0x(?:[0-9a-fA-F]{2}){4,20000}$/.test(v.input) &&
+    v.value === "0"
+  );
+}
 export type DaoTransaction = {
   hash: Hash;
+  request?: DaoCallBinding;
+  receipt?: {
+    originalHash: Hash;
+    transactionHash: Hash;
+    blockNumber: string;
+    blockHash: Hash;
+    chainId: 560048;
+  };
   success: string;
   proposalCreation?: boolean;
   phase: "pending" | "confirmed" | "failed" | "unknown";
@@ -120,49 +138,6 @@ export function loadSubmittedDaoProposal(
   }
 }
 
-export async function checkDaoTransaction({
-  client,
-  transaction,
-  isCurrent,
-  update,
-  onHash,
-}: {
-  client: Pick<PublicClient, "waitForTransactionReceipt">;
-  transaction: DaoTransaction;
-  isCurrent: () => boolean;
-  update: (transaction: DaoTransaction) => void;
-  onHash?: (hash: Hash) => void;
-}) {
-  let current = {
-    ...transaction,
-    phase: "pending" as DaoTransaction["phase"],
-    error: undefined as string | undefined,
-  };
-  const publish = () => {
-    if (isCurrent()) update(current);
-  };
-  publish();
-  try {
-    const receipt = await confirmMarketReceipt(client, current.hash, (hash) => {
-      current = { ...current, hash };
-      onHash?.(hash);
-      publish();
-    });
-    current = { ...current, hash: receipt.transactionHash, phase: "confirmed" };
-  } catch (error) {
-    current = {
-      ...current,
-      phase: error instanceof MarketReceiptFinalError ? "failed" : "unknown",
-      error:
-        error instanceof Error
-          ? error.message
-          : "The transaction receipt is unavailable.",
-    };
-  }
-  publish();
-  return current;
-}
-
 type DaoSessionSnapshot = {
   busy: boolean;
   awaitingWallet: boolean;
@@ -183,6 +158,7 @@ type PendingDaoRequest = {
   requestId: string;
   hash?: Hash;
   proposalCreation?: boolean;
+  request?: DaoCallBinding;
 };
 const pendingKey = (context: string) => `artfi:dao-pending:${context}`;
 const unknownWalletNotice =
@@ -194,13 +170,24 @@ function readPendingDaoRequest(
 ): PendingDaoRequest | undefined {
   const raw = storage.getItem(pendingKey(context));
   if (!raw) return;
-  if (raw.length > 1024)
+  if (raw.length > maxSavedLength)
     throw new Error(
       "The saved DAO request is invalid. Check the wallet before continuing.",
     );
   const saved = JSON.parse(raw);
   if (
     saved.version !== 1 ||
+    Object.keys(saved).some(
+      (key) =>
+        ![
+          "version",
+          "requestId",
+          "hash",
+          "proposalCreation",
+          "request",
+        ].includes(key),
+    ) ||
+    (saved.request !== undefined && !isDaoCallBinding(saved.request)) ||
     typeof saved.requestId !== "string" ||
     !/^[a-zA-Z0-9-]{1,64}$/.test(saved.requestId) ||
     (saved.hash !== undefined &&
@@ -272,6 +259,11 @@ export function createDaoActionSession(context: string) {
           requestId,
           hash: transaction.hash,
           proposalCreation: transaction.proposalCreation,
+          ...(transaction.request
+            ? { request: transaction.request }
+            : prior?.request
+              ? { request: prior.request }
+              : {}),
         }),
       );
       return "saved" as const;
@@ -324,6 +316,7 @@ export function createDaoActionSession(context: string) {
                     success:
                       "Saved transaction confirmed. Review on-chain state before continuing.",
                     proposalCreation: pending.proposalCreation,
+                    ...(pending.request ? { request: pending.request } : {}),
                   },
                   recoveryNotice:
                     "An unresolved DAO transaction was restored. Check its confirmation before another write.",
@@ -495,6 +488,14 @@ export function createDaoActionSession(context: string) {
           });
           return true;
         }
+        publish({
+          transaction,
+          awaitingWallet: false,
+          recoveryNotice: snapshot.submitted
+            ? persistPackage(snapshot.submitted, storage)
+            : "",
+        });
+        return true;
       }
       publish({ transaction });
       return true;

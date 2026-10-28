@@ -13,6 +13,7 @@ import { supportedChain } from "@/lib/wagmi";
 import { CharityEditionRightsNotice } from "./charity-edition-rights-notice";
 import { CharityHolderAccess } from "./charity-holder-access";
 import { CharityVenueLink } from "./charity-venue-link";
+import { CharityEvidenceRecorder } from "./charity-evidence-recorder";
 
 /**
  * One charity edition — #110 §2 CH.1 to CH.9.
@@ -215,6 +216,14 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
           <CharityVenueLink tokenId={edition.tokenId} />
 
           <CharityHolderAccess tokenId={edition.tokenId} />
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => void load()}
+          >
+            Refresh edition facts
+          </button>
+          <CharityEvidenceRecorder tokenId={edition.tokenId} />
         </>
       )}
 

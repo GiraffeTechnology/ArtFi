@@ -1,3 +1,4 @@
+import { testReceipt, testReceiptClient } from "./market-receipt-test-client";
 import { describe, expect, it } from "vitest";
 import type { Hash, PublicClient, TransactionReceipt } from "viem";
 import { currentOperation } from "./current-operation";
@@ -46,12 +47,8 @@ function start() {
 const receipt = (
   transactionHash = hash,
   status: "success" | "reverted" = "success",
-) => ({ transactionHash, status, logs: [] }) as unknown as TransactionReceipt;
-const client = (wait: unknown) =>
-  ({ waitForTransactionReceipt: wait }) as Pick<
-    PublicClient,
-    "waitForTransactionReceipt"
-  >;
+) => testReceipt(transactionHash, status);
+const client = testReceiptClient;
 
 describe("bounded public setup recovery", () => {
   it("takes a synchronous preparation lease and preserves the exact upload/intent after a wallet refusal", () => {
@@ -253,7 +250,7 @@ describe("bounded public setup recovery", () => {
                   transactionReceipt: receipt(replacement),
                 });
               return receipt(
-                hash,
+                reason === "reverted" ? hash : replacement,
                 reason === "reverted" ? "reverted" : "success",
               );
             },

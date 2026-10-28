@@ -1,3 +1,6 @@
+import { registerHolderChallenge } from "@/lib/charity-holder-challenge-store";
+import { holderVerificationResponse } from "@/lib/charity-holder-request";
+import { readUserJSON } from "@/lib/user-auth-json";
 import { NextResponse } from "next/server";
 
 import {
@@ -7,18 +10,21 @@ import {
 } from "@/lib/charity-holder-auth";
 import { configuredOrigin } from "@/lib/operator-auth";
 
-export async function POST(request: Request) {
+async function challenge(request: Request, signal: AbortSignal) {
   try {
-    const body = (await request.json()) as {
+    const body = (await readUserJSON(request, { signal, timeoutMs: 8000 })) as {
       address?: string;
       tokenId?: string;
     };
+    signal.throwIfAborted();
     const origin = configuredOrigin(new URL(request.url).origin);
     const { challenge, token } = createHolderChallenge(
       body.address ?? "",
       body.tokenId ?? "",
       origin,
     );
+    await registerHolderChallenge(token, challenge, origin);
+    signal.throwIfAborted();
     const response = NextResponse.json({
       address: challenge.address,
       tokenId: challenge.tokenId,
@@ -39,4 +45,10 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
+}
+
+export async function POST(request: Request) {
+  return holderVerificationResponse(request, (signal) =>
+    challenge(request, signal),
+  );
 }

@@ -38,15 +38,39 @@ const transaction: DaoTransaction = {
   success: "Proposal queued in the Timelock.",
   phase: "pending",
 };
+const account = "0x2000000000000000000000000000000000000002";
+const blockHash = `0x${"33".repeat(32)}` as Hash;
+const binding: Parameters<typeof checkDaoTransaction>[0]["binding"] = {
+  chainId: 560048,
+  account,
+  targets: [target],
+};
 const receipt = (
   status: "success" | "reverted" = "success",
   transactionHash = hash,
-) => ({ status, transactionHash }) as TransactionReceipt;
+) =>
+  ({
+    status,
+    transactionHash,
+    blockNumber: 77n,
+    blockHash,
+    logs: [],
+  }) as unknown as TransactionReceipt;
 const client = (wait: ReturnType<typeof vi.fn>) =>
-  ({ waitForTransactionReceipt: wait }) as unknown as Pick<
-    PublicClient,
-    "waitForTransactionReceipt"
-  >;
+  ({
+    waitForTransactionReceipt: wait,
+    getChainId: async () => 560048,
+    getBlock: async () => ({ number: 77n, hash: blockHash }),
+    getTransaction: async ({ hash }: { hash: Hash }) => ({
+      hash,
+      chainId: 560048,
+      from: account,
+      to: target,
+      value: 0n,
+      nonce: 7,
+      input: "0x12345678",
+    }),
+  }) as unknown as Parameters<typeof checkDaoTransaction>[0]["client"];
 function storage() {
   const values = new Map<string, string>();
   return {
@@ -69,6 +93,7 @@ describe("DAO transaction outcomes", () => {
     });
     const states: DaoTransaction[] = [];
     const running = checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockReturnValue(promise)),
       transaction,
       isCurrent: () => true,
@@ -85,6 +110,7 @@ describe("DAO transaction outcomes", () => {
   it("reports a reverted receipt as failed", async () => {
     const update = vi.fn();
     const result = await checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockResolvedValue(receipt("reverted"))),
       transaction,
       isCurrent: () => true,
@@ -99,6 +125,7 @@ describe("DAO transaction outcomes", () => {
   it("keeps an unavailable receipt unresolved and allows a read-only recheck", async () => {
     const update = vi.fn();
     const first = await checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockRejectedValue(new Error("timeout"))),
       transaction,
       isCurrent: () => true,
@@ -106,6 +133,7 @@ describe("DAO transaction outcomes", () => {
     });
     expect(first.phase).toBe("unknown");
     const retried = await checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockResolvedValue(receipt())),
       transaction: first,
       isCurrent: () => true,
@@ -118,6 +146,7 @@ describe("DAO transaction outcomes", () => {
     "never marks a %s transaction successful",
     async (reason) => {
       const result = await checkDaoTransaction({
+        binding,
         client: client(
           vi.fn().mockImplementation(async ({ onReplaced }) => {
             onReplaced({
@@ -138,6 +167,7 @@ describe("DAO transaction outcomes", () => {
   it("retains the replacement hash for a repriced identical operation", async () => {
     const onHash = vi.fn();
     const result = await checkDaoTransaction({
+      binding,
       client: client(
         vi.fn().mockImplementation(async ({ onReplaced }) => {
           onReplaced({
@@ -164,6 +194,7 @@ describe("DAO transaction outcomes", () => {
     });
     const update = vi.fn();
     const running = checkDaoTransaction({
+      binding,
       client: client(vi.fn().mockReturnValue(promise)),
       transaction,
       isCurrent: () => current,
@@ -551,5 +582,155 @@ describe("minimal DAO interruption recovery", () => {
       })),
     ).toThrow("quota");
     expect(session.getSnapshot().awaitingWallet).toBe(false);
+  });
+});
+
+describe("DAO terminal recovery notices", () => {
+  it.each(["confirmed", "failed"] as const)(
+    "regression terminal: a %s owned request retires its unresolved notice",
+    (phase) => {
+      const store = storage(),
+        session = createDaoActionSession("terminal-" + phase),
+        lease = session.begin()!;
+      session.awaitWallet(lease, () => store);
+      session.broadcast(lease, transaction, undefined, () => store);
+      expect(session.getSnapshot().recoveryNotice).toContain("unresolved");
+      session.updateTransaction(
+        lease,
+        hash,
+        { ...transaction, phase },
+        () => store,
+      );
+      expect(session.getSnapshot().transaction?.phase).toBe(phase);
+      expect(session.getSnapshot().recoveryNotice).toBe("");
+      expect(session.getSnapshot().awaitingWallet).toBe(false);
+      session.finish(lease);
+      expect(session.begin()).toBeDefined();
+    },
+  );
+  it.each(["confirmed", "failed"] as const)(
+    "a reloaded %s receipt clears its own notice only after removing the owned record",
+    (phase) => {
+      const store = storage(),
+        context = "terminal-reload-" + phase,
+        first = createDaoActionSession(context),
+        lease = first.begin()!;
+      first.awaitWallet(lease, () => store);
+      first.broadcast(lease, transaction, undefined, () => store);
+      first.finish(lease);
+      const reloaded = createDaoActionSession(context);
+      reloaded.restore(() => store, target);
+      const check = reloaded.begin(true)!;
+      reloaded.updateTransaction(
+        check,
+        hash,
+        { ...transaction, phase },
+        () => store,
+      );
+      expect(store.getItem("artfi:dao-pending:" + context)).toBeNull();
+      expect(reloaded.getSnapshot().recoveryNotice).toBe("");
+    },
+  );
+  it.each([true, false])(
+    "retains the proposal package save outcome after confirmation: %s",
+    (canSave) => {
+      const memory = storage();
+      const store = {
+        ...memory,
+        setItem(key: string, value: string) {
+          if (!canSave && !key.startsWith("artfi:dao-pending:"))
+            throw Error("TEST_ONLY quota");
+          memory.setItem(key, value);
+        },
+      };
+      const session = createDaoActionSession("terminal-package-" + canSave),
+        lease = session.begin()!;
+      session.awaitWallet(lease, () => store);
+      session.broadcast(
+        lease,
+        { ...transaction, proposalCreation: true },
+        proposal,
+        () => store,
+      );
+      session.updateTransaction(
+        lease,
+        hash,
+        { ...transaction, proposalCreation: true, phase: "confirmed" },
+        () => store,
+      );
+      expect(session.getSnapshot().recoveryNotice).toContain(
+        canSave
+          ? "retains the submitted execution package"
+          : "could not save its execution package",
+      );
+      expect(session.getSnapshot().awaitingWallet).toBe(false);
+      expect(session.getSnapshot().submitted?.proposal).toEqual(proposal);
+    },
+  );
+  it("never clears a blocking notice when removal of the owned record fails", () => {
+    const memory = storage(),
+      session = createDaoActionSession("terminal-remove-fails"),
+      lease = session.begin()!;
+    session.awaitWallet(lease, () => memory);
+    session.broadcast(lease, transaction, undefined, () => memory);
+    session.updateTransaction(
+      lease,
+      hash,
+      { ...transaction, phase: "confirmed" },
+      () => ({
+        ...memory,
+        removeItem() {
+          throw Error("TEST_ONLY removal unavailable");
+        },
+      }),
+    );
+    expect(
+      memory.getItem("artfi:dao-pending:terminal-remove-fails"),
+    ).not.toBeNull();
+    expect(session.getSnapshot().awaitingWallet).toBe(true);
+    expect(session.getSnapshot().recoveryNotice).toContain(
+      "removal unavailable",
+    );
+    session.finish(lease);
+    expect(session.begin()).toBeUndefined();
+  });
+  it("keeps UNKNOWN notice and the original request until reconciliation", () => {
+    const store = storage(),
+      session = createDaoActionSession("terminal-unknown"),
+      lease = session.begin()!;
+    session.awaitWallet(lease, () => store);
+    session.broadcast(lease, transaction, undefined, () => store);
+    const notice = session.getSnapshot().recoveryNotice;
+    session.updateTransaction(
+      lease,
+      hash,
+      { ...transaction, phase: "unknown" },
+      () => store,
+    );
+    expect(session.getSnapshot().recoveryNotice).toBe(notice);
+    expect(store.getItem("artfi:dao-pending:terminal-unknown")).not.toBeNull();
+    session.finish(lease);
+    expect(session.begin()).toBeUndefined();
+  });
+  it("does not let a stale lease erase the current unresolved notice", () => {
+    const store = storage(),
+      session = createDaoActionSession("terminal-stale"),
+      lease = session.begin()!;
+    session.awaitWallet(lease, () => store);
+    session.broadcast(lease, transaction, undefined, () => store);
+    session.finish(lease);
+    const check = session.begin(true)!,
+      notice = session.getSnapshot().recoveryNotice;
+    expect(
+      session.updateTransaction(
+        lease,
+        hash,
+        { ...transaction, phase: "confirmed" },
+        () => store,
+      ),
+    ).toBe(false);
+    expect(session.getSnapshot().recoveryNotice).toBe(notice);
+    expect(store.getItem("artfi:dao-pending:terminal-stale")).not.toBeNull();
+    session.finish(check);
   });
 });

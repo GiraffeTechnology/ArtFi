@@ -860,29 +860,35 @@ function FractionListingScreen({
       await grounding();
       operation.assertCurrent();
       setStage("approving");
-      await verifyFractionSale({
-        client: publicClient,
-        intent,
-        signature,
-        buyer: address,
-        expectedChainId: supportedChain.id,
-        domain: { chainId: supportedChain.id, verifyingContract: market },
-        amount,
-      });
+      const checkSale = () =>
+        verifyFractionSale({
+          client: publicClient,
+          intent,
+          signature,
+          buyer: address,
+          expectedChainId: supportedChain.id,
+          domain: { chainId: supportedChain.id, verifyingContract: market },
+          amount,
+        });
       operation.assertCurrent();
       await operation.settle({
         onStage: setStage,
-        approvePayment: () =>
-          writeContractAsync({
+        approvePayment: async () => {
+          await grounding();
+          await checkSale();
+          operation!.assertCurrent();
+          return writeContractAsync({
             abi: fractionTokenAbi,
             address: intent.paymentToken,
             functionName: "approve",
             args: [market, payment],
             chainId: supportedChain.id,
             account: address,
-          }),
+          });
+        },
         settle: async () => {
           await grounding();
+          await checkSale();
           operation!.assertCurrent();
           return writeContractAsync({
             abi: artFiFractionMarketAbi,

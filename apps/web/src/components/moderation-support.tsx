@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+import { PrivateCaseLookup } from "./private-case-lookup";
 import { useAccount } from "wagmi";
 import { portfolioSessionKey } from "@/lib/portfolio-session";
 import { useUserSession } from "@/components/user-session-provider";
@@ -135,6 +142,8 @@ function PrivateModerationSupport({ session }: { session: UserSession }) {
     hasMore: false,
   });
   const [selectedId, select] = useState("");
+  const [lookupRecord, setLookupRecord] = useState<ModerationCase>();
+  const [lookupRevision, retireLookup] = useState(0);
   const [blocked, setBlocked] = useState(false);
   const [page, setPage] = useState(1);
   const [revision, refresh] = useState(0);
@@ -145,6 +154,15 @@ function PrivateModerationSupport({ session }: { session: UserSession }) {
   const keys = useRef(new Map<string, string>());
   const locked = useRef(false);
   const live = useRef(true);
+  const openCase = useCallback((record: ModerationCase | undefined) => {
+    setLookupRecord(record);
+    select(record?.id || "");
+  }, []);
+  const denyLookup = useCallback(() => {
+    setLookupRecord(undefined);
+    setBlocked(true);
+    setData({ data: [], page: 1, pageSize: 20, hasMore: false });
+  }, []);
   useEffect(() => {
     live.current = true;
     return () => {
@@ -210,6 +228,7 @@ function PrivateModerationSupport({ session }: { session: UserSession }) {
         },
       );
       if (live.current) {
+        setLookupRecord(undefined);
         select(result.id);
         setPage(1);
         setLoading(true);
@@ -240,7 +259,10 @@ function PrivateModerationSupport({ session }: { session: UserSession }) {
       if (live.current) setBusy(false);
     }
   }
-  const selected = data.data.find((record) => record.id === selectedId);
+  const selected =
+    lookupRecord?.id === selectedId
+      ? lookupRecord
+      : data.data.find((record) => record.id === selectedId);
   if (blocked)
     return (
       <section className={styles.panel}>
@@ -279,6 +301,7 @@ function PrivateModerationSupport({ session }: { session: UserSession }) {
             className="button button-secondary"
             disabled={busy || loading}
             onClick={() => {
+              setLookupRecord(undefined);
               setLoading(true);
               setError("");
               refresh((value) => value + 1);
@@ -298,18 +321,30 @@ function PrivateModerationSupport({ session }: { session: UserSession }) {
             {message}
           </p>
         )}
+        <PrivateCaseLookup
+          key={`${page}:${revision}:${busy}:${loading}:${lookupRevision}`}
+          session={session}
+          disabled={busy || loading}
+          onOpen={openCase}
+          onDenied={denyLookup}
+        />
         <div className={styles.columns}>
           <div>
             <CaseList
               records={data.data}
               selected={selectedId}
-              select={select}
+              select={(id) => {
+                retireLookup((value) => value + 1);
+                setLookupRecord(undefined);
+                select(id);
+              }}
             />
             <CasePagination
               page={page}
               more={data.hasMore}
               busy={busy || loading}
               change={(value) => {
+                setLookupRecord(undefined);
                 setLoading(true);
                 setError("");
                 setPage(value);

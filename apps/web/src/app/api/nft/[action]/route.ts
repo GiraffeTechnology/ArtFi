@@ -16,6 +16,7 @@ import {
 } from "@/lib/nft/model";
 import { components, sdkChain } from "@/lib/nft/validation";
 import { nftJournal, nftOperationHistory } from "@/lib/nft/journal";
+import { readNftHistoryPage } from "@/lib/nft/history-view";
 import {
   prepareNftOperation,
   submitNftSignature,
@@ -81,15 +82,15 @@ export async function GET(request: Request, context: Context) {
         auth.accessToken,
         Number(query.get("page") || 1),
       );
-      if (
-        !equalAddress(history.wallet, auth.session.address) ||
-        history.chainId !== auth.session.chainId
-      )
-        throw new NftError(
-          503,
-          "The NFT history belongs to another wallet or chain.",
-        );
-      return output(history);
+      // Admit the complete native summary before serializing it to any client.
+      // The same reader is used by the UI; this creates no recovery authority.
+      return output(
+        readNftHistoryPage(history, {
+          wallet: auth.session.address,
+          chainId: auth.session.chainId,
+          page: Number(query.get("page") || 1),
+        }),
+      );
     }
     if (!["catalog", "detail", "order", "owned"].includes(action))
       return output({ detail: "Unknown NFT route." }, 404);

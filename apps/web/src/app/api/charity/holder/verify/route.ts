@@ -1,3 +1,6 @@
+import { consumeHolderChallenge } from "@/lib/charity-holder-challenge-store";
+import { holderVerificationResponse } from "@/lib/charity-holder-request";
+import { readUserJSON } from "@/lib/user-auth-json";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { isAddress, isHex, type Address, type Hex } from "viem";
@@ -12,20 +15,23 @@ import {
 } from "@/lib/charity-holder-auth";
 import { configuredOrigin } from "@/lib/operator-auth";
 
-export async function POST(request: Request) {
+async function verify(request: Request, signal: AbortSignal) {
   const origin = configuredOrigin(new URL(request.url).origin);
   let owns: boolean;
   let address: Address;
   let tokenId: string;
   try {
-    const body = (await request.json()) as {
+    const body = (await readUserJSON(request, { signal, timeoutMs: 8000 })) as {
       address?: string;
       signature?: string;
     };
+    signal.throwIfAborted();
     const cookieStore = await cookies();
-    const challenge = readHolderChallenge(
-      cookieStore.get(holderChallengeCookie)?.value,
-    );
+    signal.throwIfAborted();
+    const originalChallengeToken = cookieStore.get(
+      holderChallengeCookie,
+    )?.value;
+    const challenge = readHolderChallenge(originalChallengeToken);
     if (
       !challenge ||
       !body.address ||
@@ -47,6 +53,29 @@ export async function POST(request: Request) {
       challenge.message,
       body.signature as Hex,
     );
+    signal.throwIfAborted();
+    // Preserve the original challenge lifetime through the asynchronous ownership read.
+    const currentChallenge = readHolderChallenge(originalChallengeToken);
+    if (!currentChallenge) {
+      return NextResponse.json(
+        { detail: "The holder challenge is invalid or expired." },
+        { status: 401 },
+      );
+    }
+    if (owns) {
+      await consumeHolderChallenge(
+        originalChallengeToken!,
+        currentChallenge,
+        origin,
+      );
+      signal.throwIfAborted();
+      if (!readHolderChallenge(originalChallengeToken)) {
+        return NextResponse.json(
+          { detail: "The holder challenge is invalid or expired." },
+          { status: 401 },
+        );
+      }
+    }
   } catch {
     // An unreachable chain is reported as unavailable. It is never treated as ownership.
     return NextResponse.json(
@@ -85,4 +114,10 @@ export async function POST(request: Request) {
     maxAge: 0,
   });
   return response;
+}
+
+export async function POST(request: Request) {
+  return holderVerificationResponse(request, (signal) =>
+    verify(request, signal),
+  );
 }

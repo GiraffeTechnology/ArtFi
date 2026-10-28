@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -176,9 +175,13 @@ func newRWAService(config rwaConfig, store objectStore) *rwaService {
 		vaultIntents:       make(map[string]*vaultIntent),
 		vaultIntentByKey:   make(map[string]string),
 		marketplaceSources: map[string]struct{}{"opensea": {}},
-		marketHTTPClient:   &http.Client{Timeout: 12 * time.Second},
-		openseaAPIBaseURL:  "https://api.opensea.io",
-		now:                func() time.Time { return time.Now().UTC() },
+		marketHTTPClient: &http.Client{
+			Timeout: 12 * time.Second,
+			// Credentialed venue requests must never follow an unreviewed redirect.
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+		},
+		openseaAPIBaseURL: "https://api.opensea.io",
+		now:               func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -449,18 +452,6 @@ func validMetadataFields(input mintIntentRequest) bool {
 		len(strings.TrimSpace(input.Medium)) >= 2 && len(input.Medium) <= 160 &&
 		len(strings.TrimSpace(input.Location)) >= 2 && len(input.Location) <= 160 &&
 		len(strings.TrimSpace(input.Description)) >= 20 && len(input.Description) <= 2000
-}
-
-func decodeJSON(request *http.Request, value any) error {
-	decoder := json.NewDecoder(io.LimitReader(request.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(value); err != nil {
-		return errors.New("request body must be a valid JSON object with known fields")
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		return errors.New("request body must contain exactly one JSON object")
-	}
-	return nil
 }
 
 func randomID() string {
