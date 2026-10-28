@@ -28,7 +28,9 @@ export function PortfolioPublications() {
       </section>
     );
   }
-  return <ConnectedPublications key={key} address={wallet.address} />;
+  return (
+    <ConnectedPublications key={key} address={wallet.address.toLowerCase()} />
+  );
 }
 
 function ConnectedPublications({ address }: { address: string }) {
@@ -45,9 +47,6 @@ function ConnectedPublications({ address }: { address: string }) {
   useEffect(() => {
     const controller = new AbortController();
     active.current = controller;
-    setData(undefined);
-    setError("");
-    setLoading(true);
     void requestPortfolioPublications(address, filter, controller.signal)
       .then((page) => {
         if (!controller.signal.aborted && active.current === controller)
@@ -130,6 +129,7 @@ function ConnectedPublications({ address }: { address: string }) {
         <label>
           Published sale kind
           <select
+            aria-label="Published sale kind"
             value={filter.kind}
             onChange={(event) =>
               change({
