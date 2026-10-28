@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { translationPageTimeoutMs } from "../src/lib/translation-page-client";
 
 // Real application provider and browser DOM, with a synthetic translation
 // transport. These cases do not attest translation quality or a live provider.
@@ -96,20 +97,26 @@ async function holdTranslation(
           gate.started = true;
           await pending;
         }
-        const response = new Response(JSON.stringify(result), { status: 200 });
-        Object.defineProperty(response, "json", {
-          value: async () => {
-            if (phase === "body") {
+        if (phase === "body") {
+          const stream = new ReadableStream<Uint8Array>({
+            async start(controller) {
               gate.started = true;
               await pending;
-            }
-            gate.completed = true;
-            return result;
-          },
-        });
-        // For the headers case, a disposed provider should never read the body.
-        if (phase === "headers") gate.completed = true;
-        return response;
+              gate.completed = true;
+              try {
+                controller.enqueue(
+                  new TextEncoder().encode(JSON.stringify(result)),
+                );
+                controller.close();
+              } catch {
+                // Timeout or a locale change already cancelled this response.
+              }
+            },
+          });
+          return new Response(stream, { status: 200 });
+        }
+        gate.completed = true;
+        return Response.json(result);
       };
     },
     { source, phase },
@@ -143,7 +150,7 @@ async function releaseTranslation(page: Page) {
         }
       ).__artfiLanguageGate?.completed === true,
   );
-  // Let the resumed fetch/json microtasks and resulting DOM writes complete.
+  // Let the resumed transport/stream microtasks and resulting DOM writes complete.
   await page.evaluate(
     () =>
       new Promise<void>((resolve) => {
@@ -198,6 +205,37 @@ test("a mutation during translation is rescanned without restoring the old statu
 });
 
 for (const phase of ["headers", "body"] as const) {
+  test(`a stalled ${phase} response falls back and permits a later translation`, async ({
+    page,
+  }) => {
+    const source = `Receipt pending Juniper ${phase}`;
+    await setup(page, source);
+    await page.clock.install();
+    await holdTranslation(page, source, phase);
+    await page.locator(selector).selectOption("fr");
+    await waitForHeldTranslation(page);
+    try {
+      await page.clock.fastForward(translationPageTimeoutMs + 1);
+      await expect(page.locator(`${host} p`)).toHaveText(source);
+      await expect(page.locator(`${host} p`)).toHaveAttribute(
+        "aria-label",
+        source,
+      );
+      await expect(page.locator("body")).not.toHaveAttribute(
+        "aria-busy",
+        "true",
+      );
+    } finally {
+      await releaseTranslation(page);
+    }
+    // A late response cannot replace the authoritative English fallback.
+    await expect(page.locator(`${host} p`)).toHaveText(source);
+    await page.locator(selector).selectOption("en");
+    await page.locator(selector).selectOption("fr");
+    await expect(page.locator(`${host} p`)).toHaveText(`[fr] ${source}`);
+    await expect(page.locator("body")).not.toHaveAttribute("aria-busy", "true");
+  });
+
   test(`an obsolete locale cannot write a late ${phase} response`, async ({
     page,
   }) => {

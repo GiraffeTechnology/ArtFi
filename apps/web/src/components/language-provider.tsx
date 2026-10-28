@@ -24,6 +24,7 @@ import {
   StaticSelectLabels,
   staticSelectMutationAttributes,
 } from "@/lib/static-select-labels";
+import { requestPageTranslations } from "@/lib/translation-page-client";
 
 type TranslationStatus = "idle" | "loading" | "ready" | "unavailable";
 type LanguageContextValue = {
@@ -390,16 +391,11 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             (source) => !cachedTranslation(locale, source),
           );
           if (missing.length > 0) {
-            const response = await fetch("/api/language/v1/translate-page", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ target_language: locale, texts: missing }),
-              cache: "no-store",
-              signal: controller.signal,
-            });
-            if (disposed) return;
-            if (!response.ok) throw new Error("TRANSLATION_UNAVAILABLE");
-            const payload = (await response.json()) as {
+            const payload = (await requestPageTranslations(
+              locale,
+              missing,
+              controller.signal,
+            )) as {
               degraded?: unknown;
               translations?: unknown;
             };
