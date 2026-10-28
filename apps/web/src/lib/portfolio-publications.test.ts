@@ -203,13 +203,11 @@ describe("private publication browser transport", () => {
   it("rejects a body over the actual-byte limit", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response("x".repeat(portfolioPublicationByteLimit + 1), {
-            headers: { "content-type": "application/json" },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response("x".repeat(portfolioPublicationByteLimit + 1), {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
     );
     await expect(
       requestPortfolioPublications(
@@ -247,13 +245,11 @@ describe("private publication browser transport", () => {
     const parent = new AbortController();
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(new ReadableStream(), {
-            headers: { "content-type": "application/json" },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response(new ReadableStream(), {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
     );
     const pending = requestPortfolioPublications(
       publicationSeller,

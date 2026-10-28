@@ -101,12 +101,10 @@ for (const width of [1280, 390]) {
       5,
     );
     await expect(
-      panel
-        .getByTestId("portfolio-publication-record")
-        .getByRole("heading", {
-          name: "Fractional sale authorization",
-          exact: true,
-        }),
+      panel.getByTestId("portfolio-publication-record").getByRole("heading", {
+        name: "Fractional sale authorization",
+        exact: true,
+      }),
     ).toHaveCount(5);
     await panel
       .getByLabel("Published asset or collection address", { exact: true })
@@ -230,12 +228,10 @@ test("an older whole-sale response cannot replace a newer fractional filter resu
     1,
   );
   await expect(
-    panel
-      .getByTestId("portfolio-publication-record")
-      .getByRole("heading", {
-        name: "Fractional sale authorization",
-        exact: true,
-      }),
+    panel.getByTestId("portfolio-publication-record").getByRole("heading", {
+      name: "Fractional sale authorization",
+      exact: true,
+    }),
   ).toBeVisible();
   await page.evaluate(() =>
     (
@@ -247,12 +243,10 @@ test("an older whole-sale response cannot replace a newer fractional filter resu
     1,
   );
   await expect(
-    panel
-      .getByTestId("portfolio-publication-record")
-      .getByRole("heading", {
-        name: "Fractional sale authorization",
-        exact: true,
-      }),
+    panel.getByTestId("portfolio-publication-record").getByRole("heading", {
+      name: "Fractional sale authorization",
+      exact: true,
+    }),
   ).toBeVisible();
   expect(wallet.state.publicationPosts).toBe(2);
   expect(wallet.state.saleSigns).toBe(0);
