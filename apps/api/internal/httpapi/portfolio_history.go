@@ -139,7 +139,7 @@ func portfolioHistoryPredicate(address string, filter portfolioHistoryFilter) (s
 	return where, args
 }
 
-func readPortfolioHistory(ctx context.Context, db *sql.DB, address string, filter portfolioHistoryFilter) (portfolioHistoryPage, error) {
+func readPortfolioHistory(ctx context.Context, db persistenceDB, address string, filter portfolioHistoryFilter) (portfolioHistoryPage, error) {
 	page := portfolioHistoryPage{Address: address, ChainID: hoodiChainID, Scope: "indexed_chain_events", Filters: filter, PageSize: portfolioHistoryPageSize, Data: []portfolioEntry{}}
 	if db == nil {
 		return page, errors.New("indexed history persistence unavailable")

@@ -12,9 +12,9 @@ import {
 const test = base.extend<{
   wallet: Awaited<ReturnType<typeof installSessionWallet>>;
 }>({
-  wallet: async ({ page }, use) => {
+  wallet: async ({ page }, provide) => {
     const wallet = await installSessionWallet(page);
-    await use(wallet);
+    await provide(wallet);
     assertReadOnlyWallet(wallet.state);
   },
 });
