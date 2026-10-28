@@ -1388,6 +1388,67 @@ paths:
                     minimum: 0
                   page: { type: integer, minimum: 1 }
                   pageSize: { type: integer, minimum: 1, maximum: 100 }
+  /v1/portfolio/{address}/history:
+    get:
+      operationId: getPortfolioHistory
+      summary: Page authenticated wallet-participant indexed history beyond the recent snapshot
+      description: >-
+        Requires the original wallet session for this address and Hoodi. The fixed
+        ten-record page and count share one read-only repeatable-read SQL snapshot.
+        Separate pages are fresh snapshots; indexing and reorganizations can change
+        their contents and totals. These are directly participant-attributed indexed
+        chain events, not a complete blockchain scan, live balance or property rights.
+        Only the listed filters are accepted; duplicate, empty, unknown and identity
+        override parameters are rejected. All responses are no-store. The original
+        session check and database read share a five-second context deadline.
+      security:
+        - WalletUserSession: []
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        - name: status
+          in: query
+          schema:
+            {
+              type: string,
+              enum: [all, pending, confirmed, removed],
+              default: all,
+            }
+        - name: eventName
+          in: query
+          description: Exact case-sensitive indexed event name.
+          schema: { type: string, pattern: "^[A-Za-z][A-Za-z0-9_]{1,79}$" }
+        - name: contractAddress
+          in: query
+          schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        - name: order
+          in: query
+          description: Block, log index, then transaction hash in the selected direction.
+          schema: { type: string, enum: [newest, oldest], default: newest }
+        - name: page
+          in: query
+          description: Canonical positive decimal page; the fixed size is ten.
+          schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 }
+      responses:
+        "200":
+          description: One authenticated indexed history snapshot
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioHistoryPage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
   /v1/portfolio/{address}:
     get:
       operationId: getPortfolio
@@ -4435,6 +4496,40 @@ components:
               reasons:
                 type: array
                 items: { type: string }
+    PortfolioHistoryFilters:
+      type: object
+      additionalProperties: false
+      required: [status, eventName, contractAddress, order, page]
+      properties:
+        status: { type: string, enum: [all, pending, confirmed, removed] }
+        eventName:
+          type: string
+          pattern: "^([A-Za-z][A-Za-z0-9_]{1,79})?$"
+        contractAddress:
+          type: string
+          pattern: "^(0x[0-9a-f]{40})?$"
+        order: { type: string, enum: [newest, oldest] }
+        page: { type: integer, minimum: 1, maximum: 1000000 }
+    PortfolioHistoryPage:
+      type: object
+      additionalProperties: false
+      required: [address, chainId, scope, filters, pageSize, total, data]
+      properties:
+        address: { type: string, pattern: "^0x[0-9a-f]{40}$" }
+        chainId: { type: integer, const: 560048 }
+        scope: { type: string, const: indexed_chain_events }
+        filters:
+          $ref: "#/components/schemas/PortfolioHistoryFilters"
+        pageSize: { type: integer, const: 10 }
+        total:
+          type: integer
+          minimum: 0
+          description: Matching participant events in this page's database snapshot, including removed events when selected.
+        data:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/PortfolioEvent"
     Portfolio:
       type: object
       required:
