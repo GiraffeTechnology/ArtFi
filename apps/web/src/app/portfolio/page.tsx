@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { PortfolioRecords } from "@/components/portfolio-records";
+import { PortfolioPublications } from "@/components/portfolio-publications";
 import { PortfolioWallet } from "@/components/portfolio-wallet";
 import { WalletDaoLink } from "@/components/wallet-dao-link";
 import { XionganWalletLink } from "@/components/xiongan-wallet-link";
@@ -38,6 +39,7 @@ export default function PortfolioPage() {
       <PortfolioWallet />
       <WalletDaoLink />
       <PortfolioRecords />
+      <PortfolioPublications />
     </main>
   );
 }
