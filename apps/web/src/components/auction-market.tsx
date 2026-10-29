@@ -38,6 +38,12 @@ import {
   type AuctionSnapshot,
 } from "@/lib/auction";
 
+import {
+  auctionCreationPreflight,
+  createReviewedAuctionAtWallet,
+  type AuctionCreationReview,
+} from "@/lib/auction-creation-preflight";
+
 type Metadata = { symbol: string; decimals: number | null };
 function configuredMarket() {
   const value = publicSetting("NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS");
@@ -455,65 +461,75 @@ function AuctionWorkbench() {
       throw new Error("Review and accept the auction escrow terms first.");
     const reviewed = creation,
       action = transactions.begin(reviewed.requestId);
-    await assertRwaTradingEvidence({
-      section: "fractional",
-      chainId: 560048,
-      marketAddress: market,
-      fractionTokenAddress: reviewed.asset,
-      slug: reviewed.source.slug,
-      identity: rwaAssetIdentity(reviewed.source),
-    });
-    action.assertCurrent();
+    const terms: AuctionCreationReview = {
+      market,
+      seller: address,
+      asset: reviewed.asset,
+      payment: reviewed.payment,
+      requestId: reviewed.requestId,
+      amount: reviewed.amount,
+      opening: reviewed.opening,
+      reserve: reviewed.reserve,
+      increment: reviewed.increment,
+      starts: reviewed.starts,
+      ends: reviewed.ends,
+      extension: reviewed.extension,
+      sourceSlug: reviewed.source.slug,
+      sourceIdentity: rwaAssetIdentity(reviewed.source),
+    };
     const allowance = await client.readContract({
-      address: reviewed.asset,
+      address: terms.asset,
       abi: auctionTokenAbi,
       functionName: "allowance",
-      args: [address, market],
+      args: [terms.seller, terms.market],
     });
     action.assertCurrent();
-    if (allowance < reviewed.amount)
-      await action.write("approval", () =>
-        writeContractAsync({
-          address: reviewed.asset,
+    if (allowance < terms.amount)
+      await action.write("approval", async () => {
+        // The original hook has completed its session gate before this callback.
+        await auctionCreationPreflight(
+          client,
+          terms,
+          "approval",
+          action.assertCurrent,
+        );
+        action.assertCurrent();
+        return writeContractAsync({
+          address: terms.asset,
           abi: auctionTokenAbi,
           functionName: "approve",
-          args: [market, reviewed.amount],
+          args: [terms.market, terms.amount],
           chainId: 560048,
-          account: address,
-        }),
-      );
-    action.assertCurrent();
-    await assertRwaTradingEvidence({
-      section: "fractional",
-      chainId: 560048,
-      marketAddress: market,
-      fractionTokenAddress: reviewed.asset,
-      slug: reviewed.source.slug,
-      identity: rwaAssetIdentity(reviewed.source),
-    });
-    action.assertCurrent();
-    const request = await client.simulateContract({
-      address: market,
-      abi: auctionAbi,
-      functionName: "createAuctionListing",
-      args: [
-        reviewed.requestId,
-        reviewed.asset,
-        reviewed.payment,
-        reviewed.amount,
-        reviewed.opening,
-        reviewed.starts,
-        reviewed.ends,
-        reviewed.reserve,
-        reviewed.increment,
-        reviewed.extension,
-        reviewed.extension,
-      ],
-      account: address,
-    });
+          account: terms.seller,
+        });
+      });
     action.assertCurrent();
     const receipt = await action.write("fill", () =>
-      writeContractAsync({ ...request.request, chainId: 560048 }),
+      createReviewedAuctionAtWallet(client, terms, {
+        assertCurrent: action.assertCurrent,
+        simulate: (fresh) =>
+          client.simulateContract({
+            address: fresh.market,
+            abi: auctionAbi,
+            functionName: "createAuctionListing",
+            args: [
+              fresh.requestId,
+              fresh.asset,
+              fresh.payment,
+              fresh.amount,
+              fresh.opening,
+              fresh.starts,
+              fresh.ends,
+              fresh.reserve,
+              fresh.increment,
+              fresh.extension,
+              fresh.extension,
+            ],
+            account: fresh.seller,
+          }),
+        submit: (prepared) =>
+          writeContractAsync({ ...prepared.request, chainId: 560048 }),
+      }),
     );
     let created: string | undefined;
     for (const log of receipt.logs) {
