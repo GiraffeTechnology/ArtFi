@@ -1,5 +1,6 @@
 "use client";
 import { DaoSnapshotWeight } from "./dao-snapshot-weight";
+import { renderedDaoDeployment } from "@/lib/dao-rendered-configuration";
 
 import styles from "./dao-governance.module.css";
 
@@ -17,7 +18,6 @@ import {
   type Hex,
   encodeFunctionData,
   formatUnits,
-  isAddress,
   keccak256,
   stringToHex,
 } from "viem";
@@ -139,18 +139,11 @@ function DaoGovernanceSession({
   deployment: DaoDeployment;
   context: string;
 }) {
-  const configured =
-    isAddress(deployment.governorAddress ?? "") &&
-    isAddress(deployment.tokenAddress ?? "") &&
-    isAddress(deployment.actionRegistryAddress ?? "") &&
-    isAddress(deployment.vaultAddress ?? "");
-  const governor = (configured ? deployment.governorAddress : undefined) as
-    Address | undefined;
-  const token = (configured ? deployment.tokenAddress : undefined) as
-    Address | undefined;
-  const actionRegistry = (
-    configured ? deployment.actionRegistryAddress : undefined
-  ) as Address | undefined;
+  const configuredDeployment = renderedDaoDeployment(deployment);
+  const configured = configuredDeployment !== undefined;
+  const governor = configuredDeployment?.governorAddress;
+  const token = configuredDeployment?.tokenAddress;
+  const actionRegistry = configuredDeployment?.actionRegistryAddress;
 
   const { address, isConnected, status } = useAccount();
   const auth = useUserSession();
@@ -810,8 +803,8 @@ function DaoGovernanceSession({
         <div className="dao-alert dao-alert--blocked">
           <strong>DAO deployment not configured</strong>
           <p>
-            Governor, Vault, voting token and action-registry addresses are all
-            required. Writes fail closed.
+            Governor, Vault, voting token and action-registry addresses must all
+            be valid and nonzero. Writes fail closed.
           </p>
         </div>
       ) : null}
