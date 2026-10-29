@@ -244,7 +244,8 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
       // Derive direction from the trusted compiled operation, never an observation flag.
       const selling =
         leg.dispatch.kind === "SIGNED_ORDER_PUBLICATION" ||
-        (leg.marketKind === "AUCTION" && leg.action === "CREATE_ORDER") ||
+        (leg.marketKind === "AUCTION" &&
+          ["CREATE_ORDER", "AMEND_ORDER"].includes(leg.action)) ||
         (leg.marketKind === "NFT" &&
           ["list", "accept"].includes(leg.nativeAction));
       const adverse = selling
@@ -298,7 +299,8 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
       fail("PRIOR_ACTION_UNCONFIRMED");
     if (
       leg.expected.startsAt &&
-      (seconds < uint(leg.expected.startsAt) ||
+      ((!(leg.marketKind === "AUCTION" && leg.opensOrder) &&
+        seconds < uint(leg.expected.startsAt)) ||
         seconds >= uint(leg.expected.endsAt))
     )
       fail("ORDER_NOT_CURRENT");
@@ -336,6 +338,27 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
         o.auction.hasBid !== false
       )
         fail("AUCTION_CANCEL_REFUSED");
+    }
+    if (leg.marketKind === "AUCTION" && leg.name === "REPLACE") {
+      const cancelled = priorLegs.find(
+        (prior) =>
+          prior.name === "CANCEL" &&
+          prior.state === "COMPLETED" &&
+          prior.proof?.verified === true &&
+          prior.proof.eventName === "ListingCancelled" &&
+          prior.proof.orderKey === leg.replacesOrderKey &&
+          prior.proof.eventArgs?.listingId === leg.replacesOrderKey,
+      );
+      if (
+        !cancelled ||
+        o.auction?.state !== "CANCELLED" ||
+        o.auction.listingId !== leg.replacesOrderKey ||
+        !same(o.auction.asset, leg.asset.contract) ||
+        !same(o.auction.paymentToken, leg.paymentToken) ||
+        !same(o.auction.seller, p.wallet) ||
+        o.auction.hasBid !== false
+      )
+        fail("AUCTION_REPLACEMENT_UNCONFIRMED");
     }
     if (leg.marketKind === "AUCTION" && leg.name === "SETTLE") {
       if (

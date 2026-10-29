@@ -512,3 +512,128 @@ test("stored TEST_ONLY authority cannot be silently promoted into a configured b
     /ACTION_PROFILE_MISMATCH/,
   );
 });
+
+test("auction amendment survives real MySQL store restart and never recreates before canonical cancellation", async () => {
+  const f = await actionFixture({
+    kind: "AUCTION",
+    action: "CREATE_ORDER",
+    intentPatch: { maxExecutions: "3", maxOpenOrders: "1" },
+  });
+  const now = Math.floor(Date.now() / 1000);
+  const originalTerms = {
+    requestId: ethers.id(`OFFLINE_ORIGINAL_AUCTION_${f.user.address}`),
+    amount: "2",
+    openingBid: "20",
+    startsAt: String(now - 1),
+    endsAt: String(now + 300),
+    reservePrice: "25",
+    minimumBidIncrement: "1",
+    extensionWindow: "10",
+    extensionDuration: "10",
+  };
+  const original = f.compile(originalTerms);
+  await store.prepare(f.verified, original);
+  const created = runtime(f);
+  await assertCompleted(created.tick, original.operationId);
+  assert.equal(
+    (await store.getBudgets(original.operationId)).wallet.openOrders,
+    "1",
+  );
+
+  const plan = f.compile(
+    {
+      listingId: "77",
+      replacement: {
+        ...originalTerms,
+        requestId: ethers.id(`OFFLINE_REPLACEMENT_AUCTION_${f.user.address}`),
+        openingBid: "22",
+      },
+    },
+    { action: "AMEND_ORDER" },
+  );
+  await store.prepare(f.verified, plan);
+  const evidence = new Map();
+  let sends = 0,
+    cancelled = false;
+  function restartedTick() {
+    // A new store/kernel instance reads the same real SQL state. External chain
+    // observations remain explicit synthetic fixtures, not live RPC evidence.
+    const restartedStore = createActionStore(options);
+    return createActionKernel({
+      store: restartedStore,
+      adapterTimeoutMs: 150,
+      authorize: f.authorize,
+      observe: async (leg) => {
+        const observed = f.observe(leg);
+        observed.auction = {
+          ...observed.auction,
+          state: cancelled ? "CANCELLED" : "ACTIVE",
+          listingId: "77",
+          seller: f.user.address,
+          hasBid: false,
+        };
+        observed.originalOrderRetired = cancelled;
+        return observed;
+      },
+      execute: async (leg, context) => {
+        sends++;
+        if (leg.name === "REPLACE") assert.equal(cancelled, true);
+        const proof = syntheticEvidence(
+          leg,
+          context.operationId,
+          context.legIndex,
+        );
+        if (leg.name === "CANCEL") cancelled = true;
+        else proof.events[0].args.listingId = "78";
+        evidence.set(context.legIndex, proof);
+        throw Error("TEST_AUCTION_RESPONSE_LOST");
+      },
+      readEvidence: async (_leg, row) => evidence.get(row.cursor) ?? null,
+    });
+  }
+  assert.equal(
+    (await restartedTick()(plan.operationId)).state,
+    "SAFE_DEGRADED",
+  );
+  assert.equal(sends, 1);
+  const cancellation = evidence.get(0);
+  evidence.delete(0);
+  assert.equal(
+    (await restartedTick()(plan.operationId)).state,
+    "SAFE_DEGRADED",
+  );
+  assert.equal(sends, 1);
+  assert.equal((await store.get(plan.operationId)).cursor, 0);
+  assert.equal(
+    (await store.getBudgets(plan.operationId)).wallet.openOrders,
+    "1",
+  );
+
+  evidence.set(0, cancellation);
+  assert.equal((await restartedTick()(plan.operationId)).state, "PLANNED");
+  assert.equal(sends, 1);
+  assert.equal((await store.get(plan.operationId)).cursor, 1);
+  assert.equal(
+    (await store.getBudgets(plan.operationId)).wallet.openOrders,
+    "0",
+  );
+  assert.equal(
+    (await restartedTick()(plan.operationId)).state,
+    "SAFE_DEGRADED",
+  );
+  assert.equal(sends, 2);
+  assert.equal((await restartedTick()(plan.operationId)).state, "COMPLETED");
+  assert.equal(sends, 2);
+  const budget = await store.getBudgets(plan.operationId);
+  assert.equal(budget.authority.executions, "3");
+  assert.equal(budget.wallet.openOrders, "1");
+  const events = await store.history(plan.operationId);
+  assert.ok(
+    events.findIndex(
+      (event) => event.leg === "CANCEL" && event.state === "COMPLETED",
+    ) <
+      events.findIndex(
+        (event) => event.leg === "REPLACE" && event.state === "STARTED",
+      ),
+  );
+});
