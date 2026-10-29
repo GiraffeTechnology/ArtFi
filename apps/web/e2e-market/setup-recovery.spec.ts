@@ -1,5 +1,5 @@
 import { sourceMintFixture } from "../src/test/rwa-source-fixture";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { decodeFunctionData, type Address, type Hex } from "viem";
 import {
   erc721VaultApprovalAbi,
@@ -21,6 +21,17 @@ import {
 type Boundary =
   "upload" | "mint-intent" | "vault-intent" | "wallet" | "submission";
 type WalletResult = "accept" | "reject" | "unknown";
+
+const safeSetupFailure =
+  "Setup could not be completed. Check the saved setup and any existing transaction before retrying.";
+
+async function expectSafeSetupFailure(
+  target: Locator,
+  hiddenDiagnostic: string,
+) {
+  await expect(target).toContainText(safeSetupFailure);
+  await expect(target).not.toContainText(hiddenDiagnostic);
+}
 
 async function setupFixture(page: Page, shortEvidence = false) {
   const chain = createSetupChainFixture();
@@ -898,7 +909,8 @@ test("a reverted exact-token approval leaves deposit unavailable and permits del
   await openVault(page);
   await vaultButton(page).click();
   await approveButton(page).click();
-  await expect(page.locator(".dao-create").getByRole("alert")).toContainText(
+  await expectSafeSetupFailure(
+    page.locator(".dao-create").getByRole("alert"),
     "reverted on chain",
   );
   await expect(approveButton(page)).toBeEnabled();
@@ -927,7 +939,8 @@ for (const field of [
         : addresses.otherWallet;
     await openVault(page);
     await vaultButton(page).click();
-    await expect(page.locator(".dao-create").getByRole("alert")).toContainText(
+    await expectSafeSetupFailure(
+      page.locator(".dao-create").getByRole("alert"),
       "does not match every reviewed",
     );
     expect(state.walletRequests).toHaveLength(0);
@@ -956,7 +969,8 @@ test("owned NFT selection uses current ownership rather than historical mint rec
     page.getByLabel("Currently owned NFT", { exact: true }),
   ).toHaveCount(0);
   await vaultButton(page).click();
-  await expect(page.locator(".dao-create").getByRole("alert")).toContainText(
+  await expectSafeSetupFailure(
+    page.locator(".dao-create").getByRole("alert"),
     "must own this NFT",
   );
   expect(state.walletRequests).toHaveLength(0);
@@ -989,9 +1003,10 @@ for (const authorized of [true, false]) {
       .getByRole("button", { name: "Review and continue Vault", exact: true })
       .click();
     if (!authorized) {
-      await expect(
+      await expectSafeSetupFailure(
         page.locator(".dao-create").getByRole("alert"),
-      ).toContainText("FRACTIONALIZER_ROLE");
+        "FRACTIONALIZER_ROLE",
+      );
       await expect(issueButton(page)).toHaveCount(0);
       expect(state.walletRequests).toHaveLength(3);
       return;
@@ -1220,7 +1235,8 @@ test("expired prepared mint imports renewed evidence while preserving its origin
     path: test.info().outputPath("expired-retry-before-click.png"),
   });
   await retry.click();
-  await expect(page.locator(".transaction-panel")).toContainText(
+  await expectSafeSetupFailure(
+    page.locator(".transaction-panel"),
     "Current approved-source evidence for this exact mint is required",
   );
   expect(state.walletRequests).toHaveLength(1);
@@ -1275,7 +1291,8 @@ test("definitively reverted mint retains its failed hash and retries the origina
     exact: true,
   });
   await expect(retry).toBeEnabled();
-  await expect(page.locator(".transaction-panel")).toContainText(
+  await expectSafeSetupFailure(
+    page.locator(".transaction-panel"),
     "reverted on chain",
   );
   expect(state.chain.state.transactions).toHaveLength(1);
