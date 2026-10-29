@@ -142,6 +142,48 @@ function fixture() {
 }
 
 describe("canonical Oracle receipt source read", () => {
+  it("preserves reader metadata while checking canonical state independently", async () => {
+    const f = fixture();
+    const evidence = {
+      kind: "canonical-contract-state" as const,
+      head: { number: "11", hash: h("a") },
+      minimumConfirmations: 2,
+    };
+    const result = await f.verifier.verify(f.expected, {
+      ...f.snapshot,
+      evidence,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.verification.snapshot.evidence).toEqual(evidence);
+      expect(Object.isFrozen(result.verification.snapshot.evidence?.head)).toBe(
+        true,
+      );
+      expect(result.verification.authorization).toBe("NOT_ESTABLISHED");
+      expect(result.verification.originalDocumentVerification).toBe(
+        "NOT_ESTABLISHED",
+      );
+      expect(result.verification.projectionFinalAsOf).toBe(false);
+      expect(result.verification.chainFinality).toBe("FINALIZED");
+    }
+  });
+  it("refuses self-inconsistent reader metadata before any provider call", async () => {
+    const f = fixture();
+    const result = await f.verifier.verify(f.expected, {
+      ...f.snapshot,
+      evidence: {
+        kind: "canonical-contract-state",
+        head: { ...f.snapshot.block },
+        minimumConfirmations: 2,
+      },
+    });
+    expect(result).toEqual({
+      ok: false,
+      code: "RECEIPT_CHAIN_SNAPSHOT_REFUSED",
+    });
+    expect(f.state.calls).toHaveLength(0);
+  });
+
   it("rechecks the complete source record at one exact canonical block without authorizing execution", async () => {
     const f = fixture();
     const result = await f.verifier.verify(f.expected, f.snapshot);

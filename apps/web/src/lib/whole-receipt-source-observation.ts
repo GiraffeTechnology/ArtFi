@@ -1,6 +1,6 @@
 import "server-only";
 import {
-  observeWholeReceiptSource,
+  observeWholeReceiptReadResponse,
   snapshotWholeReceiptExpectation,
   refuseReceipt,
   WholeReceiptSourceError,
@@ -138,7 +138,10 @@ export async function readWholeReceiptSourceVersion(
     );
     const raw = await boundedJson(url, signal);
     if (signal?.aborted) return refuseReceipt("RECEIPT_CANCELLED");
-    return { ok: true, observation: observeWholeReceiptSource(expected, raw) };
+    return {
+      ok: true,
+      observation: observeWholeReceiptReadResponse(expected, raw),
+    };
   } catch (error) {
     return {
       ok: false,

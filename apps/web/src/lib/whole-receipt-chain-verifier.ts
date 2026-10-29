@@ -266,6 +266,9 @@ export function createWholeReceiptChainVerifier(options: {
               Object.entries(binding).map(([key, value]) => [key, word(value)]),
             ),
             receiptAvailable: true,
+            ...(observation.snapshot.evidence
+              ? { evidence: observation.snapshot.evidence }
+              : {}),
           });
           // A source HTTP snapshot must agree with this exact on-chain interval,
           // including later closure of the requested historical entry.
