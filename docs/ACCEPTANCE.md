@@ -94,7 +94,11 @@ Every Class B and Class C requirement `VERIFIED` on Hoodi (560048), on one integ
    projection reconciled against chain state.
 8. Auth negative tests: unauthenticated trade rejected, role escalation rejected, browser-supplied
    headers alone cannot grant admin access.
-9. A01–A38 compliant previews available with hash mapping; no preview URL exposes a master.
+9. Preview/hash mappings are available only where the asset model permits a preview, using
+   the separate isolated test payload for Hoodi evidence. Charity public metadata and pages
+   have no artwork preview (CH.7). Watermarked holder files require wallet ownership
+   verification and have no browser preview (CH.5/CH.11). No preview or holder path exposes
+   an unwatermarked master; the frozen historical charity batch is not regenerated.
 10. Failure paths exercised: RPC unavailable, insufficient gas, rejected signature, translation
     failure, external-marketplace unavailability.
 11. Transaction hashes, receipts, blocks, events and balances recorded for every runtime item.
@@ -247,19 +251,23 @@ of §6 remain the terminus for the complete market only — **a stage does not r
    data while presented as functional.
 6. Fail the audit if a Class A surface regressed without approval.
 7. Fail the audit if local, mock or historical evidence is described as current runtime delivery.
-8. Fail the audit if any A01–A38 compliant preview is missing, or if the public UI exposes an
-   unwatermarked master, a master download path, a private key, a server credential, a raw signed
-   transaction, a prohibited IP or internal topology.
+8. Fail the audit if a required, model-permitted preview or its hash mapping is missing,
+   if charity public metadata/pages expose an artwork preview, or if a charity holder file
+   has a browser preview. Fail for any exposed unwatermarked master, master download path,
+   private key, server credential, raw signed transaction, prohibited IP or internal topology.
+   Apply the distinct asset and isolated-payload rules in `PRD.md` §7; do not demand a public
+   preview from a charity edition whose applicable rule prohibits one.
 
-   > **The former "external-marketplace redirect" item is removed, not suspended.** Mirroring _is_
-   > attributed data plus an HTTPS link out to the venue (`PRD.md` §4.8 XM.4, carrying the original
-   > `MARKET-004`), and the ruling of 2026-09-19 requires ArtFi to mirror until a product line opens
-   > on ArtFi. An item that forbids the thing a requirement mandates cannot be an audit condition:
-   > this file is priority 4 in `AGENTS.md` §1 and may record a higher source, never contradict one.
+   > For digital NFTs, `PRD.md` §4.8 XM.1/XM.4 requires discovery, item/order review,
+   > listing, buying, offers, offer acceptance, eligible cancellation and result tracking
+   > inside ArtFi through the supported venue interfaces. A redirect, iframe or passive
+   > feed cannot satisfy those operational requirements. An optional OpenSea website link
+   > is footer-only and does not substitute for a native action or establish its result.
    >
-   > The removal is bounded to that one item. **Every other listed exposure still fails an audit**,
-   > and a link is only ever the one the source attributed — `market-links.ts` refuses a non-HTTPS
-   > scheme, embedded credentials and any host but the venue's, and ArtFi never constructs one.
+   > The attributed ingestion adapter remains passive. That boundary does not remove the
+   > native NFT workflow or ArtFi's applicable whole-artwork/fractional settlement paths.
+   > Preserve validated source attribution and all confidential-data exposure checks above;
+   > neither a source link nor a successful fixture proves real venue or chain acceptance.
 
 9. Fail the audit if A02 enters the formal 37-work set or any mainnet manifest.
 10. Fail the audit if tested, deployed and documented commits differ.

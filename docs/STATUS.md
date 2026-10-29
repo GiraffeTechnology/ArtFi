@@ -1,5 +1,24 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-29 acceptance alignment with the complete PRD
+
+The operative audit checks now preserve the current asset-specific preview boundaries:
+model-permitted previews have their hash mappings, charity public metadata/pages have no
+artwork preview, and wallet-verified watermarked holder delivery has no browser preview.
+The isolated Hoodi payload does not regenerate the frozen historical charity batch.
+
+Digital NFT acceptance requires the native ArtFi workflow through supported venue interfaces.
+A redirect, iframe or passive feed does not replace discovery, review, listing, purchases,
+offers, eligible cancellation and result tracking. An optional OpenSea website link is
+footer-only. The passive ingestion adapter and ArtFi's applicable whole/fractional trading
+remain separate, continuing requirements.
+
+This corrects contradictory audit prose; it does not implement or verify a previously
+missing screen, holder entitlement, venue operation or chain transaction. No requirement
+status or count is promoted. G1–G4, the six status values and the full M1–M6/CH/XM/NFR/Stage 2
+scope remain unchanged. Current source CI, independent review and real runtime evidence
+remain separate from this documentation increment.
+
 ## 2026-10-17 full-product integration candidate
 
 This downstream source candidate combines the exact stage heads listed in `INTEGRATION_CANDIDATE.md`. Aggregate application tests, MySQL integration, browser validation, builds and deployment are NOT_RUN for this candidate. Historical results below apply only to their recorded sources and environments. The operation-history UI includes its required paginated backend contract; the earlier MySQL timeout and degraded-state failure remains unresolved until independently validated on this source.
