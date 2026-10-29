@@ -1,3 +1,4 @@
+import { nativeNftTaskPrincipalMatches } from "./native-nft-principal.mjs";
 import { kernelRequestDigest } from "./agent-kernel.mjs";
 const hash = (x) => typeof x === "string" && /^0x[0-9a-fA-F]{64}$/.test(x);
 const same = (a, b) =>
@@ -27,6 +28,11 @@ export function verifyActionEvidence(leg, input) {
   )
     return unknown("ACTION_EVIDENCE_BINDING_INVALID");
   if (
+    leg.marketKind === "NFT" &&
+    !nativeNftTaskPrincipalMatches(leg, evidence.nativeTaskPrincipal)
+  )
+    return unknown("NATIVE_NFT_TASK_PRINCIPAL_MISMATCH");
+  if (
     ["SIGNED_ORDER_PUBLICATION", "NATIVE_NFT_SIGNATURE"].includes(
       leg.dispatch.kind,
     )
@@ -43,6 +49,9 @@ export function verifyActionEvidence(leg, input) {
       state: "CONFIRMED",
       verified: true,
       kind: "ORDER_PUBLICATION",
+      ...(leg.nativeTaskPrincipal
+        ? { nativeTaskPrincipal: structuredClone(leg.nativeTaskPrincipal) }
+        : {}),
       sourceId: evidence.sourceId,
       orderKey: leg.orderKey,
       evidenceDigest: kernelRequestDigest(evidence),
