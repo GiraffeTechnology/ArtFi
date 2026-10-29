@@ -1,10 +1,18 @@
 package httpapi
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -176,5 +184,223 @@ func TestPortfolioNotificationsPreserveIdentityAcrossStatusChanges(t *testing.T)
 	removed := portfolioEventNotification(entry)
 	if pending.ID != confirmed.ID || pending.ID != removed.ID || !strings.Contains(pending.Message, "pending") || !strings.Contains(removed.Message, "no longer applies") {
 		t.Fatal("notification reorg identity/status incorrect")
+	}
+}
+
+func TestPortfolioPerformanceEvidenceByteBoundaries(t *testing.T) {
+	payload := []byte(`{"padding":"` + strings.Repeat("x", portfolioPayloadByteLimit-len(`{"padding":""}`)) + `"}`)
+	order := []byte(`{"kind":"` + strings.Repeat("y", portfolioOrderByteLimit-len(`{"kind":""}`)) + `"}`)
+	used := portfolioEvidenceByteLimit - len(payload) - len(order)
+	var event portfolioEvidence
+	if err := decodePortfolioPerformanceRow(&event, payload, order, &used); err != nil || used != portfolioEvidenceByteLimit {
+		t.Fatal("exact event, order and aggregate limits must be accepted", err, used)
+	}
+	original := event
+	if err := decodePortfolioPerformanceRow(&event, []byte(`{}`), []byte("null"), &used); err == nil || used != portfolioEvidenceByteLimit || !reflect.DeepEqual(event, original) {
+		t.Fatal("aggregate overflow mutated accepted evidence", err, used)
+	}
+	for _, row := range []struct {
+		name           string
+		payload, order []byte
+	}{
+		{"event cap plus one", append(append([]byte{}, payload...), ' '), []byte("null")},
+		{"order cap plus one", []byte(`{}`), append(append([]byte{}, order...), ' ')},
+		{"null payload", []byte("null"), []byte("null")},
+		{"array payload", []byte("[]"), []byte("null")},
+		{"malformed payload", []byte("{"), []byte("null")},
+		{"malformed order", []byte(`{}`), []byte("{")},
+		{"array order", []byte(`{}`), []byte("[]")},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			used := 0
+			event := original
+			if err := decodePortfolioPerformanceRow(&event, row.payload, row.order, &used); err == nil || used != 0 || !reflect.DeepEqual(event, original) {
+				t.Fatal("rejected row changed evidence or consumed the budget", err, used)
+			}
+		})
+	}
+}
+func TestPortfolioPerformanceEvidenceCountsUTF8Bytes(t *testing.T) {
+	payload := []byte(`{"padding":"` + strings.Repeat("界", 21841) + `"}`)
+	if len(payload) != portfolioPayloadByteLimit+1 {
+		t.Fatal("invalid UTF-8 boundary fixture", len(payload))
+	}
+	used := 0
+	var event portfolioEvidence
+	if err := decodePortfolioPerformanceRow(&event, payload, []byte("null"), &used); err == nil || used != 0 {
+		t.Fatal("character count bypassed the byte limit", err, used)
+	}
+	payload = []byte(`{"padding":"` + strings.Repeat("界", 21840) + `"}`)
+	if err := decodePortfolioPerformanceRow(&event, payload, []byte("null"), &used); err != nil || used != len(payload)+4 {
+		t.Fatal("valid multibyte evidence was rejected", err, used)
+	}
+}
+
+// This SQL driver is a row-boundary fixture, not a MySQL or chain acceptance test.
+type performanceBoundsDriver struct {
+	rows    *performanceBoundsRows
+	queries *[]string
+}
+type performanceBoundsConn struct{ state performanceBoundsDriver }
+
+func (d performanceBoundsDriver) Open(string) (driver.Conn, error) {
+	return &performanceBoundsConn{state: d}, nil
+}
+func (c *performanceBoundsConn) Prepare(string) (driver.Stmt, error) { return nil, driver.ErrSkip }
+func (c *performanceBoundsConn) Close() error                        { return nil }
+func (c *performanceBoundsConn) Begin() (driver.Tx, error) {
+	return &snapshotDeadlineTx{state: &snapshotDeadlineDBState{}}, nil
+}
+func (c *performanceBoundsConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
+	return c.Begin()
+}
+func (c *performanceBoundsConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	*c.state.queries = append(*c.state.queries, query)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if strings.Contains(query, "LEFT(CAST(e.payload AS BINARY), 65537)") {
+		if !strings.Contains(query, "LEFT(CAST(COALESCE(o.envelope_json, 'null') AS BINARY), 32769)") ||
+			!strings.Contains(query, "ORDER BY e.block_number, e.log_index, e.transaction_hash LIMIT ?") ||
+			len(args) < 2 || args[0].Value != int64(hoodiChainID) || args[len(args)-1].Value != int64(portfolioEvidenceLimit+1) {
+			return nil, errors.New("SQL bounds, scope or ordering changed")
+		}
+		return c.state.rows, nil
+	}
+	if strings.Contains(query, "FROM portfolio_deltas") {
+		return &performanceBoundsRows{columns: []string{"asset_token", "symbol", "direction", "amount", "observed_at"}}, nil
+	}
+	if strings.Contains(query, "FROM chain_events") {
+		return &performanceBoundsRows{columns: []string{"transaction_hash", "log_index", "contract_address", "event_name", "block_number", "status", "observed_at"}}, nil
+	}
+	return nil, errors.New("unexpected query")
+}
+
+type performanceBoundsRows struct {
+	values   [][]driver.Value
+	index    int
+	closed   bool
+	columns  []string
+	endError error
+}
+
+func (r *performanceBoundsRows) Columns() []string {
+	if r.columns != nil {
+		return r.columns
+	}
+	return []string{"transaction_hash", "log_index", "block_number", "block_hash", "contract_address", "event_name", "confirmed", "removed", "payload", "order"}
+}
+func (r *performanceBoundsRows) Close() error { r.closed = true; return nil }
+func (r *performanceBoundsRows) Next(dest []driver.Value) error {
+	if r.index == len(r.values) {
+		if r.endError != nil {
+			return r.endError
+		}
+		return io.EOF
+	}
+	copy(dest, r.values[r.index])
+	r.index++
+	return nil
+}
+
+var performanceBoundsDBSequence atomic.Uint64
+
+func openPerformanceBoundsDB(t *testing.T, rows *performanceBoundsRows) (*sql.DB, *[]string) {
+	t.Helper()
+	queries := []string{}
+	name := fmt.Sprintf("portfolio-performance-bounds-%d", performanceBoundsDBSequence.Add(1))
+	sql.Register(name, performanceBoundsDriver{rows: rows, queries: &queries})
+	db, err := sql.Open(name, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db, &queries
+}
+func performanceBoundsValues(t *testing.T, events []portfolioEvidence) [][]driver.Value {
+	t.Helper()
+	result := [][]driver.Value{}
+	for _, e := range events {
+		payload, err := json.Marshal(e.Payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		order, err := json.Marshal(e.Order)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result = append(result, []driver.Value{e.TransactionHash, int64(e.LogIndex), int64(e.BlockNumber), e.BlockHash, e.ContractAddress, e.EventName, e.Confirmed, e.Removed, payload, order})
+	}
+	return result
+}
+func TestPortfolioPerformanceBoundedSQLPreservesExactFIFO(t *testing.T) {
+	rows := &performanceBoundsRows{values: performanceBoundsValues(t, performanceTrade(1, true, "5", "3", "15"))}
+	db, queries := openPerformanceBoundsDB(t, rows)
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	got, err := readPortfolioPerformance(context.Background(), tx, performanceOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertKnownPerformance(t, got, "5", "15", "0")
+	if !rows.closed || len(*queries) != 1 {
+		t.Fatal("rows not closed or unexpected queries")
+	}
+}
+func TestPortfolioPerformanceLateReadFailureReturnsNoPartialTotals(t *testing.T) {
+	for _, failure := range []string{"oversized payload", "oversized order", "malformed order", "aggregate limit", "row error"} {
+		t.Run(failure, func(t *testing.T) {
+			values := performanceBoundsValues(t, performanceTrade(1, true, "5", "3", "15"))
+			late := append([]driver.Value{}, values[0]...)
+			switch failure {
+			case "oversized payload":
+				late[8] = []byte(strings.Repeat(" ", portfolioPayloadByteLimit+1))
+			case "oversized order":
+				late[9] = []byte(strings.Repeat(" ", portfolioOrderByteLimit+1))
+			case "malformed order":
+				late[9] = []byte("{")
+			case "aggregate limit":
+				late[8] = []byte(`{"padding":"` + strings.Repeat("x", portfolioPayloadByteLimit-len(`{"padding":""}`)) + `"}`)
+				for i := 0; i < 65; i++ {
+					values = append(values, late)
+				}
+			}
+			if failure != "aggregate limit" && failure != "row error" {
+				values = append(values, late)
+			}
+			rows := &performanceBoundsRows{values: values}
+			if failure == "row error" {
+				rows.endError = errors.New("injected evidence read failure")
+			}
+			db, _ := openPerformanceBoundsDB(t, rows)
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			result, err := readPortfolioPerformance(context.Background(), tx, performanceOwner)
+			if err == nil || !reflect.DeepEqual(result, portfolioPerformance{}) || !rows.closed {
+				t.Fatal("late failure exposed partial performance or leaked rows", result, err, rows.closed)
+			}
+		})
+	}
+}
+func TestPortfolioPerformanceOversizedEvidenceIsSanitizedAtHTTPBoundary(t *testing.T) {
+	values := performanceBoundsValues(t, performanceTrade(1, true, "5", "3", "15"))
+	values[1][9] = []byte(strings.Repeat(" ", portfolioOrderByteLimit+1))
+	rows := &performanceBoundsRows{values: values}
+	db, queries := openPerformanceBoundsDB(t, rows)
+	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+	service.db = db
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/v1/portfolio/"+performanceOwner, nil)
+	newHandler(service).ServeHTTP(recorder, request)
+	body := recorder.Body.String()
+	if recorder.Code != http.StatusServiceUnavailable || strings.Contains(body, "costBasis") || strings.Contains(body, "realizedPnl") ||
+		strings.Contains(body, "byte budget") || !strings.Contains(body, "performance evidence could not be queried") || !rows.closed || len(*queries) != 4 {
+		t.Fatal("HTTP failure leaked a partial result, decoder detail or rows", recorder.Code, body, len(*queries), rows.closed)
 	}
 }
