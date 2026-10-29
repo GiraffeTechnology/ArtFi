@@ -42,6 +42,7 @@ const env = {
   NEXT_PUBLIC_HOODI_RPC_URL: "http://127.0.0.1:3000/TEST_ONLY-hoodi-rpc",
 };
 const children = [];
+const startup = new WeakMap();
 async function run(command, args, cwd, label) {
   const log = await open(join(data, `${label}.log`), "w", 0o600);
   const child = spawn(command, args, {
@@ -49,22 +50,83 @@ async function run(command, args, cwd, label) {
     env,
     stdio: ["ignore", log.fd, log.fd],
   });
-  child.once("error", () => {});
+  const state = { label, path: join(data, `${label}.log`), failure: null };
+  startup.set(child, state);
+  child.once("error", (error) => {
+    state.failure = /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code ?? "")
+      ? error.code
+      : "SPAWN_FAILED";
+  });
   children.push(child);
   await log.close();
   return child;
 }
-async function wait(url) {
+async function startupFailure(child, reason, httpStatus) {
+  const state = startup.get(child);
+  const codes = new Set();
+  let handle;
+  try {
+    handle = await open(state.path, "r");
+    const { size } = await handle.stat();
+    const buffer = Buffer.alloc(4096);
+    const { bytesRead } = await handle.read(
+      buffer,
+      0,
+      buffer.length,
+      Math.max(0, size - buffer.length),
+    );
+    const tail = buffer.subarray(0, bytesRead).toString("utf8");
+    const found =
+      tail.match(
+        /\b(?:ERR_[A-Z0-9_]+|MODULE_NOT_FOUND|EADDRINUSE|ENOENT|EACCES)\b/g,
+      ) ?? [];
+    for (const code of found) codes.add(code);
+    if (/heap out of memory|allocation failed/i.test(tail))
+      codes.add("HEAP_ALLOCATION_FAILURE");
+  } catch {
+    codes.add("STARTUP_LOG_UNAVAILABLE");
+  } finally {
+    await handle?.close();
+  }
+  // Publish only fixed labels and bounded codes. Raw child logs can contain
+  // database/session configuration and remain in the private test archive.
+  console.error(
+    JSON.stringify({
+      kind: "ISOLATED_SERVER_START_DIAGNOSTIC",
+      server: state.label,
+      reason,
+      exitCode: child.exitCode,
+      signal: child.signalCode,
+      spawnCode: state.failure,
+      httpStatus,
+      logCodes: [...codes].slice(0, 8),
+    }),
+  );
+  throw Error(reason);
+}
+async function wait(url, child) {
   const end = Date.now() + 30000;
+  let httpStatus = null;
   while (Date.now() < end) {
+    if (
+      startup.get(child).failure ||
+      child.exitCode !== null ||
+      child.signalCode !== null
+    )
+      return startupFailure(
+        child,
+        "ISOLATED_SERVER_EXITED_BEFORE_READY",
+        httpStatus,
+      );
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(1000) });
+      httpStatus = response.status;
       await response.body?.cancel();
       if (response.ok) return;
     } catch {}
     await delay(100);
   }
-  throw Error("ISOLATED_SERVER_START_TIMEOUT");
+  return startupFailure(child, "ISOLATED_SERVER_START_TIMEOUT", httpStatus);
 }
 async function exit(child) {
   return new Promise((resolve, reject) => {
@@ -84,15 +146,15 @@ try {
     );
     await exit(child);
   }
-  await run(api, [], root, "agent-browser-api");
-  await wait("http://127.0.0.1:8080/healthz");
-  await run(
+  const apiChild = await run(api, [], root, "agent-browser-api");
+  await wait("http://127.0.0.1:8080/healthz", apiChild);
+  const adapterChild = await run(
     process.execPath,
     [join(root, "apps/agent-runtime/test/browser-adapter-fixture.mjs")],
     root,
     "agent-browser-adapter",
   );
-  await wait("http://127.0.0.1:33328/test-only/info");
+  await wait("http://127.0.0.1:33328/test-only/info", adapterChild);
   const tokenFile = join(data, "browser-adapter-token");
   await writeFile(tokenFile, env.ARTFI_AGENT_TEST_ADAPTER_TOKEN, {
     mode: 0o600,
@@ -117,7 +179,7 @@ try {
     { mode: 0o600 },
   );
   env.ARTFI_AGENT_CONFIG_FILE = agentConfig;
-  await run(
+  const runtimeChild = await run(
     node,
     [
       bundle
@@ -127,8 +189,8 @@ try {
     root,
     "agent-browser-runtime",
   );
-  await wait("http://127.0.0.1:33327/healthz");
-  await run(
+  await wait("http://127.0.0.1:33327/healthz", runtimeChild);
+  const webChild = await run(
     node,
     bundle
       ? [join(bundle, "runtime/web/apps/web/server.js")]
@@ -143,7 +205,7 @@ try {
     bundle ? join(bundle, "runtime/web/apps/web") : join(root, "apps/web"),
     "agent-browser-web",
   );
-  await wait(`${env.ARTFI_WEB_URL}/agent`);
+  await wait(`${env.ARTFI_WEB_URL}/agent`, webChild);
   const report = join(data, "agent-browser.json");
   const testEnv = {
     ...env,
