@@ -3,7 +3,7 @@
 ## 2026-10-29 acceptance alignment with the complete PRD
 
 The operative audit checks now preserve the current asset-specific preview boundaries:
-model-permitted previews have their hash mappings, charity public metadata/pages have no
+model-permitted previews have their hash mappings, charity public token metadata has no
 artwork preview, and wallet-verified watermarked holder delivery has no browser preview.
 The isolated Hoodi payload does not regenerate the frozen historical charity batch.
 
