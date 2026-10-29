@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import {
   observeWholeReceiptSource,
+  observeWholeReceiptReadResponse,
   snapshotWholeReceiptExpectation,
   wholeReceiptSourceSchemaId,
 } from "./whole-receipt-source-observation-model";
@@ -45,6 +46,16 @@ function fixture() {
     receiptAvailable: true,
   };
   return { expected, observed };
+}
+function oracleResponse(observed: ReturnType<typeof fixture>["observed"]) {
+  return {
+    ...observed,
+    evidence: {
+      kind: "canonical-contract-state" as const,
+      head: { ...observed.block },
+      minimumConfirmations: 1,
+    },
+  };
 }
 const jsonResponse = (value: unknown) =>
   new Response(JSON.stringify(value), {
@@ -256,10 +267,148 @@ describe("bound Oracle receipt source observations — synthetic only", () => {
   });
 });
 
+describe("complete Oracle receipt reader evidence", () => {
+  it("retains the actual eight-field response without establishing authority", () => {
+    const f = fixture(),
+      wire = oracleResponse(f.observed),
+      result = observeWholeReceiptReadResponse(f.expected, wire);
+    expect(Object.keys(result.snapshot).sort()).toEqual([
+      "block",
+      "entry",
+      "evidence",
+      "mintPolicyHash",
+      "receiptAvailable",
+      "receiptBinding",
+      "source",
+      "tokenId",
+    ]);
+    expect(result.snapshot).toEqual(wire);
+    expect(result.authorization).toBe("NOT_ESTABLISHED");
+    expect(result.finality).toBe("NOT_ESTABLISHED");
+    expect(result.originalDocumentVerification).toBe("NOT_ESTABLISHED");
+    expect(Object.isFrozen(result.snapshot.evidence)).toBe(true);
+    expect(Object.isFrozen(result.snapshot.evidence?.head)).toBe(true);
+    wire.evidence.head.hash = hash(999);
+    expect(result.snapshot.evidence?.head.hash).toBe(f.observed.block.hash);
+  });
+  it("keeps the seven-field internal snapshot separate from the HTTP contract", () => {
+    const f = fixture();
+    expect(observeWholeReceiptSource(f.expected, f.observed).snapshot).toEqual(
+      f.observed,
+    );
+    expect(() =>
+      observeWholeReceiptReadResponse(f.expected, f.observed),
+    ).toThrow("RECEIPT_SOURCE_MALFORMED");
+  });
+  it("uses full-width inclusive confirmation arithmetic through the producer maximum", () => {
+    const f = fixture(),
+      wire = oracleResponse(f.observed);
+    wire.evidence.minimumConfirmations = 256;
+    wire.evidence.head = {
+      number: String(BigInt(wire.block.number) + 255n),
+      hash: hash(13),
+    };
+    expect(
+      observeWholeReceiptReadResponse(f.expected, wire).snapshot.evidence,
+    ).toEqual(wire.evidence);
+  });
+  type Evidence = ReturnType<typeof oracleResponse>["evidence"];
+  const malformed: Array<[string, (e: Evidence) => unknown]> = [
+    ["null", () => null],
+    ["undefined", () => undefined],
+    ["foreign kind", (e) => ({ ...e, kind: "zk-proof" })],
+    ["unknown field", (e) => ({ ...e, authorization: "VERIFIED" })],
+    ["zero depth", (e) => ({ ...e, minimumConfirmations: 0 })],
+    ["excessive depth", (e) => ({ ...e, minimumConfirmations: 257 })],
+    ["fractional depth", (e) => ({ ...e, minimumConfirmations: 1.5 })],
+    ["string depth", (e) => ({ ...e, minimumConfirmations: "1" })],
+    ["missing depth", (e) => ({ kind: e.kind, head: e.head })],
+    ["incomplete head", (e) => ({ ...e, head: { number: e.head.number } })],
+    ["numeric head", (e) => ({ ...e, head: { ...e.head, number: 10 } })],
+    [
+      "noncanonical head",
+      (e) => ({ ...e, head: { ...e.head, number: "0" + e.head.number } }),
+    ],
+    [
+      "uint256 overflow",
+      (e) => ({ ...e, head: { ...e.head, number: (1n << 256n).toString() } }),
+    ],
+    ["zero head hash", (e) => ({ ...e, head: { ...e.head, hash: hash(0) } })],
+    ["short head hash", (e) => ({ ...e, head: { ...e.head, hash: "0x01" } })],
+    [
+      "unknown head field",
+      (e) => ({ ...e, head: { ...e.head, url: "https://unexpected.invalid" } }),
+    ],
+    [
+      "head behind anchor",
+      (e) => ({
+        ...e,
+        head: { ...e.head, number: String(BigInt(e.head.number) - 1n) },
+      }),
+    ],
+    ["insufficient depth", (e) => ({ ...e, minimumConfirmations: 2 })],
+    [
+      "same-height hash conflict",
+      (e) => ({ ...e, head: { ...e.head, hash: hash(999) } }),
+    ],
+  ];
+  it.each(malformed)("refuses %s reader evidence", (_name, change) => {
+    const f = fixture(),
+      wire = oracleResponse(f.observed);
+    expect(() =>
+      observeWholeReceiptReadResponse(f.expected, {
+        ...wire,
+        evidence: change(wire.evidence),
+      }),
+    ).toThrow("RECEIPT_SOURCE_MALFORMED");
+  });
+  it("does not weaken the exact root or the existing holder binding", () => {
+    const f = fixture(),
+      wire = oracleResponse(f.observed);
+    expect(() =>
+      observeWholeReceiptReadResponse(f.expected, {
+        ...wire,
+        unexpected: true,
+      }),
+    ).toThrow("RECEIPT_SOURCE_MALFORMED");
+    wire.entry.holder = address(999);
+    expect(() => observeWholeReceiptReadResponse(f.expected, wire)).toThrow(
+      "RECEIPT_BINDING_MISMATCH",
+    );
+  });
+  it("refuses an evidence accessor without invoking it", () => {
+    const f = fixture(),
+      wire = oracleResponse(f.observed);
+    let calls = 0;
+    Object.defineProperty(wire, "evidence", {
+      enumerable: true,
+      get() {
+        calls++;
+        return {};
+      },
+    });
+    expect(() => observeWholeReceiptReadResponse(f.expected, wire)).toThrow(
+      "RECEIPT_SOURCE_MALFORMED",
+    );
+    expect(calls).toBe(0);
+  });
+  it("rejects a successful HTTP body that omits reader evidence", async () => {
+    const f = fixture();
+    vi.stubEnv("ARTFI_ORACLE_READ_API_URL", "https://oracle.invalid");
+    const fetcher = vi.fn(async () => jsonResponse(f.observed));
+    vi.stubGlobal("fetch", fetcher);
+    expect(await readWholeReceiptSourceVersion(f.expected)).toEqual({
+      ok: false,
+      code: "RECEIPT_SOURCE_MALFORMED",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("existing deployment-owned receipt transport", () => {
   it("reads one exact historical version using GET/no-store without browser credentials", async () => {
     const f = fixture(),
-      fetcher = vi.fn(async () => jsonResponse(f.observed));
+      fetcher = vi.fn(async () => jsonResponse(oracleResponse(f.observed)));
     vi.stubEnv("ARTFI_ORACLE_READ_API_URL", "https://oracle.invalid/bridge/");
     vi.stubGlobal("fetch", fetcher);
     const result = await readWholeReceiptSourceVersion(f.expected);
@@ -288,7 +437,7 @@ describe("existing deployment-owned receipt transport", () => {
       "fetch",
       vi.fn(async () => {
         f.expected.entry.holder = address(999);
-        return jsonResponse(f.observed);
+        return jsonResponse(oracleResponse(f.observed));
       }),
     );
     expect((await readWholeReceiptSourceVersion(f.expected)).ok).toBe(true);
@@ -328,7 +477,7 @@ describe("existing deployment-owned receipt transport", () => {
   });
   it("rejects redirects even from a nonconforming fetch adapter", async () => {
     vi.stubEnv("ARTFI_ORACLE_READ_API_URL", "https://oracle.invalid");
-    const response = jsonResponse(fixture().observed);
+    const response = jsonResponse(oracleResponse(fixture().observed));
     Object.defineProperty(response, "redirected", { value: true });
     vi.stubGlobal(
       "fetch",

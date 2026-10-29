@@ -58,17 +58,45 @@ const binding = z
     receiptDocumentHash: hash(true),
   })
   .strict();
+// Oracle reader metadata is retained as transport evidence, never authority.
+const sourceBlockSchema = z
+  .object({ number: uint(256), hash: hash() })
+  .strict();
+const sourceReadEvidenceSchema = z
+  .object({
+    kind: z.literal("canonical-contract-state"),
+    head: sourceBlockSchema,
+    minimumConfirmations: z.number().int().min(1).max(256),
+  })
+  .strict();
 const snapshotSchema = z
   .object({
     tokenId: uint(256),
     source,
-    block: z.object({ number: uint(256), hash: hash() }).strict(),
+    block: sourceBlockSchema,
     entry,
     mintPolicyHash: hash(),
     receiptBinding: binding,
     receiptAvailable: z.boolean(),
+    evidence: sourceReadEvidenceSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => {
+    const evidence = value.evidence;
+    if (!evidence) return true; // Internal canonical-RPC snapshots have no HTTP envelope.
+    try {
+      const anchor = BigInt(value.block.number),
+        head = BigInt(evidence.head.number);
+      return (
+        head >= anchor &&
+        head - anchor + 1n >= BigInt(evidence.minimumConfirmations) &&
+        (head !== anchor ||
+          evidence.head.hash.toLowerCase() === value.block.hash.toLowerCase())
+      );
+    } catch {
+      return false;
+    }
+  });
 const expectedSchema = z
   .object({
     tokenId: uint(256),
@@ -237,6 +265,19 @@ export function observeWholeReceiptSource(
     snapshot: observed,
   });
 }
+/** The HTTP read contract requires its complete reader evidence. Internal
+ * canonical-RPC reconstruction still uses observeWholeReceiptSource directly.
+ * Structural confirmation metadata is not independently verified finality. */
+export function observeWholeReceiptReadResponse(
+  expectedInput: unknown,
+  observedInput: unknown,
+) {
+  const observation = observeWholeReceiptSource(expectedInput, observedInput);
+  if (!observation.snapshot.evidence)
+    return refuseReceipt("RECEIPT_SOURCE_MALFORMED");
+  return observation;
+}
+
 export type WholeReceiptSourceObservation = ReturnType<
   typeof observeWholeReceiptSource
 >;
