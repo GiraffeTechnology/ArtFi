@@ -14,6 +14,7 @@ import {
 } from "@/lib/user-session-client";
 import { watchUserSessionDeadlines } from "@/lib/user-session-deadlines";
 import type { UserSessionState } from "@/lib/user-session-client-state";
+import { renderUserSessionState } from "@/lib/user-session-render-state";
 
 type UserSessionContextValue = UserSessionState & {
   signIn: () => Promise<void>;
@@ -58,7 +59,7 @@ export function UserSessionProvider({
   useEffect(() => watchUserSessionDeadlines(userSessionController), []);
   const value = useMemo(
     () => ({
-      ...state,
+      ...renderUserSessionState(state, { address, chainId, status }),
       signIn: () =>
         userSessionController.signIn((message) =>
           signMessageAsync({ message }),
@@ -67,7 +68,7 @@ export function UserSessionProvider({
       cancel: userSessionController.cancel,
       refresh: userSessionController.refresh,
     }),
-    [state, signMessageAsync],
+    [state, address, chainId, status, signMessageAsync],
   );
   return (
     <UserSessionContext.Provider value={value}>
