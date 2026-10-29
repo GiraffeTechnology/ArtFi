@@ -109,7 +109,45 @@ async function releaseRoot() {
     throw new Error("No active release. Use install first.");
   }
 }
-async function checkedRoot(root) {
+// Combined upgrade requires an already managed active release. Resolve and
+// verify it before install() can stage files or touch shared state. Explicit
+// install/migrate/activate remain the separate first-install/systemd workflow.
+async function managedUpgradeRoot() {
+  if (options.release)
+    throw new Error(
+      "Upgrade uses the active managed release; --release is not an upgrade option.",
+    );
+  const failure = "Upgrade requires an existing managed active release.";
+  let target;
+  try {
+    const current = join(prefix, "current");
+    if (!(await lstat(current)).isSymbolicLink()) throw new Error(failure);
+    target = await readlink(current);
+  } catch {
+    throw new Error(failure);
+  }
+  if (!/^releases\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,120}$/.test(target))
+    throw new Error(failure);
+  const root = resolve(prefix, target);
+  try {
+    const releases = await lstat(join(prefix, "releases"));
+    const active = await lstat(root);
+    if (
+      !releases.isDirectory() ||
+      releases.isSymbolicLink() ||
+      !active.isDirectory() ||
+      active.isSymbolicLink() ||
+      (await realpath(root)) !==
+        join(await realpath(prefix), "releases", basename(root))
+    )
+      throw new Error(failure);
+  } catch {
+    throw new Error(failure);
+  }
+  await checkedRoot(root, basename(root));
+  return root;
+}
+async function checkedRoot(root, expectedRelease) {
   const m = await json(join(root, "manifest.json"));
   if (
     m.format !== 1 ||
@@ -118,6 +156,10 @@ async function checkedRoot(root) {
     typeof m.files !== "object"
   )
     throw new Error("Invalid release manifest.");
+  if (expectedRelease !== undefined && m.release !== expectedRelease)
+    throw new Error(
+      "Active release manifest does not match its managed directory.",
+    );
   for (const [name, expected] of Object.entries(m.files)) {
     if (
       name.includes("\\") ||
@@ -545,16 +587,17 @@ async function main() {
     return;
   }
   if (command === "upgrade") {
+    const old = await managedUpgradeRoot();
     const root = await install(),
       state = await migrate(root, "status");
     if (state.pending > 0 && !options["apply-migrations"])
       throw new Error(
         "Forward migrations are pending. Back up the database and rerun with --apply-migrations.",
       );
-    let old;
-    try {
-      old = await releaseRoot();
-    } catch {}
+    if ((await releaseRoot()) !== old)
+      throw new Error(
+        "Active release changed during upgrade preparation; reconcile before retrying.",
+      );
     await stop();
     try {
       if (state.pending > 0) await migrate(root, "up");
