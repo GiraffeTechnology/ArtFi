@@ -832,19 +832,33 @@ describe("DAO public failure and recovery privacy", () => {
       session.finish(lease);
       expect(session.begin()).toBeUndefined();
 
-      // Reconcile the existing result and clear its own marker; never send again.
-      const check = session.begin(true)!;
-      expect(check).toBeDefined();
-      session.updateTransaction(
-        check,
+      // The live session keeps its original unresolved-wallet lease barrier.
+      expect(session.begin(true)).toBeUndefined();
+
+      // Reload the saved hash and reconcile it; never issue another wallet request.
+      const reloaded = createDaoActionSession(context);
+      reloaded.restore(() => memory, target);
+      expect(reloaded.getSnapshot().transaction).toMatchObject({
         hash,
-        { ...transaction, phase },
-        () => memory,
-      );
-      session.finish(check);
+        phase: "unknown",
+      });
+      expect(memory.values).toEqual(original);
+      expect(reloaded.begin()).toBeUndefined();
+      const check = reloaded.begin(true)!;
+      expect(check).toBeDefined();
+      expect(
+        reloaded.updateTransaction(
+          check,
+          hash,
+          { ...transaction, phase },
+          () => memory,
+        ),
+      ).toBe(true);
+      reloaded.finish(check);
       expect(memory.getItem("artfi:dao-pending:" + context)).toBeNull();
-      expect(session.getSnapshot().awaitingWallet).toBe(false);
-      expect(session.begin()).toBeDefined();
+      expect(reloaded.getSnapshot().awaitingWallet).toBe(false);
+      assertPrivate(reloaded);
+      expect(reloaded.begin()).toBeDefined();
     },
   );
 
