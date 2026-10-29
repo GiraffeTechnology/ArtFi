@@ -43,6 +43,26 @@ const env = {
 };
 const children = [];
 const startup = new WeakMap();
+const startupCodes = new Set([
+  "ERR_MODULE_NOT_FOUND",
+  "MODULE_NOT_FOUND",
+  "ERR_REQUIRE_ESM",
+  "ERR_PACKAGE_PATH_NOT_EXPORTED",
+  "ERR_DLOPEN_FAILED",
+  "ERR_UNKNOWN_FILE_EXTENSION",
+  "ERR_INVALID_ARG_TYPE",
+  "ERR_OUT_OF_RANGE",
+  "ERR_ACCESS_DENIED",
+  "EADDRINUSE",
+  "EADDRNOTAVAIL",
+  "ENOENT",
+  "EACCES",
+  "EPERM",
+  "EMFILE",
+  "ENFILE",
+  "ENOMEM",
+  "ENOSPC",
+]);
 async function run(command, args, cwd, label) {
   const log = await open(join(data, `${label}.log`), "w", 0o600);
   const child = spawn(command, args, {
@@ -53,7 +73,7 @@ async function run(command, args, cwd, label) {
   const state = { label, path: join(data, `${label}.log`), failure: null };
   startup.set(child, state);
   child.once("error", (error) => {
-    state.failure = /^[A-Z][A-Z0-9_]{0,63}$/.test(error.code ?? "")
+    state.failure = startupCodes.has(error.code)
       ? error.code
       : "SPAWN_FAILED";
   });
@@ -76,11 +96,9 @@ async function startupFailure(child, reason, httpStatus) {
       Math.max(0, size - buffer.length),
     );
     const tail = buffer.subarray(0, bytesRead).toString("utf8");
-    const found =
-      tail.match(
-        /\b(?:ERR_[A-Z0-9_]+|MODULE_NOT_FOUND|EADDRINUSE|ENOENT|EACCES)\b/g,
-      ) ?? [];
-    for (const code of found) codes.add(code);
+    const found = new Set(tail.match(/\b[A-Z][A-Z0-9_]{0,63}\b/g) ?? []);
+    for (const code of startupCodes)
+      if (found.has(code)) codes.add(code);
     if (/heap out of memory|allocation failed/i.test(tail))
       codes.add("HEAP_ALLOCATION_FAILURE");
   } catch {
