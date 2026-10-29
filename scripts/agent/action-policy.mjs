@@ -299,7 +299,10 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
       fail("PRIOR_ACTION_UNCONFIRMED");
     if (
       leg.expected.startsAt &&
-      ((!(leg.marketKind === "AUCTION" && leg.opensOrder) &&
+      ((!(
+        leg.dispatch.kind === "SIGNED_ORDER_PUBLICATION" ||
+        (leg.marketKind === "AUCTION" && leg.opensOrder)
+      ) &&
         seconds < uint(leg.expected.startsAt)) ||
         seconds >= uint(leg.expected.endsAt))
     )
