@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const (
@@ -240,6 +241,7 @@ func TestPortfolioPerformanceEvidenceCountsUTF8Bytes(t *testing.T) {
 type performanceBoundsDriver struct {
 	rows    *performanceBoundsRows
 	queries *[]string
+	session *userAuthSession
 }
 type performanceBoundsConn struct{ state performanceBoundsDriver }
 
@@ -258,6 +260,21 @@ func (c *performanceBoundsConn) QueryContext(ctx context.Context, query string, 
 	*c.state.queries = append(*c.state.queries, query)
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if query == selectUserSession {
+		columns := []string{"session_id", "wallet_address", "chain_id", "origin", "created_at", "expires_at", "revoked_at"}
+		session := c.state.session
+		if session == nil || len(args) != 1 || args[0].Value != session.ID {
+			return &performanceBoundsRows{columns: columns}, nil
+		}
+		var revokedAt driver.Value
+		if session.revoked {
+			revokedAt = session.createdAt
+		}
+		return &performanceBoundsRows{columns: columns, values: [][]driver.Value{{
+			session.ID, session.Address, int64(session.ChainID), session.origin,
+			session.createdAt, time.UnixMilli(session.ExpiresAt), revokedAt,
+		}}}, nil
 	}
 	if strings.Contains(query, "LEFT(CAST(e.payload AS BINARY), 65537)") {
 		if !strings.Contains(query, "LEFT(CAST(COALESCE(o.envelope_json, 'null') AS BINARY), 32769)") ||
@@ -305,11 +322,15 @@ func (r *performanceBoundsRows) Next(dest []driver.Value) error {
 
 var performanceBoundsDBSequence atomic.Uint64
 
-func openPerformanceBoundsDB(t *testing.T, rows *performanceBoundsRows) (*sql.DB, *[]string) {
+func openPerformanceBoundsDB(t *testing.T, rows *performanceBoundsRows, sessions ...*userAuthSession) (*sql.DB, *[]string) {
 	t.Helper()
 	queries := []string{}
 	name := fmt.Sprintf("portfolio-performance-bounds-%d", performanceBoundsDBSequence.Add(1))
-	sql.Register(name, performanceBoundsDriver{rows: rows, queries: &queries})
+	var session *userAuthSession
+	if len(sessions) == 1 {
+		session = sessions[0]
+	}
+	sql.Register(name, performanceBoundsDriver{rows: rows, queries: &queries, session: session})
 	db, err := sql.Open(name, "")
 	if err != nil {
 		t.Fatal(err)
@@ -392,15 +413,67 @@ func TestPortfolioPerformanceOversizedEvidenceIsSanitizedAtHTTPBoundary(t *testi
 	values := performanceBoundsValues(t, performanceTrade(1, true, "5", "3", "15"))
 	values[1][9] = []byte(strings.Repeat(" ", portfolioOrderByteLimit+1))
 	rows := &performanceBoundsRows{values: values}
-	db, queries := openPerformanceBoundsDB(t, rows)
+	now := time.Date(2026, 10, 3, 1, 0, 0, 0, time.UTC)
+	session := &userAuthSession{
+		ID: strings.Repeat("a", 32), Address: performanceOwner, ChainID: hoodiChainID,
+		origin: "https://artfi.test", createdAt: now.Add(-time.Minute),
+		ExpiresAt: now.Add(time.Hour).UnixMilli(),
+	}
+	db, queries := openPerformanceBoundsDB(t, rows, session)
 	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
-	service.db = db
+	service.db, service.now = db, func() time.Time { return now }
+	auth := userAuthTestService(db, service.now)
+	t.Setenv("ARTFI_USER_SESSION_SECRET", string(auth.jwtSecret))
+	t.Setenv("ARTFI_USER_AUTH_BRIDGE_TOKEN", string(auth.bridgeToken))
+	t.Setenv("ARTFI_WEB_ORIGIN", auth.origin)
+	t.Setenv("ARTFI_USER_AUTH_CHAIN_IDS", fmt.Sprint(hoodiChainID))
+	token, _, err := auth.issueAccess(*session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := newHandler(service)
+
+	// Keep the complete protected route: invalid sessions must never read the
+	// evidence fixture, even when an oversized row is waiting behind it.
+	for _, item := range []struct {
+		name, address, bearer string
+		revoked               bool
+		status, authQueries   int
+	}{
+		{"missing session", performanceOwner, "", false, http.StatusUnauthorized, 0},
+		{"different owner", performanceCounterparty, token, false, http.StatusForbidden, 1},
+		{"revoked session", performanceOwner, token, true, http.StatusUnauthorized, 1},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			session.revoked = item.revoked
+			*queries = nil
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "/v1/portfolio/"+item.address, nil)
+			if item.bearer != "" {
+				request.Header.Set("Authorization", "Bearer "+item.bearer)
+			}
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != item.status || len(*queries) != item.authQueries ||
+				rows.index != 0 || rows.closed {
+				t.Fatal("protected route did not reject before evidence access", recorder.Code, len(*queries), rows.index, rows.closed)
+			}
+			if item.authQueries == 1 && (*queries)[0] != selectUserSession {
+				t.Fatal("session was not checked through persistence")
+			}
+		})
+	}
+
+	session.revoked = false
+	*queries = nil
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/v1/portfolio/"+performanceOwner, nil)
-	newHandler(service).ServeHTTP(recorder, request)
+	request.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(recorder, request)
 	body := recorder.Body.String()
 	if recorder.Code != http.StatusServiceUnavailable || strings.Contains(body, "costBasis") || strings.Contains(body, "realizedPnl") ||
-		strings.Contains(body, "byte budget") || !strings.Contains(body, "performance evidence could not be queried") || !rows.closed || len(*queries) != 4 {
-		t.Fatal("HTTP failure leaked a partial result, decoder detail or rows", recorder.Code, body, len(*queries), rows.closed)
+		strings.Contains(body, "byte budget") || !strings.Contains(body, "performance evidence could not be queried") ||
+		!rows.closed || len(*queries) != 5 || (*queries)[0] != selectUserSession ||
+		recorder.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("authenticated HTTP failure leaked a partial result, decoder detail or rows", recorder.Code, body, len(*queries), rows.closed)
 	}
 }
