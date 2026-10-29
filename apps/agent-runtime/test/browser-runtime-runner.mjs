@@ -73,9 +73,7 @@ async function run(command, args, cwd, label) {
   const state = { label, path: join(data, `${label}.log`), failure: null };
   startup.set(child, state);
   child.once("error", (error) => {
-    state.failure = startupCodes.has(error.code)
-      ? error.code
-      : "SPAWN_FAILED";
+    state.failure = startupCodes.has(error.code) ? error.code : "SPAWN_FAILED";
   });
   children.push(child);
   await log.close();
@@ -97,8 +95,7 @@ async function startupFailure(child, reason, httpStatus) {
     );
     const tail = buffer.subarray(0, bytesRead).toString("utf8");
     const found = new Set(tail.match(/\b[A-Z][A-Z0-9_]{0,63}\b/g) ?? []);
-    for (const code of startupCodes)
-      if (found.has(code)) codes.add(code);
+    for (const code of startupCodes) if (found.has(code)) codes.add(code);
     if (/heap out of memory|allocation failed/i.test(tail))
       codes.add("HEAP_ALLOCATION_FAILURE");
   } catch {
