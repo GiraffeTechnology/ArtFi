@@ -190,12 +190,12 @@ export function createSetupRecoverySession<T>(
         }
       }
     },
-    fail(lease: number, error: unknown) {
+    fail(lease: number, _error: unknown) {
       if (!current(lease)) return;
+      // Wallet/RPC exceptions can include calldata, signatures or storage details.
+      // Keep public guidance bounded without changing the saved request or lease.
       const reason =
-        error instanceof Error
-          ? error.message
-          : "Setup could not be completed.";
+        "Setup could not be completed. Check the saved setup and any existing transaction before retrying.";
       publish({
         error:
           snapshot.record?.pending && !snapshot.record.pending.hash

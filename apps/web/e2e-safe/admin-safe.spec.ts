@@ -529,7 +529,10 @@ test("wallet rejection leaves the same reviewed call available for a deliberate 
   await panel(page)
     .getByRole("button", { name: "Submit safe proposal" })
     .click();
-  await expect(panel(page).getByRole("alert")).toContainText(/rejected/i);
+  await expect(panel(page).getByRole("alert")).toContainText(
+    "Setup could not be completed. Check the saved setup and any existing transaction before retrying.",
+  );
+  await expect(panel(page).getByRole("alert")).not.toContainText(/rejected/i);
   await expect(
     panel(page).getByRole("button", { name: "Submit safe proposal" }),
   ).toBeEnabled();
