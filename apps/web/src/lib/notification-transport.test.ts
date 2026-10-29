@@ -3,6 +3,7 @@ import {
   browserNotificationTransport,
   maximumNotificationResponseBytes,
   notificationJSON,
+  notificationText,
   notificationRoute,
   notificationSessionMatches,
 } from "./notification-transport";
@@ -111,4 +112,118 @@ describe("notification transport boundaries", () => {
     );
     expect(request).toHaveBeenCalledTimes(1);
   });
+});
+
+function notificationChunks(
+  chunks: Uint8Array[],
+  cancel: () => void | Promise<void> = () => undefined,
+) {
+  let index = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = chunks[index++];
+      if (chunk === undefined) controller.close();
+      else controller.enqueue(chunk);
+    },
+    cancel,
+  });
+}
+
+describe("notification stream progress", () => {
+  const bytes = (value: string) => new TextEncoder().encode(value);
+  const empty = () => new Uint8Array();
+  const afterEmptyBudget = () => [
+    ...Array.from({ length: 65 }, empty),
+    ...Array.from({ length: 8 }, () => bytes(" ")),
+    bytes("{}"),
+  ];
+
+  it("preserves split UTF8 after the allowed empty-read budget", async () => {
+    const value = { label: "Café 🧭" };
+    const stream = notificationChunks([
+      ...Array.from({ length: 64 }, empty),
+      ...Array.from(bytes(JSON.stringify(value)), (byte) =>
+        Uint8Array.of(byte),
+      ),
+    ]);
+    await expect(notificationJSON(new Response(stream))).resolves.toEqual(
+      value,
+    );
+    expect(stream.locked).toBe(false);
+  });
+
+  it("rejects excessive empty reads without waiting for cancellation", async () => {
+    const cancelled = vi.fn(() => new Promise<void>(() => undefined));
+    const stream = notificationChunks(afterEmptyBudget(), cancelled);
+    await expect(notificationJSON(new Response(stream))).rejects.toThrow(
+      "made no progress",
+    );
+    expect(cancelled).toHaveBeenCalledTimes(1);
+    expect(stream.locked).toBe(false);
+  });
+
+  it("cannot reset the empty-read budget with intermittent bytes", async () => {
+    const stream = notificationChunks([
+      ...Array.from({ length: 65 }, () => [empty(), bytes(" ")]).flat(),
+      ...Array.from({ length: 8 }, () => bytes(" ")),
+      bytes("{}"),
+    ]);
+    await expect(notificationJSON(new Response(stream))).rejects.toThrow(
+      "made no progress",
+    );
+    expect(stream.locked).toBe(false);
+  });
+
+  it("applies the progress budget to bounded request bodies too", async () => {
+    const stream = notificationChunks(afterEmptyBudget());
+    await expect(
+      notificationText(stream, 4_096, new AbortController().signal),
+    ).rejects.toThrow("made no progress");
+    expect(stream.locked).toBe(false);
+  });
+
+  it("retains the exact positive-byte response limit", async () => {
+    const stream = notificationChunks([
+      bytes(" ".repeat(maximumNotificationResponseBytes - 2)),
+      bytes("{}"),
+    ]);
+    await expect(notificationJSON(new Response(stream))).resolves.toEqual({});
+  });
+
+  it.each(["markRead", "savePreferences"] as const)(
+    "does not replay %s when its acknowledgement stream has no progress",
+    async (method) => {
+      const stream = notificationChunks(afterEmptyBudget());
+      const request = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response(stream));
+      const transport = browserNotificationTransport(request);
+      const key = "unchanged-request-key-03";
+      const signal = new AbortController().signal;
+      const operation =
+        method === "markRead"
+          ? transport.markRead(
+              identity,
+              { id: "b".repeat(32), expectedSourceRevision: "1" },
+              key,
+              signal,
+            )
+          : transport.savePreferences(
+              identity,
+              {
+                revision: "0",
+                transactionAlerts: true,
+                systemMessageAlerts: false,
+              },
+              key,
+              signal,
+            );
+      await expect(operation).rejects.toThrow("made no progress");
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(
+        new Headers(request.mock.calls[0][1]?.headers).get("idempotency-key"),
+      ).toBe(key);
+      expect(stream.locked).toBe(false);
+    },
+  );
 });

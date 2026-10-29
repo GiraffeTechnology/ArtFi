@@ -67,6 +67,7 @@ export async function notificationText(
   if (!reader) return "";
   const chunks: Uint8Array[] = [];
   let size = 0;
+  let emptyChunks = 0;
   let ended = false;
   let onAbort: (() => void) | undefined;
   try {
@@ -82,6 +83,13 @@ export async function notificationText(
       if (done) {
         ended = true;
         break;
+      }
+      // Count empty reads cumulatively: interleaving a byte must not reset the
+      // budget, and a microtask-only producer must not rely on a timer to stop.
+      if (value.byteLength === 0) {
+        if (++emptyChunks > 64)
+          throw new Error("The notification response made no progress.");
+        continue;
       }
       size += value.byteLength;
       if (size > maximumBytes) {
