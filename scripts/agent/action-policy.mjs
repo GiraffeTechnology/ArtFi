@@ -1,3 +1,4 @@
+import { nativeNftTaskPrincipalMatches } from "./native-nft-principal.mjs";
 import { validRuntimeMode, validChainId } from "./runtime-profile.mjs";
 import { INTENT_TYPES, INTENT_FIELDS } from "./bounded-intent.mjs";
 import { ACTION_BITS, uint } from "./stage1-action-plans.mjs";
@@ -263,6 +264,8 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
     )
       fail("EXPOSURE_EXCEEDED");
     if (leg.marketKind === "NFT") {
+      if (!nativeNftTaskPrincipalMatches(leg, o.nativeTaskPrincipal))
+        fail("NATIVE_NFT_TASK_PRINCIPAL_MISMATCH");
       if (
         o.nativeReviewDigest !== leg.nativeReviewDigest ||
         o.nativeOperationCurrent !== true ||
