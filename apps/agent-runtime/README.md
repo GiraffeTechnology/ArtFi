@@ -1,6 +1,6 @@
 # ArtFi bounded agent runtime
 
-This package supplies the application-side durable execution/recovery service. It does **not** make the current Wallet product a NO-HIL wallet. The current Wallet interface requires owner confirmation per operation and does not provide delegated session keys, autonomous broadcasting, standing signing permission or an HTTP agent-write endpoint. The existing ArtFi wallet-reviewed NFT, whole-artwork, fractional and auction paths remain the supported execution path.
+This package supplies the application-side durable execution/recovery service. Its delivered adapter composition supports an unavailable binding and an explicitly isolated test protocol; it does not supply an executable external bounded-authority adapter. This is a limitation of the ArtFi composition described here, not a statement about every current or future Wallet interface. Existing ArtFi wallet-reviewed NFT, whole-artwork, fractional and auction flows remain separate supported paths.
 
 The `/agent` application page authenticates the current wallet, reads only that wallet's operations/history, identifies synthetic evidence, and links to the existing owner-confirmed market screens. A submitted request is never displayed as settlement without matching evidence. Private records are excluded from the translation-service boundary.
 
@@ -18,7 +18,7 @@ Financial reservations currently implement a conservative gross-authorized-value
 
 ## Safe configuration
 
-The installer owns enabling/stopping the optional service. `ARTFI_AGENT_CONFIG_FILE` points to a private JSON file outside the immutable application artifact. `config.example.json` is a local example, not an approved deployment allocation. In particular, it does not allocate a CTYun port; TCP 443 remains reserved for SSH there.
+The installer owns enabling/stopping the optional service. `ARTFI_AGENT_CONFIG_FILE` points to a private JSON file outside the immutable application artifact. `config.example.json` is a local example, not an approved deployment allocation. Application listener addresses and deployment bindings must come from the actual runtime configuration; this example allocates neither.
 
 Configuration contains no JavaScript or import/module path. Available adapter kinds are:
 
@@ -28,7 +28,7 @@ Configuration contains no JavaScript or import/module path. Available adapter ki
 Environment/profile modes:
 
 - `TEST_ONLY_NO_REAL_VALUE` is the safe default and preserves the original first BUY slice.
-- `BOUNDED_SIGNED_AUTHORITY` parameterizes the reusable action core and stored record labels for a future supported binding. It cannot select the isolated test adapter and currently has **no executable external authority adapter**. This mode does not claim production readiness, pick a production chain, supply signing permission, or turn the current Wallet's owner-confirmed interface into NO-HIL.
+- `BOUNDED_SIGNED_AUTHORITY` parameterizes the reusable action core and stored record labels for a future supported binding. It cannot select the isolated test adapter and currently has **no executable external authority adapter**. This mode does not claim production readiness, pick a production chain or supply signing permission. A configuration label does not implement or connect the missing bounded execution interface.
 
 The reusable action compiler/policy/store use the configured chain/domain and preserve the stored profile identity. A stored test authority cannot be promoted by changing the configuration label. Native OpenSea reference shapes are limited to the existing Ethereum/Base support. Offline fixtures for those shapes perform no chain access or transaction.
 
