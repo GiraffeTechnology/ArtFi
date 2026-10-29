@@ -689,6 +689,9 @@ describe("DAO terminal recovery notices", () => {
     ).not.toBeNull();
     expect(session.getSnapshot().awaitingWallet).toBe(true);
     expect(session.getSnapshot().recoveryNotice).toContain(
+      "could not be cleared",
+    );
+    expect(session.getSnapshot().recoveryNotice).not.toContain(
       "removal unavailable",
     );
     session.finish(lease);
@@ -733,4 +736,182 @@ describe("DAO terminal recovery notices", () => {
     expect(store.getItem("artfi:dao-pending:terminal-stale")).not.toBeNull();
     session.finish(check);
   });
+});
+
+describe("DAO public failure and recovery privacy", () => {
+  const diagnostic =
+    "TEST_ONLY untrusted provider or storage diagnostic: " + "x".repeat(12_000);
+  const assertPrivate = (
+    session: ReturnType<typeof createDaoActionSession>,
+  ) => {
+    const visible = JSON.stringify(session.getSnapshot());
+    expect(visible).not.toContain(diagnostic);
+    expect(visible).not.toContain("TEST_ONLY");
+    expect(visible.length).toBeLessThan(2_000);
+  };
+
+  it.each(["error", "syntax", "object"] as const)(
+    "bounds a %s recovery failure without unlocking an unknown wallet outcome",
+    (kind) => {
+      const session = createDaoActionSession("private-restore-" + kind);
+      const cause =
+        kind === "error"
+          ? new Error(diagnostic)
+          : kind === "syntax"
+            ? new SyntaxError(diagnostic)
+            : { message: diagnostic };
+      session.restore(() => {
+        throw cause;
+      }, target);
+      expect(session.getSnapshot().awaitingWallet).toBe(true);
+      expect(session.getSnapshot().recoveryNotice).toContain(
+        "recovery is unavailable",
+      );
+      expect(session.begin()).toBeUndefined();
+      expect(session.begin(true)).toBeUndefined();
+      assertPrivate(session);
+    },
+  );
+
+  it("keeps the known hash when reading the saved proposal package fails", () => {
+    const memory = storage();
+    const context = "private-package-read";
+    const first = createDaoActionSession(context);
+    const lease = first.begin()!;
+    first.awaitWallet(lease, () => memory);
+    first.broadcast(lease, transaction, undefined, () => memory);
+    first.finish(lease);
+    const original = new Map(memory.values);
+    const reloaded = createDaoActionSession(context);
+    reloaded.restore(
+      () => ({
+        ...memory,
+        getItem(key: string) {
+          if (key === "artfi:dao-pending:" + context)
+            return memory.getItem(key);
+          throw new Error(diagnostic);
+        },
+      }),
+      target,
+    );
+    expect(reloaded.getSnapshot().transaction).toMatchObject({
+      hash,
+      phase: "unknown",
+    });
+    expect(reloaded.begin()).toBeUndefined();
+    expect(memory.values).toEqual(original);
+    assertPrivate(reloaded);
+    const check = reloaded.begin(true)!;
+    expect(check).toBeDefined();
+    reloaded.finish(check);
+  });
+
+  it.each(["confirmed", "failed"] as const)(
+    "redacts a %s cleanup failure while preserving the request for reconciliation",
+    (phase) => {
+      const memory = storage();
+      const context = "private-clear-" + phase;
+      const session = createDaoActionSession(context);
+      const lease = session.begin()!;
+      session.awaitWallet(lease, () => memory);
+      session.broadcast(lease, transaction, undefined, () => memory);
+      const original = new Map(memory.values);
+      session.updateTransaction(lease, hash, { ...transaction, phase }, () => ({
+        ...memory,
+        removeItem() {
+          throw new Error(diagnostic);
+        },
+      }));
+      expect(session.getSnapshot().transaction).toMatchObject({ hash, phase });
+      expect(session.getSnapshot().awaitingWallet).toBe(true);
+      expect(session.getSnapshot().recoveryNotice).toContain(
+        "New writes remain blocked",
+      );
+      expect(memory.values).toEqual(original);
+      assertPrivate(session);
+      session.finish(lease);
+      expect(session.begin()).toBeUndefined();
+
+      // Reconcile the existing result and clear its own marker; never send again.
+      const check = session.begin(true)!;
+      expect(check).toBeDefined();
+      session.updateTransaction(
+        check,
+        hash,
+        { ...transaction, phase },
+        () => memory,
+      );
+      session.finish(check);
+      expect(memory.getItem("artfi:dao-pending:" + context)).toBeNull();
+      expect(session.getSnapshot().awaitingWallet).toBe(false);
+      expect(session.begin()).toBeDefined();
+    },
+  );
+
+  it.each([true, false])(
+    "redacts a wallet failure while retaining the recognized-refusal distinction: %s",
+    (rejected) => {
+      const memory = storage();
+      const context = "private-wallet-" + rejected;
+      const session = createDaoActionSession(context);
+      const lease = session.begin()!;
+      session.awaitWallet(lease, () => memory);
+      session.fail(lease, diagnostic, rejected, () => memory);
+      session.finish(lease);
+      expect(session.getSnapshot().actionError).toContain("Review its inputs");
+      expect(session.getSnapshot().awaitingWallet).toBe(!rejected);
+      expect(memory.getItem("artfi:dao-pending:" + context) === null).toBe(
+        rejected,
+      );
+      assertPrivate(session);
+      expect(session.begin() !== undefined).toBe(rejected);
+    },
+  );
+
+  it("bounds a pre-wallet persistence failure without inventing a submitted request", () => {
+    const memory = storage();
+    const context = "private-prompt-save";
+    const session = createDaoActionSession(context);
+    const lease = session.begin()!;
+    let failure: unknown;
+    try {
+      session.awaitWallet(lease, () => ({
+        ...memory,
+        setItem() {
+          throw new Error(diagnostic);
+        },
+      }));
+    } catch (cause) {
+      failure = cause;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    session.fail(lease, (failure as Error).message, false, () => memory);
+    session.finish(lease);
+    expect(memory.values.size).toBe(0);
+    expect(session.getSnapshot().transaction).toBeUndefined();
+    expect(session.getSnapshot().awaitingWallet).toBe(false);
+    assertPrivate(session);
+    expect(session.begin()).toBeDefined();
+  });
+
+  it.each([true, false])(
+    "never clears a known pending transaction after a later error marked refused=%s",
+    (rejected) => {
+      const memory = storage();
+      const session = createDaoActionSession("private-known-hash-" + rejected);
+      const lease = session.begin()!;
+      session.awaitWallet(lease, () => memory);
+      session.broadcast(lease, transaction, undefined, () => memory);
+      const original = new Map(memory.values);
+      session.fail(lease, diagnostic, rejected, () => memory);
+      session.finish(lease);
+      expect(session.getSnapshot().transaction).toMatchObject({
+        hash,
+        phase: "pending",
+      });
+      expect(memory.values).toEqual(original);
+      expect(session.begin()).toBeUndefined();
+      assertPrivate(session);
+    },
+  );
 });
