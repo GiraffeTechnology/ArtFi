@@ -69,7 +69,6 @@ export function CharityEditionCatalog() {
   const [editions, setEditions] = useState<CharityEdition[]>([]);
   const [unitPriceWei, setUnitPriceWei] = useState<bigint>();
   const [editionsPerArtwork, setEditionsPerArtwork] = useState<bigint>();
-  const [error, setError] = useState<string>();
 
   const load = useCallback(async () => {
     if (!contractAddress || !publicClient) return;
@@ -128,15 +127,11 @@ export function CharityEditionCatalog() {
       setEditionsPerArtwork(perArtwork as bigint);
       setUnitPriceWei(priceWei as bigint);
       setEditions(loaded);
-      setError(undefined);
       setState("ready");
-    } catch (reason) {
+    } catch {
       setEditions([]);
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "The charity editions contract could not be read.",
-      );
+      setUnitPriceWei(undefined);
+      setEditionsPerArtwork(undefined);
       setState("error");
     }
   }, [contractAddress, publicClient]);
@@ -198,9 +193,13 @@ export function CharityEditionCatalog() {
       )}
 
       {state === "error" && (
-        <div className="market-runtime-state" role="alert">
+        <div
+          className="market-runtime-state"
+          role="alert"
+          data-testid="charity-catalog-read-error"
+        >
           <strong>Charity editions unavailable</strong>
-          <span>{error}</span>
+          <span>The charity editions could not be read. Please retry.</span>
           <span>No fixture is shown as live data.</span>
           <button className="secondary" onClick={() => void load()}>
             Retry

@@ -70,7 +70,6 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
     contractAddress ? "loading" : "unconfigured",
   );
   const [edition, setEdition] = useState<EditionView>();
-  const [error, setError] = useState<string>();
 
   const load = useCallback(async () => {
     if (!contractAddress || !publicClient) return;
@@ -112,15 +111,9 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
         distributorUnits: distributorUnits as bigint,
         unitPriceWei: unitPriceWei as bigint,
       });
-      setError(undefined);
       setState("ready");
-    } catch (reason) {
+    } catch {
       setEdition(undefined);
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "This charity edition could not be read from the contract.",
-      );
       setState("error");
     }
   }, [contractAddress, publicClient, tokenId]);
@@ -155,9 +148,13 @@ export function CharityEditionDetail({ tokenId }: { tokenId: string }) {
       )}
 
       {state === "error" && (
-        <div className="market-runtime-state" role="alert">
+        <div
+          className="market-runtime-state"
+          role="alert"
+          data-testid="charity-edition-read-error"
+        >
           <strong>Edition unavailable</strong>
-          <span>{error}</span>
+          <span>This charity edition could not be read. Please retry.</span>
           <button className="secondary" onClick={() => void load()}>
             Retry
           </button>
