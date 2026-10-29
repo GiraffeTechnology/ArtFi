@@ -58,7 +58,9 @@ type NFTTaskJournalConfig struct {
 	DB                 *sql.DB
 	PeerAuthenticator  NFTTaskPeerAuthenticator
 	CapabilityVerifier NFTTaskCapabilityVerifier
-	Now                func() time.Time
+	// ReceiptAuthority is an explicit installed verifier, never a caller-selected trust root.
+	ReceiptAuthority NFTReceiptAuthority
+	Now              func() time.Time
 }
 type nftTaskInput struct {
 	Action    string       `json:"action"`
@@ -162,9 +164,12 @@ func NewNFTTaskJournalHandler(config NFTTaskJournalConfig) http.Handler {
 	}
 	store := &nftOperationStore{db: config.DB, now: now}
 	peer, verifier := config.PeerAuthenticator, config.CapabilityVerifier
-	return newNFTTaskJournalHandler(store, peer, verifier, now, config.DB != nil)
+	return newNFTTaskJournalHandlerWithReceiptAuthority(store, peer, verifier, now, config.DB != nil, config.ReceiptAuthority)
 }
 func newNFTTaskJournalHandler(store *nftOperationStore, peer NFTTaskPeerAuthenticator, verifier NFTTaskCapabilityVerifier, now func() time.Time, configured bool) http.Handler {
+	return newNFTTaskJournalHandlerWithReceiptAuthority(store, peer, verifier, now, configured, nil)
+}
+func newNFTTaskJournalHandlerWithReceiptAuthority(store *nftOperationStore, peer NFTTaskPeerAuthenticator, verifier NFTTaskCapabilityVerifier, now func() time.Time, configured bool, receiptAuthority NFTReceiptAuthority) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Pragma", "no-cache")
@@ -227,15 +232,37 @@ func newNFTTaskJournalHandler(store *nftOperationStore, peer NFTTaskPeerAuthenti
 			writeUserAuthError(w, r, errUserForbidden)
 			return
 		}
-		if receipt {
-			// Typed claims alone do not establish the authoritative business and
-			// journal association. No receipt may fall back to the listing path.
-			writeUserAuthError(w, r, errUserAuthUnavailable)
-			return
-		}
 		principal := verifiedNFTPrincipal{wallet: claims.Wallet, chainID: claims.ChainID, task: &claims.Principal}
 		operationContext, cancel := context.WithDeadline(r.Context(), time.UnixMilli(claims.ExpiresAtMs))
 		defer cancel()
+		if receipt {
+			// Real consumed claims alone remain insufficient. The dedicated
+			// environment constructor installs no receipt authority by default.
+			if receiptAuthority == nil {
+				writeUserAuthError(w, r, errUserAuthUnavailable)
+				return
+			}
+			if !validNFTReceiptJournalInput(body, input.Action) {
+				writeUserAuthError(w, r, errUserForbidden)
+				return
+			}
+			if operationContext.Err() != nil || now().UnixMilli() >= claims.ExpiresAtMs {
+				writeUserAuthError(w, r, errUserAuthUnavailable)
+				return
+			}
+			binding, resolveErr := receiptAuthority.ResolveReceipt(operationContext, claims)
+			if resolveErr != nil || operationContext.Err() != nil || now().UnixMilli() >= claims.ExpiresAtMs {
+				// Never expose source/transport diagnostics or retry this
+				// already-consumed one-use capability.
+				writeUserAuthError(w, r, errUserAuthUnavailable)
+				return
+			}
+			principal.receipt, err = newVerifiedNFTReceiptContext(binding, claims)
+			if err != nil {
+				writeUserAuthError(w, r, errUserAuthUnavailable)
+				return
+			}
+		}
 		operation, err := store.apply(operationContext, principal, input.Action, input.Operation)
 		if err != nil {
 			writeNFTStoreError(w, r, err)
