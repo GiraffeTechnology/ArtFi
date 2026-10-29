@@ -342,14 +342,13 @@ export function createDaoActionSession(context: string) {
                 }
               : {}),
           });
-      } catch (error) {
-        // Unreadable storage must not make an interrupted request appear cancelled.
+      } catch {
+        // Storage and parser diagnostics are untrusted display input. Keep the
+        // original unresolved state without exposing their messages to the page.
         publish({
           awaitingWallet: !snapshot.transaction,
           recoveryNotice:
-            error instanceof Error
-              ? error.message
-              : "Browser DAO recovery is unavailable. Check the wallet before continuing.",
+            "Browser DAO recovery is unavailable. Check the wallet and any saved transaction before continuing.",
         });
       }
     },
@@ -477,14 +476,12 @@ export function createDaoActionSession(context: string) {
       if (transaction.phase === "confirmed" || transaction.phase === "failed") {
         try {
           clearOwnedRequest(storage);
-        } catch (error) {
+        } catch {
           publish({
             transaction,
             awaitingWallet: true,
             recoveryNotice:
-              error instanceof Error
-                ? error.message
-                : "The saved request could not be cleared. New writes remain blocked.",
+              "The saved DAO request could not be cleared. New writes remain blocked; reconcile the saved request before continuing.",
           });
           return true;
         }
@@ -520,7 +517,11 @@ export function createDaoActionSession(context: string) {
         }
       }
       publish({
-        actionError,
+        // Callers may pass a wallet or RPC error. Its text is not a public
+        // failure contract and must never become rendered session state.
+        actionError: actionError
+          ? "The DAO action could not complete. Review its inputs and current chain state, and reconcile any saved request before trying again."
+          : "",
         ...(snapshot.awaitingWallet
           ? { recoveryNotice: unknownWalletNotice }
           : {}),
