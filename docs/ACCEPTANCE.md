@@ -95,8 +95,8 @@ Every Class B and Class C requirement `VERIFIED` on Hoodi (560048), on one integ
 8. Auth negative tests: unauthenticated trade rejected, role escalation rejected, browser-supplied
    headers alone cannot grant admin access.
 9. Preview/hash mappings are available only where the asset model permits a preview, using
-   the separate isolated test payload for Hoodi evidence. Charity public metadata and pages
-   have no artwork preview (CH.7). Watermarked holder files require wallet ownership
+   the separate isolated test payload for Hoodi evidence. Charity public token metadata
+   has no artwork preview (CH.7). Watermarked holder files require wallet ownership
    verification and have no browser preview (CH.5/CH.11). No preview or holder path exposes
    an unwatermarked master; the frozen historical charity batch is not regenerated.
 10. Failure paths exercised: RPC unavailable, insufficient gas, rejected signature, translation
@@ -252,7 +252,7 @@ of §6 remain the terminus for the complete market only — **a stage does not r
 6. Fail the audit if a Class A surface regressed without approval.
 7. Fail the audit if local, mock or historical evidence is described as current runtime delivery.
 8. Fail the audit if a required, model-permitted preview or its hash mapping is missing,
-   if charity public metadata/pages expose an artwork preview, or if a charity holder file
+   if charity public token metadata contains an artwork preview, or if a charity holder file
    has a browser preview. Fail for any exposed unwatermarked master, master download path,
    private key, server credential, raw signed transaction, prohibited IP or internal topology.
    Apply the distinct asset and isolated-payload rules in `PRD.md` §7; do not demand a public
