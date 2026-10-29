@@ -268,3 +268,130 @@ describe("bounded public setup recovery", () => {
     },
   );
 });
+
+describe("private setup failures preserve original recovery", () => {
+  const safe =
+    "Setup could not be completed. Check the saved setup and any existing transaction before retrying.";
+  const privateFailure =
+    "TEST_ONLY wallet calldata=0x1234 signature=TEST_ONLY-signature " +
+    "Authorization=TEST_ONLY-token " +
+    "sensitive-provider-detail ".repeat(2000);
+
+  it.each(["prepared", "awaiting-wallet", "broadcast"] as const)(
+    "keeps the %s record intact while hiding provider details",
+    (phase) => {
+      const { recovery, lease, target } = start();
+      if (phase !== "prepared") recovery.awaitWallet(lease, "mint");
+      if (phase === "broadcast") recovery.broadcast(lease, hash);
+      const record = structuredClone(recovery.getSnapshot().record);
+      const stored = [...target.values.entries()];
+      recovery.fail(lease, new Error(privateFailure));
+      expect(recovery.getSnapshot().error).toContain(safe);
+      expect(recovery.getSnapshot().error).not.toContain("TEST_ONLY");
+      expect(recovery.getSnapshot().error.length).toBeLessThan(400);
+      expect(recovery.getSnapshot().record).toEqual(record);
+      expect([...target.values.entries()]).toEqual(stored);
+      if (phase === "awaiting-wallet")
+        expect(recovery.getSnapshot().error).toContain(
+          "no known transaction hash",
+        );
+      else expect(recovery.getSnapshot().error).toBe(safe);
+      recovery.finish(lease);
+      const reload = session(target).recovery;
+      expect(reload.getSnapshot().record).toEqual(record);
+      if (phase === "prepared") expect(reload.begin()).toBeDefined();
+      else {
+        expect(reload.begin()).toBeUndefined();
+        expect(reload.begin(true)).toBeDefined();
+      }
+    },
+  );
+
+  it.each(["message", "toString"] as const)(
+    "does not inspect an untrusted failure %s",
+    (property) => {
+      const { recovery, lease } = start();
+      const failure = Object.defineProperty(new Error(), property, {
+        get() {
+          throw new Error("TEST_ONLY forbidden error accessor");
+        },
+      });
+      expect(() => recovery.fail(lease, failure)).not.toThrow();
+      expect(recovery.getSnapshot().error).toBe(safe);
+    },
+  );
+
+  it("retains a late original hash after a hidden wallet failure and view reload", () => {
+    const { recovery, lease, target } = start();
+    recovery.awaitWallet(lease, "mint");
+    recovery.fail(lease, new Error(privateFailure));
+    expect(recovery.begin()).toBeUndefined();
+    expect(recovery.begin(true)).toBeUndefined();
+    recovery.broadcast(lease, hash);
+    recovery.finish(lease);
+    const reload = session(target).recovery;
+    expect(reload.getSnapshot().record?.pending?.hash).toBe(hash);
+    expect(reload.begin()).toBeUndefined();
+    const checking = reload.begin(true)!;
+    reload.resolved(checking, { ...data, stage: "confirmed" });
+    reload.finish(checking);
+    expect(reload.getSnapshot().record?.pending).toBeUndefined();
+    expect(reload.getSnapshot().record?.data.stage).toBe("confirmed");
+    expect(reload.begin()).toBeDefined();
+  });
+
+  it("ignores an expired failure lease without replacing the current result", () => {
+    const { recovery, lease } = start();
+    recovery.finish(lease);
+    const next = recovery.begin()!;
+    recovery.fail(next, new Error(privateFailure));
+    const before = recovery.getSnapshot();
+    let notifications = 0;
+    const stop = recovery.subscribe(() => notifications++);
+    recovery.fail(lease, new Error(privateFailure));
+    expect(recovery.getSnapshot()).toBe(before);
+    expect(notifications).toBe(0);
+    stop();
+  });
+
+  it("keeps a storage-failed hash blocked until the original request is reconciled", () => {
+    const { recovery, lease, target } = start();
+    recovery.awaitWallet(lease, "deposit");
+    const write = target.setItem;
+    target.setItem = () => {
+      throw new Error(privateFailure);
+    };
+    recovery.broadcast(lease, hash);
+    recovery.fail(lease, new Error(privateFailure));
+    expect(recovery.getSnapshot().blocked).toBe(true);
+    expect(recovery.getSnapshot().record?.pending?.hash).toBe(hash);
+    expect(recovery.getSnapshot().error).toBe(safe);
+    recovery.finish(lease);
+    expect(recovery.begin()).toBeUndefined();
+    target.setItem = write;
+    const checking = recovery.begin(true)!;
+    recovery.resolved(checking, { ...data, stage: "confirmed" });
+    recovery.finish(checking);
+    expect(session(target).recovery.getSnapshot().record?.data.stage).toBe(
+      "confirmed",
+    );
+    expect(recovery.begin()).toBeDefined();
+  });
+
+  it("preserves a repriced original request through a hidden reconciliation failure", () => {
+    const { recovery, lease, target } = start();
+    recovery.awaitWallet(lease, "deposit");
+    recovery.broadcast(lease, hash);
+    recovery.repriced(lease, replacement);
+    recovery.fail(lease, new Error(privateFailure));
+    recovery.finish(lease);
+    const reload = session(target).recovery;
+    expect(reload.getSnapshot().record?.pending?.hash).toBe(replacement);
+    expect(reload.begin()).toBeUndefined();
+    const checking = reload.begin(true)!;
+    reload.resolved(checking, { ...data, stage: "confirmed" });
+    reload.finish(checking);
+    expect(reload.getSnapshot().record?.pending).toBeUndefined();
+    expect(reload.begin()).toBeDefined();
+  });
+});
