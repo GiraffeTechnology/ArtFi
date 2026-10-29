@@ -47,18 +47,23 @@ const address = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as const;
 const other = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as const;
 const now = Date.UTC(2026, 9, 30);
 const privateMarker = "PRIVATE_AUTHENTICATED_HOLDING_FROM_WALLET_A";
-let observed: ReturnType<typeof useUserSession> | undefined;
 function PrivateConsumer() {
   const auth = useUserSession();
-  observed = auth;
   return createElement(
     "section",
-    { "data-authenticated": String(auth.authenticated) },
+    {
+      "data-authenticated": String(auth.authenticated),
+      "data-wallet-status": auth.walletStatus,
+      "data-revision": String(auth.revision),
+      "data-sign-out-pending": String(auth.signOutPending),
+      "data-busy": String(auth.busy),
+      "data-session-preserved": String(auth.session === mock.snapshot.session),
+      "data-sign-out-preserved": String(auth.signOut === mock.signOut),
+    },
     auth.authenticated ? privateMarker : "Sign in to view private holdings",
   );
 }
 function render() {
-  observed = undefined;
   return renderToStaticMarkup(
     createElement(
       UserSessionProvider,
@@ -103,8 +108,9 @@ afterEach(() => {
 });
 describe("live wallet session provider render", () => {
   it("keeps the matching authenticated wallet visible before any effect", () => {
-    expect(render()).toContain(privateMarker);
-    expect(observed?.authenticated).toBe(true);
+    const html = render();
+    expect(html).toContain(privateMarker);
+    expect(html).toContain('data-authenticated="true"');
     expectNoEffects();
   });
   it.each<[string, SessionWallet]>([
@@ -121,12 +127,13 @@ describe("live wallet session provider render", () => {
   ])("hides prior authentication on the first %s render", (_name, wallet) => {
     mock.wallet = wallet;
     const original = structuredClone(mock.snapshot);
-    expect(render()).not.toContain(privateMarker);
-    expect(observed?.authenticated).toBe(false);
-    expect(observed?.walletStatus).toBe(wallet.status);
+    const html = render();
+    expect(html).not.toContain(privateMarker);
+    expect(html).toContain('data-authenticated="false"');
+    expect(html).toContain(`data-wallet-status="${wallet.status}"`);
     // Do not mutate or revoke durable/controller state as part of rendering.
     expect(mock.snapshot).toEqual(original);
-    expect(observed?.revision).toBe(7);
+    expect(html).toContain('data-revision="7"');
     expectNoEffects();
     expect(mock.signOut).not.toHaveBeenCalled();
   });
@@ -139,33 +146,35 @@ describe("live wallet session provider render", () => {
     "hides expired %s before a delayed deadline callback",
     (field) => {
       mock.snapshot.session![field] = now;
-      expect(render()).not.toContain(privateMarker);
-      expect(observed?.authenticated).toBe(false);
+      const html = render();
+      expect(html).not.toContain(privateMarker);
+      expect(html).toContain('data-authenticated="false"');
       expectNoEffects();
     },
   );
   it("never promotes an unauthenticated controller snapshot", () => {
     mock.snapshot.authenticated = false;
-    expect(render()).not.toContain(privateMarker);
-    expect(observed?.authenticated).toBe(false);
+    const html = render();
+    expect(html).not.toContain(privateMarker);
+    expect(html).toContain('data-authenticated="false"');
     expectNoEffects();
   });
   it("does not advertise authentication while retirement is pending", () => {
     mock.snapshot.signOutPending = true;
-    expect(render()).not.toContain(privateMarker);
-    expect(observed?.signOutPending).toBe(true);
+    const html = render();
+    expect(html).not.toContain(privateMarker);
+    expect(html).toContain('data-sign-out-pending="true"');
     expectNoEffects();
   });
-  it("keeps a saved disconnected session available for explicit sign-out", async () => {
+  it("keeps a saved disconnected session available for explicit sign-out", () => {
     mock.wallet = { status: "disconnected" };
     const html = render();
     expect(html).not.toContain(privateMarker);
     expect(html).toContain("Wallet session saved");
     expect(html).toContain("Sign out");
-    expect(observed?.session).toBe(mock.snapshot.session);
-    expect(observed?.signOut).toBe(mock.signOut);
-    await observed!.signOut();
-    expect(mock.signOut).toHaveBeenCalledTimes(1);
+    expect(html).toContain('data-session-preserved="true"');
+    expect(html).toContain('data-sign-out-preserved="true"');
+    expect(mock.signOut).not.toHaveBeenCalled();
     expectNoEffects();
   });
   it("retains an enabled disconnected retry after failed sign-out", () => {
@@ -177,8 +186,8 @@ describe("live wallet session provider render", () => {
     const html = render();
     expect(html).toContain("Retry sign out");
     expect(html).not.toMatch(/<button[^>]*disabled/);
-    expect(observed?.signOutPending).toBe(true);
-    expect(observed?.walletStatus).toBe("disconnected");
+    expect(html).toContain('data-sign-out-pending="true"');
+    expect(html).toContain('data-wallet-status="disconnected"');
     expectNoEffects();
   });
   it("exposes the live connected status without authenticating a missing session", () => {
@@ -188,8 +197,8 @@ describe("live wallet session provider render", () => {
     const html = render();
     expect(html).toContain(">Sign in<");
     expect(html).not.toMatch(/<button[^>]*disabled/);
-    expect(observed?.authenticated).toBe(false);
-    expect(observed?.walletStatus).toBe("connected");
+    expect(html).toContain('data-authenticated="false"');
+    expect(html).toContain('data-wallet-status="connected"');
     expectNoEffects();
   });
   it("keeps an existing busy retirement barrier intact", () => {
@@ -201,8 +210,8 @@ describe("live wallet session provider render", () => {
     const html = render();
     expect(html).toContain("Retry sign out");
     expect(html).toMatch(/<button[^>]*disabled/);
-    expect(observed?.busy).toBe(true);
-    expect(observed?.signOutPending).toBe(true);
+    expect(html).toContain('data-busy="true"');
+    expect(html).toContain('data-sign-out-pending="true"');
     expectNoEffects();
   });
 });
