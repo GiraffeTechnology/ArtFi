@@ -32,7 +32,10 @@ import {
   nativeOrderFromAuthorization,
   type NativeOrder,
 } from "@/lib/native-order";
-import { verifyFractionSale } from "@/lib/signed-market-preflight";
+import {
+  verifyFractionSale,
+  verifyFractionSigningState,
+} from "@/lib/signed-market-preflight";
 import { assetDeploymentBinding } from "@/lib/asset-binding";
 import { artFiFractionMarketAbi, fractionTokenAbi } from "@/lib/contracts";
 import {
@@ -607,7 +610,17 @@ function FractionListingScreen({
             refreshGrounding: grounding,
             assertCurrent: signingOperation.assertCurrent,
           });
-        else await grounding();
+        else {
+          await grounding();
+          signingOperation.assertCurrent();
+          await verifyFractionSigningState({
+            client: publicClient,
+            intent: draft,
+            domain,
+            expectedChainId: supportedChain.id,
+            assertCurrent: signingOperation.assertCurrent,
+          });
+        }
         signingOperation.assertCurrent();
         return signTypedDataAsync({
           ...fractionIntentTypedData(draft, domain),

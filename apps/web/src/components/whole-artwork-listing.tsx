@@ -29,7 +29,10 @@ import {
   decodeNativeOrder,
   nativeOrderFromAuthorization,
 } from "@/lib/native-order";
-import { verifyWholeArtworkSale } from "@/lib/signed-market-preflight";
+import {
+  verifyWholeArtworkSale,
+  verifyWholeArtworkSigningState,
+} from "@/lib/signed-market-preflight";
 import { assetDeploymentBinding } from "@/lib/asset-binding";
 import {
   fractionTokenAbi,
@@ -468,9 +471,18 @@ function WholeArtworkListingScreen({
       const hash = saleIntentHash(draft, domain, supportedChain.id);
       await grounding();
       operation.assertCurrent();
-      const signature = await operation.authorize(async () => {
+      const signingOperation = operation;
+      const signature = await signingOperation.authorize(async () => {
         await grounding();
-        operation!.assertCurrent();
+        signingOperation.assertCurrent();
+        await verifyWholeArtworkSigningState({
+          client: publicClient,
+          intent: draft,
+          domain,
+          expectedChainId: supportedChain.id,
+          assertCurrent: signingOperation.assertCurrent,
+        });
+        signingOperation.assertCurrent();
         return signTypedDataAsync({
           ...saleIntentTypedData(draft, domain),
           account: address,

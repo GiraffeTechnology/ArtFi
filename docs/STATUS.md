@@ -1,5 +1,20 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-30 current signing state for ordinary sale orders
+
+M2.5 ordinary whole-artwork and fractional sale authorizations now recheck the captured
+seller epoch and sale window at a mined chain snapshot inside the wallet signing callback,
+after the existing grounding and session checks. The snapshot block and chain are checked
+again before returning. Stale epochs, a closed window, a changed operation or a reorganized
+observation stop the request without changing the signed terms or submitting a transaction.
+Late provider results after the existing read deadline cannot start further signing-check
+RPCs. These are current observations, not a reservation or finality guarantee.
+
+The existing fractional amendment callback keeps its final old-authorization retirement
+check; no extra asynchronous read is inserted after that check. At submission, new signing
+regressions and the two changed UI paths are **NOT_RUN** and require new-head Linux CI.
+Live wallet, chain and complete-product acceptance remain separate and open.
+
 ## 2026-10-30 fraction amendment observation and signing guard candidate
 
 M2.5/M2.6 replacement orders now snapshot the original sale terms before asynchronous reads.

@@ -67,11 +67,18 @@ async function boundedPreflight<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-async function chainSnapshot(client: Reader, expectedChainId: number) {
+async function chainSnapshot(
+  client: Reader,
+  expectedChainId: number,
+  assertActive: () => void = () => undefined,
+) {
+  assertActive();
   if ((await client.getChainId()) !== expectedChainId) {
     throw new Error("The market reader is connected to a different chain.");
   }
+  assertActive();
   const block = await client.getBlock({ blockTag: "latest" });
+  assertActive();
   if (
     typeof block.number !== "bigint" ||
     block.number < 0n ||
@@ -96,11 +103,14 @@ async function assertCanonicalSnapshot(
   client: Reader,
   expectedChainId: number,
   snapshot: Awaited<ReturnType<typeof chainSnapshot>>,
+  assertActive: () => void = () => undefined,
 ) {
+  assertActive();
   const [checked, chainId] = await Promise.all([
     client.getBlock({ blockNumber: snapshot.blockNumber }),
     client.getChainId(),
   ]);
+  assertActive();
   if (
     chainId !== expectedChainId ||
     checked.number !== snapshot.blockNumber ||
@@ -385,5 +395,133 @@ export async function verifyFractionSale({
       blockHash,
       remaining: intent.maxAmount - filled,
     };
+  });
+}
+
+type SaleSigningContext = Pick<Context, "client" | "expectedChainId"> & {
+  assertCurrent: () => void;
+};
+
+async function verifySaleSigningFacts({
+  client,
+  expectedChainId,
+  assertCurrent,
+  market,
+  seller,
+  epoch,
+  startsAt,
+  endsAt,
+  abi,
+}: SaleSigningContext & {
+  market: Address;
+  seller: Address;
+  epoch: bigint;
+  startsAt: number;
+  endsAt: number;
+  abi: typeof wholeArtworkMarketAbi | typeof artFiFractionMarketAbi;
+}) {
+  // All signing facts are primitives captured by the wrappers before any await.
+  let retired = false;
+  const assertActive = () => {
+    if (retired)
+      throw new Error(
+        "The sale signing check expired. Refresh before signing.",
+      );
+    assertCurrent();
+  };
+  try {
+    return await boundedPreflight(async () => {
+      const snapshot = await chainSnapshot(
+        client,
+        expectedChainId,
+        assertActive,
+      );
+      assertActive();
+      const currentEpoch = await client.readContract({
+        address: market,
+        abi,
+        functionName: "sellerEpoch",
+        args: [seller],
+        blockNumber: snapshot.blockNumber,
+      });
+      assertActive();
+      if (
+        typeof currentEpoch !== "bigint" ||
+        currentEpoch < 0n ||
+        currentEpoch >= 1n << 256n
+      )
+        throw new Error("The current seller epoch is unavailable.");
+      if (currentEpoch !== epoch)
+        throw new Error(
+          "The seller epoch changed. Refresh sale terms before signing.",
+        );
+      if (snapshot.now < startsAt || snapshot.now >= endsAt)
+        throw new Error(
+          "The sale window is not currently open. Refresh before signing.",
+        );
+      await assertCanonicalSnapshot(
+        client,
+        expectedChainId,
+        snapshot,
+        assertActive,
+      );
+      assertActive();
+      return Object.freeze(snapshot);
+    });
+  } finally {
+    // A late provider response must not start another read after the deadline or a failure.
+    retired = true;
+  }
+}
+
+/** Check existing whole-artwork terms inside the wallet callback, after source/session waits.
+ * This does not reserve an epoch or claim finality; settlement keeps its atomic checks. */
+export function verifyWholeArtworkSigningState({
+  client,
+  expectedChainId,
+  assertCurrent,
+  intent,
+  domain,
+}: SaleSigningContext & { intent: SaleIntent; domain: SaleIntentDomain }) {
+  const captured = Object.freeze({ ...intent });
+  const capturedDomain = Object.freeze({ ...domain });
+  saleIntentHash(captured, capturedDomain, expectedChainId);
+  return verifySaleSigningFacts({
+    client,
+    expectedChainId,
+    assertCurrent,
+    market: capturedDomain.verifyingContract,
+    seller: captured.seller,
+    epoch: captured.epoch,
+    startsAt: captured.startsAt,
+    endsAt: captured.endsAt,
+    abi: wholeArtworkMarketAbi,
+  });
+}
+
+/** The same read-only signing check for a fresh fractional authorization. */
+export function verifyFractionSigningState({
+  client,
+  expectedChainId,
+  assertCurrent,
+  intent,
+  domain,
+}: SaleSigningContext & {
+  intent: FractionSaleIntent;
+  domain: FractionIntentDomain;
+}) {
+  const captured = Object.freeze({ ...intent });
+  const capturedDomain = Object.freeze({ ...domain });
+  fractionIntentHash(captured, capturedDomain, expectedChainId);
+  return verifySaleSigningFacts({
+    client,
+    expectedChainId,
+    assertCurrent,
+    market: capturedDomain.verifyingContract,
+    seller: captured.seller,
+    epoch: captured.epoch,
+    startsAt: captured.startsAt,
+    endsAt: captured.endsAt,
+    abi: artFiFractionMarketAbi,
   });
 }
