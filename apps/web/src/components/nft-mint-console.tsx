@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { CharityEditionCreateFlow } from "./charity-edition-create-flow";
 import { RwaCreateFlow } from "./rwa-create-flow";
@@ -30,6 +30,11 @@ export function NFTMintConsole({
   initialStandard?: Standard;
 }) {
   const [standard, setStandard] = useState<Standard>(initialStandard);
+  const [focused, setFocused] = useState<Standard>(initialStandard);
+  const tabs = useRef<Record<Standard, HTMLButtonElement | null>>({
+    erc721: null,
+    erc1155: null,
+  });
 
   return (
     <section
@@ -40,6 +45,7 @@ export function NFTMintConsole({
         className="nft-standard-selector"
         role="tablist"
         aria-label="NFT standard"
+        aria-orientation="horizontal"
       >
         {standards.map((item) => {
           const selected = standard === item.id;
@@ -54,9 +60,38 @@ export function NFTMintConsole({
               }
               id={`mint-tab-${item.id}`}
               key={item.id}
-              onClick={() => setStandard(item.id)}
+              ref={(node) => {
+                tabs.current[item.id] = node;
+              }}
+              onFocus={() => setFocused(item.id)}
+              onClick={() => {
+                setFocused(item.id);
+                setStandard(item.id);
+              }}
+              onKeyDown={(event) => {
+                let next: Standard;
+                if (event.key === "Home") next = standards[0].id;
+                else if (event.key === "End")
+                  next = standards[standards.length - 1].id;
+                else if (
+                  event.key === "ArrowRight" ||
+                  event.key === "ArrowLeft"
+                ) {
+                  const index = standards.findIndex(
+                    (entry) => entry.id === item.id,
+                  );
+                  const step = event.key === "ArrowRight" ? 1 : -1;
+                  next =
+                    standards[
+                      (index + step + standards.length) % standards.length
+                    ].id;
+                } else return;
+                event.preventDefault();
+                // Manual activation keeps the current form until Enter, Space or click.
+                tabs.current[next]?.focus();
+              }}
               role="tab"
-              tabIndex={selected ? 0 : -1}
+              tabIndex={focused === item.id ? 0 : -1}
               type="button"
             >
               <span>{item.kicker}</span>
@@ -82,17 +117,24 @@ export function NFTMintConsole({
         </li>
       </ol>
 
-      <div
-        aria-labelledby={`mint-tab-${standard}`}
-        id={`mint-panel-${standard}`}
-        role="tabpanel"
-      >
-        {standard === "erc721" ? (
-          <RwaCreateFlow />
-        ) : (
-          <CharityEditionCreateFlow />
-        )}
-      </div>
+      {standards.map((item) => (
+        <div
+          key={item.id}
+          aria-labelledby={`mint-tab-${item.id}`}
+          id={`mint-panel-${item.id}`}
+          role="tabpanel"
+          hidden={standard !== item.id}
+          tabIndex={standard === item.id ? 0 : -1}
+        >
+          {standard === item.id ? (
+            item.id === "erc721" ? (
+              <RwaCreateFlow />
+            ) : (
+              <CharityEditionCreateFlow />
+            )
+          ) : null}
+        </div>
+      ))}
     </section>
   );
 }

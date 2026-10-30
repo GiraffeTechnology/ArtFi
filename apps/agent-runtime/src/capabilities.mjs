@@ -45,9 +45,9 @@ export function unavailableCapabilities(
     constitutionalMutations: false,
     privateKeyCustody: false,
     limitations: [
-      "The current Wallet interface requires owner confirmation for each operation; it has no delegated session key, autonomous broadcasting or HTTP agent write endpoint.",
-      "Autonomous execution is unavailable. Continue through the existing owner-confirmed ArtFi market screens where applicable.",
-      "Approved proof and execution adapters remain unavailable; no complete NO-HIL operation or Stage 2 acceptance is claimed.",
+      "No production wallet execution binding is configured for this ArtFi composition.",
+      "Autonomous execution is unavailable through this composition. Continue through the existing owner-confirmed ArtFi market screens where applicable.",
+      "Approved proof and production execution bindings are not configured in this ArtFi composition; no complete NO-HIL operation or Stage 2 acceptance is claimed.",
     ],
   };
 }

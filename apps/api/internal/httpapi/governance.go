@@ -35,25 +35,35 @@ type governanceProposalResponse struct {
 	VoteStart           uint64 `json:"voteStart"`
 }
 
+// Public configuration describes address syntax only. It does not verify
+// deployed bytecode, ownership, eligibility or transaction authority.
+func publicGovernanceConfigAddress(name string) string {
+	value := strings.TrimSpace(os.Getenv(name))
+	if !addressPattern.MatchString(value) || value == "0x0000000000000000000000000000000000000000" {
+		return ""
+	}
+	return strings.ToLower(value)
+}
+
 func governanceConfigFromEnv() governanceConfigResponse {
 	config := governanceConfigResponse{
-		ActionRegistryAddress: strings.TrimSpace(os.Getenv("ARTFI_DAO_ACTIONS_ADDRESS")),
+		ActionRegistryAddress: publicGovernanceConfigAddress("ARTFI_DAO_ACTIONS_ADDRESS"),
 		ApprovalPPM: map[string]int{
 			"marketMigration": 500_000,
 			"physicalAction":  666_667,
 			"forcedBuyout":    800_000,
 		},
 		ChainID:              hoodiChainID,
-		GovernorAddress:      strings.TrimSpace(os.Getenv("ARTFI_GOVERNOR_ADDRESS")),
+		GovernorAddress:      publicGovernanceConfigAddress("ARTFI_GOVERNOR_ADDRESS"),
 		MembershipAuthority:  "onchain-rwa-token-snapshot",
 		ProposalThresholdPPM: 100_000,
-		TokenAddress:         strings.TrimSpace(os.Getenv("ARTFI_GOVERNANCE_TOKEN_ADDRESS")),
-		VaultAddress:         strings.TrimSpace(os.Getenv("ARTFI_RWA_VAULT_ADDRESS")),
+		TokenAddress:         publicGovernanceConfigAddress("ARTFI_GOVERNANCE_TOKEN_ADDRESS"),
+		VaultAddress:         publicGovernanceConfigAddress("ARTFI_RWA_VAULT_ADDRESS"),
 	}
-	config.Enabled = addressPattern.MatchString(config.GovernorAddress) &&
-		addressPattern.MatchString(config.TokenAddress) &&
-		addressPattern.MatchString(config.ActionRegistryAddress) &&
-		addressPattern.MatchString(config.VaultAddress)
+	config.Enabled = config.GovernorAddress != "" &&
+		config.TokenAddress != "" &&
+		config.ActionRegistryAddress != "" &&
+		config.VaultAddress != ""
 	return config
 }
 

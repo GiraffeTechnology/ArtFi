@@ -1,0 +1,238 @@
+{
+  "fixture": "SYNTHETIC_NO_REAL_WALLET_OR_SOURCE",
+  "encoding": "Existing sorted-ASCII canonical SHA256 and PR225 application namespaces; independent fixture arithmetic only, not executed product acceptance",
+  "vectors": [
+    {
+      "name": "funded",
+      "binding": {
+        "tenant": "example-tenant",
+        "origin": "https://tenant.example:9445",
+        "taskId": "example-receipt-task",
+        "actor": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "escrow": "0x3333333333333333333333333333333333333333",
+        "runtimeCodeHash": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "principal": {
+        "kind": "task",
+        "taskId": "example-receipt-task",
+        "taskDigest": "0x8888888888888888888888888888888888888888888888888888888888888888",
+        "executorDigest": "0x9999999999999999999999999999999999999999999999999999999999999999",
+        "grantReference": "grant:example",
+        "grantPolicyVersion": "1",
+        "operationId": "example-funded"
+      },
+      "claims": {
+        "receiptPhase": "funded",
+        "receiptNonce": "2",
+        "receiptPlanDigest": "0x2f3b3a7bfc83cbb7fc2e2b665f214caca4437139171ebab69580d09e60009a8b",
+        "receiptJournalBindingHash": "0x2753648d6df2029856162b0ede5f9c6702053700848217f8b2631d0939082b6c"
+      },
+      "nativePlan": {
+        "id": "example_native_plan_0001",
+        "operationId": "native_d2fccd4a58d3907b3afa458f1a39c0190a96f74f3732f1071f504ec9d84e9430",
+        "taskPrincipal": {
+          "kind": "task",
+          "taskId": "example-receipt-task",
+          "taskDigest": "0x8888888888888888888888888888888888888888888888888888888888888888",
+          "executorDigest": "0x9999999999999999999999999999999999999999999999999999999999999999",
+          "grantReference": "grant:example",
+          "grantPolicyVersion": "1",
+          "operationId": "example-funded"
+        },
+        "kind": "transaction",
+        "chainId": 560048,
+        "request": {
+          "account": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "wholeReceipt": {
+          "schemaVersion": 1,
+          "phase": "funded",
+          "segmentId": "0x4749d8a2de0aada4dc2cb8edf179c1dac56ee0a57310920f40b6806f40b295a9",
+          "domain": {
+            "chainId": 560048,
+            "verifyingContract": "0x3333333333333333333333333333333333333333"
+          },
+          "sale": {
+            "seller": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "collection": "0x1111111111111111111111111111111111111111",
+            "tokenId": "7",
+            "paymentToken": "0x2222222222222222222222222222222222222222",
+            "price": "100",
+            "buyer": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "salt": "1",
+            "startsAt": 1000,
+            "endsAt": 2000,
+            "epoch": "0"
+          },
+          "correspondence": {
+            "settlementId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "assetRecordHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "oracleSourceId": "0x3333333333333333333333333333333333333333333333333333333333333333",
+            "requestHash": "0x4444444444444444444444444444444444444444444444444444444444444444",
+            "executionReferenceHash": "0x5555555555555555555555555555555555555555555555555555555555555555",
+            "previousSegment": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "oldCertificateHash": "0x6666666666666666666666666666666666666666666666666666666666666666",
+            "warehouseReceiptHash": "0x7777777777777777777777777777777777777777777777777777777777777777"
+          }
+        }
+      },
+      "nativePlanDigest": "78a81c14bb283df76d9d9ad1fb8af24f06050fcde2a57bb82bc178e4efb63f6f"
+    },
+    {
+      "name": "registered",
+      "binding": {
+        "tenant": "example-tenant",
+        "origin": "https://tenant.example:9445",
+        "taskId": "example-receipt-task",
+        "actor": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "escrow": "0x3333333333333333333333333333333333333333",
+        "runtimeCodeHash": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "principal": {
+        "kind": "task",
+        "taskId": "example-receipt-task",
+        "taskDigest": "0x8888888888888888888888888888888888888888888888888888888888888888",
+        "executorDigest": "0x9999999999999999999999999999999999999999999999999999999999999999",
+        "grantReference": "grant:example",
+        "grantPolicyVersion": "1",
+        "operationId": "example-registered"
+      },
+      "claims": {
+        "receiptPhase": "registered",
+        "receiptNonce": "2",
+        "receiptPlanDigest": "0xc6843ad539bb73d51fcf284ff239f3d2a41c4b1e65da7cac31c0eed9be2f029c",
+        "receiptJournalBindingHash": "0x3fcf60e2645e66b5c0a9688077fdf684d7f0a263055961a454369a00a36ea2d3"
+      },
+      "nativePlan": {
+        "id": "example_native_plan_0001",
+        "operationId": "native_4d8cf3d7c9a0bbad5fb1208084f1d18da4f4c32a23feef0e99059d9c6d15ce5a",
+        "taskPrincipal": {
+          "kind": "task",
+          "taskId": "example-receipt-task",
+          "taskDigest": "0x8888888888888888888888888888888888888888888888888888888888888888",
+          "executorDigest": "0x9999999999999999999999999999999999999999999999999999999999999999",
+          "grantReference": "grant:example",
+          "grantPolicyVersion": "1",
+          "operationId": "example-registered"
+        },
+        "kind": "transaction",
+        "chainId": 560048,
+        "request": {
+          "account": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "wholeReceipt": {
+          "schemaVersion": 1,
+          "phase": "registered",
+          "segmentId": "0x4749d8a2de0aada4dc2cb8edf179c1dac56ee0a57310920f40b6806f40b295a9",
+          "domain": {
+            "chainId": 560048,
+            "verifyingContract": "0x3333333333333333333333333333333333333333"
+          },
+          "sale": {
+            "seller": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "collection": "0x1111111111111111111111111111111111111111",
+            "tokenId": "7",
+            "paymentToken": "0x2222222222222222222222222222222222222222",
+            "price": "100",
+            "buyer": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "salt": "1",
+            "startsAt": 1000,
+            "endsAt": 2000,
+            "epoch": "0"
+          },
+          "correspondence": {
+            "settlementId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "assetRecordHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "oracleSourceId": "0x3333333333333333333333333333333333333333333333333333333333333333",
+            "requestHash": "0x4444444444444444444444444444444444444444444444444444444444444444",
+            "executionReferenceHash": "0x5555555555555555555555555555555555555555555555555555555555555555",
+            "previousSegment": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "oldCertificateHash": "0x6666666666666666666666666666666666666666666666666666666666666666",
+            "warehouseReceiptHash": "0x7777777777777777777777777777777777777777777777777777777777777777"
+          },
+          "kitRegistration": {
+            "version": "2",
+            "proofHash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      },
+      "nativePlanDigest": "025bbadfe219c33d14c75d7c99e88a0873d92f06a8f4192ccc5a0d8a4971ba5c"
+    },
+    {
+      "name": "paid",
+      "binding": {
+        "tenant": "example-tenant",
+        "origin": "https://tenant.example:9445",
+        "taskId": "example-receipt-task",
+        "actor": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "escrow": "0x3333333333333333333333333333333333333333",
+        "runtimeCodeHash": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "principal": {
+        "kind": "task",
+        "taskId": "example-receipt-task",
+        "taskDigest": "0x8888888888888888888888888888888888888888888888888888888888888888",
+        "executorDigest": "0x9999999999999999999999999999999999999999999999999999999999999999",
+        "grantReference": "grant:example",
+        "grantPolicyVersion": "1",
+        "operationId": "example-paid"
+      },
+      "claims": {
+        "receiptPhase": "paid",
+        "receiptNonce": "2",
+        "receiptPlanDigest": "0x55e59f15280edc31041906fab9d25483f0fce1115469ea7a72ad0956b502b347",
+        "receiptJournalBindingHash": "0xe68b26293f80a812d899569632e9f37c3e2c7cf15a1f9c4dbeb8e70f332f3dba"
+      },
+      "nativePlan": {
+        "id": "example_native_plan_0001",
+        "operationId": "native_f91dff8b85741318ef34e83aaffdc4e937f282a2286d416535406c2425cbe984",
+        "taskPrincipal": {
+          "kind": "task",
+          "taskId": "example-receipt-task",
+          "taskDigest": "0x8888888888888888888888888888888888888888888888888888888888888888",
+          "executorDigest": "0x9999999999999999999999999999999999999999999999999999999999999999",
+          "grantReference": "grant:example",
+          "grantPolicyVersion": "1",
+          "operationId": "example-paid"
+        },
+        "kind": "transaction",
+        "chainId": 560048,
+        "request": {
+          "account": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "wholeReceipt": {
+          "schemaVersion": 1,
+          "phase": "paid",
+          "segmentId": "0x4749d8a2de0aada4dc2cb8edf179c1dac56ee0a57310920f40b6806f40b295a9",
+          "domain": {
+            "chainId": 560048,
+            "verifyingContract": "0x3333333333333333333333333333333333333333"
+          },
+          "sale": {
+            "seller": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "collection": "0x1111111111111111111111111111111111111111",
+            "tokenId": "7",
+            "paymentToken": "0x2222222222222222222222222222222222222222",
+            "price": "100",
+            "buyer": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "salt": "1",
+            "startsAt": 1000,
+            "endsAt": 2000,
+            "epoch": "0"
+          },
+          "correspondence": {
+            "settlementId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+            "assetRecordHash": "0x2222222222222222222222222222222222222222222222222222222222222222",
+            "oracleSourceId": "0x3333333333333333333333333333333333333333333333333333333333333333",
+            "requestHash": "0x4444444444444444444444444444444444444444444444444444444444444444",
+            "executionReferenceHash": "0x5555555555555555555555555555555555555555555555555555555555555555",
+            "previousSegment": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "oldCertificateHash": "0x6666666666666666666666666666666666666666666666666666666666666666",
+            "warehouseReceiptHash": "0x7777777777777777777777777777777777777777777777777777777777777777"
+          }
+        }
+      },
+      "nativePlanDigest": "8aea1b6eb5e6a7257a8bff00e38fc5d51e61aa017967dc6c58f28f01f556996b"
+    }
+  ]
+}

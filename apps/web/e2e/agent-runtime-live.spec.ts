@@ -212,7 +212,7 @@ test("real signed session → BFF → durable agent → lost-ack recovery → ow
     page.getByRole("heading", { name: "Runtime capabilities" }),
   ).toBeVisible();
   await expect(
-    page.getByText("The current Wallet requires owner confirmation", {
+    page.getByText("No production wallet execution binding is configured", {
       exact: false,
     }),
   ).toBeVisible();

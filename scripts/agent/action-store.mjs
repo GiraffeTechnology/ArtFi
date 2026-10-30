@@ -1,3 +1,7 @@
+import {
+  actionHistoryPage,
+  decodeActionHistoryRows,
+} from "./action-history-page.mjs";
 import { TEST_MODE, validRuntimeMode } from "./runtime-profile.mjs";
 import { recordOptimization } from "./learning.mjs";
 import { randomUUID } from "node:crypto";
@@ -156,6 +160,7 @@ export function createActionStore(options) {
     mode,
     leaseDurationMs: base.leaseDurationMs,
     operationTimeoutMs: base.operationTimeoutMs,
+    totalOperationTimeoutMs: base.totalOperationTimeoutMs,
     async listPlannable({ after = "", limit = 4 } = {}) {
       if (
         (after !== "" && !/^[0-9a-f]{64}$/.test(after)) ||
@@ -662,18 +667,15 @@ export function createActionStore(options) {
         return rows.map(hydrate).filter((row) => row.plan.mode === mode);
       });
     },
-    async history(operationId) {
+    async history(operationId, input = {}) {
       if (!id(operationId)) fail("OPERATION_ID_INVALID");
+      const page = actionHistoryPage(input);
       return tx(async (c) => {
         const [rows] = await c.execute(
-          "SELECT event_id,observed_at_ms,event_json FROM agent_action_events WHERE operation_id=? ORDER BY event_id ASC LIMIT 100",
-          [operationId],
+          "SELECT event_id,operation_id,operation_version,observed_at_ms,event_json FROM agent_action_events WHERE operation_id=? AND event_id>? ORDER BY event_id ASC LIMIT ?",
+          [operationId, page.after, page.limit],
         );
-        return rows.map((row) => ({
-          id: String(row.event_id),
-          observedAt: Number(row.observed_at_ms),
-          ...decode(row.event_json),
-        }));
+        return decodeActionHistoryRows(rows, { operationId, mode, ...page });
       });
     },
   });

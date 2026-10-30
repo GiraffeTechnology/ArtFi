@@ -5,6 +5,7 @@ import {
   planFractionMatches,
   rankFractionCandidates,
   readFractionMatchPlan,
+  fractionBookReadTimeoutMs,
   type FractionLiquidity,
   type FractionMatchRequest,
 } from "./fraction-matching";
@@ -303,5 +304,269 @@ describe("fraction match chain snapshot", () => {
     await expect(
       readFractionMatchPlan(f.client, request, f.loadBook),
     ).rejects.toThrow("incomplete or malformed");
+  });
+});
+
+describe("fraction book bounded canonical observations", () => {
+  it.each([
+    { number: null },
+    { number: -1n },
+    { number: 20 },
+    { timestamp: -1n },
+    { timestamp: 1n << 48n },
+    { timestamp: 1500 },
+    { hash: "0x1234" },
+    { hash: `0x${"0".repeat(64)}` },
+  ])(
+    "rejects a malformed initial block before loading orders: %o",
+    async (partial) => {
+      const f = reader();
+      f.getBlock.mockResolvedValueOnce({
+        number: 20n,
+        timestamp: 1500n,
+        hash: `0x${"a".repeat(64)}`,
+        ...partial,
+      } as never);
+      await expect(
+        readFractionMatchPlan(f.client, request, f.loadBook),
+      ).rejects.toThrow("mined chain snapshot");
+      expect(f.loadBook).not.toHaveBeenCalled();
+    },
+  );
+  it.each([
+    { paused: undefined },
+    { paused: 0 },
+    { allowedAssetToken: "true" },
+    { allowedPaymentToken: 1 },
+  ])("requires exact market booleans: %o", async (partial) => {
+    const f = reader(partial);
+    await expect(
+      readFractionMatchPlan(f.client, request, f.loadBook),
+    ).rejects.toThrow("unavailable");
+  });
+  it.each([
+    { pilotPaymentCap: -1n },
+    { pilotPaymentCap: 1n << 256n },
+    { pilotPaymentUsed: undefined },
+    { pilotPaymentUsed: "0" },
+    { balanceOf: -1n },
+    { balanceOf: 100 },
+  ])("rejects malformed buyer payment state: %o", async (partial) => {
+    const f = reader(partial);
+    await expect(
+      readFractionMatchPlan(f.client, request, f.loadBook),
+    ).rejects.toThrow("payment state is invalid");
+  });
+  it.each([{ number: 21n }, { timestamp: 1501n }])(
+    "rejects inconsistent final block fields even with the same hash: %o",
+    async (partial) => {
+      const f = reader();
+      f.getBlock.mockResolvedValueOnce({
+        number: 20n,
+        timestamp: 1500n,
+        hash: `0x${"a".repeat(64)}`,
+      });
+      f.getBlock.mockResolvedValueOnce({
+        number: 20n,
+        timestamp: 1500n,
+        hash: `0x${"a".repeat(64)}`,
+        ...partial,
+      });
+      await expect(
+        readFractionMatchPlan(f.client, request, f.loadBook),
+      ).rejects.toThrow("chain or observed block changed");
+    },
+  );
+  it("rechecks the reader chain after every order and liquidity read", async () => {
+    const f = reader();
+    vi.mocked(f.client.getChainId)
+      .mockResolvedValueOnce(560048)
+      .mockResolvedValueOnce(1);
+    await expect(
+      readFractionMatchPlan(f.client, request, f.loadBook),
+    ).rejects.toThrow("chain or observed block changed");
+  });
+  it("does not accept an unknown signature verdict as valid authority", () => {
+    expect(() =>
+      plan([order()], {
+        states: [{ signatureValid: "true" as unknown as boolean }],
+      }),
+    ).toThrow("chain state is invalid");
+  });
+  it("does not accept an all-zero order-log digest", async () => {
+    const f = reader();
+    f.loadBook.mockResolvedValue({
+      data: [order()],
+      at: 1500,
+      priority: "price-time-hash",
+      logHash: `0x${"0".repeat(64)}`,
+    });
+    await expect(
+      readFractionMatchPlan(f.client, request, f.loadBook),
+    ).rejects.toThrow("incomplete or malformed");
+  });
+  it("retires a stalled initial RPC at the finite deadline without loading a book", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = reader();
+      vi.mocked(f.client.getChainId).mockImplementationOnce(
+        () => new Promise(() => {}),
+      );
+      const failure = expect(
+        readFractionMatchPlan(f.client, request, f.loadBook),
+      ).rejects.toThrow("timed out");
+      await vi.advanceTimersByTimeAsync(fractionBookReadTimeoutMs);
+      await failure;
+      expect(f.loadBook).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("does not deliver a late complete preview after the order-log deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = reader();
+      let resolve!: (value: Awaited<ReturnType<typeof f.loadBook>>) => void;
+      f.loadBook.mockImplementationOnce(
+        () =>
+          new Promise((done) => {
+            resolve = done;
+          }),
+      );
+      const success = vi.fn();
+      const result = readFractionMatchPlan(f.client, request, f.loadBook).then(
+        success,
+      );
+      const failure = expect(result).rejects.toThrow("timed out");
+      await vi.advanceTimersByTimeAsync(fractionBookReadTimeoutMs);
+      await failure;
+      resolve({
+        data: [order()],
+        at: 1500,
+        priority: "price-time-hash",
+        logHash: `0x${"b".repeat(64)}`,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(success).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("clears the deadline after a successful complete read", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = reader();
+      expect(
+        (await readFractionMatchPlan(f.client, request, f.loadBook)).matched,
+      ).toBe(10n);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("retired fraction-book work", () => {
+  it("does not start a block read after the initial chain RPC resolves past the deadline", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = reader();
+      let release!: (chainId: number) => void;
+      vi.mocked(f.client.getChainId).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      );
+      const result = readFractionMatchPlan(f.client, request, f.loadBook);
+      const failure = expect(result).rejects.toThrow("timed out");
+      await vi.advanceTimersByTimeAsync(fractionBookReadTimeoutMs);
+      await failure;
+      release(560048);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(f.getBlock).not.toHaveBeenCalled();
+      expect(f.loadBook).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not start liquidity RPCs after a retired order-log response arrives", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = reader();
+      let release!: (book: Awaited<ReturnType<typeof f.loadBook>>) => void;
+      f.loadBook.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      );
+      const result = readFractionMatchPlan(f.client, request, f.loadBook);
+      const failure = expect(result).rejects.toThrow("timed out");
+      await vi.advanceTimersByTimeAsync(fractionBookReadTimeoutMs);
+      await failure;
+      release({
+        data: [order()],
+        at: 1500,
+        priority: "price-time-hash",
+        logHash: `0x${"b".repeat(64)}`,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(f.readContract).not.toHaveBeenCalled();
+      expect(f.getBlock).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not launch a ninth candidate or final canonical reads when the first batch finishes late", async () => {
+    vi.useFakeTimers();
+    try {
+      const f = reader();
+      f.loadBook.mockResolvedValue({
+        data: Array.from({ length: 9 }, (_, i) =>
+          order({ salt: String(i + 1) }),
+        ),
+        at: 1500,
+        priority: "price-time-hash",
+        logHash: `0x${"b".repeat(64)}`,
+      });
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const original = f.readContract.getMockImplementation()!;
+      f.readContract.mockImplementation(async (input) => {
+        if (input.functionName === "intentFilled") await held;
+        return original(input);
+      });
+      const result = readFractionMatchPlan(f.client, request, f.loadBook);
+      const failure = expect(result).rejects.toThrow("timed out");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(
+        f.readContract.mock.calls.filter(
+          ([x]) => x.functionName === "intentFilled",
+        ),
+      ).toHaveLength(8);
+      await vi.advanceTimersByTimeAsync(fractionBookReadTimeoutMs);
+      await failure;
+      release();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(
+        f.readContract.mock.calls.filter(
+          ([x]) => x.functionName === "intentFilled",
+        ),
+      ).toHaveLength(8);
+      expect(f.getBlock).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(f.client.getChainId)).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

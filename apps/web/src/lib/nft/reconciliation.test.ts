@@ -12,13 +12,23 @@ const state = vi.hoisted(() => ({
   block: null as unknown,
   blockNumber: 101,
   chainId: 1,
+  networkReads: 0,
+  blockReads: 0,
+  changeBlockAfterFirst: false,
+  changeChainAfterFirst: false,
   updates: [] as unknown[],
 }));
 vi.mock("./recorder", () => ({
   NftPlanRecorder: class {},
   ReadOnlyNftProvider: class {
     async getNetwork() {
-      return { chainId: BigInt(state.chainId) };
+      return {
+        chainId: BigInt(
+          state.changeChainAfterFirst && ++state.networkReads > 1
+            ? 8453
+            : state.chainId,
+        ),
+      };
     }
     async getTransaction() {
       return state.tx;
@@ -27,7 +37,9 @@ vi.mock("./recorder", () => ({
       return state.receipt;
     }
     async getBlock() {
-      return state.block;
+      return state.changeBlockAfterFirst && ++state.blockReads > 1
+        ? { number: 100, hash: `0x${"4".repeat(64)}` }
+        : state.block;
     }
     async getBlockNumber() {
       return state.blockNumber;
@@ -64,7 +76,14 @@ function event(expectedHash = orderHash, recipient = wallet) {
     [],
     [],
   ]);
-  return { address: SEAPORT, topics: log.topics, data: log.data };
+  return {
+    address: SEAPORT,
+    topics: log.topics,
+    data: log.data,
+    transactionHash: hash,
+    blockHash,
+    blockNumber: 100,
+  };
 }
 function operation(): NftOperation {
   const plan: NftPlan = {
@@ -116,9 +135,30 @@ beforeEach(() => {
   state.chainId = 1;
   state.blockNumber = 101;
   state.updates = [];
-  state.tx = { from: wallet, to: SEAPORT, data: "0x1234", value: 100n };
-  state.receipt = { blockNumber: 100, blockHash, status: 1, logs: [event()] };
-  state.block = { hash: blockHash };
+  state.networkReads = 0;
+  state.blockReads = 0;
+  state.changeBlockAfterFirst = false;
+  state.changeChainAfterFirst = false;
+  state.tx = {
+    hash,
+    chainId: 1n,
+    blockNumber: 100,
+    blockHash,
+    from: wallet,
+    to: SEAPORT,
+    data: "0x1234",
+    value: 100n,
+  };
+  state.receipt = {
+    hash,
+    from: wallet,
+    to: SEAPORT,
+    blockNumber: 100,
+    blockHash,
+    status: 1,
+    logs: [event()],
+  };
+  state.block = { number: 100, hash: blockHash };
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("NFT transaction receipts and recovery", () => {
@@ -151,7 +191,15 @@ describe("NFT transaction receipts and recovery", () => {
     expect(
       (await reconcileNftOperation(operation(), "test-access")).status,
     ).toBe("pending");
-    state.receipt = { blockNumber: 100, blockHash, status: 1, logs: [event()] };
+    state.receipt = {
+      hash,
+      from: wallet,
+      to: SEAPORT,
+      blockNumber: 100,
+      blockHash,
+      status: 1,
+      logs: [event()],
+    };
     state.blockNumber = 100;
     expect(
       (await reconcileNftOperation(operation(), "test-access")).status,
@@ -159,7 +207,7 @@ describe("NFT transaction receipts and recovery", () => {
     expect(state.updates).toHaveLength(0);
   });
   it("demotes a confirmed receipt after canonical reorganization", async () => {
-    state.block = { hash: `0x${"4".repeat(64)}` };
+    state.block = { number: 100, hash: `0x${"4".repeat(64)}` };
     expect(
       (
         await reconcileNftOperation(
@@ -184,6 +232,9 @@ describe("NFT transaction receipts and recovery", () => {
     "reconciles a changed canonical outcome from %s through pending",
     async (status) => {
       state.receipt = {
+        hash,
+        from: wallet,
+        to: SEAPORT,
         blockNumber: 100,
         blockHash,
         status: status === "confirmed" ? 0 : 1,
@@ -202,7 +253,15 @@ describe("NFT transaction receipts and recovery", () => {
     },
   );
   it("records a reverted receipt as failed rather than confirmed", async () => {
-    state.receipt = { blockNumber: 100, blockHash, status: 0, logs: [] };
+    state.receipt = {
+      hash,
+      from: wallet,
+      to: SEAPORT,
+      blockNumber: 100,
+      blockHash,
+      status: 0,
+      logs: [],
+    };
     expect(
       (await reconcileNftOperation(operation(), "test-access")).status,
     ).toBe("failed");
@@ -218,6 +277,9 @@ describe("NFT transaction receipts and recovery", () => {
       if (mutation === "emitter")
         log = { ...log, address: "0x4444444444444444444444444444444444444444" };
       state.receipt = {
+        hash,
+        from: wallet,
+        to: SEAPORT,
         blockNumber: 100,
         blockHash,
         status: 1,
@@ -284,7 +346,15 @@ describe("NFT transaction receipts and recovery", () => {
   it("keeps an approval receipt distinct from trade settlement", async () => {
     const op = operation();
     op.plan.kind = "approval";
-    state.receipt = { blockNumber: 100, blockHash, status: 1, logs: [] };
+    state.receipt = {
+      hash,
+      from: wallet,
+      to: SEAPORT,
+      blockNumber: 100,
+      blockHash,
+      status: 1,
+      logs: [],
+    };
     expect((await reconcileNftOperation(op, "test-access")).plan.kind).toBe(
       "approval",
     );
@@ -295,4 +365,128 @@ describe("NFT transaction receipts and recovery", () => {
       reconcileNftOperation(operation(), "test-access"),
     ).rejects.toThrow("another chain");
   });
+});
+
+describe("NFT receipt exact identity and final canonicality", () => {
+  it("regression receipt identity: rejects an unrelated returned transaction hash", async () => {
+    state.tx = { ...(state.tx as object), hash: `0x${"4".repeat(64)}` };
+    await expect(
+      reconcileNftOperation(operation(), "test-access"),
+    ).rejects.toThrow("does not match");
+    expect(state.updates).toHaveLength(0);
+  });
+  it("regression receipt identity: rejects an unrelated returned receipt hash", async () => {
+    state.receipt = {
+      ...(state.receipt as object),
+      hash: `0x${"4".repeat(64)}`,
+    };
+    await expect(
+      reconcileNftOperation(operation(), "test-access"),
+    ).rejects.toThrow("receipt identity");
+    expect(state.updates).toHaveLength(0);
+  });
+  it("regression receipt identity: a block changed during depth lookup cannot be confirmed", async () => {
+    state.changeBlockAfterFirst = true;
+    expect(
+      (await reconcileNftOperation(operation(), "test-access")).status,
+    ).toBe("pending");
+    expect(state.updates).toHaveLength(0);
+  });
+  it.each([
+    "tx-chain",
+    "tx-block-hash",
+    "tx-block-number",
+    "receipt-from",
+    "receipt-to",
+    "receipt-number",
+    "receipt-zero-hash",
+    "receipt-status-null",
+    "receipt-status-other",
+  ])("rejects unavailable or mismatched %s identity", async (field) => {
+    if (field === "tx-chain")
+      state.tx = { ...(state.tx as object), chainId: 8453n };
+    if (field === "tx-block-hash")
+      state.tx = { ...(state.tx as object), blockHash: `0x${"4".repeat(64)}` };
+    if (field === "tx-block-number")
+      state.tx = { ...(state.tx as object), blockNumber: 99 };
+    if (field === "receipt-from")
+      state.receipt = { ...(state.receipt as object), from: SEAPORT };
+    if (field === "receipt-to")
+      state.receipt = { ...(state.receipt as object), to: wallet };
+    if (field === "receipt-number")
+      state.receipt = { ...(state.receipt as object), blockNumber: -1 };
+    if (field === "receipt-zero-hash")
+      state.receipt = {
+        ...(state.receipt as object),
+        blockHash: `0x${"0".repeat(64)}`,
+      };
+    if (field === "receipt-status-null")
+      state.receipt = { ...(state.receipt as object), status: null };
+    if (field === "receipt-status-other")
+      state.receipt = { ...(state.receipt as object), status: 2 };
+    await expect(
+      reconcileNftOperation(operation(), "test-access"),
+    ).rejects.toThrow();
+    expect(state.updates).toHaveLength(0);
+  });
+  it("a wrong canonical block number cannot establish confirmation", async () => {
+    state.block = { number: 99, hash: blockHash };
+    expect(
+      (await reconcileNftOperation(operation(), "test-access")).status,
+    ).toBe("pending");
+    expect(state.updates).toHaveLength(0);
+  });
+  it("a malformed observed head cannot establish confirmation", async () => {
+    state.blockNumber = NaN;
+    expect(
+      (await reconcileNftOperation(operation(), "test-access")).status,
+    ).toBe("pending");
+    expect(state.updates).toHaveLength(0);
+  });
+  it("a chain change before final journal publication is rejected", async () => {
+    state.changeChainAfterFirst = true;
+    await expect(
+      reconcileNftOperation(operation(), "test-access"),
+    ).rejects.toThrow("another chain");
+    expect(state.updates).toHaveLength(0);
+  });
+  it("removed settlement logs cannot confirm an NFT trade", async () => {
+    state.receipt = {
+      ...(state.receipt as object),
+      logs: [{ ...event(), removed: true }],
+    };
+    await expect(
+      reconcileNftOperation(operation(), "test-access"),
+    ).rejects.toThrow("expected NFT order event");
+    expect(state.updates).toHaveLength(0);
+  });
+  it("a confirmed operation is demoted when the final block recheck changes", async () => {
+    state.changeBlockAfterFirst = true;
+    expect(
+      (
+        await reconcileNftOperation(
+          { ...operation(), status: "confirmed" },
+          "test-access",
+        )
+      ).status,
+    ).toBe("pending");
+    expect(state.updates.map((x) => (x as NftOperation).status)).toEqual([
+      "pending",
+    ]);
+  });
+});
+
+describe("NFT settlement log inclusion identity", () => {
+  it.each(["transactionHash", "blockHash", "blockNumber"])(
+    "cannot confirm an event missing %s",
+    async (field) => {
+      const log = { ...event() };
+      Reflect.deleteProperty(log, field);
+      state.receipt = { ...(state.receipt as object), logs: [log] };
+      await expect(
+        reconcileNftOperation(operation(), "test-access"),
+      ).rejects.toThrow("expected NFT order event");
+      expect(state.updates).toEqual([]);
+    },
+  );
 });

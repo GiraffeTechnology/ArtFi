@@ -1,7 +1,11 @@
 import type { Hash, PublicClient } from "viem";
 
-type ReceiptClient = Pick<PublicClient, "waitForTransactionReceipt">;
-export type MarketWriteKind = "approval" | "fill" | "withdrawal";
+import {
+  verifyMarketReceipt,
+  type MarketReceiptClient,
+} from "./market-canonical-receipt";
+type ReceiptClient = MarketReceiptClient;
+export type MarketWriteKind = "approval" | "fill" | "withdrawal" | "claim";
 export type PendingMarketWrite = {
   hash: Hash;
   kind: MarketWriteKind;
@@ -22,28 +26,21 @@ export async function confirmMarketReceipt(
   hash: Hash,
   onHash?: (hash: Hash) => void,
 ) {
-  let changedTransaction = false;
-  let receipt;
+  let verified;
   try {
-    receipt = await client.waitForTransactionReceipt({
-      hash,
-      onReplaced(replacement) {
-        // Do not journal a cancelled or different operation as this fill. If the page
-        // closes during replacement handling, reconciliation must not accept that hash.
-        if (replacement.reason === "repriced")
-          onHash?.(replacement.transactionReceipt.transactionHash);
-        else changedTransaction = true;
-      },
-    });
+    verified = await verifyMarketReceipt(client, hash);
   } catch {
     throw new MarketReceiptPendingError();
   }
-  if (changedTransaction) {
+  const { receipt, reason, expected } = verified;
+  if (reason === "cancelled" || reason === "replaced") {
     throw new MarketReceiptFinalError(
       "The transaction was cancelled or replaced. No completion is recorded.",
     );
   }
-  if (receipt.status !== "success") {
+  // Publish a replacement only after exact-call, nonce and canonical-block checks.
+  if (reason === "repriced") onHash?.(expected);
+  if (receipt.status === "reverted") {
     throw new MarketReceiptFinalError(
       "The transaction reverted on chain. No completion is recorded.",
     );
@@ -126,7 +123,7 @@ export function marketWriteJournal(
         const parsed = JSON.parse(saved) as PendingMarketWrite;
         if (
           /^0x[a-fA-F0-9]{64}$/.test(parsed.hash) &&
-          ["approval", "fill", "withdrawal"].includes(parsed.kind) &&
+          ["approval", "fill", "withdrawal", "claim"].includes(parsed.kind) &&
           (parsed.intentHash === undefined ||
             /^0x[a-fA-F0-9]{64}$/.test(parsed.intentHash))
         )

@@ -30,6 +30,11 @@ const context = () => ({ params: Promise.resolve({ tokenId: "1" }) });
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv(
+    "ARTFI_CHARITY_EDITIONS_ADDRESS",
+    "0x2222222222222222222222222222222222222222",
+  );
+
   vi.stubEnv("ARTFI_CHARITY_HOLDER_ASSET_MANIFEST", "");
   mocks.cookies.mockResolvedValue({ get: () => ({ value: "test-grant" }) });
   mocks.canonicalTokenId.mockReturnValue("1");
@@ -182,4 +187,127 @@ describe("charity holder file cache boundary", () => {
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
     expect(mocks.fetchObject).toHaveBeenCalledWith(asset);
   });
+});
+
+async function currentRealGrant() {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-20T00:00:00Z"));
+  vi.stubEnv(
+    "ARTFI_CHARITY_HOLDER_SESSION_SECRET",
+    "test-only-holder-grant-integrity-key-not-a-real-credential",
+  );
+  const auth = await vi.importActual<typeof import("./charity-holder-auth")>(
+    "./charity-holder-auth",
+  );
+  const issued = auth.createHolderGrant(
+    "0x1111111111111111111111111111111111111111",
+    "1",
+  );
+  mocks.cookies.mockResolvedValue({ get: () => ({ value: issued.token }) });
+  mocks.readHolderGrant.mockImplementation(auth.readHolderGrant);
+  mocks.grantCoversEdition.mockImplementation(auth.grantCoversEdition);
+  return issued;
+}
+describe("holder file original grant at delivery", () => {
+  afterEach(() => vi.useRealTimers());
+  it.each(["descriptor", "object"])(
+    "holder-grant regression expiry during %s read returns no file",
+    async (phase) => {
+      const issued = await currentRealGrant();
+      let release!: (value: unknown) => void;
+      if (phase === "descriptor")
+        mocks.resolve.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              release = resolve;
+            }),
+        );
+      else
+        mocks.fetchObject.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              release = resolve;
+            }),
+        );
+      const pending = GET(request(), context());
+      await vi.waitFor(() =>
+        expect(
+          phase === "descriptor" ? mocks.resolve : mocks.fetchObject,
+        ).toHaveBeenCalledOnce(),
+      );
+      vi.setSystemTime(issued.grant.expiresAt);
+      release(
+        phase === "descriptor" ? { ok: true, asset } : { ok: true, bytes },
+      );
+      const response = await pending;
+      expect(response.status).toBe(401);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("content-disposition")).toBeNull();
+      expect(await response.json()).toHaveProperty("detail");
+      if (phase === "descriptor")
+        expect(mocks.fetchObject).not.toHaveBeenCalled();
+    },
+  );
+  it("holder-grant regression authenticates the original token again after object read", async () => {
+    await currentRealGrant();
+    mocks.fetchObject.mockImplementation(async () => {
+      vi.stubEnv(
+        "ARTFI_CHARITY_HOLDER_SESSION_SECRET",
+        "different-test-only-holder-grant-key-not-a-real-credential",
+      );
+      return { ok: true, bytes };
+    });
+    const response = await GET(request(), context());
+    expect(response.status).toBe(401);
+    expect(response.headers.get("content-disposition")).toBeNull();
+  });
+  it("delivers the original attachment immediately before expiry without issuing a new grant", async () => {
+    const issued = await currentRealGrant();
+    mocks.fetchObject.mockImplementation(async () => {
+      vi.setSystemTime(issued.grant.expiresAt - 1);
+      return { ok: true, bytes };
+    });
+    const response = await GET(request(), context());
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+    expect(mocks.cookies).toHaveBeenCalledOnce();
+    expect(mocks.fetchObject).toHaveBeenCalledOnce();
+  });
+  it("does not reveal an object fault after the original grant expires", async () => {
+    const issued = await currentRealGrant();
+    mocks.fetchObject.mockImplementation(async () => {
+      vi.setSystemTime(issued.grant.expiresAt + 1);
+      return { ok: false, refusal: "digest-mismatch" };
+    });
+    const response = await GET(request(), context());
+    expect(response.status).toBe(401);
+    expect(await response.text()).not.toContain("digest-mismatch");
+  });
+});
+
+describe("holder file deployment changes during delivery", () => {
+  afterEach(() => vi.useRealTimers());
+  it.each(["descriptor", "object"])(
+    "refuses replacement deployment during %s access",
+    async (phase) => {
+      await currentRealGrant();
+      const replace = async () => {
+        vi.stubEnv(
+          "ARTFI_CHARITY_EDITIONS_ADDRESS",
+          "0x3333333333333333333333333333333333333333",
+        );
+        return phase === "descriptor"
+          ? { ok: true, asset }
+          : { ok: true, bytes };
+      };
+      if (phase === "descriptor") mocks.resolve.mockImplementation(replace);
+      else mocks.fetchObject.mockImplementation(replace);
+      const response = await GET(request(), context());
+      expect(response.status).toBe(401);
+      expect(response.headers.get("content-disposition")).toBeNull();
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      if (phase === "descriptor")
+        expect(mocks.fetchObject).not.toHaveBeenCalled();
+    },
+  );
 });

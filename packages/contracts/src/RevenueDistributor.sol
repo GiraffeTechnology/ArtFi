@@ -151,11 +151,15 @@ contract RevenueDistributor is AccessControl, ReentrancyGuard {
     }
 
     function _pullExact(IERC20 token, address from, uint256 amount) private {
-        uint256 beforeBalance = token.balanceOf(address(this));
+        uint256 senderBefore = token.balanceOf(from);
+        uint256 recipientBefore = token.balanceOf(address(this));
         token.safeTransferFrom(from, address(this), amount);
-        if (token.balanceOf(address(this)) - beforeBalance != amount) {
-            revert TransferAmountMismatch();
-        }
+        uint256 senderAfter = token.balanceOf(from);
+        uint256 recipientAfter = token.balanceOf(address(this));
+        if (
+            senderAfter > senderBefore || senderBefore - senderAfter != amount
+                || recipientAfter < recipientBefore || recipientAfter - recipientBefore != amount
+        ) revert TransferAmountMismatch();
     }
 
     function _pushExact(IERC20 token, address recipient, uint256 amount) private {

@@ -125,6 +125,12 @@ export function accessibleLanguageNameFor(locale: UiLocale): string {
   );
 }
 
+// Technical identities are authoritative data, including when embedded in labels.
+// Keep them out of the translation request rather than asking a model to copy them.
+const translationIdentity =
+  /https?:\/\/|mailto:|0x[0-9a-f]{8,}|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/i;
+export const maxUiTranslationBytes = 8 * 1024;
+
 export function isTranslatableSource(value: string): boolean {
   const text = value.trim();
   if (
@@ -134,13 +140,7 @@ export function isTranslatableSource(value: string): boolean {
   ) {
     return false;
   }
-  if (
-    /^(?:https?:\/\/|mailto:|0x[0-9a-f]{8,}|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,})/i.test(
-      text,
-    )
-  ) {
-    return false;
-  }
+  if (translationIdentity.test(text)) return false;
   return true;
 }
 
@@ -193,5 +193,41 @@ export function protectedTermsIntact(
 ): boolean {
   return protectedTranslationTerms.every(
     (term) => !source.includes(term) || candidate.includes(term),
+  );
+}
+
+// Literal facts may be reordered by grammar, but cannot be changed, added or lost.
+// This is a display-integrity guard, never validation of financial authority or meaning.
+function translationFacts(value: string): string[] {
+  const numbers =
+    value.match(/[+-]?[0-9]+(?:[.,][0-9]+)*(?:[eE][+-]?[0-9]+)?%?/g) ?? [];
+  const units =
+    value.match(
+      /(?<![A-Za-z])(?:ETH|WETH|USDC|USDT|DAI|wei|gwei|USD|EUR|CAD)(?![A-Za-z])/g,
+    ) ?? [];
+  return [
+    ...numbers.map((n) => `number:${n}`),
+    ...units.map((u) => `unit:${u}`),
+  ].sort();
+}
+
+export function isSafeUiTranslation(
+  source: string,
+  candidate: unknown,
+): candidate is string {
+  if (
+    typeof candidate !== "string" ||
+    !candidate.trim() ||
+    candidate.length > maxUiTranslationBytes ||
+    new TextEncoder().encode(candidate).byteLength > maxUiTranslationBytes ||
+    translationIdentity.test(candidate) ||
+    !protectedTermsIntact(source, candidate)
+  )
+    return false;
+  const expected = translationFacts(source),
+    actual = translationFacts(candidate);
+  return (
+    expected.length === actual.length &&
+    expected.every((value, index) => value === actual[index])
   );
 }

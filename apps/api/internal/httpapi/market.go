@@ -166,6 +166,9 @@ func projectTransfer(request *http.Request, tx *sql.Tx, input chainEventRequest)
 	if input.EventName != "Transfer" {
 		return nil
 	}
+	if nft, err := isERC721TransferPayload(input.Payload); err != nil || nft {
+		return err
+	}
 	from, fromOK := input.Payload["from"].(string)
 	to, toOK := input.Payload["to"].(string)
 	value, valueOK := input.Payload["value"].(string)

@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "ethers": "6.17.0",
-    "mysql2": "3.24.5"
+    "mysql2": "3.24.6"
   },
   "license": "UNLICENSED"
 }

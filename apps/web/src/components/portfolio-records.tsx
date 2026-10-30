@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
+import { hoodi } from "wagmi/chains";
 import { useUserSession } from "@/components/user-session-provider";
 import { portfolioSessionKey } from "@/lib/portfolio-session";
+import { PortfolioHistory } from "./portfolio-history";
 
 import {
   loadPortfolioRecords,
@@ -21,6 +23,18 @@ export function PortfolioRecords() {
         <h2>Runtime positions and history</h2>
         <p>
           Sign in with the connected wallet to view its holdings and history.
+        </p>
+      </section>
+    );
+  }
+
+  if (wallet.chainId !== hoodi.id) {
+    return (
+      <section className="portfolio-records" aria-live="polite">
+        <h2>Runtime positions and history</h2>
+        <p role="status">
+          Indexed positions and history are available on Hoodi only. Switch to
+          Hoodi and sign in with the connected wallet.
         </p>
       </section>
     );
@@ -113,27 +127,7 @@ export function PortfolioDetails({ portfolio }: { portfolio: Portfolio }) {
         )}
       </article>
       <article>
-        <h3>Transaction history</h3>
-        {portfolio.transactions.length === 0 ? (
-          <p>No indexed transaction is associated with this address.</p>
-        ) : (
-          <ol>
-            {portfolio.transactions.map((transaction) => (
-              <li
-                key={
-                  transaction.id ??
-                  `${transaction.transactionHash}:${transaction.logIndex}:${transaction.eventName}`
-                }
-              >
-                <strong>{transaction.eventName}</strong>
-                <span>
-                  {transaction.status} · block {transaction.blockNumber}
-                </span>
-                <small>{shortHash(transaction.transactionHash)}</small>
-              </li>
-            ))}
-          </ol>
-        )}
+        <PortfolioHistory entries={portfolio.transactions} />
       </article>
       <article>
         <h3>Indexed trade P&L</h3>

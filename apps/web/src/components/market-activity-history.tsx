@@ -2,16 +2,13 @@
 
 import { publicSetting } from "@/lib/public-runtime-config";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
+import { activityLabel } from "@/lib/market-activity";
 import {
-  activityLabel,
-  appendMarketActivityPage,
-  emptyMarketActivityWalk,
-  marketActivityQuery,
-  type MarketActivityPage,
-  type MarketActivityWalk,
-} from "@/lib/market-activity";
+  createMarketHistorySession,
+  readMarketHistoryPage,
+} from "@/lib/market-activity-session";
 import {
   freshness,
   shortOrderId,
@@ -22,55 +19,38 @@ import {
 /** Read-only source history. Native order operations are a separate application workflow. */
 
 const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
-const pageSize = 25;
 
 export function MarketActivityHistory() {
-  const [walk, setWalk] = useState<MarketActivityWalk>(emptyMarketActivityWalk);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>();
-  const [started, setStarted] = useState(false);
-
-  const loadPage = useCallback(async (from: MarketActivityWalk) => {
-    setLoading(true);
+  const [session] = useState(() =>
+    createMarketHistorySession((query, signal) =>
+      readMarketHistoryPage(apiURL, query, signal),
+    ),
+  );
+  const snapshot = useSyncExternalStore(
+    session.subscribe,
+    session.getSnapshot,
+    session.getServerSnapshot,
+  );
+  const { events, finished, loading, error, started, contract } = snapshot;
+  const [contractInput, setContractInput] = useState("");
+  const [filterError, setFilterError] = useState("");
+  useEffect(() => {
+    session.activate();
+    return () => session.deactivate();
+  }, [session]);
+  function applyFilter(value: string) {
     try {
-      const response = await fetch(
-        `${apiURL}/v1/market/activity?${marketActivityQuery("opensea", pageSize, from.cursor)}`,
-        { cache: "no-store" },
-      );
-      if (!response.ok) {
-        throw new Error(
-          response.status === 503
-            ? "The external-market mirror is unavailable, so no history can be shown. This is not the same as no activity."
-            : `The external-market mirror answered HTTP ${response.status}.`,
-        );
-      }
-      const body = (await response.json()) as MarketActivityPage;
-      if (!Array.isArray(body.data)) {
-        throw new Error("The activity response is not runtime data.");
-      }
-      setWalk(appendMarketActivityPage(from, body, from.cursor));
-      setError(undefined);
+      session.applyFilter(value);
+      setContractInput(session.getSnapshot().contract);
+      setFilterError("");
     } catch (caught) {
-      setError(
+      setFilterError(
         caught instanceof Error
           ? caught.message
-          : "The mirrored activity could not be read.",
+          : "The contract filter is invalid.",
       );
-    } finally {
-      setLoading(false);
-      setStarted(true);
     }
-  }, []);
-
-  // Deferred to a task rather than run in the effect body, so the first page's state lands in its
-  // own render instead of cascading out of this one.
-  useEffect(() => {
-    const initial = window.setTimeout(
-      () => void loadPage(emptyMarketActivityWalk),
-      0,
-    );
-    return () => window.clearTimeout(initial);
-  }, [loadPage]);
+  }
 
   return (
     <section
@@ -87,6 +67,53 @@ export function MarketActivityHistory() {
         reference. This history panel is read-only and does not submit orders.
       </p>
 
+      <form
+        className="market-filters"
+        aria-label="Filter market activity"
+        onSubmit={(event) => {
+          event.preventDefault();
+          applyFilter(contractInput);
+        }}
+      >
+        <label>
+          Contract address
+          <input
+            data-no-translate
+            type="text"
+            value={contractInput}
+            maxLength={42}
+            spellCheck={false}
+            placeholder="0x… or leave empty for all contracts"
+            onChange={(event) => setContractInput(event.currentTarget.value)}
+          />
+        </label>
+        <button type="submit" className="secondary">
+          Apply contract filter
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => applyFilter("")}
+        >
+          Clear contract filter
+        </button>
+      </form>
+      <p>
+        Active contract:{" "}
+        {contract ? <span data-no-translate>{contract}</span> : "All contracts"}{" "}
+        · Source: <span data-no-translate>OpenSea</span>
+      </p>
+      <p>
+        Filters are applied by the mirror API across the paginated history.
+        Prices remain source-reported amounts; this history does not establish
+        settlement finality.
+      </p>
+      {filterError ? (
+        <p className="market-runtime-state" role="alert">
+          {filterError}
+        </p>
+      ) : null}
+
       {error && (
         <p
           className="market-runtime-state"
@@ -97,16 +124,23 @@ export function MarketActivityHistory() {
         </p>
       )}
 
-      {!error && started && walk.events.length === 0 && (
+      {!error && started && finished && events.length === 0 && (
         <p className="market-runtime-state" data-testid="activity-empty">
-          The mirror is reachable and has observed no activity yet. That is an
-          answer from the mirror, not an assumption made here.
+          The mirror returned no events for this source and contract filter.
+          This is an answer from the mirror, not an assumption made here.
         </p>
       )}
 
-      {walk.events.length > 0 && (
+      {!error && started && !loading && !finished && events.length === 0 ? (
+        <p className="market-runtime-state">
+          This page contained no events. The mirror supplied an older page; the
+          history is not known to be empty.
+        </p>
+      ) : null}
+
+      {events.length > 0 && (
         <ol className="market-mirror-grid" data-testid="activity-list">
-          {walk.events.map((item) => {
+          {events.map((item) => {
             const link = venueLink(item.source, item.marketplaceUrl);
             const order = shortOrderId(item.orderHash);
             return (
@@ -125,6 +159,12 @@ export function MarketActivityHistory() {
                     <div>
                       <dt>Collection</dt>
                       <dd>{item.collectionSlug || "Not reported"}</dd>
+                    </div>
+                    <div>
+                      <dt>Contract</dt>
+                      <dd data-no-translate>
+                        {item.contractAddress || "Not reported"}
+                      </dd>
                     </div>
                     <div>
                       <dt>Token</dt>
@@ -166,11 +206,19 @@ export function MarketActivityHistory() {
       )}
 
       <nav className="market-pagination" aria-label="Activity history pages">
-        {!walk.finished && (
+        <button
+          type="button"
+          className="secondary"
+          onClick={session.refresh}
+          disabled={loading}
+        >
+          Refresh this history
+        </button>
+        {!finished && (
           <button
             type="button"
             className="secondary"
-            onClick={() => void loadPage(walk)}
+            onClick={() => void session.loadMore()}
             disabled={loading}
             data-testid="activity-load-more"
           >
@@ -179,7 +227,7 @@ export function MarketActivityHistory() {
         )}
       </nav>
 
-      {walk.finished && walk.events.length > 0 && (
+      {finished && events.length > 0 && (
         <p className="market-gate" data-testid="activity-end">
           The history ends here. The mirror said so — it was not inferred from a
           short page.
