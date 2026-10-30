@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { createAgentService } from "./agent-service.mjs";
 import { createOracleObservation } from "./oracle-observation.mjs";
 const address = "0x" + "ab".repeat(20),
-  hash = "0x" + "12".repeat(32);
+  hash = "0x" + "12".repeat(32),
+  mixedCaseRevocationHash = "0x" + "aB".repeat(32);
 const ethers = {
   ZeroAddress: "0x" + "00".repeat(20),
   ZeroHash: "0x" + "00".repeat(32),
@@ -34,7 +35,12 @@ const policy = Object.freeze({
   jurisdictionPolicy: hash,
   settlementPolicy: hash,
 });
-const session = { authenticated: true, wallet: address, expiresAt: 2000 };
+const session = {
+  authenticated: true,
+  wallet: address,
+  chainId: "560048",
+  expiresAt: 2000,
+};
 test("source throw/unavailable/stale preserves owned durable read and independently verified revoke", async () => {
   for (const observe of [
     async () => {
@@ -48,6 +54,7 @@ test("source throw/unavailable/stale preserves owned durable read and independen
       id: "test",
       state: "PREPARED",
       request: {
+        execution: { chainId: "560048", executor: address },
         intent: { wallet: address, nonce: "1" },
         sale: { nft: address, tokenId: "1" },
       },
@@ -88,10 +95,11 @@ test("source throw/unavailable/stale preserves owned durable read and independen
           return row;
         },
       },
-      inspectRevocation: async () => {
+      inspectRevocation: async (_request, transactionHash) => {
         proofs++;
+        assert.equal(transactionHash, mixedCaseRevocationHash.toLowerCase());
         return {
-          transactionHash: hash,
+          transactionHash: mixedCaseRevocationHash,
           wallet: address,
           nonce: "1",
           executor: address,
@@ -116,9 +124,20 @@ test("source throw/unavailable/stale preserves owned durable read and independen
     );
     assert.equal(before.fresh, false);
     assert.equal(before.execution.state, "PREPARED");
+    await assert.rejects(
+      service.recordRevocation(session, "test", "0x" + "00".repeat(32)),
+      /REVOCATION_HASH_INVALID/,
+    );
+    assert.equal(proofs, 0);
+    assert.equal(row.revocation, undefined);
     assert.equal(
-      (await service.recordRevocation(session, "test", hash)).state,
+      (await service.recordRevocation(session, "test", mixedCaseRevocationHash))
+        .state,
       "CONFIRMED",
+    );
+    assert.equal(
+      row.revocation.transactionHash,
+      mixedCaseRevocationHash.toLowerCase(),
     );
     assert.equal(
       (await service.getIntent(session, "test")).revocation.state,

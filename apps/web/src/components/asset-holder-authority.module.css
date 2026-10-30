@@ -1,0 +1,86 @@
+.panel {
+  margin: 24px 0;
+  padding: 24px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.heading h3 {
+  margin: 0;
+}
+.heading button {
+  padding: 10px 14px;
+  border: 1px solid currentColor;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+.heading button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.facts {
+  margin: 16px 0;
+}
+.facts > div {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.facts dt {
+  color: var(--muted);
+}
+.facts dd {
+  margin: 0;
+  min-width: 0;
+}
+.note {
+  font-size: 13px;
+  color: var(--muted);
+}
+.warning {
+  border-left: 3px solid var(--wall-red);
+  padding-left: 12px;
+}
+.projectionForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+.projectionForm input {
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+}
+.projectionForm button {
+  padding: 10px 14px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+@media (max-width: 680px) {
+  .panel {
+    padding: 16px;
+  }
+  .facts > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

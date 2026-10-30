@@ -1,0 +1,29 @@
+/* Keep exact published DAO terms and native controls reachable at narrow widths. */
+.dao-published-execution,
+.dao-published-execution > article,
+.dao-published-execution label {
+  min-width: 0;
+  max-width: 100%;
+}
+.dao-published-execution p,
+.dao-published-execution dd,
+.dao-published-execution summary {
+  overflow-wrap: anywhere;
+}
+.dao-published-execution pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dao-published-execution input {
+  min-width: 0;
+  max-width: 100%;
+}
+.dao-published-execution button,
+.dao-published-execution summary {
+  min-height: 44px;
+  max-width: 100%;
+}
+.dao-published-execution button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   encodeSafeSubmission,
+  safeProposalRequestId,
+  encodeOperatorSafeSubmission,
   ownerCheck,
   proposalStage,
   secondsUntilExecutable,
@@ -170,5 +172,28 @@ describe("ownerCheck", () => {
     expect(call.address).toBe(SAFE);
     expect(call.functionName).toBe("isOwner");
     expect(call.args).toEqual([OWNER]);
+  });
+});
+
+describe("exact operator proposal identity", () => {
+  it("keeps identical payload retries stable and gives a renewed payload a distinct proposal", () => {
+    const first = safeProposalRequestId(REQUEST_ID, TARGET, "0x12345678");
+    expect(safeProposalRequestId(REQUEST_ID, TARGET, "0x12345678")).toBe(first);
+    expect(safeProposalRequestId(REQUEST_ID, TARGET, "0x12345679")).not.toBe(
+      first,
+    );
+  });
+  it("changes only the outer proposal identity, preserving the target's original operation ID", () => {
+    const call = encodeOperatorSafeSubmission({
+      requestId: REQUEST_ID,
+      target: TARGET,
+      abi: rwaRegistryAbi,
+      functionName: "createAsset",
+      args: [REQUEST_ID, OWNER, "ipfs://example", METADATA_HASH],
+    });
+    expect(call.requestId).not.toBe(REQUEST_ID);
+    expect(
+      decodeFunctionData({ abi: rwaRegistryAbi, data: call.data }).args?.[0],
+    ).toBe(REQUEST_ID);
   });
 });

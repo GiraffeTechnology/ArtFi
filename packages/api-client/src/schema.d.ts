@@ -4,6 +4,426 @@
  */
 
 export interface paths {
+  "/v1/admin/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Check deployment-configured application moderation permission
+     * @description Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+     */
+    get: operations["administrationSession"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/admin/moderation/cases": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List private content review and appeal queue
+     * @description Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+     */
+    get: operations["adminModerationCases"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/admin/moderation/cases/{caseID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read a private moderation case
+     * @description Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+     */
+    get: operations["adminModerationCase"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/admin/moderation/cases/{caseID}/decisions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record a revision-checked moderation or appeal decision
+     * @description Requires a configured application moderator wallet. start_review applies to open reports; resolve to open/reviewing; uphold_appeal and reject_appeal to pending appeals. resolve/uphold require no_action with an empty publicNotice or content_warning with a 10–500 character publicNotice. Other actions require empty decision/publicNotice. A warning publishes only target and moderator-authored notice; private report and appeal text are never public. No state, receipt or audit is committed unless all succeed atomically.
+     */
+    post: operations["adminModerationDecision"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/moderation/cases": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List only the authenticated wallet’s reports and appeals
+     * @description Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+     */
+    get: operations["userModerationCases"];
+    put?: never;
+    /**
+     * Submit a private marketplace-content report
+     * @description Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+     */
+    post: operations["createModerationReport"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/moderation/cases/{caseID}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read only a case owned by the authenticated wallet
+     * @description Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+     */
+    get: operations["userModerationCase"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/moderation/cases/{caseID}/appeals": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Appeal a resolved report from its original reporter wallet
+     * @description One private appeal per resolved case. A current case revision is required. Other wallets receive 404 without case details. The existing content decision stays in effect while the appeal is pending. Authenticated ownership, revision, state, durable audit and idempotency are checked together.
+     */
+    post: operations["createModerationAppeal"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/admin/config": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read service-notice configuration including an unpublished draft
+     * @description Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+     */
+    get: operations["adminPlatformConfiguration"];
+    /**
+     * Update only the audited platform service notice
+     * @description Requires a configured moderator wallet, current revision and reason. noticeEnabled=true requires a 10–500 character notice. Security, roles, fees, trading, custody and execution settings are not mutable here. The service notice is applied by the web application on load and refresh.
+     */
+    put: operations["updatePlatformConfiguration"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/admin/audit": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read append-only moderation and configuration audit history
+     * @description Application content moderation only. No asset, custody, settlement, registry, seller-identity or trading privileges. All responses are no-store.
+     */
+    get: operations["administrationAudit"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/platform/config": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read the current public platform service notice
+     * @description No wallet required. Disabled draft text is omitted as an empty noticeText. No secrets or operational authority are returned.
+     */
+    get: operations["publicPlatformConfiguration"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/moderation/notices": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read published content notices without reporter or appeal data
+     * @description Only the content reference, moderator-authored notice, case ID and update time are public. A notice remains during appeal and is removed when an upheld appeal replaces the decision with no_action. Notices do not alter orders, balances, settlement or property rights.
+     */
+    get: operations["publicModerationNotices"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/nft/operations/history": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Read the authenticated wallet's native NFT operation history
+     * @description Internal bridge credential and current wallet access token required. Returns paginated unsigned summaries scoped to the session wallet and chain, never wallet signatures or full review payloads.
+     */
+    post: operations["nftOperationHistory"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/nft/operations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Read or transition an authenticated native NFT operation
+     * @description Internal web-to-API bridge. Stores only unsigned review plans and transaction/order hashes. Server credentials and a current wallet access token are both required. Plans are immutable; updates use revision compare-and-swap. No wallet signature or raw signed transaction may be stored.
+     */
+    post: operations["nftOperation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/auth/challenge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserChallenge"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/auth/verify": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserVerify"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/auth/session": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserSession"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/auth/refresh": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserRefresh"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/auth/logout": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ordinary-session bridge endpoint. The browser uses the same-origin Next API. A verifier proof is accepted only from the configured bridge after cryptographic wallet-message verification. Login grants no sale or transfer authority. */
+    post: operations["walletUserLogout"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/orders": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Public immutable sale authorizations in original publication order. Chain state remains authoritative for fillability. Missing persistence is not an empty account. */
+    get: operations["listNativeSignedOrders"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/orders/fraction-book": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Read-only complete candidate snapshot for a fraction/payment pair at a caller-observed chain time. Lowest numeric uint256 price, original server publication time, then intent hash determine priority. Seller identity grants no preference. At most 500 candidates are returned; a larger book is refused instead of silently truncated. Terms do not reserve liquidity. Clients verify signatures, epoch, cumulative fill, shared seller balances/allowances and buyer payment availability at one mined block before constructing a plan. */
+    get: operations["getFractionOrderBook"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/orders/{intentHash}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations["getNativeSignedOrder"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/indexer/signed-orders": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Internal ingress from the sale-signature verifier. Both X-Indexer-Key and a valid wallet JWT matching the seller are required. The verifier validates existing EIP-712/EIP-1271 sale authority; publication uses the explicit seller session, not another signing protocol. A 32 KiB body and exact canonical fields are enforced. Exact retries retain original publication time; conflicting terms are rejected. */
+    post: operations["publishVerifiedSignedOrder"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/healthz": {
     parameters: {
       query?: never;
@@ -108,6 +528,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
+    /** @description Authenticated owner-only indexed Hoodi portfolio. Positions, event notifications and exact FIFO native fractional trade P&L are read from one canonical SQL snapshot. Unknown basis is null, never zero; this is not a full account, tax statement or current valuation. */
     get: operations["getPortfolio"];
     put?: never;
     post?: never;
@@ -144,6 +565,23 @@ export interface paths {
     put?: never;
     /** @description Credential-gated ingestion for normalized, read-only events from approved marketplaces. */
     post: operations["ingestExternalMarketEvent"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/indexer/market-snapshots": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Atomically commits a complete NDJSON marketplace snapshot; any invalid or interrupted line rolls back the whole snapshot, while an empty body records a valid zero-event cutover. */
+    post: operations["ingestExternalMarketSnapshot"];
     delete?: never;
     options?: never;
     head?: never;
@@ -308,6 +746,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
+    /** @description Requires current source-signed correspondence for the exact request, recipient, registry, metadata digest and URI. Metadata-only issuance is rejected. */
     post: operations["createMintIntent"];
     delete?: never;
     options?: never;
@@ -325,6 +764,26 @@ export interface paths {
     get: operations["getMintIntent"];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/rwa/intents/{intentID}/evidence": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Renew source evidence on the same immutable issuance request
+     * @description Registrar-authenticated import of independently signed source evidence. Preserves request, recipient, metadata, source, underlying asset, model, rights and uniqueness reservations; audits the previous and renewed public proof. Does not submit, cancel or replace a wallet transaction.
+     */
+    post: operations["renewMintSourceEvidence"];
     delete?: never;
     options?: never;
     head?: never;
@@ -412,10 +871,564 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/rwa/assets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Persisted public records only, with current independently verified source status. Empty is not substituted for unavailable persistence. Expired and revoked records remain visible with non-tradable status. */
+    get: operations["listSourceVerifiedRWAAssets"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/rwa/assets/{slug}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Returns the raw asset DTO. Exact-case Oracle identity is preserved; status is recomputed, no-store. */
+    get: operations["getSourceVerifiedRWAAsset"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/rwa/sources": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description Public source trust roots only; neither wallet role nor this endpoint can approve a source. */
+    get: operations["listApprovedRWASources"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/rwa/source-revocations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Public signature-authenticated source endpoint. Permanent, replay-safe revocation, serialized atomically with activation. No ArtFi role can manufacture the source signature. Application receipt does not itself submit an on-chain revocation. */
+    post: operations["recordSignedRWASourceRevocation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/rwa/metadata-preparations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Operator-gated immutable image/metadata preparation for source review. Explicitly non-executable: no mint function or contract arguments. Whole commercial ERC-8415 receipts continue through their external Oracle integration. */
+    post: operations["prepareUnsignedRWAMetadata"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/rwa/catalog-drafts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Unsigned public proposal and exact source-signing context. Ordinary authenticated users have the same source-based publication path as admin convenience routes. */
+    post: operations["userReviewRWACatalogDraft"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/user/rwa/assets/{slug}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** @description Source-signed public activation or metadata/validity renewal. Actor-scoped idempotency, optimistic revision, atomic audit, immutable identity and unique model/token/underlying bindings. Source proof confers authenticity; no discretionary ArtFi-admin approval cycle is required. */
+    put: operations["userPublishSourceVerifiedRWA"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/admin/rwa/catalog-drafts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** @description Unsigned public proposal and exact source-signing context. Ordinary authenticated users have the same source-based publication path as admin convenience routes. */
+    post: operations["adminReviewRWACatalogDraft"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/admin/rwa/assets/{slug}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** @description Source-signed public activation or metadata/validity renewal. Actor-scoped idempotency, optimistic revision, atomic audit, immutable identity and unique model/token/underlying bindings. Source proof confers authenticity; no discretionary ArtFi-admin approval cycle is required. */
+    put: operations["adminPublishSourceVerifiedRWA"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/rwa/underlying-status": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** @description No-store current approved-source correspondence check for an exact underlying, before new fraction issuance. Does not block owner exits or imply current registry holdership. */
+    get: operations["checkCurrentRWAUnderlyingGrounding"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    ApprovedRWASource: {
+      id: string;
+      name: string;
+      /** @enum {string} */
+      kind: "registry" | "warehouse" | "custody" | "certificate" | "provenance";
+      publicKeyX: string;
+      publicKeyY: string;
+      /** @enum {string} */
+      mode: "LIVE" | "TEST_ONLY";
+      registryBacked: boolean;
+      disabled: boolean;
+    };
+    RWARegistryRecord: {
+      reference: string;
+      version: string;
+      /** @description Source registry observation, Unix seconds. This is a source claim, not a chain ownership assertion. */
+      observedAt: number;
+    };
+    RWASourceEvidence: {
+      sourceId: string;
+      sourceAssetId: string;
+      evidenceId: string;
+      underlyingAssetId: string;
+      /** @enum {string} */
+      section: "whole" | "fractional";
+      /** @enum {string} */
+      mode: "LIVE" | "TEST_ONLY";
+      sourceReference: string;
+      evidenceSha256: string;
+      rights: string;
+      registryRecord?: components["schemas"]["RWARegistryRecord"];
+      validFrom: number;
+      validUntil: number;
+      contextHash: string;
+      signatureR: string;
+      signatureS: string;
+    };
+    RWAContractEvidence: {
+      sourceIdHash: string;
+      sourceAssetHash: string;
+      assetKey: string;
+      evidenceId: string;
+      claimHash: string;
+      validFrom: number;
+      validUntil: number;
+      modeHash: string;
+      sectionHash: string;
+    };
+    RWACatalogBinding: {
+      /** @constant */
+      chainId: 560048;
+      collectionAddress: string;
+      tokenId: string;
+      assetId?: string;
+      underlyingAssetId: string;
+      fractionTokenAddress?: string;
+      vaultAddress?: string;
+      marketAddress?: string;
+    };
+    RWACatalogRecord: {
+      slug: string;
+      title: string;
+      artist: string;
+      year: number;
+      medium: string;
+      location: string;
+      description: string;
+      /** @description Optional public HTTPS image URL, or empty. No artwork preview or image prerequisite is created by catalog activation. */
+      imageUrl?: string;
+      /** @enum {string} */
+      section: "whole" | "fractional";
+      rights: string;
+      provenance: string[];
+      binding: components["schemas"]["RWACatalogBinding"];
+    };
+    RWAGrounding: {
+      /** @enum {string} */
+      status:
+        | "verified"
+        | "expired"
+        | "revoked"
+        | "source-unavailable"
+        | "not-yet-valid";
+      /** @enum {string} */
+      mode: "LIVE" | "TEST_ONLY";
+      sourceId: string;
+      sourceName: string;
+      sourceKind: string;
+      sourceReference: string;
+      sourceAssetId: string;
+      evidenceId: string;
+      evidenceSha256: string;
+      /** Format: date-time */
+      validFrom: string;
+      /** Format: date-time */
+      validUntil: string;
+      /** Format: date-time */
+      verifiedAt: string;
+      registryBacked: boolean;
+      registryRecord?: components["schemas"]["RWARegistryRecord"];
+    };
+    RWACatalogAsset: {
+      slug: string;
+      title: string;
+      artist: string;
+      year: number;
+      medium: string;
+      location: string;
+      description: string;
+      /** @description Optional public HTTPS image URL, or empty. No artwork preview or image prerequisite is created by catalog activation. */
+      imageUrl: string;
+      /** @enum {string} */
+      section: "whole" | "fractional";
+      rights: string;
+      provenance: string[];
+      binding: components["schemas"]["RWACatalogBinding"];
+      grounding: components["schemas"]["RWAGrounding"];
+      revision: number;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    RWACatalogPage: {
+      data: components["schemas"]["RWACatalogAsset"][];
+      total: number;
+      page: number;
+      pageSize: number;
+      hasMore: boolean;
+    };
+    RWACatalogMutation: {
+      revision: number;
+      asset: components["schemas"]["RWACatalogRecord"];
+      evidence: components["schemas"]["RWASourceEvidence"];
+    };
+    RWACatalogDraft: {
+      asset: components["schemas"]["RWACatalogRecord"];
+      contextHash: string;
+      /** @constant */
+      executable: false;
+      detail?: string;
+    };
+    RWAMetadataPreparationRequest: {
+      uploadId: string;
+      recipient: string;
+      name: string;
+      artist: string;
+      year: number;
+      medium: string;
+      location: string;
+      description: string;
+    };
+    RWAMetadataPreparation: {
+      requestId: string;
+      recipient: string;
+      registryAddress: string;
+      /** @constant */
+      chainId: 560048;
+      /** Format: uri */
+      metadataUri: string;
+      metadataSha256: string;
+      contextHash: string;
+      /** @constant */
+      executable: false;
+      /** @constant */
+      status: "awaiting-approved-source-evidence";
+    };
+    RWASourceRevocation: {
+      sourceId: string;
+      evidenceId: string;
+      revokedAt: number;
+      reason: string;
+      /** @enum {string} */
+      mode: "LIVE" | "TEST_ONLY";
+      signatureR: string;
+      signatureS: string;
+    };
+    ModerationCase: {
+      id: string;
+      reporter: string;
+      target: string;
+      /** @enum {string} */
+      category:
+        | "misleading_metadata"
+        | "inappropriate_content"
+        | "suspected_fraud"
+        | "other";
+      details: string;
+      /** @enum {string} */
+      status: "open" | "reviewing" | "resolved" | "appealed";
+      /** @enum {string} */
+      decision: "none" | "no_action" | "content_warning";
+      decisionReason: string;
+      publicNotice: string;
+      revision: number;
+      /** @enum {string} */
+      appealStatus: "none" | "pending" | "upheld" | "rejected";
+      appealStatement: string;
+      appealResponse: string;
+      /** Format: date-time */
+      createdAt: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    ModerationCasePage: {
+      data: components["schemas"]["ModerationCase"][];
+      page: number;
+      pageSize: number;
+      hasMore: boolean;
+    };
+    ModerationReport: {
+      target: string;
+      /** @enum {string} */
+      category:
+        | "misleading_metadata"
+        | "inappropriate_content"
+        | "suspected_fraud"
+        | "other";
+      details: string;
+    };
+    ModerationAppeal: {
+      revision: number;
+      statement: string;
+    };
+    ModerationDecision: {
+      revision: number;
+      /** @enum {string} */
+      action: "start_review" | "resolve" | "uphold_appeal" | "reject_appeal";
+      reason: string;
+      /** @enum {string} */
+      decision?: "" | "no_action" | "content_warning";
+      publicNotice?: string;
+    };
+    PlatformConfiguration: {
+      revision: number;
+      noticeEnabled: boolean;
+      noticeText: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    PlatformConfigurationUpdate: {
+      revision: number;
+      noticeEnabled: boolean;
+      noticeText: string;
+      reason: string;
+    };
+    ModerationNotice: {
+      id: string;
+      target: string;
+      notice: string;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    ModerationNoticePage: {
+      data: components["schemas"]["ModerationNotice"][];
+      page: number;
+      pageSize: number;
+      hasMore: boolean;
+    };
+    AdministrationSession: {
+      address: string;
+      /** @constant */
+      role: "content_moderator";
+      scope: string;
+    };
+    AdministrationAuditPage: {
+      data: {
+        id: string;
+        /** Format: date-time */
+        occurredAt: string;
+        action: string;
+        /** @enum {string} */
+        resourceType: "moderation_case" | "platform_configuration";
+        requestId: string;
+        metadata: {
+          actor: string;
+          resourceId: string;
+          previousRevision: number;
+          snapshot: unknown;
+        };
+      }[];
+      nextCursor: string;
+    };
+    WalletUserSession: {
+      id: string;
+      address: string;
+      /** @constant */
+      chainId: 560048;
+      /** @description Unix time in milliseconds */
+      expiresAt: number;
+      /** @description Unix time in milliseconds */
+      accessExpiresAt: number;
+    };
+    WalletUserChallenge: {
+      id: string;
+      address: string;
+      /** @constant */
+      chainId: 560048;
+      /** Format: uri */
+      origin: string;
+      message: string;
+      /** @description Unix time in milliseconds */
+      issuedAt: number;
+      /** @description Unix time in milliseconds */
+      expiresAt: number;
+    };
+    /** @description Server-to-server reply only. Next stores tokens in HttpOnly cookies and returns only the public session object to the browser. */
+    WalletUserTokens: {
+      session: components["schemas"]["WalletUserSession"];
+      accessToken: string;
+      refreshToken: string;
+    };
+    NativeSignedOrderEnvelope: {
+      /** @enum {string} */
+      kind: "whole" | "fraction";
+      /** @constant */
+      chainId: 560048;
+      marketAddress: string;
+      intentHash: string;
+      intent:
+        | {
+            seller: string;
+            paymentToken: string;
+            buyer: string;
+            salt: string;
+            startsAt: number;
+            endsAt: number;
+            epoch: string;
+            collection: string;
+            tokenId: string;
+            price: string;
+          }
+        | {
+            seller: string;
+            paymentToken: string;
+            buyer: string;
+            salt: string;
+            startsAt: number;
+            endsAt: number;
+            epoch: string;
+            assetToken: string;
+            maxAmount: string;
+            unitPrice: string;
+          };
+      /** @description Original sale signature bytes, at most 8192 bytes. Empty bytes are accepted only for a contract wallet verified by the upstream verifier. */
+      signature: string;
+    };
+    NativeSignedOrder: {
+      /** @enum {string} */
+      kind: "whole" | "fraction";
+      /** @constant */
+      chainId: 560048;
+      marketAddress: string;
+      intentHash: string;
+      intent:
+        | {
+            seller: string;
+            paymentToken: string;
+            buyer: string;
+            salt: string;
+            startsAt: number;
+            endsAt: number;
+            epoch: string;
+            collection: string;
+            tokenId: string;
+            price: string;
+          }
+        | {
+            seller: string;
+            paymentToken: string;
+            buyer: string;
+            salt: string;
+            startsAt: number;
+            endsAt: number;
+            epoch: string;
+            assetToken: string;
+            maxAmount: string;
+            unitPrice: string;
+          };
+      /** @description Original sale signature bytes, at most 8192 bytes. Empty bytes are accepted only for a contract wallet verified by the upstream verifier. */
+      signature: string;
+      /** Format: date-time */
+      readonly createdAt: string;
+    };
     Status: {
       service: string;
       status: string;
@@ -504,6 +1517,7 @@ export interface components {
       };
     };
     MintIntentRequest: {
+      evidence: components["schemas"]["RWASourceEvidence"];
       uploadId: string;
       recipient: string;
       name: string;
@@ -514,6 +1528,8 @@ export interface components {
       description: string;
     };
     MintIntent: {
+      sourceEvidence: components["schemas"]["RWASourceEvidence"];
+      contractEvidence: components["schemas"]["RWAContractEvidence"];
       intentId: string;
       requestId: string;
       recipient: string;
@@ -524,7 +1540,8 @@ export interface components {
       metadataUri: string;
       metadataSha256: string;
       /** @constant */
-      contractFunction: "createAsset(bytes32,address,string,bytes32)";
+      contractFunction: "createAssetWithEvidence(bytes32,address,string,bytes32,(bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64,bytes32,bytes32),bytes32,bytes32)";
+      /** @description First four scalar arguments; append the verified contractEvidence tuple and sourceEvidence.signatureR/signatureS for the guarded call. Never call the permanently disabled legacy function. */
       contractArguments: string[];
       /** @enum {string} */
       status: "prepared" | "submitted" | "confirmed" | "failed";
@@ -628,6 +1645,46 @@ export interface components {
       assetSlugs: string[];
       description: string;
     };
+    PortfolioEvent: {
+      /** @description Stable chain/transaction/log identity; status updates reuse it. */
+      id: string;
+      transactionHash: string;
+      logIndex: number;
+      contractAddress: string;
+      eventName: string;
+      blockNumber: number;
+      /** @enum {string} */
+      status: "pending" | "confirmed" | "removed";
+      /** Format: date-time */
+      observedAt: string;
+    };
+    PortfolioPerformance: {
+      /** @enum {string} */
+      status: "no_indexed_history" | "known_for_indexed_history" | "unknown";
+      /** @constant */
+      method: "fifo";
+      /** @constant */
+      scope: "confirmed_indexed_fraction_trades";
+      unmappedTradeCount: number;
+      pendingEventCount: number;
+      reasons: string[];
+      items: {
+        assetToken: string;
+        /** @description Payment currency address. No conversion is performed. */
+        paymentToken: string | null;
+        /** @description Exact unscaled confirmed indexed token quantity; null if invalid. */
+        confirmedQuantity: string | null;
+        /** @description Remaining FIFO basis in payment-token base units; null if incomplete. */
+        costBasis: string | null;
+        /** @description Signed exact payment-token base units; null if incomplete. Gas is excluded. */
+        realizedPnl: string | null;
+        /** @enum {string} */
+        status: "known" | "unknown";
+        buyCount: number;
+        sellCount: number;
+        reasons: string[];
+      }[];
+    };
     Portfolio: {
       address: string;
       /** @constant */
@@ -637,13 +1694,18 @@ export interface components {
       positions: {
         assetToken: string;
         symbol: string;
+        /** @description Unscaled indexed transfer balance. A negative value indicates incomplete history. */
         balance: string;
         /** Format: date-time */
         updatedAt: string;
       }[];
-      transactions: Record<string, never>[];
+      transactions: components["schemas"]["PortfolioEvent"][];
       offers: Record<string, never>[];
-      notifications: Record<string, never>[];
+      /** @description Direct wallet-participant events ordered by latest indexed update, including pending and removed events. No external delivery or subscription. */
+      notifications: (components["schemas"]["PortfolioEvent"] & {
+        message: string;
+      })[];
+      performance: components["schemas"]["PortfolioPerformance"];
     };
     ChainEventRequest: {
       /** @constant */
@@ -776,6 +1838,843 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  administrationSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationSession"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  adminModerationCases: {
+    parameters: {
+      query?: {
+        page?: number;
+        pageSize?: number;
+        status?: "" | "open" | "reviewing" | "resolved" | "appealed";
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModerationCasePage"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  adminModerationCase: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        caseID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModerationCase"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  adminModerationDecision: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Actor-scoped, durable replay key. Reuse only for the identical method, path and payload. A conflicting payload returns 409. */
+        "Idempotency-Key": string;
+      };
+      path: {
+        caseID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ModerationDecision"];
+      };
+    };
+    responses: {
+      /** @description Durably recorded result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModerationCase"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  userModerationCases: {
+    parameters: {
+      query?: {
+        page?: number;
+        pageSize?: number;
+        status?: "" | "open" | "reviewing" | "resolved" | "appealed";
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModerationCasePage"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  createModerationReport: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Actor-scoped, durable replay key. Reuse only for the identical method, path and payload. A conflicting payload returns 409. */
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ModerationReport"];
+      };
+    };
+    responses: {
+      /** @description Durably recorded result */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModerationCase"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  userModerationCase: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        caseID: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModerationCase"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  createModerationAppeal: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Actor-scoped, durable replay key. Reuse only for the identical method, path and payload. A conflicting payload returns 409. */
+        "Idempotency-Key": string;
+      };
+      path: {
+        caseID: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ModerationAppeal"];
+      };
+    };
+    responses: {
+      /** @description Durably recorded result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModerationCase"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  adminPlatformConfiguration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlatformConfiguration"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  updatePlatformConfiguration: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Actor-scoped, durable replay key. Reuse only for the identical method, path and payload. A conflicting payload returns 409. */
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PlatformConfigurationUpdate"];
+      };
+    };
+    responses: {
+      /** @description Durably recorded result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlatformConfiguration"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  administrationAudit: {
+    parameters: {
+      query?: {
+        /** @description Exclusive audit ID cursor returned as nextCursor. At most 50 records per page. */
+        before?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AdministrationAuditPage"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  publicPlatformConfiguration: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PlatformConfiguration"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  publicModerationNotices: {
+    parameters: {
+      query?: {
+        page?: number;
+        pageSize?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current records */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModerationNoticePage"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  nftOperationHistory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          accessToken: string;
+          page: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Current wallet's operation summaries, newest first, 25 per page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            data: {
+              id: string;
+              chainId: number;
+              status: string;
+              action: string;
+              collection: string;
+              tokenId: string;
+              kind: string;
+              walletStarted: boolean;
+              transactionHash?: string;
+              orderHash?: string;
+              /** Format: date-time */
+              updatedAt: string;
+            }[];
+            page: number;
+            /** @constant */
+            pageSize: 25;
+            hasMore: boolean;
+            wallet: string;
+            chainId: number;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  nftOperation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @enum {string} */
+          action: "get" | "create" | "update";
+          accessToken: string;
+          operation: {
+            id: string;
+            wallet?: string;
+            chainId?: number;
+            requestHash?: string;
+            revision?: number;
+            /** @enum {string} */
+            status?:
+              | "awaiting-wallet"
+              | "submitted"
+              | "pending"
+              | "accepted"
+              | "rejected"
+              | "confirmed"
+              | "failed"
+              | "cancelled";
+            /** @description Unsigned session-bound review plan. Credential and signature fields are rejected recursively. */
+            plan?: {
+              [key: string]: unknown;
+            };
+            transactionHash?: string;
+            orderHash?: string;
+          };
+        };
+      };
+    };
+    responses: {
+      /** @description The authoritative operation and unsigned review plan */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Missing or expired wallet session or invalid bridge credential */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Operation belongs to another wallet or chain */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Operation was not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Idempotency, immutable-plan, or revision conflict */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Durable operation journal is unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+    };
+  };
+  walletUserChallenge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          address: string;
+          /** @constant */
+          chainId: 560048;
+          /** Format: uri */
+          origin: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Bounded server response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WalletUserChallenge"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  walletUserVerify: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          challengeId: string;
+          address: string;
+          /** @constant */
+          chainId: 560048;
+          /** Format: uri */
+          origin: string;
+          message: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Bounded server response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WalletUserTokens"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  walletUserSession: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          accessToken: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Bounded server response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            session: components["schemas"]["WalletUserSession"];
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  walletUserRefresh: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          refreshToken: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Bounded server response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WalletUserTokens"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  walletUserLogout: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          accessToken?: string;
+          refreshToken?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Durable revocation confirmed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  listNativeSignedOrders: {
+    parameters: {
+      query?: {
+        kind?: "whole" | "fraction";
+        chainId?: 560048;
+        marketAddress?: string;
+        assetAddress?: string;
+        tokenId?: string;
+        sellerAddress?: string;
+        page?: number;
+        pageSize?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Published terms, ascending by publication time with stable identity tie breakers */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            data: components["schemas"]["NativeSignedOrder"][];
+            total: number;
+            page: number;
+            pageSize: number;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getFractionOrderBook: {
+    parameters: {
+      query: {
+        chainId: 560048;
+        marketAddress: string;
+        assetAddress: string;
+        paymentToken: string;
+        at: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Immutable price-time candidate log; chain state is not implied */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            data: components["schemas"]["NativeSignedOrder"][];
+            at: number;
+            logHash: string;
+            /** @constant */
+            priority: "price-time-hash";
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getNativeSignedOrder: {
+    parameters: {
+      query: {
+        chainId: 560048;
+        marketAddress: string;
+      };
+      header?: never;
+      path: {
+        intentHash: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Exact immutable order envelope */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NativeSignedOrder"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  publishVerifiedSignedOrder: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Indexer-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NativeSignedOrderEnvelope"];
+      };
+    };
+    responses: {
+      /** @description Identical prior publication; original time retained */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NativeSignedOrder"];
+        };
+      };
+      /** @description Stored durably */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NativeSignedOrder"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
   getHealth: {
     parameters: {
       query?: never;
@@ -899,6 +2798,7 @@ export interface operations {
           };
         };
       };
+      503: components["responses"]["Problem"];
     };
   };
   listProjects: {
@@ -941,7 +2841,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Read-only public address portfolio */
+      /** @description Private read-only indexed portfolio for the authenticated wallet */
       200: {
         headers: {
           [name: string]: unknown;
@@ -951,6 +2851,9 @@ export interface operations {
         };
       };
       400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
     };
   };
   ingestChainEvent: {
@@ -1019,12 +2922,43 @@ export interface operations {
       422: components["responses"]["Problem"];
     };
   };
+  ingestExternalMarketSnapshot: {
+    parameters: {
+      query?: never;
+      header: {
+        "X-Indexer-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/x-ndjson": string;
+      };
+    };
+    responses: {
+      /** @description Complete external marketplace snapshot committed atomically */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      415: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+    };
+  };
   getExternalMarketActivity: {
     parameters: {
       query?: {
         source?: string;
         contract?: string;
         limit?: number;
+        /** @description Opaque position from a previous response's nextCursor. Keyset, not an offset: a feed that grows at its head would make offset paging skip and repeat rows. A cursor this endpoint did not issue is refused rather than rounded to the start. */
+        cursor?: string;
       };
       header?: never;
       path?: never;
@@ -1047,6 +2981,8 @@ export interface operations {
             execution: "external-deeplink-only";
             /** @constant */
             custody: false;
+            /** @description Position to pass as cursor for the next page. Absent once the history has ended, so its absence is the end rather than something to infer from a short page. */
+            nextCursor?: string;
           };
         };
       };
@@ -1346,6 +3282,38 @@ export interface operations {
       404: components["responses"]["Problem"];
     };
   };
+  renewMintSourceEvidence: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        intentID: components["parameters"]["IntentID"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          evidence: components["schemas"]["RWASourceEvidence"];
+        };
+      };
+    };
+    responses: {
+      /** @description Original issuance request with current source evidence */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MintIntent"];
+        };
+      };
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
   recordMintSubmission: {
     parameters: {
       query?: never;
@@ -1488,6 +3456,370 @@ export interface operations {
           "application/json": components["schemas"]["VaultIntent"];
         };
       };
+    };
+  };
+  listSourceVerifiedRWAAssets: {
+    parameters: {
+      query?: {
+        section?: "whole" | "fractional";
+        q?: string;
+        sort?: "title" | "updated";
+        page?: number;
+        pageSize?: number;
+        chainId?: 560048;
+        collectionAddress?: string;
+        tokenId?: string;
+        fractionTokenAddress?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Verified result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RWACatalogPage"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  getSourceVerifiedRWAAsset: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Verified result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RWACatalogAsset"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  listApprovedRWASources: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Verified result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            data: components["schemas"]["ApprovedRWASource"][];
+            /** @enum {string} */
+            mode: "LIVE" | "TEST_ONLY";
+            signatureAlgorithm: string;
+            /** @constant */
+            schemaVersion: 1;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  recordSignedRWASourceRevocation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RWASourceRevocation"];
+      };
+    };
+    responses: {
+      /** @description Verified result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            sourceId: string;
+            evidenceId: string;
+            /** @constant */
+            status: "revoked";
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  prepareUnsignedRWAMetadata: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RWAMetadataPreparationRequest"];
+      };
+    };
+    responses: {
+      /** @description Verified result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RWAMetadataPreparation"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  userReviewRWACatalogDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RWACatalogRecord"];
+      };
+    };
+    responses: {
+      /** @description Verified result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RWACatalogDraft"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  userPublishSourceVerifiedRWA: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RWACatalogMutation"];
+      };
+    };
+    responses: {
+      /** @description Verified result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RWACatalogAsset"];
+        };
+      };
+      /** @description New source-verified record */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RWACatalogAsset"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  adminReviewRWACatalogDraft: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RWACatalogRecord"];
+      };
+    };
+    responses: {
+      /** @description Verified result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RWACatalogDraft"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  adminPublishSourceVerifiedRWA: {
+    parameters: {
+      query?: never;
+      header: {
+        "Idempotency-Key": string;
+      };
+      path: {
+        slug: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RWACatalogMutation"];
+      };
+    };
+    responses: {
+      /** @description Verified result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RWACatalogAsset"];
+        };
+      };
+      /** @description New source-verified record */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RWACatalogAsset"];
+        };
+      };
+      400: components["responses"]["Problem"];
+      401: components["responses"]["Problem"];
+      403: components["responses"]["Problem"];
+      404: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      413: components["responses"]["Problem"];
+      422: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
+    };
+  };
+  checkCurrentRWAUnderlyingGrounding: {
+    parameters: {
+      query: {
+        chainId: 560048;
+        collectionAddress: string;
+        tokenId: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Exact underlying currently has active approved-source evidence */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @constant */
+            chainId: 560048;
+            collectionAddress: string;
+            tokenId: string;
+            /** @constant */
+            grounded: true;
+            /** Format: date-time */
+            checkedAt: string;
+          };
+        };
+      };
+      400: components["responses"]["Problem"];
+      409: components["responses"]["Problem"];
+      503: components["responses"]["Problem"];
     };
   };
 }

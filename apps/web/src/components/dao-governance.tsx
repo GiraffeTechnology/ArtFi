@@ -1,12 +1,23 @@
 "use client";
+import { DaoSnapshotWeight } from "./dao-snapshot-weight";
+import { renderedDaoDeployment } from "@/lib/dao-rendered-configuration";
 
-import { FormEvent, useMemo, useState } from "react";
+import styles from "./dao-governance.module.css";
+
+import {
+  FormEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   type Address,
   type Hex,
   encodeFunctionData,
   formatUnits,
-  isAddress,
   keccak256,
   stringToHex,
 } from "viem";
@@ -16,9 +27,19 @@ import {
   usePublicClient,
   useReadContract,
   useSignMessage,
-  useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
+
+import { useUserSession } from "@/components/user-session-provider";
+import { DaoAccountMetrics } from "@/components/dao-account-metrics";
+import { portfolioSessionKey } from "@/lib/portfolio-session";
+import {
+  assertTradingSession,
+  userSessionController,
+} from "@/lib/user-session-client";
+import { runDaoSessionAction } from "@/lib/dao-session-action";
+import { DaoProposalDraftWorkspace } from "@/components/dao-proposal-draft-workspace";
+import type { DaoDraftForm } from "@/lib/dao-proposal-draft";
 
 import {
   daoActionsAbi,
@@ -26,6 +47,23 @@ import {
   daoVotingTokenAbi,
 } from "@/lib/dao-contracts";
 import { supportedChain } from "@/lib/wagmi";
+import {
+  checkDaoTransaction,
+  isDaoCallBinding,
+  daoActionSession,
+  isDaoWalletRejection,
+  type DaoTransaction,
+  type ProposalPackage,
+} from "@/lib/dao-action-state";
+
+import {
+  daoExecutionDeployment,
+  publishedDaoReadDeadline,
+} from "@/lib/dao-published-execution";
+import {
+  prepareSelectedDaoAction,
+  selectedDaoPackage,
+} from "@/lib/dao-selected-execution";
 
 export type DaoDeployment = {
   actionRegistryAddress?: string;
@@ -34,24 +72,9 @@ export type DaoDeployment = {
   vaultAddress?: string;
 };
 
-type ActionType =
-  | "market"
-  | "warehouse"
-  | "auction"
-  | "sale"
-  | "custodian"
-  | "failure"
-  | "buyout30"
-  | "buyout10";
+import { verifyDaoGovernanceAtWallet } from "@/lib/dao-governance-wallet-boundary";
 
-type ProposalPackage = {
-  calldatas: readonly [Hex];
-  description: string;
-  descriptionHash: Hex;
-  proposalId: bigint;
-  targets: readonly [Address];
-  values: readonly [bigint];
-};
+type ActionType = DaoDraftForm["actionType"];
 
 const proposalStates = [
   "Pending",
@@ -72,11 +95,6 @@ const proposalKinds = [
 ];
 const bytes32Pattern = /^0x[0-9a-fA-F]{64}$/;
 
-function percent(value: bigint, total: bigint): string {
-  if (total === 0n) return "0.00%";
-  return `${Number((value * 10_000n) / total) / 100}%`;
-}
-
 function shortUnits(value: bigint): string {
   const rendered = formatUnits(value, 18);
   const [whole, fraction = ""] = rendered.split(".");
@@ -93,29 +111,53 @@ function safeBigInt(value: string): bigint | null {
 }
 
 export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
-  const configured =
-    isAddress(deployment.governorAddress ?? "") &&
-    isAddress(deployment.tokenAddress ?? "") &&
-    isAddress(deployment.actionRegistryAddress ?? "") &&
-    isAddress(deployment.vaultAddress ?? "");
-  const governor = (configured ? deployment.governorAddress : undefined) as
-    Address | undefined;
-  const token = (configured ? deployment.tokenAddress : undefined) as
-    Address | undefined;
-  const actionRegistry = (
-    configured ? deployment.actionRegistryAddress : undefined
-  ) as Address | undefined;
-
   const { address, isConnected } = useAccount();
+  const auth = useUserSession();
   const chainId = useChainId();
+  const context = [
+    chainId,
+    address?.toLowerCase(),
+    isConnected,
+    deployment.governorAddress?.toLowerCase(),
+    deployment.tokenAddress?.toLowerCase(),
+    deployment.actionRegistryAddress?.toLowerCase(),
+    deployment.vaultAddress?.toLowerCase(),
+  ].join(":");
+  return (
+    <DaoGovernanceSession
+      key={`${context}:${auth.session?.id ?? "signed-out"}:${auth.revision}`}
+      deployment={deployment}
+      context={context}
+    />
+  );
+}
+
+function DaoGovernanceSession({
+  deployment,
+  context,
+}: {
+  deployment: DaoDeployment;
+  context: string;
+}) {
+  const configuredDeployment = renderedDaoDeployment(deployment);
+  const configured = configuredDeployment !== undefined;
+  const governor = configuredDeployment?.governorAddress;
+  const token = configuredDeployment?.tokenAddress;
+  const actionRegistry = configuredDeployment?.actionRegistryAddress;
+
+  const { address, isConnected, status } = useAccount();
+  const auth = useUserSession();
+  const chainId = useChainId();
+  const authenticated = Boolean(
+    portfolioSessionKey(auth, { address, chainId, status }),
+  );
   const publicClient = usePublicClient();
   const [verificationNonce, setVerificationNonce] = useState(() =>
     crypto.randomUUID(),
   );
   const [verifiedAddress, setVerifiedAddress] = useState<Address>();
   const [notice, setNotice] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [proposalInput, setProposalInput] = useState("");
+  const [proposalInput, setProposalInput] = useState<string>();
   const [actionType, setActionType] = useState<ActionType>("market");
   const [description, setDescription] = useState("");
   const [marketName, setMarketName] = useState("");
@@ -126,66 +168,124 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
   const [observationStart, setObservationStart] = useState("");
   const [tradeCount, setTradeCount] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [proposalPackage, setProposalPackage] = useState<ProposalPackage>();
+  const session = useMemo(() => daoActionSession(context), [context]);
+  const actionState = useSyncExternalStore(
+    session.subscribe,
+    session.getSnapshot,
+    session.getServerSnapshot,
+  );
+  const {
+    transaction,
+    busy: actionBusy,
+    recoveryNotice,
+    actionError,
+  } = actionState;
+  const proposalPackage = authenticated
+    ? actionState.submitted?.proposal
+    : undefined;
+  const selectedProposalInput =
+    proposalInput ?? proposalPackage?.proposalId.toString() ?? "";
+  const selectionGeneration = useRef(0);
+  const active = useRef(false);
+  useLayoutEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (address && isConnected && actionRegistry)
+      session.restore(() => window.sessionStorage, actionRegistry);
+  }, [address, isConnected, actionRegistry, session]);
 
-  const enabled = configured && Boolean(address);
-  const { data: balance = 0n, refetch: refetchBalance } = useReadContract({
+  const enabled =
+    configured &&
+    Boolean(address) &&
+    authenticated &&
+    chainId === supportedChain.id;
+  const {
+    data: balance = 0n,
+    isSuccess: balanceKnown,
+    refetch: refetchBalance,
+  } = useReadContract({
+    chainId: supportedChain.id,
     abi: daoVotingTokenAbi,
     address: token,
     functionName: "balanceOf",
     args: [address ?? "0x0000000000000000000000000000000000000000"],
     query: { enabled },
   });
-  const { data: votes = 0n, refetch: refetchVotes } = useReadContract({
+  const {
+    data: votes = 0n,
+    isSuccess: votesKnown,
+    refetch: refetchVotes,
+  } = useReadContract({
+    chainId: supportedChain.id,
     abi: daoVotingTokenAbi,
     address: token,
     functionName: "getVotes",
     args: [address ?? "0x0000000000000000000000000000000000000000"],
     query: { enabled },
   });
-  const { data: totalSupply = 0n } = useReadContract({
+  const { data: totalSupply = 0n, isSuccess: supplyKnown } = useReadContract({
+    chainId: supportedChain.id,
     abi: daoVotingTokenAbi,
     address: token,
     functionName: "totalSupply",
     query: { enabled: configured },
   });
-  const { data: proposalThreshold = 0n } = useReadContract({
-    abi: daoGovernorAbi,
-    address: governor,
-    functionName: "proposalThreshold",
-    query: { enabled: configured },
-  });
+  const { data: proposalThreshold = 0n, isSuccess: thresholdKnown } =
+    useReadContract({
+      chainId: supportedChain.id,
+      abi: daoGovernorAbi,
+      address: governor,
+      functionName: "proposalThreshold",
+      query: { enabled: configured },
+    });
   const { data: rwaEligible = false } = useReadContract({
+    chainId: supportedChain.id,
     abi: daoGovernorAbi,
     address: governor,
     functionName: "rwaEligible",
     query: { enabled: configured },
   });
 
-  const proposalId = useMemo(() => safeBigInt(proposalInput), [proposalInput]);
+  const proposalId = useMemo(
+    () => safeBigInt(selectedProposalInput),
+    [selectedProposalInput],
+  );
+  const selectedPackage = authenticated
+    ? selectedDaoPackage(actionState.submitted, proposalId)
+    : undefined;
   const proposalEnabled = configured && proposalId !== null;
-  const { data: proposalState } = useReadContract({
-    abi: daoGovernorAbi,
-    address: governor,
-    functionName: "state",
-    args: [proposalId ?? 0n],
-    query: { enabled: proposalEnabled },
-  });
+  const { data: proposalState, refetch: refetchProposalState } =
+    useReadContract({
+      chainId: supportedChain.id,
+      abi: daoGovernorAbi,
+      address: governor,
+      functionName: "state",
+      args: [proposalId ?? 0n],
+      query: { enabled: proposalEnabled },
+    });
   const { data: proposalKind } = useReadContract({
+    chainId: supportedChain.id,
     abi: daoGovernorAbi,
     address: governor,
     functionName: "proposalKind",
     args: [proposalId ?? 0n],
     query: { enabled: proposalEnabled },
   });
-  const { data: proposalVotes } = useReadContract({
-    abi: daoGovernorAbi,
-    address: governor,
-    functionName: "proposalVotes",
-    args: [proposalId ?? 0n],
-    query: { enabled: proposalEnabled },
-  });
+  const { data: proposalVotes, refetch: refetchProposalVotes } =
+    useReadContract({
+      chainId: supportedChain.id,
+      abi: daoGovernorAbi,
+      address: governor,
+      functionName: "proposalVotes",
+      args: [proposalId ?? 0n],
+      query: { enabled: proposalEnabled },
+    });
   const { data: requiredForVotes } = useReadContract({
+    chainId: supportedChain.id,
     abi: daoGovernorAbi,
     address: governor,
     functionName: "requiredForVotes",
@@ -193,16 +293,44 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
     query: { enabled: proposalEnabled },
   });
 
-  const { signMessageAsync, isPending: signaturePending } = useSignMessage();
   const {
-    data: transactionHash,
-    error: transactionError,
-    isPending: transactionPending,
-    writeContractAsync,
-  } = useWriteContract();
-  const transactionReceipt = useWaitForTransactionReceipt({
-    hash: transactionHash,
+    data: proposalSnapshot,
+    isSuccess: snapshotKnown,
+    refetch: refetchSnapshot,
+  } = useReadContract({
+    chainId: supportedChain.id,
+    abi: daoGovernorAbi,
+    address: governor,
+    functionName: "proposalSnapshot",
+    args: [proposalId ?? 0n],
+    query: { enabled: proposalEnabled },
   });
+  const {
+    data: snapshotVotes,
+    isSuccess: snapshotVotesKnown,
+    refetch: refetchSnapshotVotes,
+  } = useReadContract({
+    chainId: supportedChain.id,
+    abi: daoGovernorAbi,
+    address: governor,
+    functionName: "getVotes",
+    args: [
+      address ?? "0x0000000000000000000000000000000000000000",
+      proposalSnapshot ?? 0n,
+    ],
+    query: {
+      enabled:
+        enabled && proposalEnabled && snapshotKnown && proposalState === 1,
+    },
+  });
+
+  const { signMessageAsync, isPending: signaturePending } = useSignMessage();
+  const { writeContractAsync } = useWriteContract();
+  const transactionPending =
+    actionBusy ||
+    actionState.awaitingWallet ||
+    transaction?.phase === "pending" ||
+    transaction?.phase === "unknown";
 
   const ownershipMessage = useMemo(
     () =>
@@ -211,32 +339,87 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
   );
 
   const verified = Boolean(
-    address && verifiedAddress?.toLowerCase() === address.toLowerCase(),
+    isConnected &&
+    address &&
+    verifiedAddress?.toLowerCase() === address.toLowerCase(),
   );
-  const member = verified && balance > 0n && rwaEligible;
+  const member =
+    authenticated && verified && balanceKnown && balance > 0n && rwaEligible;
+  const canVote =
+    authenticated &&
+    verified &&
+    rwaEligible &&
+    proposalState === 1 &&
+    snapshotKnown &&
+    snapshotVotesKnown &&
+    typeof snapshotVotes === "bigint" &&
+    snapshotVotes > 0n;
   const canPropose =
-    member && votes >= proposalThreshold && proposalThreshold > 0n;
+    member &&
+    votesKnown &&
+    thresholdKnown &&
+    votes >= proposalThreshold &&
+    proposalThreshold > 0n;
   const correctChain = chainId === supportedChain.id;
 
-  async function runAction(action: () => Promise<void>) {
-    setActionError("");
+  async function runAction(
+    action: (lease: number) => Promise<void>,
+    checking = false,
+  ) {
+    if (!active.current) return;
+    const lease = session.begin(checking);
+    if (lease === undefined) return;
+    setNotice("");
     try {
-      await action();
+      await action(lease);
     } catch (error) {
-      setActionError(
+      session.fail(
+        lease,
         error instanceof Error ? error.message : "The wallet action failed.",
+        isDaoWalletRejection(error),
+        () => window.sessionStorage,
       );
+    } finally {
+      session.finish(lease);
     }
   }
 
-  async function verifyOwnership() {
+  function actionIsCurrent(lease: number) {
+    const current = userSessionController.getSnapshot();
+    return (
+      active.current &&
+      session.isCurrent(lease) &&
+      current.revision === auth.revision &&
+      current.session?.id === auth.session?.id &&
+      Boolean(portfolioSessionKey(current, { address, chainId, status }))
+    );
+  }
+  async function verifyOwnership(lease: number) {
     if (!address || !configured || !correctChain || !publicClient) return;
-    const signature = await signMessageAsync({ message: ownershipMessage });
-    const valid = await publicClient.verifyMessage({
-      address,
-      message: ownershipMessage,
-      signature,
+    const signature = await runDaoSessionAction({
+      account: address,
+      chainId,
+      assertSession: assertTradingSession,
+      isCurrent: () => actionIsCurrent(lease),
+      prepare: async () => {
+        if (
+          (await publishedDaoReadDeadline(publicClient.getChainId())) !==
+          supportedChain.id
+        )
+          throw Error("The DAO reader is not on Hoodi.");
+      },
+      execute: () =>
+        signMessageAsync({ message: ownershipMessage, account: address }),
     });
+    if (!active.current) return;
+    const valid = await publishedDaoReadDeadline(
+      publicClient.verifyMessage({
+        address,
+        message: ownershipMessage,
+        signature,
+      }),
+    );
+    if (!actionIsCurrent(lease)) return;
     if (!valid) throw new Error("Wallet signature did not verify.");
     setVerifiedAddress(address);
     setVerificationNonce(crypto.randomUUID());
@@ -245,17 +428,150 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
     );
   }
 
+  async function checkReceipt(next: DaoTransaction, lease: number) {
+    if (!publicClient || !address || !governor || !token)
+      throw new Error(
+        "The chain client is unavailable. The transaction is still unconfirmed.",
+      );
+    let expectedHash = next.hash;
+    await checkDaoTransaction({
+      client: publicClient,
+      binding: {
+        chainId: 560048,
+        account: address,
+        targets: [governor, token],
+      },
+      transaction: next,
+      isCurrent: () => session.isCurrent(lease),
+      update: (value) =>
+        session.updateTransaction(
+          lease,
+          expectedHash,
+          value,
+          () => window.sessionStorage,
+        ),
+      onHash: (hash) => {
+        if (
+          session.replaceHash(
+            lease,
+            expectedHash,
+            hash,
+            () => window.sessionStorage,
+          )
+        )
+          expectedHash = hash;
+      },
+    });
+  }
+
+  // The mounted subscriber refreshes reads even when an older instance received the receipt.
+  useEffect(() => {
+    if (transaction?.phase !== "confirmed") return;
+    void Promise.all([
+      ...(enabled ? [refetchBalance(), refetchVotes()] : []),
+      refetchProposalState(),
+      refetchProposalVotes(),
+      refetchSnapshot(),
+      refetchSnapshotVotes(),
+    ]);
+  }, [
+    transaction?.phase,
+    transaction?.hash,
+    enabled,
+    refetchBalance,
+    refetchVotes,
+    refetchProposalState,
+    refetchProposalVotes,
+    refetchSnapshot,
+    refetchSnapshotVotes,
+  ]);
+
   async function submitWrite(
     request: Parameters<typeof writeContractAsync>[0],
     success: string,
+    lease: number,
+    submittedPackage?: ProposalPackage,
+    verifySelection?: () => Promise<unknown>,
   ) {
-    if (!member || !correctChain)
-      throw new Error("DAO ownership verification is required.");
-    await writeContractAsync(request);
-    setNotice(success);
+    if (!active.current || !session.isCurrent(lease)) return;
+    const eligibleForCall =
+      request.functionName === "castVote" ? canVote : member;
+    if (!eligibleForCall || !correctChain || !address || !publicClient)
+      throw new Error("DAO ownership verification on Hoodi is required.");
+    const boundRequest = {
+      target: request.address,
+      input: encodeFunctionData(
+        request as Parameters<typeof encodeFunctionData>[0],
+      ),
+      value: ((request as { value?: bigint }).value ?? 0n).toString(),
+    };
+    if (!isDaoCallBinding(boundRequest))
+      throw Error("The DAO call is invalid or too large for safe recovery.");
+    const selectedGeneration = selectionGeneration.current;
+    const selectionSensitive = ["castVote", "queue", "execute"].includes(
+      request.functionName,
+    );
+    const verifyBeforeWallet = async () => {
+      await publishedDaoReadDeadline(
+        verifyDaoGovernanceAtWallet({
+          client: publicClient,
+          deployment: daoExecutionDeployment(deployment),
+          account: address,
+          call: boundRequest,
+          verifySelection,
+          assertCurrent: () => {
+            if (
+              !actionIsCurrent(lease) ||
+              (selectionSensitive &&
+                selectedGeneration !== selectionGeneration.current)
+            )
+              throw Error("The DAO action selection or session changed.");
+          },
+        }),
+      );
+    };
+    const hash = await runDaoSessionAction({
+      account: address,
+      chainId,
+      assertSession: assertTradingSession,
+      isCurrent: () => actionIsCurrent(lease),
+      prepare: verifyBeforeWallet,
+      execute: async () => {
+        await verifyBeforeWallet();
+
+        if (!session.awaitWallet(lease, () => window.sessionStorage))
+          return undefined;
+        return writeContractAsync({
+          ...request,
+          account: address,
+          chainId: supportedChain.id,
+        });
+      },
+    });
+    if (!hash) return;
+    // Keep the original operation alive across navigation; a returned view subscribes to it.
+    const next: DaoTransaction = {
+      hash,
+      request: boundRequest,
+      success,
+      phase: "pending",
+      proposalCreation: Boolean(submittedPackage),
+    };
+    if (
+      !session.broadcast(
+        lease,
+        next,
+        submittedPackage,
+        () => window.sessionStorage,
+      )
+    )
+      return;
+    if (submittedPackage && active.current)
+      setProposalInput(submittedPackage.proposalId.toString());
+    await checkReceipt(next, lease);
   }
 
-  async function delegateToSelf() {
+  async function delegateToSelf(lease: number) {
     if (!token || !address) return;
     await submitWrite(
       {
@@ -264,12 +580,12 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
         functionName: "delegate",
         args: [address],
       },
-      "Delegation submitted. Voting power updates after confirmation.",
+      "Delegation confirmed.",
+      lease,
     );
-    await Promise.all([refetchBalance(), refetchVotes()]);
   }
 
-  async function castVote(support: 0 | 1 | 2) {
+  async function castVote(support: 0 | 1 | 2, lease: number) {
     if (!governor || proposalId === null) return;
     await submitWrite(
       {
@@ -278,7 +594,8 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
         functionName: "castVote",
         args: [proposalId, support],
       },
-      "Vote submitted. The proposal snapshot determines final voting weight.",
+      "Vote confirmed. The proposal snapshot determines final voting weight.",
+      lease,
     );
   }
 
@@ -393,7 +710,7 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
 
   function createProposal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void runAction(async () => {
+    void runAction(async (lease) => {
       if (!governor || !actionRegistry || !publicClient || !canPropose) return;
       if (description.trim().length < 12)
         throw new Error("A clear proposal description is required.");
@@ -408,15 +725,15 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
         functionName: "hashProposal",
         args: [targets, values, calldatas, descriptionHash],
       });
-      setProposalPackage({
+      if (!active.current) return;
+      const nextPackage: ProposalPackage = {
         calldatas,
         description: description.trim(),
         descriptionHash,
         proposalId: nextProposalId,
         targets,
         values,
-      });
-      setProposalInput(nextProposalId.toString());
+      };
       await submitWrite(
         {
           abi: daoGovernorAbi,
@@ -424,42 +741,70 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
           functionName: "proposeWithKind",
           args: [targets, values, calldatas, description.trim(), kind],
         },
-        "Proposal submitted. Its ID and execution package are retained for this browser session.",
+        "Proposal creation confirmed.",
+        lease,
+        nextPackage,
       );
     });
   }
 
-  async function queueOrExecute(mode: "queue" | "execute") {
-    if (!governor || !proposalPackage) return;
+  async function queueOrExecute(mode: "queue" | "execute", lease: number) {
+    if (
+      !governor ||
+      !selectedPackage ||
+      !actionState.submitted ||
+      !publicClient ||
+      !address
+    )
+      throw new Error("Select the saved proposal package before continuing.");
+    const generation = selectionGeneration.current;
+    const submitted = actionState.submitted;
+    const verifySelection = () =>
+      prepareSelectedDaoAction({
+        client: publicClient,
+        deployment: daoExecutionDeployment(deployment),
+        submitted,
+        selectedProposalId: proposalId,
+        account: address,
+        mode,
+        isCurrent: () =>
+          active.current &&
+          session.isCurrent(lease) &&
+          generation === selectionGeneration.current,
+      });
+    const currentPackage = await verifySelection();
     await submitWrite(
       {
         abi: daoGovernorAbi,
         address: governor,
         functionName: mode,
         args: [
-          proposalPackage.targets,
-          proposalPackage.values,
-          proposalPackage.calldatas,
-          proposalPackage.descriptionHash,
+          currentPackage.targets,
+          currentPackage.values,
+          currentPackage.calldatas,
+          currentPackage.descriptionHash,
         ],
       },
       mode === "queue"
         ? "Proposal queued in the Timelock."
-        : "Timelock execution submitted.",
+        : "Timelock execution confirmed.",
+      lease,
+      undefined,
+      verifySelection,
     );
   }
 
   return (
     <section
-      className="dao-console"
+      className={`dao-console ${styles.console}`}
       aria-label="DAO ownership verification and governance"
     >
       {!configured ? (
         <div className="dao-alert dao-alert--blocked">
           <strong>DAO deployment not configured</strong>
           <p>
-            Governor, Vault, voting token and action-registry addresses are all
-            required. Writes fail closed.
+            Governor, Vault, voting token and action-registry addresses must all
+            be valid and nonzero. Writes fail closed.
           </p>
         </div>
       ) : null}
@@ -477,23 +822,26 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
               <dt>Wallet control</dt>
               <dd>{verified ? "Verified" : "Not verified"}</dd>
             </div>
-            <div>
-              <dt>Token balance</dt>
-              <dd>{shortUnits(balance)}</dd>
-            </div>
-            <div>
-              <dt>Voting power</dt>
-              <dd>{shortUnits(votes)}</dd>
-            </div>
-            <div>
-              <dt>Ownership</dt>
-              <dd>{percent(balance, totalSupply)}</dd>
-            </div>
+            <DaoAccountMetrics
+              authenticated={authenticated}
+              balance={balance}
+              votes={votes}
+              totalSupply={totalSupply}
+              balanceKnown={balanceKnown}
+              votesKnown={votesKnown}
+              supplyKnown={supplyKnown}
+            />
             <div>
               <dt>Proposal threshold</dt>
               <dd>{shortUnits(proposalThreshold)} · 10%</dd>
             </div>
           </dl>
+          {!authenticated && (
+            <p>
+              Sign in with the connected holder wallet to view account data or
+              request a DAO action.
+            </p>
+          )}
           {!isConnected ? (
             <p>Connect the corresponding holder wallet to continue.</p>
           ) : null}
@@ -503,7 +851,12 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
           <div className="dao-actions-row">
             <button
               disabled={
-                !configured || !isConnected || !correctChain || signaturePending
+                !authenticated ||
+                !configured ||
+                !isConnected ||
+                !correctChain ||
+                signaturePending ||
+                transactionPending
               }
               onClick={() => void runAction(verifyOwnership)}
               type="button"
@@ -512,7 +865,11 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
             </button>
             <button
               disabled={
-                !member || balance === 0n || votes > 0n || transactionPending
+                !member ||
+                !correctChain ||
+                balance === 0n ||
+                votes > 0n ||
+                transactionPending
               }
               onClick={() => void runAction(delegateToSelf)}
               type="button"
@@ -534,12 +891,22 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
             Proposal ID
             <input
               inputMode="numeric"
-              onChange={(event) => setProposalInput(event.target.value)}
-              value={proposalInput}
+              onChange={(event) => {
+                selectionGeneration.current++;
+                setProposalInput(event.target.value);
+              }}
+              value={selectedProposalInput}
             />
           </label>
           {proposalEnabled ? (
             <dl className="dao-metrics">
+              <DaoSnapshotWeight
+                snapshot={proposalSnapshot}
+                snapshotKnown={snapshotKnown}
+                weight={snapshotVotes}
+                weightKnown={snapshotVotesKnown}
+                authenticated={authenticated}
+              />
               <div>
                 <dt>Class</dt>
                 <dd>{proposalKinds[Number(proposalKind ?? 0)] ?? "Unknown"}</dd>
@@ -547,7 +914,9 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
               <div>
                 <dt>State</dt>
                 <dd>
-                  {proposalStates[Number(proposalState ?? 0)] ?? "Unknown"}
+                  {proposalState === undefined
+                    ? "Unavailable"
+                    : (proposalStates[Number(proposalState)] ?? "Unknown")}
                 </dd>
               </div>
               <div>
@@ -562,33 +931,91 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
           ) : null}
           <div className="dao-actions-row">
             <button
-              disabled={!member || proposalId === null || transactionPending}
-              onClick={() => void runAction(() => castVote(1))}
+              disabled={
+                !canVote ||
+                !correctChain ||
+                proposalId === null ||
+                transactionPending
+              }
+              onClick={() => void runAction((lease) => castVote(1, lease))}
               type="button"
             >
               Vote for
             </button>
             <button
-              disabled={!member || proposalId === null || transactionPending}
-              onClick={() => void runAction(() => castVote(0))}
+              disabled={
+                !canVote ||
+                !correctChain ||
+                proposalId === null ||
+                transactionPending
+              }
+              onClick={() => void runAction((lease) => castVote(0, lease))}
               type="button"
             >
               Vote against
             </button>
             <button
-              disabled={!member || proposalId === null || transactionPending}
-              onClick={() => void runAction(() => castVote(2))}
+              disabled={
+                !canVote ||
+                !correctChain ||
+                proposalId === null ||
+                transactionPending
+              }
+              onClick={() => void runAction((lease) => castVote(2, lease))}
               type="button"
             >
               Abstain
             </button>
           </div>
           <p className="dao-note">
+            To continue a proposal created by another member or browser,{" "}
+            <a href="/dao/proposals/execute">
+              load its published execution terms
+            </a>
+            .
+          </p>
+          <p className="dao-note">
             Voting weight comes from the proposal snapshot, preventing transfers
-            or temporary borrowing from being counted twice.
+            or temporary borrowing from being counted twice. A later transfer
+            does not remove voting power already recorded at that snapshot.
           </p>
         </article>
       </div>
+
+      <DaoProposalDraftWorkspace
+        expected={{
+          chainId: String(supportedChain.id),
+          governor: deployment.governorAddress ?? "",
+          token: deployment.tokenAddress ?? "",
+          vault: deployment.vaultAddress ?? "",
+          actionRegistry: deployment.actionRegistryAddress ?? "",
+        }}
+        currentForm={{
+          actionType,
+          description,
+          marketName,
+          evidenceHash,
+          evidenceURI,
+          amountWei,
+          t0,
+          observationStart,
+          tradeCount,
+          dueDate,
+        }}
+        disabled={transactionPending || signaturePending}
+        onApply={(form) => {
+          setActionType(form.actionType);
+          setDescription(form.description);
+          setMarketName(form.marketName);
+          setEvidenceHash(form.evidenceHash);
+          setEvidenceURI(form.evidenceURI);
+          setAmountWei(form.amountWei);
+          setT0(form.t0);
+          setObservationStart(form.observationStart);
+          setTradeCount(form.tradeCount);
+          setDueDate(form.dueDate);
+        }}
+      />
 
       <form className="dao-panel dao-composer" onSubmit={createProposal}>
         <div>
@@ -722,8 +1149,11 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
             </label>
           </>
         ) : null}
-        <button disabled={!canPropose || transactionPending} type="submit">
-          {transactionPending ? "Wallet confirmation…" : "Create proposal"}
+        <button
+          disabled={!canPropose || !correctChain || transactionPending}
+          type="submit"
+        >
+          {transactionPending ? "Transaction in progress…" : "Create proposal"}
         </button>
         {!canPropose ? (
           <p className="dao-note">
@@ -733,24 +1163,64 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
         ) : null}
       </form>
 
-      {proposalPackage ? (
+      {authenticated && proposalPackage ? (
         <section className="dao-panel">
           <p className="approved-eyebrow">4 · Timelock</p>
-          <h2>Queue and execute current proposal package</h2>
+          <h2>Queue and execute the selected proposal package</h2>
           <p data-no-translate>
             Proposal {proposalPackage.proposalId.toString()}
           </p>
+          <p>{proposalPackage.description}</p>
+          {!selectedPackage && (
+            <p role="status">
+              This saved package does not match the selected Proposal ID. Select
+              it before continuing.
+            </p>
+          )}
+          <p className="dao-note">
+            Before requesting a transaction, the original creation receipt, DAO
+            binding, current membership, proposal state and timelock are checked
+            again.
+          </p>
           <div className="dao-actions-row">
+            {!selectedPackage && (
+              <button
+                type="button"
+                disabled={transactionPending}
+                onClick={() => {
+                  selectionGeneration.current++;
+                  setProposalInput(proposalPackage.proposalId.toString());
+                }}
+              >
+                Select saved proposal
+              </button>
+            )}
             <button
-              disabled={!member || transactionPending}
-              onClick={() => void runAction(() => queueOrExecute("queue"))}
+              disabled={
+                !member ||
+                !correctChain ||
+                !selectedPackage ||
+                transactionPending ||
+                proposalState !== 4
+              }
+              onClick={() =>
+                void runAction((lease) => queueOrExecute("queue", lease))
+              }
               type="button"
             >
               Queue succeeded proposal
             </button>
             <button
-              disabled={!member || transactionPending}
-              onClick={() => void runAction(() => queueOrExecute("execute"))}
+              disabled={
+                !member ||
+                !correctChain ||
+                !selectedPackage ||
+                transactionPending ||
+                proposalState !== 5
+              }
+              onClick={() =>
+                void runAction((lease) => queueOrExecute("execute", lease))
+              }
               type="button"
             >
               Execute after timelock
@@ -771,16 +1241,42 @@ export function DaoGovernance({ deployment }: { deployment: DaoDeployment }) {
         </p>
       </div>
 
-      {notice ? <p className="dao-status">{notice}</p> : null}
-      {actionError ? <p className="dao-error">{actionError}</p> : null}
-      {transactionHash ? (
-        <p className="dao-status" data-no-translate>
-          Transaction: {transactionHash} ·{" "}
-          {transactionReceipt.isSuccess ? "confirmed" : "pending"}
-        </p>
+      {authenticated && notice ? <p className="dao-status">{notice}</p> : null}
+      {authenticated && transaction?.phase === "confirmed" ? (
+        <p className="dao-status">{transaction.success}</p>
       ) : null}
-      {transactionError ? (
-        <p className="dao-error">{transactionError.message}</p>
+      {authenticated && actionError ? (
+        <p className="dao-error">{actionError}</p>
+      ) : null}
+      {authenticated && recoveryNotice ? (
+        <p className="dao-status">{recoveryNotice}</p>
+      ) : null}
+      {authenticated && transaction ? (
+        <>
+          <p className="dao-status" data-no-translate>
+            Transaction: {transaction.hash} ·{" "}
+            {transaction.phase === "unknown"
+              ? "confirmation unavailable"
+              : transaction.phase}
+          </p>
+          {transaction.error ? (
+            <p className="dao-error">{transaction.error}</p>
+          ) : null}
+          {transaction.phase === "unknown" ? (
+            <button
+              type="button"
+              disabled={actionBusy || !correctChain}
+              onClick={() =>
+                void runAction(
+                  (lease) => checkReceipt(transaction, lease),
+                  true,
+                )
+              }
+            >
+              Check transaction confirmation
+            </button>
+          ) : null}
+        </>
       ) : null}
     </section>
   );

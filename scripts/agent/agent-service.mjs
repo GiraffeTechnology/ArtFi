@@ -99,6 +99,7 @@ export function createAgentService({
     if (
       !Number.isSafeInteger(time) ||
       session?.authenticated !== true ||
+      session.chainId !== domain.chainId ||
       !e.isAddress(session.wallet) ||
       !Number.isSafeInteger(session.expiresAt) ||
       session.expiresAt <= time
@@ -189,21 +190,34 @@ export function createAgentService({
     if (
       !row ||
       row.id !== operationId ||
+      row.request?.execution?.chainId !== domain.chainId ||
       !same(row.request?.intent?.wallet, wallet)
     )
       fail("OPERATION_NOT_FOUND");
     return row;
   }
-  async function revocationProof(row, transactionHash) {
-    if (!/^0x[0-9a-f]{64}$/.test(transactionHash))
+  async function revocationProof(row, transactionHash, signal) {
+    signal?.throwIfAborted();
+    if (
+      typeof transactionHash !== "string" ||
+      !/^0x[0-9a-fA-F]{64}$/.test(transactionHash) ||
+      /^0x0{64}$/i.test(transactionHash)
+    )
       fail("REVOCATION_HASH_INVALID");
+    const normalizedHash = transactionHash.toLowerCase();
     const proof = structuredClone(
-      await inspectRevocation(structuredClone(row.request), transactionHash),
+      await inspectRevocation(
+        structuredClone(row.request),
+        normalizedHash,
+        signal,
+      ),
     );
+    signal?.throwIfAborted();
     const request = row.request;
     if (
       !proof ||
-      proof.transactionHash !== transactionHash ||
+      !/^0x[0-9a-fA-F]{64}$/.test(proof.transactionHash ?? "") ||
+      proof.transactionHash.toLowerCase() !== normalizedHash ||
       !same(proof.wallet, request.intent.wallet) ||
       proof.nonce !== request.intent.nonce ||
       !same(proof.executor, fixed.executor) ||
@@ -212,9 +226,23 @@ export function createAgentService({
       (proof.state === "CONFIRMED" && proof.canonical !== true)
     )
       fail("REVOCATION_EVIDENCE_UNPROVEN");
-    return proof;
+    return { ...proof, transactionHash: normalizedHash };
   }
   return Object.freeze({
+    async getHistory(session, operationId, page = {}) {
+      const wallet = identity(session);
+      await owned(operationId, wallet);
+      if (typeof store.listEvents !== "function")
+        fail("AUDIT_DEPENDENCY_UNAVAILABLE");
+      const events = await store.listEvents(operationId, page);
+      recheck(session, wallet);
+      return {
+        id: operationId,
+        mode,
+        events,
+        nextAfter: events.at(-1)?.id ?? page.after ?? "0",
+      };
+    },
     async prepareIntent(session, input) {
       const wallet = identity(session),
         requested = structuredClone(input);
@@ -308,15 +336,34 @@ export function createAgentService({
       let row = await owned(operationId, wallet);
       if (row.revocation?.state === "PENDING") {
         // Attestor outage does not fabricate confirmation or destroy the pending record.
+        const inspectionAbort = new AbortController();
+        let inspectionTimer;
         try {
-          const proof = await revocationProof(
-            row,
-            row.revocation.transactionHash,
-          );
+          const proof = await Promise.race([
+            Promise.resolve().then(() =>
+              revocationProof(
+                row,
+                row.revocation.transactionHash,
+                inspectionAbort.signal,
+              ),
+            ),
+            new Promise((_, reject) => {
+              inspectionTimer = setTimeout(() => {
+                inspectionAbort.abort();
+                reject(Error("REVOCATION_INSPECTION_TIMEOUT"));
+              }, sourceObservationTimeoutMs);
+            }),
+          ]);
+          inspectionAbort.signal.throwIfAborted();
           recheck(session, wallet);
           if (proof.state === "CONFIRMED")
             row = await note(operationId, wallet, proof);
-        } catch {}
+        } catch {
+          // Preserve the saved pending record. A late read cannot authorize a write.
+        } finally {
+          clearTimeout(inspectionTimer);
+          inspectionAbort.abort();
+        }
       }
       let observation;
       let sourceTimer;

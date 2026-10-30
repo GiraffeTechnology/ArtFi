@@ -23,7 +23,8 @@ const pins = {
   "src/adapters/resilient-source-adapter.js":
     "395b70a8ed64f27d8923f35d2bce8bad0559a292",
 };
-// Git blob identities from Oracle 8350a65a086f11068bcc98e302e4c25abdd795b7.
+// Git blob identities rechecked unchanged on Oracle main
+// f2ba4bc5fa6e88330a19c3f8684764e524917dd0 (through PR #41).
 for (const [file, expected] of Object.entries(pins)) {
   const bytes = Buffer.from(
     (await readFile(path.join(checkout, file), "utf8")).replaceAll(

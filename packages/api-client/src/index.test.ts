@@ -47,3 +47,73 @@ describe("ArtFi API client", () => {
     ).rejects.toBeInstanceOf(ArtFiAPIError);
   });
 });
+
+describe("public native order reads", () => {
+  it("preserves exact deployment, asset and page filters without credentials", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ data: [], total: 0, page: 2, pageSize: 20 }),
+      );
+    await createArtFiClient("https://api.example.test", fetcher).nativeOrders({
+      kind: "whole",
+      chainId: 560048,
+      marketAddress: "0x1111111111111111111111111111111111111111",
+      assetAddress: "0x2222222222222222222222222222222222222222",
+      tokenId: "1",
+      page: 2,
+      pageSize: 20,
+    });
+    const url = new URL(String(fetcher.mock.calls[0][0]));
+    expect(url.pathname).toBe("/v1/orders");
+    const query: Record<string, string> = {};
+    url.searchParams.forEach((value, key) => {
+      query[key] = value;
+    });
+    expect(query).toEqual({
+      kind: "whole",
+      chainId: "560048",
+      marketAddress: "0x1111111111111111111111111111111111111111",
+      assetAddress: "0x2222222222222222222222222222222222222222",
+      tokenId: "1",
+      page: "2",
+      pageSize: "20",
+    });
+    expect(fetcher.mock.calls[0][1]?.headers).toEqual({
+      Accept: "application/json, application/problem+json",
+    });
+  });
+  it("loads a public order by hash and exact deployment", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ intentHash: "0xabc" }));
+    await createArtFiClient("https://api.example.test", fetcher).nativeOrder(
+      "0xabc",
+      560048,
+      "0x1111111111111111111111111111111111111111",
+    );
+    const url = new URL(String(fetcher.mock.calls[0][0]));
+    expect(url.pathname).toBe("/v1/orders/0xabc");
+    expect(url.searchParams.get("chainId")).toBe("560048");
+    expect(url.searchParams.get("marketAddress")).toBe(
+      "0x1111111111111111111111111111111111111111",
+    );
+  });
+  it("keeps service failure distinct from an empty order list", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json(
+        {
+          type: "about:blank",
+          title: "Unavailable",
+          status: 503,
+          detail: "Order storage unavailable",
+          requestId: "test",
+        },
+        { status: 503 },
+      ),
+    );
+    await expect(
+      createArtFiClient("https://api.example.test", fetcher).nativeOrders(),
+    ).rejects.toBeInstanceOf(ArtFiAPIError);
+  });
+});

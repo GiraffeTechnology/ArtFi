@@ -1,0 +1,182 @@
+import {
+  readNativeOrderPage,
+  validNativeOrderQuery,
+} from "@/lib/native-order-page";
+import { decodeNativeOrder } from "@/lib/native-order";
+import {
+  boundedOrderText,
+  nativeOrderAPIURL,
+  nativeOrderResponse,
+  NativeOrderReadError,
+} from "@/lib/native-order-upstream";
+import {
+  verifyNativeOrderSale,
+  OrderVerificationUnavailable,
+} from "@/lib/native-order-verification";
+import { requireUserSession, UserAuthError } from "@/lib/user-auth";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  const query = new URL(request.url).searchParams;
+  if (!validNativeOrderQuery(query))
+    return Response.json({ detail: "Invalid order filters." }, { status: 400 });
+  try {
+    const upstream = nativeOrderAPIURL(`/v1/orders?${query.toString()}`);
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(5000)]);
+    const response = await nativeOrderResponse(
+      await fetch(upstream, {
+        cache: "no-store",
+        redirect: "error",
+        signal,
+      }),
+      { signal, timeoutMs: 5000 },
+    );
+    if (!response.ok) return response;
+    const data: unknown = await response.json();
+    return Response.json(readNativeOrderPage(data, query), {
+      status: response.status,
+      headers: { "cache-control": "no-store" },
+    });
+  } catch {
+    return Response.json(
+      { detail: "The order service is unavailable." },
+      { status: 503 },
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const configured = process.env.ARTFI_WEB_URL?.trim();
+    if (!configured)
+      return Response.json(
+        { detail: "Publication is unavailable." },
+        { status: 503 },
+      );
+    const authority = new URL(configured);
+    const origin = authority.origin;
+    const host = request.headers.get("host");
+    // `authority.host` is the configured authority exactly as configured: it carries the port when
+    // the configured URL names one and carries none when it does not. No default port is assumed.
+    //
+    // This used to fall back to the default HTTPS port when the configured URL named none: a
+    // port-less configuration then accepted the bare host and that implied port and rejected every
+    // other, so a deployment serving on any other port answered 403 here with nothing naming the
+    // cause. Where the deployment host reserves that default port for something else, the fallback
+    // also pinned the deployment to a port it could never use. A deployment that serves on a port
+    // now names it in the configuration, and a mismatch is a visible configuration fault rather
+    // than a fallback that quietly accepts the wrong authority.
+    //
+    // NextRequest normalizes loopback URLs, and a reverse proxy may use an internal URL.
+    // The proxy must preserve the public Host. Forwarded headers are not trusted here.
+    const publicHostMatches =
+      host === null
+        ? new URL(request.url).origin === origin
+        : host.toLowerCase() === authority.host.toLowerCase();
+    if (
+      !publicHostMatches ||
+      request.headers.get("origin") !== origin ||
+      request.headers.get("sec-fetch-site") === "cross-site"
+    )
+      return Response.json(
+        { detail: "Publication requires the application's own origin." },
+        { status: 403 },
+      );
+    const verifierKey = process.env.ARTFI_INDEXER_SHARED_KEY?.trim();
+    if (!verifierKey)
+      return Response.json(
+        { detail: "Publication is unavailable." },
+        { status: 503 },
+      );
+    let raw: string;
+    try {
+      raw = await boundedOrderText(request.body, 32768, {
+        signal: request.signal,
+        timeoutMs: 5000,
+      });
+    } catch (error) {
+      const status =
+        error instanceof NativeOrderReadError
+          ? error.reason === "too-large"
+            ? 413
+            : ["timeout", "aborted"].includes(error.reason)
+              ? 408
+              : 400
+          : 400;
+      return Response.json(
+        {
+          detail:
+            status === 413
+              ? "The order payload exceeds the supported size."
+              : status === 408
+                ? "The order request did not complete before forwarding."
+                : "The order payload could not be read.",
+        },
+        { status, headers: { "cache-control": "no-store" } },
+      );
+    }
+    let order;
+    try {
+      const body: unknown = JSON.parse(raw);
+      if (
+        !body ||
+        typeof body !== "object" ||
+        Array.isArray(body) ||
+        Object.keys(body).length !== 1 ||
+        !("order" in body)
+      )
+        throw new Error("Unsupported publication fields.");
+      order = decodeNativeOrder(body.order).order;
+      // Publication time is server-owned and cannot change immutable retry identity.
+      delete order.createdAt;
+    } catch {
+      return Response.json(
+        { detail: "The signed order is malformed." },
+        { status: 400 },
+      );
+    }
+    const { accessToken } = await requireUserSession(
+      String(order.intent.seller),
+    );
+    try {
+      await verifyNativeOrderSale(order);
+    } catch (error) {
+      if (error instanceof OrderVerificationUnavailable)
+        return Response.json(
+          { detail: "Sale verification is unavailable." },
+          { status: 503 },
+        );
+      return Response.json(
+        { detail: "The seller's sale signature is invalid." },
+        { status: 401 },
+      );
+    }
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(5000)]);
+    return await nativeOrderResponse(
+      await fetch(nativeOrderAPIURL("/v1/indexer/signed-orders"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Indexer-Key": verifierKey,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(order),
+        cache: "no-store",
+        redirect: "error",
+        signal,
+      }),
+      { signal, timeoutMs: 5000 },
+    );
+  } catch (error) {
+    if (error instanceof UserAuthError)
+      return Response.json(
+        { detail: "Sign in with the seller wallet." },
+        { status: error.status },
+      );
+    return Response.json(
+      { detail: "The order service is unavailable." },
+      { status: 503 },
+    );
+  }
+}

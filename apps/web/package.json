@@ -9,28 +9,38 @@
     "start": "next start",
     "test": "vitest run src",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e:market": "playwright test --config=playwright.market.config.ts",
+    "test:e2e:oracle": "playwright test --config=playwright.oracle.config.ts",
+    "test:e2e:session": "node ../../scripts/test/run-session-e2e.mjs",
+    "test:e2e:safe": "playwright test --config=playwright.safe.config.ts",
+    "test:e2e:rwa-oracle": "playwright test --config=playwright.rwa-oracle.config.ts"
   },
   "dependencies": {
     "@giraffetechnology/artfi-api-client": "workspace:*",
     "@rainbow-me/rainbowkit": "2.2.11",
     "@tanstack/react-query": "5.101.4",
-    "next": "16.3.2",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "viem": "2.56.0",
     "wagmi": "2.17.5",
-    "zod": "4.4.3"
+    "zod": "4.6.5",
+    "@opensea/sdk": "12.11.2",
+    "@opensea/seaport-js": "4.3.0",
+    "ethers": "6.17.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@playwright/test": "1.62.1",
-    "@types/node": "26.4.0",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5",
-    "eslint": "9.39.5",
+    "@eslint/compat": "2.1.1",
+    "@playwright/test": "1.64.0",
+    "@types/node": "26.5.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "10.9.1",
     "eslint-config-next": "16.3.1",
     "typescript": "5.9.3",
-    "vitest": "4.1.11"
-  }
+    "vitest": "5.0.3"
+  },
+  "license": "UNLICENSED"
 }

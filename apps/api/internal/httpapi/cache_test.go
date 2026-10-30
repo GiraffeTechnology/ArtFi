@@ -40,11 +40,8 @@ func (cache *memoryCache) Increment(_ context.Context, key string) error {
 		return cache.incrementErr
 	}
 	current := cache.values[key]
-	if current == "" {
-		cache.values[key] = "1"
-	} else {
-		cache.values[key] = "2"
-	}
+	value, _ := strconv.Atoi(current)
+	cache.values[key] = strconv.Itoa(value + 1)
 	return nil
 }
 
@@ -147,5 +144,20 @@ func TestRedisCacheStoreIntegration(t *testing.T) {
 	service.bumpCacheNamespace(ctx, namespace)
 	if _, hit := service.loadCachedJSON(ctx, namespace, "query", &response); hit {
 		t.Fatal("Redis namespace bump did not invalidate the response")
+	}
+}
+
+func TestParticipantEventsInvalidatePrivatePortfolioHistoryAndNotifications(t *testing.T) {
+	for _, field := range portfolioWalletFields {
+		t.Run(field, func(t *testing.T) {
+			cache := &memoryCache{values: map[string]string{}}
+			service := newRWAService(rwaConfig{}, newMemoryObjectStore())
+			service.cache = cache
+			owner := "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+			service.invalidatePortfolioCache(context.Background(), chainEventRequest{EventName: "IntentFilled", Payload: map[string]any{field: owner, "unrelated": "0x1111111111111111111111111111111111111111"}})
+			if cache.values[cacheVersionKey("portfolio:"+owner)] != "1" || len(cache.values) != 1 {
+				t.Fatal("wallet-relevant non-transfer event did not invalidate exactly its participant")
+			}
+		})
 	}
 }

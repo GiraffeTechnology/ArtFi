@@ -2,7 +2,21 @@
 
 Status: pre-chain implementation complete; no live OpenSea acceptance is claimed.
 
-## Implemented flow
+## Current venue boundary — 2026-10-10
+
+OpenSea [announced the end of its dedicated testnet environment on July 23, 2025](https://support.opensea.io/en/articles/11833955-farewell-testnets).
+The Sepolia sequence below records the historical discovery-check implementation;
+it is not a currently available OpenSea testnet acceptance route. An observed
+`unsupported-chain` result is the truthful result for an unsupported test chain.
+
+Sepolia wallet/NFT chain tests may establish only their own approved on-chain
+behavior. Neither those tests nor local OpenSea fixtures establish live OpenSea
+visibility, listing acceptance, or settlement. Testnet capability must not be
+silently replaced with Ethereum/Base mainnet execution. Live venue checks require
+a supported configured collection, approved venue access, and the applicable
+wallet-action authorization; no transaction is authorized by this document.
+
+## Historical implemented discovery-check flow
 
 1. After a confirmed Sepolia `createAsset` transaction, the browser decodes the registry's `AssetCreated` event and verifies the request ID and recipient.
 2. The browser reads the registry's immutable `nft()` address and combines it with the emitted token ID. The registry address is never misrepresented as the ERC-721 collection address.

@@ -1,0 +1,24 @@
+# M6.2 source-neutral MySQL 8.4 primary template.
+# Operator substitutes paths, a distinct nonzero server-id, and allocated port.
+# No account, credential, grant, network setting or automatic promotion is made.
+[mysqld]
+server-id=PRIMARY_UNIQUE_SERVER_ID
+bind-address=PRIVATE_SERVICE_BIND_ADDRESS
+port=ALLOCATED_MYSQL_PORT
+datadir=/OPERATOR_PROVISIONED/mysql-primary
+log-bin=/OPERATOR_PROVISIONED/mysql-primary/binlog
+binlog-format=ROW
+gtid-mode=ON
+enforce-gtid-consistency=ON
+log-replica-updates=ON
+sync-binlog=1
+innodb-flush-log-at-trx-commit=1
+binlog-expire-logs-seconds=604800
+read-only=OFF
+super-read-only=OFF
+mysqlx=OFF
+# Supply operator-approved server certificate/key/CA paths before real use.
+require-secure-transport=ON
+ssl-ca=/OPERATOR_PROVISIONED/tls/ca.pem
+ssl-cert=/OPERATOR_PROVISIONED/tls/server-cert.pem
+ssl-key=/OPERATOR_PROVISIONED/tls/server-key.pem

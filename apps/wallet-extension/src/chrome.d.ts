@@ -5,10 +5,30 @@ interface ChromeStorageArea {
 }
 
 interface ChromeRuntimeMessageSender {
+  /** Set by the browser, not the message. The only trustworthy caller identity available. */
   origin?: string;
 }
 
+interface ChromeRuntimePort {
+  name: string;
+  sender?: ChromeRuntimeMessageSender;
+  postMessage(message: unknown): void;
+  disconnect(): void;
+  onMessage: {
+    addListener(
+      listener: (message: unknown, port: ChromeRuntimePort) => void,
+    ): void;
+  };
+  onDisconnect: {
+    addListener(listener: (port: ChromeRuntimePort) => void): void;
+  };
+}
+
 interface ChromeRuntime {
+  connect(options: { name: string }): ChromeRuntimePort;
+  onConnect: {
+    addListener(listener: (port: ChromeRuntimePort) => void): void;
+  };
   onMessage: {
     addListener(
       listener: (
@@ -21,7 +41,65 @@ interface ChromeRuntime {
   sendMessage(message: unknown): Promise<unknown>;
 }
 
+interface ChromeRegisteredContentScript {
+  id: string;
+  matches?: string[];
+  js?: string[];
+  world?: "MAIN" | "ISOLATED";
+  runAt?: string;
+  allFrames?: boolean;
+  persistAcrossSessions?: boolean;
+}
+
+interface ChromeScripting {
+  registerContentScripts(
+    scripts: ChromeRegisteredContentScript[],
+  ): Promise<void>;
+  unregisterContentScripts(filter: { ids: string[] }): Promise<void>;
+  getRegisteredContentScripts(): Promise<ChromeRegisteredContentScript[]>;
+  /**
+   * Registration only covers later document loads, so a tab that is already open is injected
+   * directly. Chrome documents the two as separate operations.
+   */
+  executeScript(injection: {
+    target: { tabId: number };
+    files: string[];
+    world?: "MAIN" | "ISOLATED";
+  }): Promise<unknown>;
+}
+
+interface ChromePermissions {
+  request(request: {
+    permissions?: string[];
+    origins?: string[];
+  }): Promise<boolean>;
+  contains(request: {
+    permissions?: string[];
+    origins?: string[];
+  }): Promise<boolean>;
+  remove(request: {
+    permissions?: string[];
+    origins?: string[];
+  }): Promise<boolean>;
+}
+
+interface ChromeTab {
+  id?: number;
+  url?: string;
+}
+
+interface ChromeTabs {
+  query(query: {
+    active?: boolean;
+    currentWindow?: boolean;
+  }): Promise<ChromeTab[]>;
+  get(tabId: number): Promise<ChromeTab>;
+}
+
 declare const chrome: {
   storage: { local: ChromeStorageArea; session: ChromeStorageArea };
   runtime: ChromeRuntime;
+  scripting: ChromeScripting;
+  permissions: ChromePermissions;
+  tabs: ChromeTabs;
 };
