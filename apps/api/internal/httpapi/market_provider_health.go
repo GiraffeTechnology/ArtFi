@@ -147,7 +147,7 @@ func (service *rwaService) normalizeMarketProviderHealth(input marketProviderHea
 	if freshness != nil {
 		seconds := uint64(observedAt.Sub(*freshness) / time.Second)
 		expectedLag = &seconds
-		expectedStale = seconds > *input.StaleAfterSeconds
+		expectedStale = observedAt.Sub(*freshness) > time.Duration(*input.StaleAfterSeconds)*time.Second
 	}
 	if !sameOptionalUint64(input.FreshnessLagSeconds, expectedLag) || *input.Stale != expectedStale {
 		return normalizedMarketProviderHealth{}, fmt.Errorf("market provider freshness evidence is inconsistent")
@@ -315,12 +315,22 @@ func (service *rwaService) getMarketProviderHealth(writer http.ResponseWriter, r
 		value := uint64(freshnessLag.Int64)
 		payload.FreshnessLagSeconds = &value
 	}
-	reportLag := uint64(max(time.Duration(0), service.now().UTC().Sub(receivedAt.UTC())) / time.Second)
-	reportingStale := reportLag > payload.StaleAfterSeconds
+	var lastSource *time.Time
+	if lastBackfill.Valid {
+		value := lastBackfill.Time.UTC()
+		lastSource = &value
+	}
+	if lastEvent.Valid {
+		value := lastEvent.Time.UTC()
+		lastSource = latestHealthTime(lastSource, &value)
+	}
+	reportLag, reportingStale, sourceCurrent := marketHealthAvailability(
+		service.now().UTC(), observedAt.UTC(), receivedAt.UTC(), lastSource, payload.StaleAfterSeconds,
+	)
 	writeJSON(writer, http.StatusOK, marketProviderHealthResponse{
 		marketProviderHealthPayload: payload, ReceivedAt: receivedAt.UTC().Format(time.RFC3339Nano),
 		ReportLagSeconds: reportLag, ReportingStale: reportingStale,
-		Available: !payload.Stale && !reportingStale && payload.State == "healthy" && payload.RealtimeConnected,
+		Available: !payload.Stale && !reportingStale && sourceCurrent && payload.State == "healthy" && payload.RealtimeConnected,
 	})
 }
 
@@ -379,4 +389,13 @@ func optionalUint64Argument(value *uint64) any {
 		return nil
 	}
 	return *value
+}
+
+func marketHealthAvailability(now, observedAt, receivedAt time.Time, sourceAt *time.Time, staleAfterSeconds uint64) (uint64, bool, bool) {
+	window := time.Duration(staleAfterSeconds) * time.Second
+	reportAge := max(time.Duration(0), now.Sub(receivedAt))
+	observationAge := max(time.Duration(0), now.Sub(observedAt))
+	reportingStale := reportAge > window || observationAge > window
+	sourceCurrent := sourceAt != nil && !sourceAt.After(now) && now.Sub(*sourceAt) <= window
+	return uint64(reportAge / time.Second), reportingStale, sourceCurrent
 }

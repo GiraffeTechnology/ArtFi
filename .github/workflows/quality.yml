@@ -26,6 +26,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm security:secrets
+      - run: pnpm agent:test
+      - run: pnpm ops:test
+      - run: node --test scripts/install/*.test.mjs
+      - run: node --test scripts/operations/*.test.mjs
+      - run: node --test scripts/test/performance-*.test.mjs
       - run: pnpm release:verify-schema
       - run: pnpm hoodi-admin-safe:verify-schema
       - run: pnpm hoodi-admin-safe:verifier:test
@@ -85,7 +90,7 @@ jobs:
         with:
           go-version: 1.26.5
           cache: false
-      - run: docker compose up -d --wait mysql
+      - run: docker compose up -d --wait mysql redis
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000001_stage1_catalog.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000002_stage2_rwa_mint.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000003_stage3_vault_fractional.up.sql
@@ -94,33 +99,88 @@ jobs:
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000006_dao_rwa_governance.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000007_external_trade_orchestration.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000008_hoodi_test_chain.up.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000009_native_signed_orders.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000010_wallet_user_sessions.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000011_nft_operations.up.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "32"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000012_moderation_admin.up.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "35"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000013_rwa_source_grounding.up.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "39"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000014_agent_runtime.up.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "48"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000015_notification_inbox.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000016_dao_presentation.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000017_whole_receipt_principal_observations.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000018_charity_holder_challenges.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000019_external_market_provider_health.up.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "53"
       - name: MySQL restart, replay, conflict, reorg, and projection tests
         working-directory: apps/api
         env:
           ARTFI_INTEGRATION_MYSQL_DSN: root:local-root-only@tcp(127.0.0.1:3306)/artfi?parseTime=true
-        run: go test ./...
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000008_hoodi_test_chain.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000007_external_trade_orchestration.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "25"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000006_dao_rwa_governance.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "22"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000005_stage6_compliance_operations.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "14"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000004_stage4_market_governance.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "7"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000003_stage3_vault_fractional.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "5"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000002_stage2_rwa_mint.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "2"
-      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000001_stage1_catalog.down.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "0"
+          ARTFI_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+          ARTFI_NOTIFICATION_MYSQL_REQUIRED: "1"
+          ARTFI_PRINCIPAL_JOURNAL_MYSQL_REQUIRED: "1"
+          ARTFI_EXPORT_RWA_FIXTURE: ${{ runner.temp }}/artfi-public-source-fixture.json
+        run: go test -race -v ./...
+      - name: Verify forward-only refusal and preserve current data
+        run: |
+          snapshot='CHECKSUM TABLE notifications,notification_preferences,chain_events,vaults,whole_receipt_principal_observations,whole_receipt_principal_observation_events,external_market_provider_health EXTENDED;'
+          before="$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e "$snapshot")"
+          [[ -n "$before" && "$before" != *NULL* ]] || exit 1
+          for migration in 000015_notification_inbox 000016_dao_presentation 000017_whole_receipt_principal_observations 000019_external_market_provider_health; do
+            if output="$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < "apps/api/migrations/$migration.down.sql" 2>&1)"; then
+              echo 'Forward-only migration unexpectedly allowed downgrade' >&2
+              exit 1
+            fi
+            grep -Eq '^ERROR [0-9]+ [(]45000[)]' <<< "$output" || exit 1
+          done
+          after="$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e "$snapshot")"
+          test "$before" = "$after"
+      - name: Prepare separate legacy rollback database
+        run: |
+          docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot -e 'CREATE DATABASE artfi_legacy_rollback_test;'
+          for file in apps/api/migrations/*.up.sql; do
+            [[ "$(basename "$file")" < "000015" ]] || break
+            docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < "$file"
+          done
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000018_charity_holder_challenges.up.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000018_charity_holder_challenges.down.sql
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000014_agent_runtime.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "39"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000013_rwa_source_grounding.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "35"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000012_moderation_admin.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "32"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000011_nft_operations.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "31"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000010_wallet_user_sessions.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "28"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000009_native_signed_orders.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000008_hoodi_test_chain.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "27"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000007_external_trade_orchestration.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "25"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000006_dao_rwa_governance.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "22"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000005_stage6_compliance_operations.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "14"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000004_stage4_market_governance.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "7"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000003_stage3_vault_fractional.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "5"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000002_stage2_rwa_mint.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "2"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi_legacy_rollback_test < apps/api/migrations/000001_stage1_catalog.down.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi_legacy_rollback_test -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "0"
       - if: always()
         run: docker compose down -v
 
   browser:
-    runs-on: ubuntu-latest
+    # Match the existing installed-browser jobs: retain Chromium sandbox on a supported image.
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -134,3 +194,323 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
       - run: pnpm test:e2e
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright test --config=playwright.nft.config.ts
+
+  market-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:market
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:safe
+
+  oracle-browser:
+    # Match the existing installed-browser jobs: retain Chromium sandbox on a supported image.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
+      # Exercise immutable production output instead of concurrent dev-manifest writes.
+      - run: pnpm --filter @giraffetechnology/artfi-web build
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:oracle
+        env:
+          ARTFI_E2E_PRODUCTION: "1"
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:rwa-oracle
+
+  session-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.26.5
+          cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --only-shell chromium
+      - run: docker compose -p artfi-session-e2e up -d --wait mysql
+      - name: Apply disposable session and order migrations
+        run: |
+          for migration in apps/api/migrations/*.up.sql; do
+            docker compose -p artfi-session-e2e exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < "$migration"
+          done
+      - run: pnpm --filter @giraffetechnology/artfi-web test:e2e:session
+      - if: always()
+        run: docker compose -p artfi-session-e2e down -v
+
+  installable-bundle:
+    # As in the installed-extension job, use a runner supporting Chromium's
+    # sandbox without modifying host security policy.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: --max-old-space-size=1536
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.26.5
+          cache: false
+      - run: pnpm install --frozen-lockfile
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Verify installable acceptance harness
+        run: node --test scripts/test/installable-acceptance.test.mjs
+      - name: Build reusable native Linux package
+        run: node scripts/install/build-bundle.mjs --output "$RUNNER_TEMP/artfi-bundles"
+      - name: Retain package and checksum for this exact source
+        uses: actions/upload-artifact@v7
+        with:
+          name: artfi-linux-x64-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/artfi-bundles/*.tar.gz
+            ${{ runner.temp }}/artfi-bundles/*.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Install sandboxed browser and isolated MySQL test runtime
+        run: |
+          pnpm --filter @giraffetechnology/artfi-web exec playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends libaio1 libnuma1 libncurses6
+          mkdir -p "$RUNNER_TEMP/artfi-mysql-runtime"
+          cd "$RUNNER_TEMP/artfi-mysql-runtime"
+          curl --fail --location --proto '=https' --tlsv1.2 https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.11-linux-glibc2.28-x86_64-minimal.tar.xz -o mysql.tar.xz
+          echo '383f54e124d5f325d67f0c6912a8f96814eedc761a17ea30112e52fa4cc6b143  mysql.tar.xz' | sha256sum --check
+          tar -xJf mysql.tar.xz
+      - name: Verify installed artifact including default, changed, and reset browser state
+        run: |
+          artifacts=("$RUNNER_TEMP/artfi-bundles/"*.tar.gz)
+          test "${#artifacts[@]}" = 1
+          test -f "${artifacts[0]}"
+          node scripts/test/installable-acceptance.mjs \
+            --artifact "${artifacts[0]}" \
+            --checksum "${artifacts[0]}.sha256" \
+            --mysql-basedir "$RUNNER_TEMP/artfi-mysql-runtime/mysql-8.4.11-linux-glibc2.28-x86_64-minimal" \
+            --playwright-module "$GITHUB_WORKSPACE/apps/web/node_modules/@playwright/test/index.mjs" \
+            --evidence-dir "$RUNNER_TEMP/artfi-installed-acceptance" \
+            --expected-migrations 19 \
+            --require-browser
+      - name: Verify existing conditional agent and charity browser cases
+        timeout-minutes: 8
+        env:
+          ARTFI_TEST_MYSQL_BASE: ${{ runner.temp }}/artfi-mysql-runtime/mysql-8.4.11-linux-glibc2.28-x86_64-minimal
+          ARTFI_AGENT_TEST_CACHE: ${{ runner.temp }}/artfi-conditional-browser
+          ARTFI_AGENT_TEST_PROFILE: browser
+          NEXT_PUBLIC_HOODI_RPC_URL: http://127.0.0.1:3000/__test_only_rpc__
+          NEXT_PUBLIC_BASE_RPC_URL: http://127.0.0.1:3000/__test_only_rpc__
+          NEXT_PUBLIC_ETHEREUM_RPC_URL: http://127.0.0.1:3000/__test_only_rpc__
+        run: |
+          node --test scripts/test/conditional-browser-summary.test.mjs scripts/test/conditional-browser-config.test.mjs
+          manifests=("$RUNNER_TEMP/artfi-installed-acceptance/extracted/"*/manifest.json)
+          test "${#manifests[@]}" = 1
+          test -f "${manifests[0]}"
+          export ARTFI_AGENT_TEST_BUNDLE="${manifests[0]%/manifest.json}"
+          export ARTFI_E2E_BUNDLE_ROOT="$ARTFI_AGENT_TEST_BUNDLE"
+          agent_status=0
+          bash scripts/agent/test-mysql.sh || agent_status=$?
+          charity_status=0
+          NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS=0x1000000000000000000000000000000000000001 \
+          PLAYWRIGHT_JSON_OUTPUT_FILE="$ARTFI_AGENT_TEST_CACHE/charity-browser.json" \
+          pnpm --filter @giraffetechnology/artfi-web exec playwright test \
+            e2e/charity-editions-populated.spec.ts \
+            --config=playwright.fixtures.config.ts --workers=1 --retries=0 \
+            --output="$ARTFI_AGENT_TEST_CACHE/charity-browser-artifacts" \
+            --reporter=json || charity_status=$?
+          test "$agent_status" = 0
+          test "$charity_status" = 0
+      - name: Verify and prepare public conditional-browser summary
+        if: always()
+        run: |
+          node scripts/test/conditional-browser-summary.mjs \
+            "$RUNNER_TEMP/artfi-conditional-browser" \
+            "$RUNNER_TEMP/artfi-installed-acceptance/report.json" \
+            "$RUNNER_TEMP/artfi-public-conditional-browser-summary.json"
+      - name: Retain only public conditional-browser summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: artfi-conditional-browser-${{ github.sha }}
+          path: ${{ runner.temp }}/artfi-public-conditional-browser-summary.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Prepare public synthetic acceptance summary
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const directory = join(process.env.RUNNER_TEMP, 'artfi-installed-acceptance');
+          const path = join(directory, 'report.json');
+          const report = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+          const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+          const artifact = report?.artifact;
+          const revision = artifact?.source?.revision;
+          const tree = /^[a-f0-9]{40}$/.test(revision ?? '')
+            ? execFileSync('git', ['rev-parse', `${revision}^{tree}`], { encoding: 'utf8' }).trim()
+            : null;
+          const summary = {
+            headCommit: event.pull_request?.head?.sha ?? process.env.GITHUB_SHA,
+            testedCommit: process.env.GITHUB_SHA,
+            testedTree: tree,
+            artifact: artifact ? {
+              filename: artifact.filename,
+              sha256: artifact.sha256,
+              bytes: artifact.bytes,
+              checksumSidecarSha256: artifact.checksumSidecarSha256,
+              manifestSha256: artifact.manifestSha256,
+              source: { revision, dirty: artifact.source?.dirty, fingerprint: artifact.source?.fingerprint },
+            } : null,
+            scope: 'TEST_ONLY installed artifact; sandboxed browser; no production or real-value execution',
+            result: report?.result ?? 'NOT_RUN',
+            checks: (report?.checks ?? []).map(({ name, result, required }) => ({ name, result, required })),
+          };
+          writeFileSync(join(process.env.RUNNER_TEMP, 'artfi-installed-acceptance-summary.json'), JSON.stringify(summary, null, 2) + '\n');
+          JS
+      - name: Retain only public synthetic browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: artfi-installed-browser-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/artfi-installed-acceptance-summary.json
+            ${{ runner.temp }}/artfi-installed-acceptance/screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 30
+
+  operations-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: 1.26.5
+          cache: false
+      - name: Verify isolated primary, replica, backup and empty-target restore
+        run: bash scripts/operations/mysql-ci-test.sh
+      - name: Verify explicit legacy-ledger adoption on isolated MySQL 8.4.11
+        run: bash scripts/operations/mysql-legacy-ci-test.sh
+      - name: Build the pinned official Nginx test binary
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpcre2-dev libssl-dev
+          mkdir -p "$RUNNER_TEMP/artfi-nginx"
+          cd "$RUNNER_TEMP/artfi-nginx"
+          curl --fail --location --proto '=https' --tlsv1.2 https://nginx.org/download/nginx-1.30.5.tar.gz -o nginx.tar.gz
+          echo '6c20565aa2325cb82216ae804f4a4ff1875179014759a381c42ddc8e11c4906d  nginx.tar.gz' | sha256sum --check
+          tar -xzf nginx.tar.gz
+          cd nginx-1.30.5
+          ./configure --prefix="$RUNNER_TEMP/artfi-nginx/runtime" --with-http_ssl_module --without-http_gzip_module
+          make -j2
+      - name: Verify bounded two-pool load-balancer recovery
+        env:
+          ARTFI_TEST_NGINX: ${{ runner.temp }}/artfi-nginx/nginx-1.30.5/objs/nginx
+          ARTFI_TEST_OUTPUT: ${{ runner.temp }}
+        run: node --test scripts/operations/cluster-runtime.integration.mjs
+      - name: Retain synthetic operations test summaries
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: artfi-operations-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/mysql-legacy-adoption/ci-*/public-summary.json
+            ${{ runner.temp }}/mysql-legacy-adoption/ci-*/mysql-image-digests.json
+            ${{ runner.temp }}/mysql-operations/ci-*/test.log
+            ${{ runner.temp }}/mysql-operations/ci-*/mysql-image-digests.json
+            ${{ runner.temp }}/mysql-operations/ci-*/m6-mysql-*/summary.json
+            ${{ runner.temp }}/artfi-lb-*/access.jsonl
+            ${{ runner.temp }}/artfi-lb-*/processes.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  bounded-runtime-mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify bounded runtime with isolated real MySQL and restart control
+        run: bash scripts/agent/test-mysql-docker.sh
+
+  installed-extension-prepermission:
+    name: Installed extension (prepermission only)
+    # Keep Chromium sandbox enabled on a compatible hosted image; do not alter host policy.
+    # This image retires on 2027-04-17: https://github.com/actions/runner-images/issues/14254
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.22.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @giraffetechnology/artfi-wallet-extension build
+      - name: Install full bundled Chromium (not headless-shell)
+        run: pnpm --filter @giraffetechnology/artfi-web exec playwright install --with-deps chromium
+      - name: Verify actual installed extension before optional site permission
+        run: pnpm --filter @giraffetechnology/artfi-web exec playwright test --config=playwright.extension.config.ts --project=prepermission
+      - name: Record limited acceptance scope
+        if: always()
+        run: |
+          echo '### Installed extension: prepermission only' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This job does not approve optional permissions or verify page-provider injection/lifecycle. Full acceptance remains permission-gated; see apps/web/e2e-extension/README.md.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: installed-extension-prepermission-results
+          path: apps/web/test-results/
+          if-no-files-found: warn

@@ -1,79 +1,62 @@
 import { expect, test } from "@playwright/test";
 
-test("stale provider data is visible and never presented as live", async ({
-  page,
-}) => {
-  await page.route("**/v1/market/assets**", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ data: [], total: 0, runtime: true }),
-    }),
-  );
-  await page.route("**/v1/market/health**", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        schemaVersion: "1",
-        source: "opensea",
-        state: "stale",
-        stale: true,
-        realtimeConnected: true,
-        consecutiveFailures: 0,
-        observedAt: "2026-09-14T00:02:00Z",
-        lastEventAt: "2026-09-14T00:00:00Z",
-        freshnessLagSeconds: 120,
-        staleAfterSeconds: 60,
-        receivedAt: "2026-09-14T00:02:00Z",
-        reportLagSeconds: 1,
-        reportingStale: false,
-        available: false,
+// Synthetic browser responses verify presentation only.
+for (const mode of ["healthy", "delayed", "missing", "malformed"] as const) {
+  test(`provider status remains truthful for ${mode} reports`, async ({
+    page,
+  }) => {
+    await page.route("**/v1/market/assets**", (route) => {
+      const query = new URL(route.request().url()).searchParams;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          runtime: true,
+          schemaVersion: "1",
+          source: "opensea",
+          page: Number(query.get("page")),
+          pageSize: 12,
+          q: query.get("q"),
+          listingStatus: query.get("listingStatus"),
+          sort: query.get("sort"),
+          total: 0,
+          data: [],
+        }),
+      });
+    });
+    await page.route("**/v1/market/health**", (route) =>
+      route.fulfill({
+        status: mode === "missing" ? 404 : 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          schemaVersion: "1",
+          source: "opensea",
+          state: "healthy",
+          stale: false,
+          realtimeConnected: true,
+          receivedAt: "2026-10-30T00:00:00Z",
+          reportLagSeconds: 0,
+          reportingStale: mode === "delayed",
+          available: mode !== "delayed",
+          ...(mode === "malformed" ? { realtimeConnected: false } : {}),
+        }),
       }),
-    }),
-  );
-
-  await page.goto("/market/rwa");
-  await expect(page.getByText("Provider data stale").first()).toBeVisible();
-  await expect(
-    page.getByText(/Mirrored records remain read-only and may be out of date/),
-  ).toBeVisible();
-  await expect(page.getByText(/Provider live/)).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: /buy|bid|send transaction/i }),
-  ).toHaveCount(0);
-});
-
-test("missing provider health fails closed without hiding attributed records", async ({
-  page,
-}) => {
-  await page.route("**/v1/market/assets**", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ data: [], total: 0, runtime: true }),
-    }),
-  );
-  await page.route("**/v1/market/health**", (route) =>
-    route.fulfill({
-      status: 503,
-      contentType: "application/problem+json",
-      body: JSON.stringify({
-        status: 503,
-        title: "Service Unavailable",
-        detail: "Durable provider health is unavailable.",
-      }),
-    }),
-  );
-
-  await page.goto("/market/rwa");
-  await expect(
-    page.getByText("Provider status unavailable").first(),
-  ).toBeVisible();
-  await expect(
-    page.getByText(
-      /Mirrored records remain read-only and are not presented as current/,
-    ),
-  ).toBeVisible();
-  await expect(page.getByText("No OpenSea assets observed yet")).toBeVisible();
-});
+    );
+    await page.goto("/market/rwa");
+    const status = page.getByRole("status", {
+      name: "Marketplace provider health",
+    });
+    await expect(status).toContainText(
+      mode === "healthy"
+        ? "Provider live"
+        : mode === "delayed"
+          ? "Provider report stale"
+          : "Provider status unavailable",
+    );
+    if (mode !== "healthy")
+      await expect(status).toContainText("may be out of date");
+    await expect(
+      page.getByRole("button", { name: "Search catalog", exact: true }),
+    ).toBeEnabled();
+  });
+}

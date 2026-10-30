@@ -1,12 +1,21 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import "@rainbow-me/rainbowkit/styles.css";
 import "./globals.css";
 
+import {
+  publicRuntimeConfig,
+  publicRuntimeScript,
+} from "@/lib/public-runtime-config";
+
 import { Providers } from "@/components/providers";
 import { SiteHeader } from "@/components/site-header";
+import { PlatformNotice } from "@/components/platform-notice";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
@@ -14,7 +23,7 @@ export const metadata: Metadata = {
     template: "%s | ArtCCH:ArtFi",
   },
   description:
-    "A Hoodi-first, auditable platform for real-world art assets and shared ownership.",
+    "NFT collectibles, whole-artwork receipt assets, and fractional trading with DAO governance. Hoodi testnet workflows with explicit runtime availability.",
 };
 
 export default function RootLayout({
@@ -22,14 +31,31 @@ export default function RootLayout({
 }: Readonly<{ children: ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          id="artfi-public-config"
+          dangerouslySetInnerHTML={{
+            __html: publicRuntimeScript(publicRuntimeConfig()),
+          }}
+        />
+      </head>
       <body data-translation-root>
         <Providers>
           <SiteHeader />
+          <PlatformNotice />
           {children}
           <footer className="site-footer">
             <p>
               ArtCCH:ArtFi · Where living traditions become contemporary art.
             </p>
+            <Link href="/help">Help and FAQ</Link>
+            <a
+              href="https://opensea.io/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              OpenSea website ↗
+            </a>
             <p
               className="technical-support"
               data-no-translate

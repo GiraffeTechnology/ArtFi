@@ -96,7 +96,11 @@ func (store *s3ObjectStore) Put(
 	request.Header.Set("X-Amz-Meta-Sha256", declaredSHA256)
 	request.Header.Set("Authorization", authorization)
 
-	response, err := store.client.Do(request)
+	// A signed object write is authorized only for its configured endpoint.
+	// Clone the caller client so redirect rejection does not mutate shared policy.
+	client := *store.client
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	response, err := client.Do(request)
 	if err != nil {
 		return fmt.Errorf("object storage put: %w", err)
 	}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { ArtworkCard } from "@/components/artwork-card";
+import { PrototypeDataNotice } from "@/components/prototype-data-notice";
 import { getProject, getProjectArtworks, projects } from "@/lib/catalog";
 
 type PageProps = { params: Promise<{ slug: string }> };
@@ -24,6 +25,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
 
   return (
     <main className="page-shell page-main">
+      <PrototypeDataNotice />
       <header
         className="project-hero"
         style={{ background: project.accent[0] }}

@@ -1,0 +1,433 @@
+import { expect, test, type Page } from "@playwright/test";
+import { type Hex } from "viem";
+import { editionBlock, editionCall } from "../src/test/flow-chain-fixture";
+
+const walletA = "0x1000000000000000000000000000000000000010";
+const walletB = "0x1000000000000000000000000000000000000020";
+
+/** Isolated injected fixture: no origin permission until an explicit Connect click. */
+async function walletFixture(page: Page) {
+  await page.addInitScript(
+    ({ walletA }) => {
+      const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
+      let account = walletA;
+      let authorized =
+        sessionStorage.getItem("artfi-flow-wallet-authorized") === "true";
+      const permit = () => {
+        authorized = true;
+        sessionStorage.setItem("artfi-flow-wallet-authorized", "true");
+        return [
+          {
+            parentCapability: "eth_accounts",
+            caveats: [{ type: "restrictReturnedAccounts", value: [account] }],
+          },
+        ];
+      };
+      const change = (next?: string) => {
+        if (next) account = next;
+        authorized = Boolean(next);
+        listeners.accountsChanged?.forEach((listener) =>
+          listener(next ? [next] : []),
+        );
+      };
+      Object.defineProperty(window, "artfiFlowFixture", { value: { change } });
+      Object.defineProperty(window, "ethereum", {
+        value: {
+          isMetaMask: true,
+          on(event: string, listener: (...args: unknown[]) => void) {
+            (listeners[event] ||= []).push(listener);
+          },
+          removeListener(
+            event: string,
+            listener: (...args: unknown[]) => void,
+          ) {
+            listeners[event] =
+              listeners[event]?.filter((entry) => entry !== listener) ?? [];
+          },
+          async request({ method }: { method: string }) {
+            if (method === "eth_accounts") return authorized ? [account] : [];
+            if (method === "eth_requestAccounts") {
+              permit();
+              return [account];
+            }
+            if (method === "wallet_requestPermissions") return permit();
+            if (method === "wallet_getPermissions")
+              return authorized ? permit() : [];
+            if (method === "wallet_revokePermissions") {
+              authorized = false;
+              sessionStorage.removeItem("artfi-flow-wallet-authorized");
+              return null;
+            }
+            if (method === "eth_chainId") return "0x88bb0";
+            if (method === "wallet_getCapabilities") return {};
+            if (method === "personal_sign") {
+              await fetch("/test-flow-sign", { method: "POST" });
+              return `0x${"11".repeat(65)}`;
+            }
+            throw new Error(`Unsupported fixture method: ${method}`);
+          },
+        },
+      });
+    },
+    { walletA },
+  );
+  await page.route("**/test-hoodi-rpc", async (route) => {
+    const answer = (request: {
+      id: number;
+      method: string;
+      params?: unknown[];
+    }) => {
+      let result: unknown = "0x0";
+      if (request.method === "eth_chainId") result = "0x88bb0";
+      else if (request.method === "eth_blockNumber") result = "0x64";
+      else if (request.method === "eth_getBlockByNumber")
+        result = editionBlock();
+      else if (request.method === "eth_call")
+        result = editionCall((request.params?.[0] as { data: Hex }).data);
+      return { id: request.id, jsonrpc: "2.0", result };
+    };
+    const body = route.request().postDataJSON();
+    await route.fulfill({
+      json: Array.isArray(body) ? body.map(answer) : answer(body),
+    });
+  });
+}
+
+async function connect(page: Page) {
+  await page
+    .getByRole("button", { name: "Connect wallet", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: /Browser Wallet|MetaMask|Injected/ })
+    .first()
+    .click();
+  await expect(
+    page.locator(".wallet-button--connected").filter({ visible: true }).first(),
+  ).toBeVisible();
+}
+
+async function switchWallet(page: Page, address?: string) {
+  await page.evaluate((next) => {
+    (
+      window as unknown as {
+        artfiFlowFixture: { change: (address?: string) => void };
+      }
+    ).artfiFlowFixture.change(next);
+  }, address);
+}
+
+async function holderFixture(page: Page, expiresIn = 600_000) {
+  let verifyRequests = 0;
+  await page.route("**/api/charity/holder/challenge", (route) =>
+    route.fulfill({
+      json: {
+        address: walletA,
+        tokenId: "1",
+        message: "Test-only edition 1 ownership challenge",
+        expiresAt: new Date(Date.now() + expiresIn).toISOString(),
+      },
+    }),
+  );
+  await page.route("**/api/charity/holder/verify", (route) => {
+    verifyRequests++;
+    return route.fulfill({
+      json: {
+        verified: true,
+        holderBenefit: "watermarked-copy-after-ownership-verification",
+        address: walletA,
+        tokenId: "1",
+        expiresAt: new Date(Date.now() + expiresIn).toISOString(),
+      },
+    });
+  });
+  await page.route("**/api/charity/editions/1/holder-asset", (route) =>
+    route.fulfill({
+      json: {
+        tokenId: "1",
+        class: "watermarked-holder",
+        contentType: "image/png",
+        byteLength: 20,
+        sha256: "a".repeat(64),
+        objectKey: "TEST_ONLY-watermarked-copy",
+        artworkPreview: "not-provided",
+        rights:
+          "This edition conveys no copyright, physical title, possession, redemption, commercial-use or reproduction right.",
+      },
+    }),
+  );
+  return () => verifyRequests;
+}
+
+test("holder access resets on wallet changes and ignores a departed signature", async ({
+  page,
+}) => {
+  await walletFixture(page);
+  const verifyCount = await holderFixture(page);
+  let holdSignature = false;
+  let releaseSignature: (() => void) | undefined;
+  await page.route("**/test-flow-sign", async (route) => {
+    if (holdSignature)
+      await new Promise<void>((resolve) => {
+        releaseSignature = resolve;
+      });
+    await route.fulfill({ json: {} });
+  });
+  await page.goto("/charity/1");
+  await connect(page);
+  await page
+    .getByRole("button", { name: "Verify ownership", exact: true })
+    .click();
+  await expect(
+    page.getByRole("link", { name: "Download the watermarked copy" }),
+  ).toBeVisible();
+  await switchWallet(page, walletB);
+  await expect(
+    page.getByText("Ownership not yet verified", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Download the watermarked copy" }),
+  ).toHaveCount(0);
+  await switchWallet(page, walletA);
+  holdSignature = true;
+  await page
+    .getByRole("button", { name: "Verify ownership", exact: true })
+    .click();
+  await expect.poll(() => Boolean(releaseSignature)).toBe(true);
+  const before = verifyCount();
+  await switchWallet(page, walletB);
+  releaseSignature!();
+  await expect(
+    page.getByText("Ownership not yet verified", { exact: true }),
+  ).toBeVisible();
+  expect(verifyCount()).toBe(before);
+  await expect(
+    page.getByRole("link", { name: "Download the watermarked copy" }),
+  ).toHaveCount(0);
+});
+
+test("expired holder access removes the download and exposes verification retry", async ({
+  page,
+}) => {
+  await walletFixture(page);
+  await page.clock.install({ time: new Date() });
+  await holderFixture(page);
+  await page.route("**/test-flow-sign", (route) => route.fulfill({ json: {} }));
+  await page.goto("/charity/1");
+  await connect(page);
+  await page
+    .getByRole("button", { name: "Verify ownership", exact: true })
+    .click();
+  await expect(
+    page.getByRole("link", { name: "Download the watermarked copy" }),
+  ).toBeVisible();
+  await page.clock.fastForward(660_000);
+  await expect(
+    page.getByText("Holder access expired. Verify ownership again."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Download the watermarked copy" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Verify ownership", exact: true }),
+  ).toBeEnabled();
+});
+
+test("portfolio retry and wallet switch never display another wallet's holdings", async ({
+  page,
+}) => {
+  await walletFixture(page);
+  // Explicit UI-only authentication fixture. The session-browser suite verifies real SIWE login.
+  let sessionAddress: string | undefined;
+  let sessionExpiry = Date.now() + 60_000;
+  let portfolioReads = 0;
+  await page.route("**/api/user/auth/*", async (route) => {
+    if (route.request().url().endsWith("/logout")) {
+      sessionAddress = undefined;
+      return route.fulfill({ json: { signedOut: true } });
+    }
+    if (!sessionAddress)
+      return route.fulfill({
+        status: 401,
+        json: { detail: "Fixture session absent" },
+      });
+    return route.fulfill({
+      json: {
+        session: {
+          id: `fixture-${sessionAddress}`,
+          address: sessionAddress,
+          chainId: 560048,
+          expiresAt: sessionExpiry,
+          accessExpiresAt: sessionExpiry,
+        },
+      },
+    });
+  });
+  let phase: "failed" | "ready" | "hold-wallet-b" = "failed";
+  let notificationStatus: "confirmed" | "removed" = "confirmed";
+  const heldWalletB: Array<() => void> = [];
+  await page.route("**/api/portfolio/**", async (route) => {
+    portfolioReads += 1;
+    if (phase === "failed")
+      return route.fulfill({
+        status: 503,
+        json: { detail: "Fixture index unavailable" },
+      });
+    const address = route.request().url().split("/").at(-1)!;
+    if (
+      phase === "hold-wallet-b" &&
+      address.toLowerCase() === walletB.toLowerCase()
+    )
+      await new Promise<void>((resolve) => {
+        heldWalletB.push(resolve);
+      });
+    await route.fulfill({
+      json: {
+        address,
+        chainId: 560048,
+        network: "hoodi",
+        positions: [
+          {
+            assetToken: address,
+            symbol:
+              address.toLowerCase() === walletA.toLowerCase()
+                ? "WALLET_A_ONLY"
+                : "WALLET_B_ONLY",
+            balance: "2",
+            updatedAt: "2026-10-02T00:00:00Z",
+          },
+        ],
+        transactions: [],
+        offers: [],
+        notifications: [
+          {
+            id: `560048:0x${"1".repeat(64)}:1`,
+            transactionHash: `0x${"1".repeat(64)}`,
+            logIndex: 1,
+            contractAddress: address,
+            eventName:
+              address.toLowerCase() === walletA.toLowerCase()
+                ? "WalletABidPlaced"
+                : "WalletBBidPlaced",
+            blockNumber: 10,
+            status: notificationStatus,
+            observedAt: "2026-10-05T12:00:00Z",
+            message: `${address.toLowerCase() === walletA.toLowerCase() ? "WalletABidPlaced" : "WalletBBidPlaced"} ${notificationStatus === "removed" ? "was removed from the canonical chain. Any previous confirmation no longer applies." : "is confirmed in the indexed chain history."}`,
+          },
+        ],
+        performance: {
+          status: "known_for_indexed_history",
+          method: "fifo",
+          scope: "confirmed_indexed_fraction_trades",
+          pendingEventCount: 0,
+          unmappedTradeCount: 0,
+          reasons: [],
+          items: [
+            {
+              assetToken: address,
+              paymentToken:
+                address.toLowerCase() === walletA.toLowerCase()
+                  ? walletB
+                  : walletA,
+              confirmedQuantity: "2",
+              costBasis: "900719925474099300000001",
+              realizedPnl: "-1",
+              status: "known",
+              buyCount: 1,
+              sellCount: 1,
+              reasons: [],
+            },
+          ],
+        },
+      },
+    });
+  });
+  // Use the same explicit permission flow as the holder tests, then navigate with that wallet.
+  await page.goto("/charity/1");
+  await connect(page);
+  await page.goto("/portfolio");
+  await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
+  expect(portfolioReads).toBe(0);
+  sessionAddress = walletA;
+  // Restore the explicit signed-in fixture on a fresh page, after proving connection alone is gated.
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Retry indexed records" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "No indexed token position is associated with this address.",
+    ),
+  ).toHaveCount(0);
+  phase = "ready";
+  await page.getByRole("button", { name: "Retry indexed records" }).click();
+  await expect(page.getByText("WALLET_A_ONLY", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("900719925474099300000001 payment-token base units", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Realized P&L: -1 payment-token base units", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "WalletABidPlaced is confirmed in the indexed chain history.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  notificationStatus = "removed";
+  await page
+    .getByRole("button", { name: "Refresh positions, P&L and notifications" })
+    .click();
+  await expect(
+    page.getByText("WalletABidPlaced · removed", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "WalletABidPlaced was removed from the canonical chain. Any previous confirmation no longer applies.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  phase = "hold-wallet-b";
+  await switchWallet(page, walletB);
+  await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
+  await expect(page.getByText("WALLET_A_ONLY", { exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("button", { name: "Sign in", exact: true })
+      .filter({ visible: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByText(
+      "WalletABidPlaced was removed from the canonical chain. Any previous confirmation no longer applies.",
+      { exact: true },
+    ),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Indexed trade P&L", exact: true }),
+  ).toHaveCount(0);
+  sessionAddress = walletB;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect.poll(() => heldWalletB.length).toBeGreaterThan(0);
+  await expect(
+    page.getByText("Loading indexed records…", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("WALLET_A_ONLY", { exact: true })).toHaveCount(0);
+  phase = "ready";
+  heldWalletB.forEach((release) => release());
+  await expect(page.getByText("WALLET_B_ONLY", { exact: true })).toBeVisible();
+  // Expiry removes an already-rendered balance/portfolio without relying on a route change.
+  sessionExpiry = Date.now() + 750;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(page.getByTestId("portfolio-wallet-gate")).toBeVisible();
+  await expect(page.getByText("WALLET_B_ONLY", { exact: true })).toHaveCount(0);
+  await switchWallet(page);
+  await expect(
+    page.getByText(
+      "Sign in with the connected wallet to view its holdings and history.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByText("WALLET_B_ONLY", { exact: true })).toHaveCount(0);
+});

@@ -102,7 +102,12 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid marketplace source", "The requested source is not approved.")
 		return
 	}
-	page, pageSize := pagination(request)
+	queryInput, err := parseMarketCatalogQuery(request.URL.Query())
+	if err != nil {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid catalog query", err.Error())
+		return
+	}
+	page, pageSize := queryInput.Page, queryInput.PageSize
 	contract := strings.ToLower(strings.TrimSpace(request.URL.Query().Get("contract")))
 	if contract != "" && !addressPattern.MatchString(contract) {
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid contract", "Contract must be a 20-byte Ethereum address.")
@@ -115,25 +120,6 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 		where += " AND contract_address = ?"
 		args = append(args, contract)
 	}
-	var total int
-	countRows, err := service.db.QueryContext(request.Context(), `
-		SELECT COUNT(*) FROM (
-			SELECT chain_name, contract_address, token_id FROM external_market_events
-			WHERE `+where+` GROUP BY chain_name, contract_address, token_id
-		) catalog`, args...)
-	if err != nil {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog could not be counted.")
-		return
-	}
-	if countRows.Next() {
-		err = countRows.Scan(&total)
-	}
-	countRows.Close()
-	if err != nil {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog count could not be decoded.")
-		return
-	}
-
 	query := `
 		WITH ranked AS (
 			SELECT source, chain_name, contract_address, token_id,
@@ -155,11 +141,12 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 			       ) AS rn
 			FROM external_market_orders
 		)
+  , catalog AS (
 		SELECT ranked.source, ranked.chain_name, ranked.contract_address, ranked.token_id,
 		       ranked.collection_slug, ranked.event_type, ranked.event_timestamp,
-		       COALESCE(latest_orders.order_hash, ''), COALESCE(latest_orders.status, ''),
-		       COALESCE(latest_orders.price, ''), COALESCE(latest_orders.payment_symbol, ''),
-		       COALESCE(latest_orders.marketplace_url, '')
+		       COALESCE(latest_orders.order_hash, '') AS order_hash, COALESCE(latest_orders.status, '') AS order_status,
+		       COALESCE(latest_orders.price, '') AS price, COALESCE(latest_orders.payment_symbol, '') AS payment_symbol,
+		       COALESCE(latest_orders.marketplace_url, '') AS marketplace_url
 		FROM ranked
 		LEFT JOIN latest_orders ON latest_orders.source = ranked.source
 		 AND latest_orders.chain_name = ranked.chain_name
@@ -167,10 +154,45 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 		 AND latest_orders.token_id = ranked.token_id
 		 AND latest_orders.rn = 1
 		WHERE ranked.rn = 1
-		ORDER BY ranked.event_timestamp DESC, ranked.contract_address, ranked.token_id
-		LIMIT ? OFFSET ?`
-	queryArgs := append(args, pageSize, (page-1)*pageSize)
-	rows, err := service.db.QueryContext(request.Context(), query, queryArgs...)
+		)
+  `
+	filterWhere, filterArgs := queryInput.filterSQL()
+	countArgs := append(append([]any{}, args...), filterArgs...)
+	// Both SELECTs must share one MVCC read view. Pool-level reads can observe
+	// an indexer commit between count and page, even when their SQL is identical.
+	tx, err := service.db.BeginTx(request.Context(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil || tx == nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "A consistent catalog snapshot could not be opened.")
+		return
+	}
+	defer tx.Rollback()
+	var total int
+	countRows, err := tx.QueryContext(request.Context(), query+"SELECT COUNT(*) FROM catalog"+filterWhere, countArgs...)
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog could not be counted.")
+		return
+	}
+	if !countRows.Next() {
+		err = countRows.Err()
+		if err == nil {
+			err = sql.ErrNoRows
+		}
+	} else {
+		err = countRows.Scan(&total)
+	}
+	if err == nil {
+		err = countRows.Err()
+	}
+	if closeErr := countRows.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog count could not be decoded.")
+		return
+	}
+	query += "SELECT source, chain_name, contract_address, token_id, collection_slug, event_type, event_timestamp, order_hash, order_status, price, payment_symbol, marketplace_url FROM catalog" + filterWhere + queryInput.orderSQL() + " LIMIT ? OFFSET ?"
+	queryArgs := append(append([]any{}, countArgs...), pageSize, (page-1)*pageSize)
+	rows, err := tx.QueryContext(request.Context(), query, queryArgs...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog could not be queried.")
 		return
@@ -194,9 +216,18 @@ func (service *rwaService) getMarketAssets(writer http.ResponseWriter, request *
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The mirrored NFT catalog query was interrupted.")
 		return
 	}
+	if err := rows.Close(); err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The catalog snapshot could not be closed.")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Market catalog unavailable", "The catalog snapshot could not be completed.")
+		return
+	}
 	writeJSON(writer, http.StatusOK, map[string]any{
 		"data": items, "total": total, "page": page, "pageSize": pageSize,
 		"schemaVersion": "1", "source": source, "runtime": true,
+		"q": queryInput.Q, "listingStatus": queryInput.ListingStatus, "sort": queryInput.Sort,
 	})
 }
 
@@ -594,35 +625,165 @@ func (service *rwaService) rejectMarketIntent(request *http.Request, intentID, c
 	return err
 }
 
+// submittedMatch selects which intents on an order a transition applies to, by comparing the
+// transaction the venue reported against the transaction this user's wallet broadcast.
+type submittedMatch int
+
+const (
+	// matchAnyIntent: the event says something about the order itself, not about one fill.
+	matchAnyIntent submittedMatch = iota
+	// matchOurTransaction: the venue reported our transaction. This fill is this user's.
+	matchOurTransaction
+	// matchOtherTransaction: the venue reported a different transaction, or none we can attribute.
+	matchOtherTransaction
+)
+
+// intentTransition is one reconciliation step: what an event means for the intents on its order.
+type intentTransition struct {
+	Status       string
+	FailureCode  string
+	Match        submittedMatch
+	AllowedPrior []string
+}
+
+// States an unfinished intent can legitimately be in when a venue event arrives. Every other state
+// — confirmed, failed, cancelled, rejected — is terminal and no event moves an intent out of it.
+var openIntentStates = []string{"initiated", "awaiting-wallet", "submitted", "accepted", "pending"}
+
+func isSaleEvent(input marketEventRequest) bool {
+	return input.EventFamily == "sale" || input.EventType == "item_sold" || input.EventType == "sale"
+}
+
+func isTransferEvent(input marketEventRequest) bool {
+	return input.EventFamily == "transfer" || input.EventType == "item_transferred" ||
+		input.EventType == "transfer"
+}
+
+// planIntentTransitions decides what a venue event means, without touching the database.
+//
+// Two rules here are not cosmetic.
+//
+// **A sale is attributed before it is reported.** An order can only be filled once. Whoever filled
+// it, the order is gone, so every intent against it reaches a terminal state — but only the intent
+// whose own transaction the venue reported may be called `confirmed`. Marking every intent on the
+// order `confirmed`, as this did before, tells a user their purchase succeeded when somebody else
+// bought the item. A sale the venue reports with no transaction hash attributes to nobody, so it
+// confirms nobody.
+//
+// **`accepted` is the state between broadcast and settlement.** `PRD.md` §4.8 XM.6 lists the nine
+// states in order — `submitted`, `accepted`, … `confirmed` — and defines no trigger for the middle
+// one, which is why no code reached it. The reading taken here is the narrowest the existing data
+// supports: a transfer carrying **our** transaction hash means the venue observed this user's
+// transaction, so the fill is real but the sale record has not arrived. A later sale upgrades it to
+// `confirmed`; a sale that arrived first is terminal and this cannot pull it back, which is what
+// XM.6 means by converging under out-of-order callbacks. If the client reads `accepted` differently,
+// this function is where that is corrected.
+func planIntentTransitions(input marketEventRequest) []intentTransition {
+	eventTx := strings.ToLower(strings.TrimSpace(input.TransactionHash))
+
+	switch {
+	case isSaleEvent(input):
+		if eventTx == "" {
+			// The order sold and nothing ties it to any intent. Every intent fails, saying so.
+			return []intentTransition{{
+				Status:       "failed",
+				FailureCode:  "external-sale-unattributed",
+				Match:        matchAnyIntent,
+				AllowedPrior: openIntentStates,
+			}}
+		}
+		return []intentTransition{
+			{Status: "confirmed", Match: matchOurTransaction, AllowedPrior: openIntentStates},
+			{
+				Status:       "failed",
+				FailureCode:  "external-order-filled-by-another-transaction",
+				Match:        matchOtherTransaction,
+				AllowedPrior: openIntentStates,
+			},
+		}
+	case isTransferEvent(input):
+		if eventTx == "" {
+			return nil
+		}
+		// Only our own transaction, and only from a state that has not already settled.
+		return []intentTransition{{
+			Status:       "accepted",
+			Match:        matchOurTransaction,
+			AllowedPrior: []string{"awaiting-wallet", "submitted", "pending"},
+		}}
+	case input.EventType == "item_cancelled":
+		return []intentTransition{{
+			Status:       "cancelled",
+			Match:        matchAnyIntent,
+			AllowedPrior: openIntentStates,
+		}}
+	case input.EventType == "order_invalidate":
+		return []intentTransition{{
+			Status:       "failed",
+			FailureCode:  "external-order-invalidated",
+			Match:        matchAnyIntent,
+			AllowedPrior: openIntentStates,
+		}}
+	case input.EventType == "order_revalidate":
+		return []intentTransition{{
+			Status:       "pending",
+			Match:        matchAnyIntent,
+			AllowedPrior: openIntentStates,
+		}}
+	}
+	return nil
+}
+
 func reconcileMarketIntents(tx *sql.Tx, input marketEventRequest, eventTimestamp time.Time) error {
 	if input.OrderHash == "" {
 		return nil
 	}
-	status := ""
-	failureCode := ""
-	switch {
-	case input.EventFamily == "sale" || input.EventType == "item_sold" || input.EventType == "sale":
-		status = "confirmed"
-	case input.EventType == "item_cancelled":
-		status = "cancelled"
-	case input.EventType == "order_invalidate":
-		status = "failed"
-		failureCode = "external-order-invalidated"
-	case input.EventType == "order_revalidate":
-		status = "pending"
-	default:
-		return nil
+	eventTx := strings.ToLower(strings.TrimSpace(input.TransactionHash))
+	orderHash := strings.ToLower(input.OrderHash)
+
+	for _, transition := range planIntentTransitions(input) {
+		match := ""
+		// Another party's transaction hash is never written into this user's intent: the row would
+		// then read as if this wallet had sent it.
+		recordedTx := eventTx
+		switch transition.Match {
+		case matchOurTransaction:
+			match = " AND submitted_transaction_hash = ?"
+		case matchOtherTransaction:
+			match = " AND (submitted_transaction_hash IS NULL OR submitted_transaction_hash <> ?)"
+			recordedTx = ""
+		case matchAnyIntent:
+		}
+		args := []any{transition.Status, recordedTx, transition.FailureCode, eventTimestamp, eventTimestamp}
+
+		query := `
+			UPDATE external_market_intents
+			SET status = ?,
+			    external_transaction_hash = COALESCE(NULLIF(LOWER(?), ''), external_transaction_hash),
+			    failure_code = NULLIF(?, ''),
+			    external_event_timestamp = GREATEST(COALESCE(external_event_timestamp, ?), ?)
+			WHERE source = ? AND chain_name = ? AND order_hash = ?` + match + `
+			  AND status IN (` + placeholders(len(transition.AllowedPrior)) + `)
+			  AND (external_event_timestamp IS NULL OR external_event_timestamp <= ?)`
+		args = append(args, input.Source, input.Chain, orderHash)
+		if transition.Match != matchAnyIntent {
+			args = append(args, eventTx)
+		}
+		for _, state := range transition.AllowedPrior {
+			args = append(args, state)
+		}
+		args = append(args, eventTimestamp)
+
+		if _, err := tx.Exec(query, args...); err != nil {
+			return err
+		}
 	}
-	_, err := tx.Exec(`
-		UPDATE external_market_intents
-		SET status = ?,
-		    external_transaction_hash = COALESCE(NULLIF(LOWER(?), ''), external_transaction_hash),
-		    failure_code = NULLIF(?, ''),
-		    external_event_timestamp = GREATEST(COALESCE(external_event_timestamp, ?), ?)
-		WHERE source = ? AND chain_name = ? AND order_hash = ?
-		  AND status NOT IN ('confirmed', 'failed', 'cancelled', 'rejected')
-		  AND (external_event_timestamp IS NULL OR external_event_timestamp <= ?)`,
-		status, input.TransactionHash, failureCode, eventTimestamp, eventTimestamp,
-		input.Source, input.Chain, strings.ToLower(input.OrderHash), eventTimestamp)
-	return err
+	return nil
+}
+
+func placeholders(count int) string {
+	if count == 0 {
+		return "NULL"
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", count), ",")
 }

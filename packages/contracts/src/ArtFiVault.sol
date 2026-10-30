@@ -21,6 +21,7 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
     error AlreadyFractionalized();
     error InvalidFractionConfiguration();
     error InvalidNFT();
+    error InvalidRecoveryRecipient(address recipient, address originalOwner);
     error NotDeposited();
     error RecoveryAfterFractionalizationForbidden();
     error ZeroAddress();
@@ -67,7 +68,7 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
     function deposit() external whenNotPaused nonReentrant {
         if (deposited) revert AlreadyDeposited();
         collection.safeTransferFrom(msg.sender, address(this), tokenId);
-        if (!deposited) revert InvalidNFT();
+        if (!deposited || collection.ownerOf(tokenId) != address(this)) revert InvalidNFT();
     }
 
     function fractionalize(
@@ -78,6 +79,7 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
     ) external onlyRole(FRACTIONALIZER_ROLE) whenNotPaused nonReentrant returns (address token) {
         if (!deposited) revert NotDeposited();
         if (address(fractionalToken) != address(0)) revert AlreadyFractionalized();
+        if (collection.ownerOf(tokenId) != address(this)) revert InvalidNFT();
         if (
             recipient == address(0) || bytes(name).length < 2 || bytes(name).length > 80
                 || bytes(symbol).length < 2 || bytes(symbol).length > 12 || supply < 1 ether
@@ -102,9 +104,11 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
             revert RecoveryAfterFractionalizationForbidden();
         }
         if (recipient == address(0)) revert ZeroAddress();
+        if (recipient != originalOwner) revert InvalidRecoveryRecipient(recipient, originalOwner);
 
         deposited = false;
         collection.safeTransferFrom(address(this), recipient, tokenId);
+        if (collection.ownerOf(tokenId) == address(this)) revert InvalidNFT();
         emit NFTEmergencyRecovered(recipient);
     }
 
@@ -123,6 +127,7 @@ contract ArtFiVault is AccessControl, IERC721Receiver, Pausable, ReentrancyGuard
     {
         if (msg.sender != address(collection) || receivedTokenId != tokenId) revert InvalidNFT();
         if (deposited) revert AlreadyDeposited();
+        if (collection.ownerOf(tokenId) != address(this)) revert InvalidNFT();
         deposited = true;
         originalOwner = from;
         emit NFTDeposited(msg.sender, receivedTokenId, from);

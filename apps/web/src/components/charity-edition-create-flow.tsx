@@ -1,10 +1,35 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { operatorErrorText } from "@/lib/operator-error";
+
+import { publicSetting } from "@/lib/public-runtime-config";
+
+import {
+  FormEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { currentOperation } from "@/lib/current-operation";
+import { isDaoWalletRejection } from "@/lib/dao-action-state";
+import { setupRecoverySession } from "@/lib/setup-recovery";
+import {
+  CharitySeriesFinalError,
+  isCharitySeriesFields,
+  isCharitySeriesSetup,
+  readCharitySeriesCreation,
+  simulateCharitySeriesCreation,
+  sameCharitySeriesFields,
+  type CharitySeriesFields,
+  type CharitySeriesSetup,
+} from "@/lib/charity-creation-recovery";
 import {
   formatEther,
+  decodeFunctionData,
   isAddress,
-  parseEventLogs,
   zeroAddress,
   zeroHash,
   type Address,
@@ -18,13 +43,24 @@ import {
   useWriteContract,
 } from "wagmi";
 
-import { charityEditionsAbi } from "@/lib/contracts";
+import { charityEditionsAbi, artFiAdminSafeAbi } from "@/lib/contracts";
+import {
+  encodeOperatorSafeSubmission,
+  type SafeSubmission,
+} from "@/lib/admin-safe";
+import {
+  configuredAdminSafe,
+  operatorCallRoute,
+  reviewSafeSubmission,
+} from "@/lib/admin-safe-client";
+import { AdminSafeConsole } from "./admin-safe-console";
 import { supportedChain } from "@/lib/wagmi";
 
+import { CharityEditionRightsNotice } from "./charity-edition-rights-notice";
 import { NFTWalletImport } from "./nft-wallet-import";
 
 type EditionStatus =
-  "idle" | "awaiting-wallet" | "confirming" | "confirmed" | "error";
+  "idle" | "awaiting-wallet" | "confirming" | "confirmed" | "saved" | "error";
 
 type MintedEdition = {
   collectionAddress: Address;
@@ -39,12 +75,27 @@ const labels: Record<EditionStatus, string> = {
   "awaiting-wallet": "Waiting for wallet confirmation",
   confirming: "Waiting for Hoodi confirmation",
   confirmed: "ERC-1155 series confirmed",
+  saved: "Saved series receipt — recheck its confirmation",
   error: "Action needs attention",
 };
 
 export function CharityEditionCreateFlow() {
-  const configuredAddress =
-    process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS;
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const collection = publicSetting(
+    "NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS",
+  );
+  return (
+    <CharityEditionCreateForm
+      key={`${isConnected}:${chainId}:${address?.toLowerCase()}:${collection?.toLowerCase()}`}
+    />
+  );
+}
+
+function CharityEditionCreateForm() {
+  const configuredAddress = publicSetting(
+    "NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS",
+  );
   const configured = isAddress(configuredAddress ?? "");
   const contractAddress = (configured ? configuredAddress : undefined) as
     Address | undefined;
@@ -56,8 +107,81 @@ export function CharityEditionCreateFlow() {
   const [message, setMessage] = useState(
     "Use only a fully verified, rights-cleared package. No artwork master is uploaded here.",
   );
-  const [transactionHash, setTransactionHash] = useState<Hex>();
-  const [mintedEdition, setMintedEdition] = useState<MintedEdition>();
+  const session = useMemo(
+    () =>
+      setupRecoverySession<CharitySeriesSetup>(
+        `charity-series:${chainId}:${address?.toLowerCase() ?? "disconnected"}:${contractAddress?.toLowerCase() ?? "unconfigured"}`,
+        (value): value is CharitySeriesSetup =>
+          isCharitySeriesSetup(value) &&
+          value.chainId === chainId &&
+          Boolean(
+            address &&
+            contractAddress &&
+            value.walletAddress.toLowerCase() === address.toLowerCase() &&
+            value.collectionAddress.toLowerCase() ===
+              contractAddress.toLowerCase(),
+          ),
+      ),
+    [chainId, address, contractAddress],
+  );
+  const snapshot = useSyncExternalStore(
+    session.subscribe,
+    session.getSnapshot,
+    session.getServerSnapshot,
+  );
+  const [checked, setChecked] = useState(false);
+  const view = useRef(currentOperation());
+  useEffect(() => {
+    session.restore(() => sessionStorage);
+  }, [session]);
+  useLayoutEffect(() => {
+    const active = currentOperation();
+    view.current = active;
+    const retire = () => {
+      view.current.retire();
+      view.current = currentOperation();
+    };
+    window.addEventListener("pagehide", retire);
+    window.addEventListener("popstate", retire);
+    return () => {
+      view.current.retire();
+      window.removeEventListener("pagehide", retire);
+      window.removeEventListener("popstate", retire);
+    };
+  }, []);
+  const savedResult = snapshot.record?.data.result;
+  const transactionHash =
+    snapshot.record?.pending?.hash ??
+    savedResult?.transactionHash ??
+    snapshot.record?.data.lastFailure?.receiptHash;
+  const mintedEdition: MintedEdition | undefined =
+    checked && savedResult && snapshot.record
+      ? {
+          collectionAddress: snapshot.record.data.collectionAddress,
+          distributionWallet: snapshot.record.data.fields.distributionWallet,
+          quantity: BigInt(savedResult.quantity),
+          tokenId: savedResult.tokenId,
+        }
+      : undefined;
+  const displayStatus: EditionStatus =
+    !checked && savedResult
+      ? "saved"
+      : status === "idle" && snapshot.record?.pending
+        ? snapshot.record.pending.hash
+          ? "confirming"
+          : "awaiting-wallet"
+        : status;
+  function beginView() {
+    view.current.retire();
+    view.current = currentOperation();
+    return view.current;
+  }
+  const [safePrepared, setSafePrepared] = useState<SafeSubmission>();
+  const rawSafe = publicSetting("NEXT_PUBLIC_ARTFI_ADMIN_SAFE_ADDRESS");
+  const safe =
+    rawSafe && isAddress(rawSafe) && rawSafe !== zeroAddress
+      ? rawSafe
+      : undefined;
 
   const readsEnabled = Boolean(contractAddress);
   const { data: creatorRole } = useReadContract({
@@ -75,6 +199,21 @@ export function CharityEditionCreateFlow() {
       enabled: readsEnabled && Boolean(address) && Boolean(creatorRole),
     },
   });
+  const { data: safeHasRole = false } = useReadContract({
+    abi: charityEditionsAbi,
+    address: contractAddress,
+    functionName: "hasRole",
+    args: [creatorRole ?? zeroHash, safe ?? zeroAddress],
+    query: { enabled: readsEnabled && Boolean(creatorRole) && Boolean(safe) },
+  });
+  const { data: safeOwner = false } = useReadContract({
+    abi: artFiAdminSafeAbi,
+    address: safe,
+    functionName: "isOwner",
+    args: [address ?? zeroAddress],
+    query: { enabled: Boolean(safe && address) },
+  });
+  const authorizedCreator = safeHasRole ? safeOwner : hasCreatorRole;
   const { data: editionsPerArtwork } = useReadContract({
     abi: charityEditionsAbi,
     address: contractAddress,
@@ -105,9 +244,14 @@ export function CharityEditionCreateFlow() {
     editionsPerArtwork === 100n && primaryPriceWei === 10_000_000_000_000_000n;
   const canSubmit =
     configured &&
+    snapshot.ready &&
+    !snapshot.busy &&
+    !snapshot.blocked &&
+    !snapshot.record?.pending &&
     isConnected &&
     correctChain &&
-    hasCreatorRole &&
+    authorizedCreator &&
+    (!rawSafe || Boolean(safe)) &&
     constantsVerified &&
     !paused &&
     status !== "awaiting-wallet" &&
@@ -118,8 +262,8 @@ export function CharityEditionCreateFlow() {
     if (!isConnected) return "Connect the authorized series-creator wallet.";
     if (!correctChain) return "Switch the wallet network to Hoodi.";
     if (paused) return "The ERC-1155 contract is paused.";
-    if (!hasCreatorRole)
-      return "The connected wallet does not hold SERIES_CREATOR_ROLE.";
+    if (!authorizedCreator)
+      return "Connect a SERIES_CREATOR_ROLE holder or an owner of its configured safe.";
     if (!constantsVerified)
       return "The contract does not match the approved 100-edition / 0.01 ETH policy.";
     return "Series-creator role and fixed contract constants are verified on Hoodi.";
@@ -127,7 +271,7 @@ export function CharityEditionCreateFlow() {
     configured,
     constantsVerified,
     correctChain,
-    hasCreatorRole,
+    authorizedCreator,
     isConnected,
     paused,
   ]);
@@ -135,6 +279,9 @@ export function CharityEditionCreateFlow() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!contractAddress || !publicClient || !canSubmit) return;
+    const lease = session.begin();
+    if (lease === undefined) return;
+    const active = beginView();
     const formData = new FormData(event.currentTarget);
     const artworkId = String(formData.get("artworkId") ?? "");
     const masterArtworkHash = String(formData.get("masterArtworkHash") ?? "");
@@ -166,8 +313,72 @@ export function CharityEditionCreateFlow() {
           "Confirm the reviewed package and no-preview boundary.",
         );
 
-      setMintedEdition(undefined);
-      setTransactionHash(undefined);
+      const fields = {
+        artworkId,
+        masterArtworkHash,
+        metadataHash,
+        distributionWallet,
+        metadataURI,
+      };
+      if (!isCharitySeriesFields(fields))
+        throw Error(
+          "Nonzero commitments, a nonzero distribution wallet and a bounded metadata URI are required.",
+        );
+      const saved: CharitySeriesSetup = {
+        version: 1,
+        chainId: 560048,
+        walletAddress: address!,
+        collectionAddress: contractAddress,
+        fields,
+      };
+      session.save(lease, saved);
+      setChecked(false);
+      const reviewedSafe = configuredAdminSafe();
+      const caller = reviewedSafe
+        ? await operatorCallRoute(
+            publicClient,
+            "charity",
+            contractAddress,
+            address!,
+            reviewedSafe,
+          )
+        : address!;
+      active.assertCurrent();
+      await simulateCharitySeriesCreation(
+        publicClient,
+        saved,
+        active.assertCurrent,
+        caller,
+      );
+      if (reviewedSafe && caller.toLowerCase() === reviewedSafe.toLowerCase()) {
+        const call = {
+          abi: charityEditionsAbi,
+          functionName: "createSeries" as const,
+          args: [
+            artworkId as Hex,
+            masterArtworkHash as Hex,
+            metadataHash as Hex,
+            distributionWallet,
+            metadataURI,
+          ] as const,
+        };
+        active.assertCurrent();
+        setSafePrepared(
+          encodeOperatorSafeSubmission({
+            ...call,
+            target: contractAddress,
+            requestId: artworkId as Hex,
+          }),
+        );
+        setStatus("idle");
+        setMessage(
+          "The reviewed charity-edition call is ready for multisignature review. It publishes no artwork master and attaches no ETH value.",
+        );
+        return;
+      }
+      setSafePrepared(undefined);
+      active.assertCurrent();
+      session.awaitWallet(lease, "create-series");
       setStatus("awaiting-wallet");
       setMessage(
         `Confirm one createSeries call to ${shortAddress(contractAddress)}. It mints exactly 100 units to ${shortAddress(distributionWallet)}.`,
@@ -176,6 +387,7 @@ export function CharityEditionCreateFlow() {
         abi: charityEditionsAbi,
         address: contractAddress,
         chainId: supportedChain.id,
+        account: address!,
         functionName: "createSeries",
         args: [
           artworkId as Hex,
@@ -185,83 +397,160 @@ export function CharityEditionCreateFlow() {
           metadataURI,
         ],
       });
-      setTransactionHash(hash);
+      // Keep the late public hash in its original wallet/collection journal before retiring a view.
+      session.broadcast(lease, hash);
+      active.assertCurrent();
       setStatus("confirming");
       setMessage(
-        "Waiting for one Hoodi confirmation and exact event matching.",
+        "Waiting for the original transaction and exact receipt-block evidence.",
       );
-      const receipt = await publicClient.waitForTransactionReceipt({
-        hash,
-        confirmations: 1,
-      });
-      if (receipt.status !== "success")
-        throw new Error("The Hoodi transaction reverted.");
-
-      const createdEvents = parseEventLogs({
-        abi: charityEditionsAbi,
-        eventName: "SeriesCreated",
-        logs: receipt.logs.filter(
-          (log) => log.address.toLowerCase() === contractAddress.toLowerCase(),
-        ),
-        strict: true,
-      });
-      const created = createdEvents.find(
-        (eventLog) =>
-          eventLog.args.artworkId.toLowerCase() === artworkId.toLowerCase() &&
-          eventLog.args.masterArtworkHash.toLowerCase() ===
-            masterArtworkHash.toLowerCase() &&
-          eventLog.args.metadataHash.toLowerCase() ===
-            metadataHash.toLowerCase() &&
-          eventLog.args.distributionWallet.toLowerCase() ===
-            distributionWallet.toLowerCase() &&
-          eventLog.args.metadataURI === metadataURI,
-      );
-      if (!created)
-        throw new Error("The confirmed series event is missing or mismatched.");
-
-      const [totalSupply, distributionBalance] = await Promise.all([
-        publicClient.readContract({
-          abi: charityEditionsAbi,
-          address: contractAddress,
-          functionName: "totalSupply",
-          args: [created.args.tokenId],
-        }),
-        publicClient.readContract({
-          abi: charityEditionsAbi,
-          address: contractAddress,
-          functionName: "balanceOf",
-          args: [distributionWallet, created.args.tokenId],
-        }),
-      ]);
-      if (totalSupply !== 100n || distributionBalance !== 100n) {
-        throw new Error(
-          "The confirmed series does not hold the required 100 units.",
+      await reconcileSeries(lease, active);
+    } catch (error) {
+      if (isDaoWalletRejection(error)) session.rejected(lease);
+      if (active.isCurrent()) {
+        setStatus("error");
+        session.fail(
+          lease,
+          new Error(
+            operatorErrorText(
+              error,
+              "The ERC-1155 series could not be created.",
+            ),
+          ),
         );
       }
+    } finally {
+      session.finish(lease);
+    }
+  }
 
-      setMintedEdition({
-        collectionAddress: contractAddress,
-        distributionWallet,
-        quantity: distributionBalance,
-        tokenId: created.args.tokenId.toString(),
-      });
+  async function reconcileSeries(
+    lease: number,
+    active: ReturnType<typeof currentOperation>,
+  ) {
+    const record = session.getSnapshot().record;
+    if (!record || !publicClient)
+      throw Error("The original charity-series record is unavailable.");
+    const hash = record.pending?.hash ?? record.data.result?.transactionHash;
+    if (!hash)
+      throw Error(
+        "The original wallet request has no known transaction hash. Check wallet activity; another submission remains blocked.",
+      );
+    try {
+      const result = await readCharitySeriesCreation(
+        publicClient,
+        record.data,
+        hash,
+        active.assertCurrent,
+        (next) => session.repriced(lease, next),
+      );
+      active.assertCurrent();
+      session.resolved(lease, { ...record.data, result });
+      setChecked(true);
       setStatus("confirmed");
       setMessage(
-        "The fixed ERC-1155 supply is confirmed. Marketplace listing remains a separate wallet action.",
+        "The fixed ERC-1155 creation and 100-unit receipt-block supply are confirmed. Marketplace listing remains a separate wallet action.",
       );
     } catch (error) {
-      setStatus("error");
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "The ERC-1155 series could not be created.",
+      if (error instanceof CharitySeriesFinalError) {
+        active.assertCurrent();
+        session.resolved(lease, {
+          ...record.data,
+          result: undefined,
+          lastFailure: error.failure,
+        });
+      }
+      throw error;
+    }
+  }
+  async function checkSeries() {
+    if (!correctChain || !isConnected || !publicClient) return;
+    const lease = session.begin(true);
+    if (lease === undefined) return;
+    const active = beginView();
+    setChecked(false);
+    try {
+      const record = session.getSnapshot().record;
+      if (record && !record.pending && record.data.result) {
+        session.awaitWallet(lease, "create-series");
+        session.broadcast(lease, record.data.result.transactionHash);
+      }
+      await reconcileSeries(lease, active);
+    } catch (error) {
+      if (active.isCurrent()) {
+        setStatus("error");
+        session.fail(lease, new Error(operatorErrorText(error)));
+      }
+    } finally {
+      session.finish(lease);
+    }
+  }
+
+  async function recoverSafeEdition(hash: Hex, submission: SafeSubmission) {
+    if (!contractAddress)
+      throw new Error("The reviewed edition contract is unavailable.");
+    reviewSafeSubmission("charity", contractAddress, submission);
+    const call = decodeFunctionData({
+      abi: charityEditionsAbi,
+      data: submission.data,
+    });
+    if (call.functionName !== "createSeries")
+      throw new Error("The confirmed call is not a charity edition creation.");
+    const [
+      artworkId,
+      masterArtworkHash,
+      metadataHash,
+      distributionWallet,
+      metadataURI,
+    ] = call.args;
+    const fields = {
+      artworkId,
+      masterArtworkHash,
+      metadataHash,
+      distributionWallet,
+      metadataURI,
+    };
+    const record = session.getSnapshot().record;
+    if (
+      !record ||
+      !sameCharitySeriesFields(record.data.fields, fields) ||
+      record.pending
+    )
+      throw Error(
+        "Restore the exact reviewed charity-series request before checking this safe execution.",
       );
+    const lease = session.begin();
+    if (lease === undefined)
+      throw Error("Finish the original charity-series operation first.");
+    const active = view.current;
+    try {
+      session.awaitWallet(lease, "create-series");
+      session.broadcast(lease, hash);
+      active.assertCurrent();
+      await reconcileSeries(lease, active);
+    } catch (error) {
+      if (active.isCurrent()) {
+        setStatus("error");
+        session.fail(lease, new Error(operatorErrorText(error)));
+      }
+      throw error;
+    } finally {
+      session.finish(lease);
     }
   }
 
   return (
-    <div className="create-layout">
-      <form className="rwa-form" onSubmit={submit}>
+    <div className="create-layout" data-no-translate>
+      <form
+        className="rwa-form"
+        onSubmit={submit}
+        onChange={() => {
+          setSafePrepared(undefined);
+          setChecked(false);
+          view.current.retire();
+          view.current = currentOperation();
+        }}
+      >
         <fieldset disabled={!canSubmit}>
           <legend>Fixed ERC-1155 series</legend>
           <div
@@ -351,8 +640,27 @@ export function CharityEditionCreateFlow() {
         aria-live="polite"
       >
         <p className="eyebrow">Transaction lifecycle</p>
-        <h2>{labels[status]}</h2>
+        <h2>{labels[displayStatus]}</h2>
         <p>{message}</p>
+        {snapshot.error ? <p role="alert">{snapshot.error}</p> : null}
+        {snapshot.record?.pending ? (
+          <p role="status">
+            {snapshot.record.pending.hash
+              ? "The original broadcast is unresolved. Reconcile it before another submission."
+              : "A wallet request has no known hash. Check its original wallet activity; refreshing does not cancel it."}
+          </p>
+        ) : null}
+        {snapshot.record?.pending || savedResult ? (
+          <button
+            type="button"
+            disabled={
+              snapshot.busy || !correctChain || !isConnected || !publicClient
+            }
+            onClick={() => void checkSeries()}
+          >
+            Check original series transaction
+          </button>
+        ) : null}
         <ol>
           <li>Verify off-repository package</li>
           <li>Verify creator role and constants</li>
@@ -380,13 +688,20 @@ export function CharityEditionCreateFlow() {
             {address?.toLowerCase() !==
             mintedEdition.distributionWallet.toLowerCase() ? (
               <p className="nft-wallet-import__status">
-                Switch to the distribution wallet to display its 100-unit
-                balance.
+                Switch to the distribution wallet to view its current balance.
+                The creation receipt recorded 100 units.
               </p>
             ) : null}
           </>
         ) : null}
+        <CharityEditionRightsNotice className="nft-wallet-import__status" />
       </aside>
+      <AdminSafeConsole
+        kind="charity"
+        target={contractAddress}
+        prepared={safePrepared}
+        onExecuted={recoverSafeEdition}
+      />
     </div>
   );
 }

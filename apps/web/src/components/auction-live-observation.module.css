@@ -1,0 +1,18 @@
+.facts {
+  min-width: 0;
+}
+
+.facts > div {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.facts dt,
+.facts dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.facts dd {
+  margin-inline-start: 0;
+}

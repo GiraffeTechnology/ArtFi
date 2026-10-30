@@ -3,7 +3,21 @@ pragma solidity 0.8.30;
 
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
-import {ArtFiRWA} from "../src/ArtFiRWA.sol";
+import {
+    ERC721URIStorage
+} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+
+contract TestOnlyVaultNFT is ERC721URIStorage {
+    uint256 private nextId = 1;
+    constructor() ERC721("TEST_ONLY vault mechanics", "TEST") {}
+
+    function safeMint(address recipient, string calldata uri) external returns (uint256 id) {
+        id = nextId++;
+        _safeMint(recipient, id);
+        _setTokenURI(id, uri);
+    }
+}
 import {ArtFiVault} from "../src/ArtFiVault.sol";
 import {FractionalToken} from "../src/FractionalToken.sol";
 import {VaultFactory} from "../src/VaultFactory.sol";
@@ -14,8 +28,24 @@ contract UntrustedFractionalizer {
     }
 }
 
+contract VaultDepositor is IERC721Receiver {
+    function deposit(TestOnlyVaultNFT nft, ArtFiVault vault, uint256 tokenId) external {
+        nft.approve(address(vault), tokenId);
+        vault.deposit();
+    }
+
+    function onERC721Received(address, address, uint256, bytes calldata)
+        external
+        pure
+        override
+        returns (bytes4)
+    {
+        return IERC721Receiver.onERC721Received.selector;
+    }
+}
+
 contract VaultFlowTest is IERC721Receiver {
-    ArtFiRWA private nft;
+    TestOnlyVaultNFT private nft;
     VaultFactory private factory;
     ArtFiVault private vault;
     UntrustedFractionalizer private untrusted;
@@ -23,7 +53,7 @@ contract VaultFlowTest is IERC721Receiver {
     bytes32 private constant REQUEST_ID = keccak256("vault-request");
 
     function setUp() public {
-        nft = new ArtFiRWA("ArtFi RWA", "ARWA", address(this), address(this), address(this));
+        nft = new TestOnlyVaultNFT();
         nft.safeMint(address(this), "ipfs://vault-test");
         factory = new VaultFactory(address(this), address(this), address(this));
         vault = ArtFiVault(
@@ -108,6 +138,63 @@ contract VaultFlowTest is IERC721Receiver {
         vault.emergencyRecover(address(this));
         require(nft.ownerOf(1) == address(this), "NFT was not recovered");
         require(!vault.deposited(), "deposit flag not cleared");
+    }
+
+    function testPausedVaultRecoveryReturnsOnlyToOriginalOwner() public {
+        (ArtFiVault separateVault, VaultDepositor owner, uint256 tokenId) =
+            _depositForSeparateOwner();
+        separateVault.pause();
+        separateVault.emergencyRecover(address(owner));
+        require(nft.ownerOf(tokenId) == address(owner), "original owner did not recover NFT");
+        require(!separateVault.deposited(), "deposit flag not cleared");
+    }
+
+    function testAdministrativeRecoveryCannotRedirectToAdminOrThirdParty() public {
+        (ArtFiVault separateVault, VaultDepositor owner, uint256 tokenId) =
+            _depositForSeparateOwner();
+        separateVault.pause();
+        address[2] memory recipients = [address(this), address(0xBEEF)];
+        for (uint256 index; index < recipients.length; ++index) {
+            (bool ok, bytes memory reason) = address(separateVault)
+                .call(abi.encodeCall(separateVault.emergencyRecover, (recipients[index])));
+            require(!ok, "admin redirected a user's deposited NFT");
+            require(
+                keccak256(reason)
+                    == keccak256(
+                        abi.encodeWithSelector(
+                            bytes4(keccak256("InvalidRecoveryRecipient(address,address)")),
+                            recipients[index],
+                            address(owner)
+                        )
+                    ),
+                "unexpected rejection"
+            );
+            require(nft.ownerOf(tokenId) == address(separateVault), "rejected recovery moved NFT");
+            require(separateVault.deposited(), "rejected recovery cleared deposit");
+            require(separateVault.originalOwner() == address(owner), "original owner changed");
+        }
+        separateVault.emergencyRecover(address(owner));
+        require(nft.ownerOf(tokenId) == address(owner), "valid recovery blocked after rejection");
+    }
+
+    function _depositForSeparateOwner()
+        private
+        returns (ArtFiVault separateVault, VaultDepositor owner, uint256 tokenId)
+    {
+        owner = new VaultDepositor();
+        tokenId = nft.safeMint(address(owner), "ipfs://separate-owner");
+        separateVault = ArtFiVault(
+            factory.createVault(
+                keccak256("separate-owner-vault"),
+                "Separate Owner Vault",
+                nft,
+                tokenId,
+                address(this),
+                address(this),
+                address(this)
+            )
+        );
+        owner.deposit(nft, separateVault, tokenId);
     }
 
     function testRecoveryAfterIssueIsForbidden() public {

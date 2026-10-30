@@ -1,121 +1,105 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import localFont from "next/font/local";
+import Link from "next/link";
+import { publicSetting } from "@/lib/public-runtime-config";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const apiURL = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const recoveryFont = localFont({
+  src: "../fonts/InterVariable.woff2",
+  display: "swap",
+  weight: "100 900",
+  fallback: [],
+});
 
-type MarketAsset = {
-  source: string;
-  chain: string;
-  contractAddress: string;
-  tokenId: string;
-  collectionSlug?: string;
-  latestEventType: string;
-  latestEventTimestamp: string;
-  orderHash?: string;
-  orderStatus?: string;
-  price?: string;
-  paymentSymbol?: string;
-};
+import {
+  freshness,
+  shortOrderId,
+  venueLabel,
+  venueLink,
+} from "@/lib/market-links";
 
-type MarketCatalogResponse = {
-  data: MarketAsset[];
-  total: number;
-  runtime: true;
-};
+const apiURL = (publicSetting("NEXT_PUBLIC_API_URL") || "").replace(/\/$/, "");
+
+import { type MarketAsset } from "@/lib/complete-market-catalog";
+import {
+  fetchMarketCatalogPage,
+  marketCatalogQuery,
+} from "@/lib/market-catalog-query";
 
 type MarketProviderHealth = {
   source: string;
   state: "starting" | "healthy" | "degraded" | "stale" | "stopped";
   stale: boolean;
   realtimeConnected: boolean;
-  lastBackfillSuccessAt?: string;
-  lastEventAt?: string;
-  lastFailureAt?: string;
   receivedAt: string;
   reportLagSeconds: number;
   reportingStale: boolean;
   available: boolean;
 };
-
 export function LiveMarketCatalog() {
-  const [assets, setAssets] = useState<MarketAsset[]>([]);
+  const [assets, setAssets] = useState<readonly MarketAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string>();
   const [providerHealth, setProviderHealth] = useState<MarketProviderHealth>();
   const [providerHealthError, setProviderHealthError] = useState<string>();
   const [query, setQuery] = useState("");
+  const [draftQuery, setDraftQuery] = useState("");
+  const [inputError, setInputError] = useState<string>();
+  const [total, setTotal] = useState<number>();
+  const [attempt, setAttempt] = useState(0);
   const [listingStatus, setListingStatus] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [page, setPage] = useState(1);
+  const requestInFlight = useRef<AbortController | null>(null);
   const pageSize = 12;
 
   const loadCatalog = useCallback(async () => {
-    const catalogRequest = async () => {
-      const collected: MarketAsset[] = [];
-      let sourcePage = 1;
-      let total = 0;
-      do {
-        const response = await fetch(
-          `${apiURL}/v1/market/assets?source=opensea&page=${sourcePage}&pageSize=100`,
-          { cache: "no-store" },
-        );
-        if (!response.ok) throw await responseError(response);
-        const body = (await response.json()) as MarketCatalogResponse;
-        if (body.runtime !== true || !Array.isArray(body.data)) {
-          throw new Error("The market catalog response is not runtime data.");
-        }
-        collected.push(...body.data);
-        total = body.total;
-        sourcePage += 1;
-      } while (collected.length < total && sourcePage <= 100);
-      return collected;
-    };
-    const healthRequest = async () => {
-      const response = await fetch(
-        `${apiURL}/v1/market/health?source=opensea`,
-        { cache: "no-store" },
+    if (requestInFlight.current) return;
+    const controller = new AbortController();
+    requestInFlight.current = controller;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 15000);
+    setLoading(true);
+    try {
+      const result = await fetchMarketCatalogPage(
+        fetch,
+        apiURL,
+        { q: query, listingStatus, sort: sortOrder },
+        page,
+        controller.signal,
       );
-      if (!response.ok) throw await responseError(response);
-      const body = (await response.json()) as MarketProviderHealth;
-      if (
-        body.source !== "opensea" ||
-        typeof body.available !== "boolean" ||
-        typeof body.reportingStale !== "boolean" ||
-        typeof body.reportLagSeconds !== "number"
-      ) {
-        throw new Error("The provider health response is invalid.");
-      }
-      return body;
-    };
-
-    const [catalogResult, healthResult] = await Promise.allSettled([
-      catalogRequest(),
-      healthRequest(),
-    ]);
-    if (catalogResult.status === "fulfilled") {
-      setAssets(catalogResult.value);
+      if (requestInFlight.current !== controller || controller.signal.aborted)
+        return;
+      setAssets(result.data);
+      setTotal(result.total);
       setCatalogError(undefined);
-    } else {
+    } catch (error) {
+      if (
+        requestInFlight.current !== controller ||
+        (controller.signal.aborted && !timedOut)
+      )
+        return;
+      setAssets([]);
+      setTotal(undefined);
       setCatalogError(
-        catalogResult.reason instanceof Error
-          ? catalogResult.reason.message
-          : "Live market data is unavailable.",
+        timedOut
+          ? "The market catalog page could not be read before the refresh timeout."
+          : error instanceof Error
+            ? error.message
+            : "Live market data is unavailable.",
       );
+    } finally {
+      window.clearTimeout(timeout);
+      if (requestInFlight.current === controller) {
+        requestInFlight.current = null;
+        setLoading(false);
+      }
     }
-    if (healthResult.status === "fulfilled") {
-      setProviderHealth(healthResult.value);
-      setProviderHealthError(undefined);
-    } else {
-      setProviderHealth(undefined);
-      setProviderHealthError(
-        healthResult.reason instanceof Error
-          ? healthResult.reason.message
-          : "Provider health is unavailable.",
-      );
-    }
-    setLoading(false);
-  }, []);
+  }, [page, query, listingStatus, sortOrder, attempt]);
 
   useEffect(() => {
     const initial = window.setTimeout(() => void loadCatalog(), 0);
@@ -123,8 +107,81 @@ export function LiveMarketCatalog() {
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(interval);
+      const pending = requestInFlight.current;
+      requestInFlight.current = null;
+      pending?.abort();
     };
   }, [loadCatalog]);
+
+  useEffect(() => {
+    let pending: AbortController | undefined;
+    let disposed = false;
+    async function refreshHealth() {
+      if (pending) return;
+      const controller = new AbortController();
+      pending = controller;
+      const timeout = window.setTimeout(() => controller.abort(), 15_000);
+      try {
+        const response = await fetch(
+          `${apiURL}/v1/market/health?source=opensea`,
+          {
+            cache: "no-store",
+            credentials: "omit",
+            redirect: "error",
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok)
+          throw new Error(
+            `Provider health unavailable (HTTP ${response.status}).`,
+          );
+        const body = (await response.json()) as MarketProviderHealth;
+        if (
+          body.source !== "opensea" ||
+          !["starting", "healthy", "degraded", "stale", "stopped"].includes(
+            body.state,
+          ) ||
+          [
+            body.available,
+            body.stale,
+            body.reportingStale,
+            body.realtimeConnected,
+          ].some((value) => typeof value !== "boolean") ||
+          !Number.isSafeInteger(body.reportLagSeconds) ||
+          body.reportLagSeconds < 0 ||
+          !Number.isFinite(Date.parse(body.receivedAt)) ||
+          (body.available &&
+            (body.stale ||
+              body.reportingStale ||
+              !body.realtimeConnected ||
+              body.state !== "healthy"))
+        ) {
+          throw new Error("The provider health response is invalid.");
+        }
+        if (disposed || controller.signal.aborted) return;
+        setProviderHealth(body);
+        setProviderHealthError(undefined);
+      } catch (error) {
+        if (disposed) return;
+        setProviderHealth(undefined);
+        setProviderHealthError(
+          error instanceof Error
+            ? error.message
+            : "Provider health unavailable.",
+        );
+      } finally {
+        window.clearTimeout(timeout);
+        if (pending === controller) pending = undefined;
+      }
+    }
+    void refreshHealth();
+    const interval = window.setInterval(() => void refreshHealth(), 15_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      pending?.abort();
+    };
+  }, []);
 
   const lastObserved = useMemo(() => {
     const values = assets
@@ -135,75 +192,62 @@ export function LiveMarketCatalog() {
       : undefined;
   }, [assets]);
 
-  const filteredAssets = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const result = assets.filter((asset) => {
-      const matchesQuery =
-        normalizedQuery === "" ||
-        [
-          asset.collectionSlug,
-          asset.contractAddress,
-          asset.tokenId,
-          asset.chain,
-        ].some((value) => value?.toLowerCase().includes(normalizedQuery));
-      const active = asset.orderStatus === "active" && Boolean(asset.orderHash);
-      const matchesStatus =
-        listingStatus === "all" ||
-        (listingStatus === "active" ? active : !active);
-      return matchesQuery && matchesStatus;
-    });
-    return result.toSorted((left, right) => {
-      if (sortOrder === "oldest") {
-        return (
-          Date.parse(left.latestEventTimestamp) -
-          Date.parse(right.latestEventTimestamp)
-        );
-      }
-      if (sortOrder === "token") {
-        const contract = left.contractAddress.localeCompare(
-          right.contractAddress,
-        );
-        if (contract !== 0) return contract;
-        return BigInt(left.tokenId) < BigInt(right.tokenId) ? -1 : 1;
-      }
-      return (
-        Date.parse(right.latestEventTimestamp) -
-        Date.parse(left.latestEventTimestamp)
-      );
-    });
-  }, [assets, listingStatus, query, sortOrder]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const visibleAssets = filteredAssets.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  );
+  const totalPages = Math.max(1, Math.ceil((total ?? 0) / pageSize));
+  const currentPage = page;
+  const visibleAssets = assets;
+  function clearCurrentPage() {
+    setAssets([]);
+    setTotal(undefined);
+    setCatalogError(undefined);
+    setLoading(true);
+  }
+  function selectPage(next: number) {
+    clearCurrentPage();
+    setPage(next);
+  }
 
   return (
     <section className="live-market" aria-live="polite">
       <form
         className="market-filters"
         aria-label="Search and filter mirrored NFTs"
-        onSubmit={(event) => event.preventDefault()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          try {
+            marketCatalogQuery(
+              { q: draftQuery, listingStatus, sort: sortOrder },
+              1,
+            );
+          } catch {
+            setInputError(
+              "Use at most 100 search characters without control characters.",
+            );
+            return;
+          }
+          setInputError(undefined);
+          clearCurrentPage();
+          setQuery(draftQuery.trim());
+          setPage(1);
+          setAttempt((value) => value + 1);
+        }}
       >
         <label>
           Search
           <input
             type="search"
             placeholder="Collection, contract, token or chain"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.currentTarget.value);
-              setPage(1);
-            }}
+            value={draftQuery}
+            maxLength={200}
+            onChange={(event) => setDraftQuery(event.currentTarget.value)}
           />
         </label>
         <label>
           Listing status
           <select
+            data-translate-options="static"
             value={listingStatus}
             onChange={(event) => {
+              clearCurrentPage();
               setListingStatus(event.currentTarget.value);
               setPage(1);
             }}
@@ -216,65 +260,119 @@ export function LiveMarketCatalog() {
         <label>
           Sort
           <select
+            data-translate-options="static"
             value={sortOrder}
             onChange={(event) => {
+              clearCurrentPage();
               setSortOrder(event.currentTarget.value);
               setPage(1);
             }}
           >
             <option value="newest">Newest observed</option>
             <option value="oldest">Oldest observed</option>
-            <option value="token">Contract and token</option>
+            <option value="token">Chain, contract and token</option>
           </select>
         </label>
+        <button type="submit" disabled={loading}>
+          Search catalog
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setDraftQuery("");
+            setQuery("");
+            setListingStatus("all");
+            setSortOrder("newest");
+            setInputError(undefined);
+            clearCurrentPage();
+            setPage(1);
+            setAttempt((value) => value + 1);
+          }}
+        >
+          Clear search and filters
+        </button>
       </form>
+      {inputError && <p role="alert">{inputError}</p>}
+      {query && <p data-no-translate>Applied search: {query}</p>}
 
       <div className="filter-bar" aria-label="Live market status">
         <span>OpenSea information mirror</span>
         <span>
           {loading
             ? "Loading…"
-            : `${visibleAssets.length} shown · ${filteredAssets.length} matched · ${assets.length} total`}
+            : catalogError
+              ? "Market data unavailable"
+              : `${visibleAssets.length} shown · ${total ?? 0} matched across the catalog`}
         </span>
         <span>
           {lastObserved
-            ? `Observed ${formatObserved(lastObserved)}`
-            : "Awaiting source events"}
+            ? `Latest observation on this page: ${formatObserved(lastObserved)}`
+            : catalogError
+              ? "Awaiting a successful refresh"
+              : "Awaiting source events"}
         </span>
-        <span>{providerStatusLabel(providerHealth, loading)}</span>
       </div>
 
+      <div
+        className="market-provider-health"
+        role="status"
+        aria-label="Marketplace provider health"
+      >
+        <strong>
+          {providerHealth?.available
+            ? `Provider live · report ${providerHealth.reportLagSeconds}s old`
+            : providerHealth?.reportingStale
+              ? "Provider report stale"
+              : providerHealth?.stale
+                ? "Provider data stale"
+                : providerHealth
+                  ? `Provider ${providerHealth.state}`
+                  : "Provider status unavailable"}
+        </strong>
+        {!providerHealth?.available && (
+          <p>
+            {providerHealthError ||
+              "No current healthy provider report is available."}{" "}
+            Mirrored records remain observations and may be out of date.
+          </p>
+        )}
+      </div>
+      <p>
+        Search, status and sorting are applied across the mirrored catalog
+        before pagination. Each page is an observation; source records can
+        change between reads. This is not an atomic inventory snapshot.
+      </p>
+
       {catalogError ? (
-        <div className="market-runtime-state" role="alert">
+        <div
+          className={`market-runtime-state ${recoveryFont.className}`}
+          role="alert"
+        >
           <strong>Live mirror unavailable</strong>
           <span>{catalogError} No fixture is shown as live data.</span>
-        </div>
-      ) : null}
-      {!loading && (!providerHealth || !providerHealth.available) ? (
-        <div className="market-runtime-state" role="alert">
-          <strong>{providerWarningTitle(providerHealth)}</strong>
           <span>
-            {providerWarningDetail(providerHealth, providerHealthError)}
+            Previous results are hidden until the market refresh succeeds.
           </span>
+          <button
+            type="button"
+            className="wallet-button"
+            disabled={loading}
+            onClick={() => void loadCatalog()}
+          >
+            {loading ? "Retrying…" : "Retry market data"}
+          </button>
         </div>
       ) : null}
       {!loading && !catalogError && assets.length === 0 ? (
         <div className="market-runtime-state">
-          <strong>No OpenSea assets observed yet</strong>
+          <strong>
+            {query || listingStatus !== "all"
+              ? "No records match these filters"
+              : "No OpenSea assets observed yet"}
+          </strong>
           <span>
             The page will populate only from attributed runtime events.
-          </span>
-        </div>
-      ) : null}
-      {!loading &&
-      !catalogError &&
-      assets.length > 0 &&
-      filteredAssets.length === 0 ? (
-        <div className="market-runtime-state">
-          <strong>No records match these filters</strong>
-          <span>
-            Change the search text or listing status. Runtime data remains
-            unchanged.
           </span>
         </div>
       ) : null}
@@ -284,6 +382,9 @@ export function LiveMarketCatalog() {
           const key = `${asset.chain}:${asset.contractAddress}:${asset.tokenId}`;
           const active =
             asset.orderStatus === "active" && Boolean(asset.orderHash);
+          const orderId = shortOrderId(asset.orderHash);
+          // The link is the one the source reported, re-validated here; never one ArtFi assembles.
+          const link = venueLink(asset.source, asset.marketplaceUrl);
           return (
             <article className="market-mirror-card" key={key}>
               <div className="market-mirror-card__artwork market-placeholder">
@@ -297,14 +398,32 @@ export function LiveMarketCatalog() {
                 </p>
                 <dl>
                   <div>
+                    <dt>Source</dt>
+                    <dd>{venueLabel(asset.source)}</dd>
+                  </div>
+                  <div>
+                    <dt>Chain</dt>
+                    <dd data-no-translate>{asset.chain}</dd>
+                  </div>
+                  <div>
                     <dt>Order</dt>
                     <dd>
                       {active ? "Active listing" : asset.orderStatus || "None"}
                     </dd>
                   </div>
+                  {orderId ? (
+                    <div>
+                      <dt>Order ID</dt>
+                      <dd data-no-translate>{orderId}</dd>
+                    </div>
+                  ) : null}
                   <div>
                     <dt>Observed</dt>
                     <dd>{formatObserved(asset.latestEventTimestamp)}</dd>
+                  </div>
+                  <div>
+                    <dt>Freshness</dt>
+                    <dd>{freshness(asset.latestEventTimestamp)}</dd>
                   </div>
                   {asset.price ? (
                     <div>
@@ -315,49 +434,96 @@ export function LiveMarketCatalog() {
                     </div>
                   ) : null}
                 </dl>
+                <details className="market-source-reference">
+                  <summary>Full asset identity</summary>
+                  <p data-no-translate style={{ overflowWrap: "anywhere" }}>
+                    Chain: {asset.chain}
+                  </p>
+                  <p data-no-translate style={{ overflowWrap: "anywhere" }}>
+                    Contract: {asset.contractAddress}
+                  </p>
+                  <p data-no-translate style={{ overflowWrap: "anywhere" }}>
+                    Token ID: {asset.tokenId}
+                  </p>
+                </details>
+                {link ? (
+                  <details className="market-source-reference">
+                    <summary>Source reference</summary>
+                    <p data-no-translate>{link}</p>
+                  </details>
+                ) : (
+                  <p className="market-gate">
+                    No venue link was attributed to this record. ArtFi does not
+                    construct one.
+                  </p>
+                )}
                 <p className="market-gate">
-                  Source attributed to OpenSea · no external link or trade
-                  action
+                  Observed record only. This panel does not submit an order. Use
+                  the native NFT marketplace for configured collections.
                 </p>
+                <Link href="/nft">Open native NFT trading</Link>
               </div>
             </article>
           );
         })}
       </div>
 
-      {filteredAssets.length > pageSize ? (
+      {(total !== undefined && total > pageSize) || page > 1 ? (
         <nav className="market-pagination" aria-label="Market result pages">
           <button
             type="button"
-            disabled={currentPage === 1}
-            onClick={() => setPage((value) => Math.max(1, value - 1))}
+            disabled={loading || currentPage === 1}
+            onClick={() => selectPage(Math.max(1, page - 1))}
           >
             Previous
           </button>
           <span>
-            Page {currentPage} of {totalPages}
+            {total === undefined
+              ? `Requested page ${page}`
+              : `Page ${currentPage} of ${totalPages}`}
           </span>
           <button
             type="button"
-            disabled={currentPage === totalPages}
-            onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+            disabled={
+              loading ||
+              Boolean(catalogError) ||
+              total === undefined ||
+              currentPage >= totalPages ||
+              page >= 1000000
+            }
+            onClick={() => selectPage(page + 1)}
           >
             Next
           </button>
+          <button
+            type="button"
+            disabled={loading || page === 1}
+            onClick={() => selectPage(1)}
+          >
+            First page
+          </button>
+          <button
+            type="button"
+            disabled={
+              loading ||
+              Boolean(catalogError) ||
+              total === undefined ||
+              page >= totalPages ||
+              totalPages > 1000000
+            }
+            onClick={() => selectPage(totalPages)}
+          >
+            Last page
+          </button>
+          {totalPages > 1000000 && (
+            <p>
+              Narrow the search to reach results beyond the bounded page range.
+            </p>
+          )}
         </nav>
       ) : null}
     </section>
   );
-}
-
-async function responseError(response: Response) {
-  const fallback = `Request failed with status ${response.status}.`;
-  try {
-    const body = (await response.json()) as { detail?: string };
-    return new Error(body.detail || fallback);
-  } catch {
-    return new Error(fallback);
-  }
 }
 
 function shortAddress(value: string) {
@@ -367,40 +533,4 @@ function shortAddress(value: string) {
 function formatObserved(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? "Unknown" : parsed.toLocaleString();
-}
-
-function providerStatusLabel(
-  health: MarketProviderHealth | undefined,
-  loading: boolean,
-) {
-  if (loading) return "Checking provider status…";
-  if (!health) return "Provider status unavailable";
-  if (health.available) {
-    return `Provider live · report ${health.reportLagSeconds}s old`;
-  }
-  if (health.reportingStale) return "Provider report stale";
-  if (health.stale) return "Provider data stale";
-  return `Provider ${health.state}`;
-}
-
-function providerWarningTitle(health: MarketProviderHealth | undefined) {
-  if (!health) return "Provider status unavailable";
-  if (health.reportingStale) return "Provider report stale";
-  if (health.stale) return "Provider data stale";
-  if (!health.realtimeConnected) return "Provider stream disconnected";
-  return `Provider ${health.state}`;
-}
-
-function providerWarningDetail(
-  health: MarketProviderHealth | undefined,
-  error: string | undefined,
-) {
-  if (!health) {
-    return `${error || "No durable provider report is available."} Mirrored records remain read-only and are not presented as current.`;
-  }
-  const latest = health.lastEventAt || health.lastBackfillSuccessAt;
-  const observed = latest
-    ? ` Last source success: ${formatObserved(latest)}.`
-    : "";
-  return `OpenSea availability is not current.${observed} Mirrored records remain read-only and may be out of date.`;
 }

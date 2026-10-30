@@ -94,7 +94,11 @@ Every Class B and Class C requirement `VERIFIED` on Hoodi (560048), on one integ
    projection reconciled against chain state.
 8. Auth negative tests: unauthenticated trade rejected, role escalation rejected, browser-supplied
    headers alone cannot grant admin access.
-9. A01–A38 compliant previews available with hash mapping; no preview URL exposes a master.
+9. Preview/hash mappings are available only where the asset model permits a preview, using
+   the separate isolated test payload for Hoodi evidence. Charity public token metadata
+   has no artwork preview (CH.7). Watermarked holder files require wallet ownership
+   verification and have no browser preview (CH.5/CH.11). No preview or holder path exposes
+   an unwatermarked master; the frozen historical charity batch is not regenerated.
 10. Failure paths exercised: RPC unavailable, insufficient gas, rejected signature, translation
     failure, external-marketplace unavailability.
 11. Transaction hashes, receipts, blocks, events and balances recorded for every runtime item.
@@ -214,6 +218,25 @@ percentage of elapsed effort, and never in person-days.
 `STATUS.md` is updated on every delivery commit. A commit that changes source without updating it
 is incomplete.
 
+### 6.2 Stage delivery — UI-visible evidence
+
+Client ruling of 2026-09-19 (`DIRECTIVE_2026-09-19_TRADING_AND_ROLLOUT.md` §3). §6 above defines
+when **the complete RWA market** is delivered. This subsection defines the evidence for **one
+stage** of `PRD.md` §3.2.3.
+
+A stage is delivered when, for every requirement in that stage:
+
+1. a user in the stage's intended role can carry out the function **from the ArtFi UI**;
+2. the surface has G1 human visual sign-off, desktop and mobile (§4, G1);
+3. the evidence rules of §3 are satisfied for each item.
+
+**A requirement no screen reaches is not delivered**, whatever its implementation state — a working
+endpoint, a deployed contract, a passing test or a generated client is `IMPLEMENTED-NOT-VERIFIED`,
+not a stage handover. Fixtures presented as live behaviour fail this outright (§3).
+
+This adds no gate and no status value. G1–G4 and the six values of §2 are unchanged, and items 7–10
+of §6 remain the terminus for the complete market only — **a stage does not require mainnet**.
+
 ---
 
 ## 7. Audit instructions (human or agent reviewer)
@@ -228,9 +251,24 @@ is incomplete.
    data while presented as functional.
 6. Fail the audit if a Class A surface regressed without approval.
 7. Fail the audit if local, mock or historical evidence is described as current runtime delivery.
-8. Fail the audit if any A01–A38 compliant preview is missing, or if the public UI exposes an
-   external-marketplace redirect, an unwatermarked master, a master download path, a private key,
-   a server credential, a raw signed transaction, a prohibited IP or internal topology.
+8. Fail the audit if a required, model-permitted preview or its hash mapping is missing,
+   if charity public token metadata contains an artwork preview, or if a charity holder file
+   has a browser preview. Fail for any exposed unwatermarked master, master download path,
+   private key, server credential, raw signed transaction, prohibited IP or internal topology.
+   Apply the distinct asset and isolated-payload rules in `PRD.md` §7; do not demand a public
+   preview from a charity edition whose applicable rule prohibits one.
+
+   > For digital NFTs, `PRD.md` §4.8 XM.1/XM.4 requires discovery, item/order review,
+   > listing, buying, offers, offer acceptance, eligible cancellation and result tracking
+   > inside ArtFi through the supported venue interfaces. A redirect, iframe or passive
+   > feed cannot satisfy those operational requirements. An optional OpenSea website link
+   > is footer-only and does not substitute for a native action or establish its result.
+   >
+   > The attributed ingestion adapter remains passive. That boundary does not remove the
+   > native NFT workflow or ArtFi's applicable whole-artwork/fractional settlement paths.
+   > Preserve validated source attribution and all confidential-data exposure checks above;
+   > neither a source link nor a successful fixture proves real venue or chain acceptance.
+
 9. Fail the audit if A02 enters the formal 37-work set or any mainnet manifest.
 10. Fail the audit if tested, deployed and documented commits differ.
 11. Fail the audit if a non-mainnet-only requirement is deferred without completed test evidence.
@@ -245,3 +283,11 @@ is incomplete.
     it — Solidity, shell tooling, TypeScript, Go, SQL constraints and the environment example. A
     directive that the tooling silently refuses to execute is the failure mode this rule exists to
     catch.
+16. **Fail the audit if any charity-edition master is reachable.** A preview URL, public metadata
+    field, website download, or any browser-delivered object that resolves to an unwatermarked
+    master is a failure, as is a charity master present in public storage (`PRD.md` §4.7 CH.6,
+    CH.7). A manifest that _declares_ the correct posture is not evidence that the runtime enforces
+    it; the check is against what the running system actually serves.
+17. **Fail the audit if the charity holder benefit is presented as available without the runtime
+    behind it** — ownership verification followed by watermarked delivery (`PRD.md` §4.7 CH.5) — or
+    if an edition is displayed or offered without the no-rights disclosure required by CH.8.

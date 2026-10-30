@@ -1,6 +1,12 @@
+import { Readable } from "node:stream";
+
 import type { NormalizedMarketEvent } from "./adapter.js";
 import { publishMarketplaceHealth } from "./health-publisher.js";
-import { eventFingerprint, OpenSeaAdapter } from "./opensea.js";
+import {
+  eventFingerprint,
+  OpenSeaAdapter,
+  startOpenSeaMirror,
+} from "./opensea.js";
 import { assertSinPublicChainExecution } from "./runtime-boundary.js";
 
 function required(name: string): string {
@@ -36,12 +42,10 @@ const adapter = new OpenSeaAdapter({
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean),
-  backfillPages: boundedInteger("OPENSEA_BACKFILL_PAGES", 2, 1, 20),
+  spoolParentDirectory: required("OPENSEA_BACKFILL_STATE_DIRECTORY"),
   staleAfterMs:
     boundedInteger("OPENSEA_STALE_AFTER_SECONDS", 60, 1, 86_400) * 1_000,
 });
-const healthReportIntervalMs =
-  boundedInteger("OPENSEA_HEALTH_REPORT_INTERVAL_SECONDS", 15, 5, 300) * 1_000;
 
 async function publish(event: NormalizedMarketEvent): Promise<void> {
   const response = await fetch(`${apiURL}/v1/indexer/market-events`, {
@@ -60,33 +64,70 @@ async function publish(event: NormalizedMarketEvent): Promise<void> {
   }
 }
 
-async function publishHealth(): Promise<void> {
-  await publishMarketplaceHealth(apiURL, indexerKey, adapter.health());
+async function publishSnapshot(
+  events: AsyncIterable<NormalizedMarketEvent>,
+  signal: AbortSignal,
+): Promise<void> {
+  const body = Readable.from(
+    (async function* () {
+      for await (const event of events) {
+        yield `${JSON.stringify(event)}\n`;
+      }
+    })(),
+  );
+  const response = await fetch(`${apiURL}/v1/indexer/market-snapshots`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-ndjson",
+      "X-Indexer-Key": indexerKey,
+    },
+    body: body as unknown as BodyInit,
+    signal,
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+  if (!response.ok) {
+    throw new Error(
+      `ArtFi mirror snapshot ingestion failed with HTTP ${response.status}`,
+    );
+  }
 }
 
+let healthPublishInFlight = false;
+async function publishHealth(): Promise<void> {
+  if (healthPublishInFlight) return;
+  healthPublishInFlight = true;
+  try {
+    await publishMarketplaceHealth(apiURL, indexerKey, adapter.health());
+  } catch (error) {
+    console.error("ArtFi provider health report rejected", error);
+  } finally {
+    healthPublishInFlight = false;
+  }
+}
+const healthInterval = setInterval(
+  () => {
+    void publishHealth();
+  },
+  boundedInteger("OPENSEA_HEALTH_REPORT_INTERVAL_SECONDS", 15, 5, 300) * 1_000,
+);
+await publishHealth();
+let stop: () => void;
 try {
-  await adapter.backfill(publish);
+  stop = await startOpenSeaMirror(
+    adapter,
+    publish,
+    publishSnapshot,
+    (error) => {
+      console.error("OpenSea mirror reconnect recovery failed", error);
+      process.exitCode = 1;
+    },
+  );
 } catch (error) {
-  await publishHealth().catch((reportError: unknown) => {
-    console.error("ArtFi provider health report rejected", reportError);
-  });
+  clearInterval(healthInterval);
+  await publishHealth();
   throw error;
 }
 await publishHealth();
-const stop = await adapter.start(publish);
-await publishHealth();
-let healthPublishInFlight = false;
-const healthInterval = setInterval(() => {
-  if (healthPublishInFlight) return;
-  healthPublishInFlight = true;
-  void publishHealth()
-    .catch((error: unknown) => {
-      console.error("ArtFi provider health report rejected", error);
-    })
-    .finally(() => {
-      healthPublishInFlight = false;
-    });
-}, healthReportIntervalMs);
 let stopping = false;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
@@ -94,12 +135,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     stopping = true;
     clearInterval(healthInterval);
     stop();
-    void publishHealth()
-      .catch((error: unknown) => {
-        console.error("ArtFi final provider health report rejected", error);
-      })
-      .finally(() => {
-        process.exitCode = 0;
-      });
+    void publishHealth().finally(() => {
+      process.exitCode = 0;
+    });
   });
 }

@@ -55,6 +55,9 @@ export class MarketplaceHealthTracker {
   readonly #staleAfterMs: number;
   readonly #now: () => Date;
   #started = false;
+  #epoch = 0;
+  #connectionGeneration = 0;
+  #realtimeFailed = false;
   #realtimeConnected = false;
   #consecutiveFailures = 0;
   #lastBackfillSuccessAt?: Date;
@@ -66,6 +69,7 @@ export class MarketplaceHealthTracker {
       !source ||
       !Number.isSafeInteger(staleAfterMs) ||
       staleAfterMs < 1_000 ||
+      staleAfterMs > 86_400_000 ||
       staleAfterMs % 1_000 !== 0
     ) {
       throw new Error("Marketplace health configuration is invalid");
@@ -79,31 +83,63 @@ export class MarketplaceHealthTracker {
     this.#started = true;
   }
 
-  markBackfillSuccess(): void {
-    this.#started = true;
-    this.#lastBackfillSuccessAt = this.#now();
-    this.#consecutiveFailures = 0;
+  beginWork(): number {
+    this.start();
+    return this.#epoch;
   }
 
-  markEvent(): void {
-    this.#started = true;
-    this.#realtimeConnected = true;
-    this.#lastEventAt = this.#now();
-    this.#consecutiveFailures = 0;
-  }
-
-  markFailure(): void {
-    this.#started = true;
-    this.#lastFailureAt = this.#now();
-    this.#consecutiveFailures += 1;
-  }
-
-  markRealtimeFailure(): void {
+  beginConnection(): number {
+    this.start();
     this.#realtimeConnected = false;
+    return ++this.#connectionGeneration;
+  }
+
+  markRealtimeReady(generation: number): void {
+    if (!this.#started || generation !== this.#connectionGeneration) return;
+    this.#realtimeConnected = true;
+    this.#realtimeFailed = false;
+    this.#consecutiveFailures = 0;
+  }
+
+  markRealtimeFailure(generation: number): void {
+    if (!this.#started || generation !== this.#connectionGeneration) return;
+    this.#connectionGeneration++;
+    this.#realtimeConnected = false;
+    this.#realtimeFailed = true;
     this.markFailure();
   }
 
+  markBackfillSuccess(epoch = this.#epoch): void {
+    if (!this.#started || epoch !== this.#epoch) return;
+    this.#lastBackfillSuccessAt = new Date(this.#now().getTime());
+    if (!this.#realtimeFailed) this.#consecutiveFailures = 0;
+  }
+
+  markEvent(generation: number): void {
+    if (
+      !this.#started ||
+      !this.#realtimeConnected ||
+      generation !== this.#connectionGeneration
+    )
+      return;
+    this.#lastEventAt = new Date(this.#now().getTime());
+    this.#consecutiveFailures = 0;
+  }
+
+  markEventFailure(generation: number): void {
+    if (!this.#started || generation !== this.#connectionGeneration) return;
+    this.markFailure();
+  }
+
+  markFailure(epoch = this.#epoch): void {
+    if (!this.#started || epoch !== this.#epoch) return;
+    this.#lastFailureAt = new Date(this.#now().getTime());
+    this.#consecutiveFailures += 1;
+  }
+
   stop(): void {
+    this.#epoch++;
+    this.#connectionGeneration++;
     this.#started = false;
     this.#realtimeConnected = false;
   }
@@ -120,7 +156,8 @@ export class MarketplaceHealthTracker {
       freshnessLagMs === undefined || freshnessLagMs > this.#staleAfterMs;
     let state: MarketplaceHealthState = "starting";
     if (!this.#started) state = "stopped";
-    else if (this.#consecutiveFailures > 0) state = "degraded";
+    else if (this.#consecutiveFailures > 0 || this.#realtimeFailed)
+      state = "degraded";
     else if (!freshnessReference) state = "starting";
     else if (stale) state = "stale";
     else state = "healthy";
@@ -128,6 +165,7 @@ export class MarketplaceHealthTracker {
     return {
       schemaVersion: "1",
       source: this.#source,
+      staleAfterSeconds: this.#staleAfterMs / 1_000,
       state,
       stale,
       realtimeConnected: this.#realtimeConnected,
@@ -140,7 +178,6 @@ export class MarketplaceHealthTracker {
         freshnessLagMs === undefined
           ? undefined
           : Math.floor(freshnessLagMs / 1_000),
-      staleAfterSeconds: this.#staleAfterMs / 1_000,
     };
   }
 }
@@ -153,10 +190,38 @@ function latest(first?: Date, second?: Date): Date | undefined {
 
 export type MarketEventSink = (event: NormalizedMarketEvent) => Promise<void>;
 
+export type MarketSnapshotSink = (
+  events: AsyncIterable<NormalizedMarketEvent>,
+  signal: AbortSignal,
+) => Promise<void>;
+
+export interface MarketplaceBackfillLease {
+  commit(): Promise<void>;
+  abort(): Promise<void>;
+}
+
+export interface MarketplaceBackfillOptions {
+  deferFinalize?: boolean;
+  onLeaseReady?(lease: MarketplaceBackfillLease): void;
+  onSourceSealed?(): Promise<void>;
+}
+
+export interface MarketplaceStreamLifecycle {
+  onReconnectReady(): Promise<void>;
+  onFatal(error: unknown): void;
+}
+
 export interface MarketplaceAdapter {
   readonly source: string;
   readonly capabilities: MarketplaceCapabilities;
-  backfill(sink: MarketEventSink, signal?: AbortSignal): Promise<void>;
-  start(sink: MarketEventSink): Promise<() => void>;
-  health(now?: Date): MarketplaceHealthSnapshot;
+  health?(now?: Date): MarketplaceHealthSnapshot;
+  backfill(
+    sink: MarketEventSink,
+    signal?: AbortSignal,
+    options?: MarketplaceBackfillOptions,
+  ): Promise<void | MarketplaceBackfillLease>;
+  start(
+    sink: MarketEventSink,
+    lifecycle?: MarketplaceStreamLifecycle,
+  ): Promise<() => void>;
 }

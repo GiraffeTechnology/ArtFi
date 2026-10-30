@@ -1,0 +1,27 @@
+.root {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.root [data-no-translate] {
+  min-width: 0;
+  max-width: 100%;
+}
+.root form {
+  align-items: end;
+}
+.root label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 100%;
+}
+.root input {
+  min-width: 0;
+  max-width: 100%;
+}
+.root button {
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

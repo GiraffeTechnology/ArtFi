@@ -27,17 +27,22 @@ func TestMySQLMarketProviderHealthReplayConflictAndServerStaleness(t *testing.T)
 	}
 	defer db.Exec("DELETE FROM external_market_provider_health WHERE source = 'opensea'")
 
+	var databaseNow time.Time
+	if err := db.QueryRowContext(ctx, "SELECT CURRENT_TIMESTAMP(6)").Scan(&databaseNow); err != nil {
+		t.Fatal(err)
+	}
+	base := databaseNow.UTC().Truncate(time.Second)
 	service := newRWAService(rwaConfig{}, newMemoryObjectStore())
 	service.db = db
 	service.indexerEnabled = true
 	service.indexerKeyHash = sha256.Sum256([]byte("provider-health-indexer-key"))
-	service.now = func() time.Time { return time.Date(2026, 9, 14, 0, 0, 45, 0, time.UTC) }
+	service.now = func() time.Time { return base.Add(45 * time.Second) }
 	handler := newHandler(service)
 	report := map[string]any{
 		"schemaVersion": "1", "source": "opensea", "state": "healthy",
 		"stale": false, "realtimeConnected": true, "consecutiveFailures": 0,
-		"observedAt": "2026-09-14T00:00:30Z", "lastBackfillSuccessAt": "2026-09-14T00:00:00Z",
-		"lastEventAt": "2026-09-14T00:00:20Z", "freshnessLagSeconds": 10,
+		"observedAt": base.Add(30 * time.Second).Format(time.RFC3339Nano), "lastBackfillSuccessAt": base.Format(time.RFC3339Nano),
+		"lastEventAt": base.Add(20 * time.Second).Format(time.RFC3339Nano), "freshnessLagSeconds": 10,
 		"staleAfterSeconds": 60,
 	}
 	unauthorized := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-health", report,
@@ -54,7 +59,7 @@ func TestMySQLMarketProviderHealthReplayConflictAndServerStaleness(t *testing.T)
 	if replay.Code != http.StatusOK {
 		t.Fatalf("exact provider health replay: status=%d body=%s", replay.Code, replay.Body.String())
 	}
-	conflict := cloneMap(report)
+	conflict := cloneMarketHealthMap(report)
 	conflict["realtimeConnected"] = false
 	conflicting := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-health", conflict, headers)
 	if conflicting.Code != http.StatusConflict {
@@ -63,7 +68,7 @@ func TestMySQLMarketProviderHealthReplayConflictAndServerStaleness(t *testing.T)
 	older := map[string]any{
 		"schemaVersion": "1", "source": "opensea", "state": "starting",
 		"stale": true, "realtimeConnected": false, "consecutiveFailures": 0,
-		"observedAt": "2026-09-13T23:59:59Z", "staleAfterSeconds": 60,
+		"observedAt": base.Add(-1 * time.Second).Format(time.RFC3339Nano), "staleAfterSeconds": 60,
 	}
 	outOfOrder := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-health", older, headers)
 	if outOfOrder.Code != http.StatusConflict {
@@ -72,15 +77,19 @@ func TestMySQLMarketProviderHealthReplayConflictAndServerStaleness(t *testing.T)
 	degraded := map[string]any{
 		"schemaVersion": "1", "source": "opensea", "state": "degraded",
 		"stale": false, "realtimeConnected": true, "consecutiveFailures": 1,
-		"observedAt": "2026-09-14T00:00:40Z", "lastBackfillSuccessAt": "2026-09-14T00:00:00Z",
-		"lastEventAt": "2026-09-14T00:00:20Z", "lastFailureAt": "2026-09-14T00:00:40Z",
+		"observedAt": base.Add(40 * time.Second).Format(time.RFC3339Nano), "lastBackfillSuccessAt": base.Add(0*time.Second).Format(time.RFC3339Nano),
+		"lastEventAt": base.Add(20*time.Second).Format(time.RFC3339Nano), "lastFailureAt": base.Add(40 * time.Second).Format(time.RFC3339Nano),
 		"freshnessLagSeconds": 20, "staleAfterSeconds": 60,
 	}
 	updated := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-health", degraded, headers)
 	if updated.Code != http.StatusOK {
 		t.Fatalf("new provider health: status=%d body=%s", updated.Code, updated.Body.String())
 	}
-	service.now = func() time.Time { return time.Date(2026, 9, 14, 0, 2, 0, 0, time.UTC) }
+	var storedReceived time.Time
+	if err := db.QueryRowContext(ctx, "SELECT received_at FROM external_market_provider_health WHERE source = ?", "opensea").Scan(&storedReceived); err != nil {
+		t.Fatal(err)
+	}
+	service.now = func() time.Time { return storedReceived.UTC().Add(61 * time.Second) }
 	response := requestWithHandler(t, handler, http.MethodGet, "/v1/market/health?source=opensea")
 	if response.Code != http.StatusOK {
 		t.Fatalf("get provider health: status=%d body=%s", response.Code, response.Body.String())
@@ -92,7 +101,7 @@ func TestMySQLMarketProviderHealthReplayConflictAndServerStaleness(t *testing.T)
 	}
 }
 
-func cloneMap(input map[string]any) map[string]any {
+func cloneMarketHealthMap(input map[string]any) map[string]any {
 	result := make(map[string]any, len(input))
 	for key, value := range input {
 		result[key] = value

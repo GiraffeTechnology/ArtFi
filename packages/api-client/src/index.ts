@@ -5,9 +5,10 @@ export type Asset = components["schemas"]["Asset"];
 export type MintedNFT = components["schemas"]["MintedNFT"];
 export type Project = components["schemas"]["Project"];
 export type Portfolio = components["schemas"]["Portfolio"];
-export type Problem = components["schemas"]["Problem"];
+export type NativeSignedOrder = components["schemas"]["NativeSignedOrder"];
 export type ExternalMarketProviderHealth =
   components["schemas"]["ExternalMarketProviderHealth"];
+export type Problem = components["schemas"]["Problem"];
 
 export class ArtFiAPIError extends Error {
   constructor(public readonly problem: Problem) {
@@ -31,6 +32,38 @@ export function createArtFiClient(
   };
 
   return {
+    nativeOrders: (
+      filters: {
+        kind?: "whole" | "fraction";
+        chainId?: 560048;
+        marketAddress?: string;
+        assetAddress?: string;
+        tokenId?: string;
+        sellerAddress?: string;
+        page?: number;
+        pageSize?: number;
+      } = {},
+    ) => {
+      const query = new URLSearchParams(
+        Object.entries(filters)
+          .filter(([, value]) => value !== undefined)
+          .map(([key, value]) => [key, String(value)]),
+      );
+      return request<{
+        data: NativeSignedOrder[];
+        total: number;
+        page: number;
+        pageSize: number;
+      }>(`/v1/orders?${query}`);
+    },
+    nativeOrder: (intentHash: string, chainId: 560048, marketAddress: string) =>
+      request<NativeSignedOrder>(
+        `/v1/orders/${encodeURIComponent(intentHash)}?${new URLSearchParams({ chainId: String(chainId), marketAddress })}`,
+      ),
+    marketProviderHealth: (source = "opensea") =>
+      request<ExternalMarketProviderHealth>(
+        `/v1/market/health?source=${encodeURIComponent(source)}`,
+      ),
     config: () => request<ArtFiConfig>("/v1/config"),
     assets: () => request<{ data: Asset[]; total: number }>("/v1/assets"),
     mintedNFTs: () =>
@@ -42,9 +75,5 @@ export function createArtFiClient(
     projects: () => request<{ data: Project[]; total: number }>("/v1/projects"),
     portfolio: (address: string) =>
       request<Portfolio>(`/v1/portfolio/${encodeURIComponent(address)}`),
-    marketProviderHealth: (source = "opensea") =>
-      request<ExternalMarketProviderHealth>(
-        `/v1/market/health?source=${encodeURIComponent(source)}`,
-      ),
   };
 }

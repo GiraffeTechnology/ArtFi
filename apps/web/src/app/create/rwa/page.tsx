@@ -5,7 +5,13 @@ import { NFTMintConsole } from "@/components/nft-mint-console";
 
 export const metadata: Metadata = { title: "NFT control" };
 
-export default function CreateRwaPage() {
+export default async function CreateRwaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ standard?: string }>;
+}) {
+  const { standard } = await searchParams;
+  const initialStandard = standard === "erc1155" ? "erc1155" : "erc721";
   return (
     <main className="page-shell page-main">
       <header className="page-intro page-intro--compact">
@@ -17,7 +23,7 @@ export default function CreateRwaPage() {
           wallet on Hoodi. The application never receives a private key.
         </p>
       </header>
-      <NFTMintConsole />
+      <NFTMintConsole key={initialStandard} initialStandard={initialStandard} />
       <MintedNFTCatalog />
     </main>
   );

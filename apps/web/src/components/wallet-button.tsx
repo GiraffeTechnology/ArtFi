@@ -20,6 +20,7 @@ export function WalletButton() {
           return (
             <button
               className="wallet-button"
+              disabled={!ready || !openConnectModal}
               onClick={openConnectModal}
               type="button"
             >
