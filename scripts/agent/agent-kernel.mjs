@@ -69,16 +69,25 @@ export function createAgentKernel({
     renew = store.renew.bind(store),
     transition = store.transition.bind(store),
     release = store.release.bind(store);
+  // Real stores declare work plus bounded cleanup independently of execution adapters.
+  // Older test stores may declare only their operation budget; never substitute the adapter budget.
+  const storeTimeoutMs = Object.hasOwn(store, "totalOperationTimeoutMs")
+    ? store.totalOperationTimeoutMs
+    : store.operationTimeoutMs;
   if (
     !Number.isSafeInteger(store.leaseDurationMs) ||
     !Number.isSafeInteger(store.operationTimeoutMs) ||
-    store.leaseDurationMs <
-      adapterTimeoutMs + 2 * store.operationTimeoutMs + 1000
+    store.operationTimeoutMs < 10 ||
+    store.operationTimeoutMs > 30000 ||
+    !Number.isSafeInteger(storeTimeoutMs) ||
+    storeTimeoutMs < store.operationTimeoutMs ||
+    storeTimeoutMs > 33000 ||
+    store.leaseDurationMs < adapterTimeoutMs + 2 * storeTimeoutMs + 1000
   )
     throw new Error("KERNEL_LEASE_BUDGET_INVALID");
-  async function bounded(stage, call) {
+  async function bounded(stage, call, timeoutMs = adapterTimeoutMs) {
     const controller = new AbortController();
-    const deadline = performance.now() + adapterTimeoutMs;
+    const deadline = performance.now() + timeoutMs;
     const expired = () => {
       if (performance.now() >= deadline) {
         controller.abort();
@@ -96,7 +105,7 @@ export function createAgentKernel({
           timer = setTimeout(() => {
             controller.abort();
             reject(new Error(`ADAPTER_${stage}_TIMEOUT`));
-          }, adapterTimeoutMs);
+          }, timeoutMs);
         }),
       ]);
       // Timers cannot preempt synchronous JS or a microtask backlog. Do not
@@ -109,6 +118,7 @@ export function createAgentKernel({
     // Abort is advisory. A timed-out send may still complete externally. Its
     // durable STARTED anchor forbids re-execution; late results are not saved.
   }
+  const boundedStore = (stage, call) => bounded(stage, call, storeTimeoutMs);
   return async function tick(request) {
     const frozen = structuredClone(request);
     const requestDigest = kernelRequestDigest(frozen);
@@ -116,7 +126,7 @@ export function createAgentKernel({
       storeUncertain = false;
     try {
       record = structuredClone(
-        await bounded("STORE_CLAIM", (signal) =>
+        await boundedStore("STORE_CLAIM", (signal) =>
           claim(frozen.operationId, requestDigest, signal),
         ),
       );
@@ -138,7 +148,7 @@ export function createAgentKernel({
       kernelRequestDigest(record.request) !== requestDigest
     ) {
       try {
-        await bounded("STORE_RELEASE", (signal) =>
+        await boundedStore("STORE_RELEASE", (signal) =>
           release(frozen.operationId, record.leaseToken, signal),
         );
       } catch {}
@@ -170,7 +180,7 @@ export function createAgentKernel({
       // send another mutation or release the lease while its outcome is unknown.
       storeUncertain = true;
       const next = structuredClone(
-        await bounded("STORE_TRANSITION", (signal) =>
+        await boundedStore("STORE_TRANSITION", (signal) =>
           transition(record.id, record.version, patch, leaseToken, signal),
         ),
       );
@@ -192,7 +202,7 @@ export function createAgentKernel({
       checkLease(record);
       storeUncertain = true;
       const next = structuredClone(
-        await bounded("STORE_RENEW", (signal) =>
+        await boundedStore("STORE_RENEW", (signal) =>
           renew(record.id, record.version, leaseToken, signal),
         ),
       );
@@ -364,7 +374,7 @@ export function createAgentKernel({
       // Identity-bound release may fail during outage; the durable lease must expire safely.
       if (!storeUncertain) {
         try {
-          await bounded("STORE_RELEASE", (signal) =>
+          await boundedStore("STORE_RELEASE", (signal) =>
             release(frozen.operationId, leaseToken, signal),
           );
         } catch {
