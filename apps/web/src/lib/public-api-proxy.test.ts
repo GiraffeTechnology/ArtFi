@@ -56,9 +56,12 @@ describe("standalone public read proxy", () => {
     vi.stubGlobal("fetch", fetch);
     try {
       const response = await GET(
-        new Request("https://web.example.test/v1/market/health?source=opensea", {
-          headers: { authorization: "do-not-forward", cookie: "private=1" },
-        }),
+        new Request(
+          "https://web.example.test/v1/market/health?source=opensea",
+          {
+            headers: { authorization: "do-not-forward", cookie: "private=1" },
+          },
+        ),
         { params: Promise.resolve({ path: ["market", "health"] }) },
       );
       expect(response.status).toBe(200);
