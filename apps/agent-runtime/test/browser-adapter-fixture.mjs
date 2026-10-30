@@ -3,6 +3,8 @@
 import { createServer } from "node:http";
 import { actionFixture, syntheticEvidence } from "./action-fixtures.mjs";
 import { TEST_ADAPTER_CONTRACT } from "../src/adapter.mjs";
+if (typeof process.send !== "function")
+  throw Error("ISOLATED_OWNED_IPC_REQUIRED");
 const f = await actionFixture(),
   quote = await f.order(),
   evidence = new Map();
@@ -107,9 +109,16 @@ const server = createServer(async (request, response) => {
     reply(response, 503, { code: "ISOLATED_FIXTURE_UNAVAILABLE" });
   }
 });
-server.listen(33328, "127.0.0.1", () =>
-  console.log("ISOLATED_AGENT_BROWSER_FIXTURE_READY"),
-);
+server.listen(0, "127.0.0.1", () => {
+  const address = server.address();
+  process.send({
+    type: "ARTFI_TEST_OWNED_LISTENER",
+    host: address.address,
+    port: address.port,
+    pid: process.pid,
+  });
+  console.log("ISOLATED_AGENT_BROWSER_FIXTURE_READY");
+});
 for (const signal of ["SIGTERM", "SIGINT"])
   process.on(signal, () => {
     server.close();
