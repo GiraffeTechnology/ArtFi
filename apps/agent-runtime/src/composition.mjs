@@ -332,9 +332,9 @@ export function createRuntimeController({
           : item,
       ),
       limitations: [
-        "Isolated ArtFi integration-test adapter; current Wallet still requires owner confirmation for each operation.",
+        "Isolated ArtFi integration-test adapter; no production wallet execution binding is configured in this composition.",
         actionWorker
-          ? "Native multi-action app-side contract is isolated TEST_ONLY; NFT delegated execution remains unavailable."
+          ? "Native multi-action app-side contract is isolated TEST_ONLY; NFT delegated execution is unavailable through this composition."
           : "Only one bounded BUY is configured.",
         "No real autonomous signing or broadcasting is available. Use the existing wallet-reviewed market screens for supported owner-confirmed actions.",
       ],

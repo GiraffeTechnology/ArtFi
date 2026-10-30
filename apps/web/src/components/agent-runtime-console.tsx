@@ -176,10 +176,10 @@ function PrivateAgentConsole({ session }: { session: UserSession }) {
         </strong>
         <p>
           User authority, operational execution and constitutional governance
-          remain separate. No user keys are held by this runtime. The current
-          Wallet requires owner confirmation for each operation. Autonomous
-          signing, broadcasting and nonce revocation are unavailable through
-          this runtime.
+          remain separate. No user keys are held by this runtime. No production
+          wallet execution binding is configured for this ArtFi runtime.
+          Autonomous signing, broadcasting and nonce revocation are unavailable
+          through this runtime.
         </p>
       </section>
       <section className={styles.panel}>
