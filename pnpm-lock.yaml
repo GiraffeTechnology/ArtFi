@@ -67,8 +67,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/api-client
       '@opensea/sdk':
-        specifier: 12.11.2
-        version: 12.11.2(bufferutil@4.1.0)(utf-8-validate@5.0.10)(viem@2.56.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.6.5))
+        specifier: 12.12.0
+        version: 12.12.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)(viem@2.56.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.6.5))
       '@opensea/seaport-js':
         specifier: 4.3.0
         version: 4.3.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
@@ -752,12 +752,12 @@ packages:
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
 
-  '@opensea/api-types@0.15.1':
-    resolution: {integrity: sha512-fMgHl0MxiTO7uTpB8yD47yzWCFKpVVkV1E+bM8eSxQmZ2hb6ktPVssJg911m3HW7mPTV5FyI/v2iH/FAEQ5TNA==}
+  '@opensea/api-types@0.16.1':
+    resolution: {integrity: sha512-sina5GBj+ERlX5BJ6ydJo2ShAUixTtbGpb3KJEpPwaY6SAUTMidZ/xeOC9lhQW8DWN3UJjIT6vGTuKT6PNoE4g==}
     engines: {node: '>=18.0.0'}
 
-  '@opensea/sdk@12.11.2':
-    resolution: {integrity: sha512-JTZqbXyJ5HySJsQtkbEvwokcjvb88fMczjXu7NT8974KJssnP1DQPQCCn8aikWOXWy12dnSJomsGdiLRd1H5zA==}
+  '@opensea/sdk@12.12.0':
+    resolution: {integrity: sha512-YnXarhNYrwUwNAd5OxSjwfJPaW7FbDqFLKLtz3645NkZksGPgZZ1z8FDrX9nOYkwSwhuKPXWv7pNhFg56e4cNA==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       viem: ^2.0.0
@@ -4569,12 +4569,12 @@ snapshots:
 
   '@nolyfill/is-core-module@1.0.39': {}
 
-  '@opensea/api-types@0.15.1': {}
+  '@opensea/api-types@0.16.1': {}
 
-  '@opensea/sdk@12.11.2(bufferutil@4.1.0)(utf-8-validate@5.0.10)(viem@2.56.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.6.5))':
+  '@opensea/sdk@12.12.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)(viem@2.56.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.6.5))':
     dependencies:
       '@noble/hashes': 2.4.0
-      '@opensea/api-types': 0.15.1
+      '@opensea/api-types': 0.16.1
       '@opensea/seaport-js': 4.3.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
     optionalDependencies:
