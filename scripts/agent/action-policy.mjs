@@ -1,3 +1,4 @@
+import { nativeNftTaskPrincipalMatches } from "./native-nft-principal.mjs";
 import { validRuntimeMode, validChainId } from "./runtime-profile.mjs";
 import { INTENT_TYPES, INTENT_FIELDS } from "./bounded-intent.mjs";
 import { ACTION_BITS, uint } from "./stage1-action-plans.mjs";
@@ -239,8 +240,22 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
         fail("FINANCIAL_BOUND_EXCEEDED");
       const quote = uint(o.quotedValue, true),
         slippage = uint(p.slippageLimit);
-      if (value > quote && (value - quote) * 10000n > quote * slippage)
-        fail("SLIPPAGE_EXCEEDED");
+      // A sell's adverse movement is reduced proceeds; a buy's is higher cost.
+      // Derive direction from the trusted compiled operation, never an observation flag.
+      const selling =
+        leg.dispatch.kind === "SIGNED_ORDER_PUBLICATION" ||
+        (leg.marketKind === "AUCTION" &&
+          ["CREATE_ORDER", "AMEND_ORDER"].includes(leg.action)) ||
+        (leg.marketKind === "NFT" &&
+          ["list", "accept"].includes(leg.nativeAction));
+      const adverse = selling
+        ? quote > value
+          ? quote - value
+          : 0n
+        : value > quote
+          ? value - quote
+          : 0n;
+      if (adverse * 10000n > quote * slippage) fail("SLIPPAGE_EXCEEDED");
     }
     if (uint(o.executions) >= uint(p.maxExecutions)) fail("AUTHORITY_CONSUMED");
     if (
@@ -250,6 +265,8 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
     )
       fail("EXPOSURE_EXCEEDED");
     if (leg.marketKind === "NFT") {
+      if (!nativeNftTaskPrincipalMatches(leg, o.nativeTaskPrincipal))
+        fail("NATIVE_NFT_TASK_PRINCIPAL_MISMATCH");
       if (
         o.nativeReviewDigest !== leg.nativeReviewDigest ||
         o.nativeOperationCurrent !== true ||
@@ -282,7 +299,11 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
       fail("PRIOR_ACTION_UNCONFIRMED");
     if (
       leg.expected.startsAt &&
-      (seconds < uint(leg.expected.startsAt) ||
+      ((!(
+        leg.dispatch.kind === "SIGNED_ORDER_PUBLICATION" ||
+        (leg.marketKind === "AUCTION" && leg.opensOrder)
+      ) &&
+        seconds < uint(leg.expected.startsAt)) ||
         seconds >= uint(leg.expected.endsAt))
     )
       fail("ORDER_NOT_CURRENT");
@@ -303,6 +324,7 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
         !same(auction.asset, leg.asset.contract) ||
         !same(auction.paymentToken, leg.paymentToken) ||
         auction.listingId !== leg.orderKey ||
+        auction.amountRemaining !== leg.quantity ||
         seconds < uint(auction.startsAt) ||
         seconds >= uint(auction.endsAt) ||
         value < uint(auction.minimumBid) ||
@@ -320,6 +342,27 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
         o.auction.hasBid !== false
       )
         fail("AUCTION_CANCEL_REFUSED");
+    }
+    if (leg.marketKind === "AUCTION" && leg.name === "REPLACE") {
+      const cancelled = priorLegs.find(
+        (prior) =>
+          prior.name === "CANCEL" &&
+          prior.state === "COMPLETED" &&
+          prior.proof?.verified === true &&
+          prior.proof.eventName === "ListingCancelled" &&
+          prior.proof.orderKey === leg.replacesOrderKey &&
+          prior.proof.eventArgs?.listingId === leg.replacesOrderKey,
+      );
+      if (
+        !cancelled ||
+        o.auction?.state !== "CANCELLED" ||
+        o.auction.listingId !== leg.replacesOrderKey ||
+        !same(o.auction.asset, leg.asset.contract) ||
+        !same(o.auction.paymentToken, leg.paymentToken) ||
+        !same(o.auction.seller, p.wallet) ||
+        o.auction.hasBid !== false
+      )
+        fail("AUCTION_REPLACEMENT_UNCONFIRMED");
     }
     if (leg.marketKind === "AUCTION" && leg.name === "SETTLE") {
       if (

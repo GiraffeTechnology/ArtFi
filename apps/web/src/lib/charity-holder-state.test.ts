@@ -2,12 +2,33 @@ import { describe, expect, it, vi } from "vitest";
 import { verifyHolderAccess, type HolderState } from "./charity-holder-state";
 
 const address = "0x1000000000000000000000000000000000000001";
-const verified = { address, tokenId: "7", expiresAt: "2026-10-02T22:00:00Z" };
+const verified = {
+  verified: true,
+  address,
+  tokenId: "7",
+  expiresAt: "2026-10-02T22:00:00Z",
+  holderBenefit: "watermarked-copy-after-ownership-verification",
+};
+const challenge = (message: string) => ({
+  address,
+  tokenId: "7",
+  message,
+  expiresAt: "2026-10-02T22:00:00Z",
+});
 const now = () => Date.parse("2026-10-02T21:00:00Z");
 const descriptor = {
   contentType: "image/png",
   byteLength: 20,
   sha256: "a".repeat(64),
+};
+const descriptorResponse = {
+  ...descriptor,
+  tokenId: "7",
+  class: "watermarked-holder",
+  objectKey: "test-only/watermarked",
+  artworkPreview: "not-provided",
+  rights:
+    "This edition conveys no copyright, physical title, possession, redemption, commercial-use or reproduction right.",
 };
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 function deferred<T>() {
@@ -22,9 +43,9 @@ function setup() {
   const states: HolderState[] = [];
   const request = vi
     .fn<typeof fetch>()
-    .mockResolvedValueOnce(json({ message: "edition-specific challenge" }))
+    .mockResolvedValueOnce(json(challenge("edition-specific challenge")))
     .mockResolvedValueOnce(json(verified))
-    .mockResolvedValueOnce(json(descriptor));
+    .mockResolvedValueOnce(json(descriptorResponse));
   const signMessage = vi.fn().mockResolvedValue("0xsigned");
   return {
     states,
@@ -69,7 +90,7 @@ describe("holder proof stays bound to its mounted wallet and edition", () => {
     flow.request.mockReset().mockReturnValueOnce(response.promise);
     const running = flow.run();
     flow.leave();
-    response.resolve(json({ message: "old challenge" }));
+    response.resolve(json(challenge("old challenge")));
     await running;
     expect(flow.signMessage).not.toHaveBeenCalled();
     expect(flow.states.at(-1)?.step).toBe("requesting-challenge");
@@ -93,7 +114,7 @@ describe("holder proof stays bound to its mounted wallet and edition", () => {
     const response = deferred<Response>();
     flow.request
       .mockReset()
-      .mockResolvedValueOnce(json({ message: "challenge" }))
+      .mockResolvedValueOnce(json(challenge("challenge")))
       .mockReturnValueOnce(response.promise);
     const running = flow.run();
     await vi.waitFor(() => expect(flow.request).toHaveBeenCalledTimes(2));
@@ -109,13 +130,13 @@ describe("holder proof stays bound to its mounted wallet and edition", () => {
     const response = deferred<Response>();
     flow.request
       .mockReset()
-      .mockResolvedValueOnce(json({ message: "challenge" }))
+      .mockResolvedValueOnce(json(challenge("challenge")))
       .mockResolvedValueOnce(json(verified))
       .mockReturnValueOnce(response.promise);
     const running = flow.run();
     await vi.waitFor(() => expect(flow.request).toHaveBeenCalledTimes(3));
     flow.leave();
-    response.resolve(json(descriptor));
+    response.resolve(json(descriptorResponse));
     await running;
     expect(flow.states.at(-1)?.step).toBe("verifying");
   });
@@ -131,7 +152,7 @@ describe("holder proof stays bound to its mounted wallet and edition", () => {
       const flow = setup();
       flow.request
         .mockReset()
-        .mockResolvedValueOnce(json({ message: "challenge" }))
+        .mockResolvedValueOnce(json(challenge("challenge")))
         .mockResolvedValueOnce(json(response));
       await flow.run();
       expect(flow.request).toHaveBeenCalledTimes(2);
@@ -144,7 +165,7 @@ describe("holder proof stays bound to its mounted wallet and edition", () => {
     const flow = setup();
     flow.request
       .mockReset()
-      .mockResolvedValueOnce(json({ message: "challenge" }))
+      .mockResolvedValueOnce(json(challenge("challenge")))
       .mockResolvedValueOnce(json(verified))
       .mockResolvedValueOnce(json({ detail: "File unavailable" }, 503));
     await flow.run();

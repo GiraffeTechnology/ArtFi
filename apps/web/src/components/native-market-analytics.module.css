@@ -1,0 +1,79 @@
+.panel {
+  margin-block: 2rem;
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid #d8d0c4;
+  min-width: 0;
+}
+.panel h2,
+.panel h3 {
+  overflow-wrap: anywhere;
+}
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: end;
+  margin-block: 1.5rem;
+}
+.form label {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0.7rem;
+  font: inherit;
+}
+.form button {
+  padding: 0.7rem 1rem;
+  font: inherit;
+  min-height: 44px;
+}
+.scope,
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 1rem;
+}
+.scope div,
+.metrics div,
+.history li {
+  min-width: 0;
+  border: 1px solid #d8d0c4;
+  padding: 0.8rem;
+}
+.panel dt {
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+}
+.panel dd {
+  margin: 0;
+  min-width: 0;
+}
+.fact {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+}
+.history {
+  list-style-position: inside;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+.history dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.8rem;
+}
+@media (max-width: 600px) {
+  .form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .form button {
+    width: 100%;
+  }
+}

@@ -47,21 +47,24 @@
         color: #b9b2a5;
         overflow-wrap: anywhere;
       }
-      ul:empty::after {
-        content: "No site is enabled.";
-        color: #b9b2a5;
-      }
       #site {
         overflow-wrap: anywhere;
       }
       button + button {
         margin-top: 8px;
       }
-      button[hidden],
-      form[hidden],
-      div[hidden],
-      p[hidden] {
-        display: none;
+      [hidden] {
+        display: none !important;
+      }
+      button {
+        overflow-wrap: anywhere;
+        white-space: normal;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible {
+        outline: 2px solid #d9ff5a;
+        outline-offset: 3px;
       }
       label {
         display: block;
@@ -90,11 +93,19 @@
   </head>
   <body>
     <h1>ArtFi Wallet Alpha</h1>
-    <p>
+    <label for="language" data-popup-message="language">Language</label>
+    <select id="language">
+      <option value="en">English</option>
+    </select>
+    <p id="language-status" role="status" aria-live="polite"></p>
+    <p lang="en">
       Hoodi only. Signing remains in an approved hardware wallet or
       WalletConnect session.
     </p>
-    <p id="status">Checking encrypted vault…</p>
+    <p id="translated-boundary" data-popup-message="boundary" hidden></p>
+    <p id="status" role="status" aria-live="polite">
+      Checking encrypted vault…
+    </p>
 
     <form id="vault-form" hidden>
       <label for="vault-password" id="vault-password-label"
@@ -108,7 +119,9 @@
         required
       />
       <div id="vault-account-fields" hidden>
-        <label for="vault-address">Account address</label>
+        <label for="vault-address" data-popup-message="account"
+          >Account address</label
+        >
         <input
           id="vault-address"
           type="text"
@@ -116,9 +129,11 @@
           placeholder="0x…"
           pattern="0x[0-9a-fA-F]{40}"
         />
-        <label for="vault-connector">Signer</label>
+        <label for="vault-connector" data-popup-message="signer">Signer</label>
         <select id="vault-connector">
-          <option value="hardware">Hardware wallet</option>
+          <option value="hardware" data-popup-message="hardware">
+            Hardware wallet
+          </option>
           <option value="walletconnect">WalletConnect</option>
         </select>
       </div>
@@ -126,15 +141,20 @@
       <p id="vault-error" role="alert" hidden></p>
     </form>
 
-    <h2>This site</h2>
-    <p id="site">Reading the active tab…</p>
+    <h2 data-popup-message="thisSite">This site</h2>
+    <p id="site" role="status" aria-live="polite">Reading the active tab…</p>
     <button id="toggle-site" type="button" hidden>Enable for this site</button>
 
-    <h2>Enabled sites</h2>
+    <h2 data-popup-message="enabledSites">Enabled sites</h2>
     <ul id="grants"></ul>
+    <p id="grants-empty" data-popup-message="noSites" hidden>
+      No site is enabled.
+    </p>
 
-    <h2>Coordinator</h2>
-    <button id="lock" type="button">Lock coordinator</button>
+    <h2 data-popup-message="coordinator">Coordinator</h2>
+    <button id="lock" type="button" data-popup-message="lock">
+      Lock coordinator
+    </button>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

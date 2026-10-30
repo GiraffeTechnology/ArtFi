@@ -106,9 +106,13 @@ function parseNFTID(value: string | undefined): {
 }
 
 function timestamp(value: unknown): string {
-  const parsed = new Date(
-    typeof value === "number" || typeof value === "string" ? value : Date.now(),
-  );
+  if (
+    (typeof value !== "number" && typeof value !== "string") ||
+    (typeof value === "string" && value.trim() === "")
+  ) {
+    throw new Error("OpenSea event timestamp is missing or invalid");
+  }
+  const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     throw new Error("OpenSea event timestamp is invalid");
   }
@@ -160,10 +164,15 @@ export function normalizeOpenSeaEvent(input: unknown): NormalizedMarketEvent {
   if (!entityKey) throw new Error("OpenSea event entity key is missing");
 
   const rawVersion = event.version ?? payload.version;
-  const version =
-    typeof rawVersion === "number" && Number.isSafeInteger(rawVersion)
-      ? rawVersion
-      : new Date(eventTimestamp).getTime();
+  if (
+    rawVersion !== undefined &&
+    (typeof rawVersion !== "number" ||
+      !Number.isSafeInteger(rawVersion) ||
+      rawVersion < 0)
+  ) {
+    throw new Error("OpenSea event version is invalid");
+  }
+  const version = rawVersion ?? new Date(eventTimestamp).getTime();
 
   return {
     schemaVersion: MARKET_EVENT_SCHEMA_VERSION,

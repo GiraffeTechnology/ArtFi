@@ -82,35 +82,137 @@ export function validateMonitor(config) {
     throw new Error("diskPath must be an absolute filesystem path.");
   return config;
 }
-async function jsonResponse(response) {
-  const declared = Number(response.headers.get("content-length"));
-  if (declared > 65536) throw new Error("oversized");
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("empty");
-  let size = 0,
-    chunks = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.length;
-    if (size > 65536) {
-      await reader.cancel();
-      throw new Error("oversized");
-    }
-    chunks.push(value);
+function discardBody(response) {
+  try {
+    Promise.resolve(response?.body?.cancel()).catch(() => {});
+  } catch {
+    // Cleanup must not replace a completed result or keep the sampler waiting.
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
-async function rpc(url, method, params, fetcher) {
-  const r = await fetcher(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-    signal: AbortSignal.timeout(3000),
-    redirect: "error",
+
+function interrupt(call, signal, discardLate) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const abort = () => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", abort);
+      reject(new Error("unavailable"));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    Promise.resolve()
+      .then(() => {
+        if (signal.aborted) throw new Error("unavailable");
+        return call();
+      })
+      .then(
+        (value) => {
+          if (settled) {
+            try {
+              discardLate?.(value);
+            } catch {}
+            return;
+          }
+          settled = true;
+          signal.removeEventListener("abort", abort);
+          resolve(value);
+        },
+        (error) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", abort);
+          reject(error);
+        },
+      );
   });
+}
+
+async function jsonResponse(response, signal, deadline) {
+  let reader;
+  try {
+    const declared = Number(response.headers.get("content-length"));
+    if (declared > 65536) throw new Error("oversized");
+    reader = response.body?.getReader();
+    if (!reader) throw new Error("empty");
+    let size = 0,
+      reads = 0;
+    const chunks = [];
+    while (true) {
+      if (performance.now() >= deadline) throw new Error("unavailable");
+      const { done, value } = await interrupt(() => reader.read(), signal);
+      if (done) break;
+      // Bound no-progress/custom streams as well as their accumulated bytes.
+      if (++reads > 65536 || !(value instanceof Uint8Array))
+        throw new Error("invalid");
+      size += value.byteLength;
+      if (size > 65536) throw new Error("oversized");
+      if (value.byteLength) chunks.push(value);
+    }
+    return JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(
+        Buffer.concat(chunks, size),
+      ),
+    );
+  } finally {
+    if (reader) {
+      try {
+        Promise.resolve(reader.cancel()).catch(() => {});
+      } catch {}
+      try {
+        reader.releaseLock();
+      } catch {}
+    } else {
+      discardBody(response);
+    }
+  }
+}
+
+async function requestJSON(url, options, fetcher) {
+  const control = new AbortController();
+  const deadline = performance.now() + 3000;
+  const timer = setTimeout(() => control.abort(), 3000);
+  let response,
+    bodyHandled = false;
+  try {
+    response = await interrupt(
+      () =>
+        fetcher(url, {
+          ...options,
+          signal: control.signal,
+          redirect: "error",
+        }),
+      control.signal,
+      discardBody,
+    );
+    if (performance.now() >= deadline) throw new Error("unavailable");
+    if (!response.ok) return { ok: false, status: response.status };
+    bodyHandled = true;
+    const body = await jsonResponse(response, control.signal, deadline);
+    if (performance.now() >= deadline) throw new Error("unavailable");
+    return { ok: true, status: response.status, body };
+  } finally {
+    clearTimeout(timer);
+    control.abort();
+    if (!bodyHandled) discardBody(response);
+  }
+}
+
+async function rpc(url, method, params, fetcher) {
+  const r = await requestJSON(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    },
+    fetcher,
+  );
   if (!r.ok) throw new Error("unavailable");
-  const body = await jsonResponse(r);
+  const body = r.body;
   if (body.error || body.id !== 1) throw new Error("invalid");
   return body.result;
 }
@@ -164,17 +266,14 @@ export async function sampleMonitor(
             ageSeconds,
           };
         }
-        const response = await fetcher(url, {
-          signal: AbortSignal.timeout(3000),
-          redirect: "error",
-        });
+        const response = await requestJSON(url, { method: "GET" }, fetcher);
         if (!response.ok)
           return {
             name: probe.name,
             status: "unavailable",
             httpStatus: response.status,
           };
-        const body = await jsonResponse(response);
+        const body = response.body;
         return {
           name: probe.name,
           status:

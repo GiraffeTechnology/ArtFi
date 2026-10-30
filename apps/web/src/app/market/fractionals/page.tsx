@@ -41,6 +41,9 @@ export default function FractionalMarketPage() {
         <Link className="secondary" href="/market/auctions">
           Open fraction auctions
         </Link>
+        <Link className="secondary" href="/market/fractionals/revenue">
+          Inspect snapshot revenue claims
+        </Link>
       </nav>
       <Link className="secondary" href="/rwa/activate">
         Publish approved-source asset evidence

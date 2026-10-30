@@ -89,7 +89,7 @@ describe("bounded application administration", () => {
       );
     vi.stubGlobal("fetch", fetch);
     await expect(administrationRequest("admin/config")).rejects.toThrow(
-      "Refresh the current revision.",
+      "The record changed or this action was already completed. Refresh before trying again.",
     );
     expect(fetch).toHaveBeenCalledTimes(1);
   });

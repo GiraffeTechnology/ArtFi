@@ -1,3 +1,11 @@
+import {
+  administrationErrorMessage,
+  administrationErrorStatus,
+  administrationJSON,
+  discardAdministrationBody,
+  withAdministrationDeadline,
+} from "./administration-transport";
+
 export type ModerationCase = {
   id: string;
   reporter: string;
@@ -75,21 +83,36 @@ export async function administrationRequest<T>(
   }
   if (options.body !== undefined) headers["content-type"] = "application/json";
   if (options.key) headers["idempotency-key"] = options.key;
-  const response = await fetch(`/api/administration/${path}`, {
-    method: options.method || "GET",
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    cache: "no-store",
-    signal: options.signal,
-  });
-  const result = await response.json();
-  if (!response.ok)
-    throw new AdministrationRequestError(
-      response.status,
-      result.detail ||
-        "No result was confirmed. Refresh or retry the same request.",
-    );
-  return result as T;
+  try {
+    return await withAdministrationDeadline(async (signal) => {
+      const response = await fetch(`/api/administration/${path}`, {
+        method: options.method || "GET",
+        headers,
+        body:
+          options.body === undefined ? undefined : JSON.stringify(options.body),
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
+        signal,
+      });
+      if (signal.aborted) {
+        discardAdministrationBody(response);
+        signal.throwIfAborted();
+      }
+      if (!response.ok) {
+        discardAdministrationBody(response);
+        const status = administrationErrorStatus(response.status);
+        throw new AdministrationRequestError(
+          status,
+          administrationErrorMessage(status),
+        );
+      }
+      return (await administrationJSON(response, signal)) as T;
+    }, options.signal);
+  } catch (error) {
+    if (error instanceof AdministrationRequestError) throw error;
+    throw new AdministrationRequestError(503, administrationErrorMessage(503));
+  }
 }
 
 /** Retry an unchanged mutation with the same key, including after an uncertain response. */

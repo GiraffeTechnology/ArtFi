@@ -3,6 +3,18 @@ import { basename, resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const projects = ["desktop-chromium", "mobile-chromium"];
+const expectedTitlesByFile = {
+  "agent-runtime-live.spec.ts": [
+    "real signed session → BFF → durable agent → lost-ack recovery → owner-approved handoff → logout",
+  ],
+  "charity-editions-populated.spec.ts": [
+    "an edition renders the supply the contract reports",
+    "charity read failures stay private and retry on /charity",
+    "charity read failures stay private and retry on /charity/1",
+    "a failed charity refresh removes the earlier edition facts until recovery",
+  ],
+};
+
 const statuses = new Set([
   "passed",
   "failed",
@@ -17,43 +29,84 @@ export function summarizeReport(
   report,
   expectedFile = "agent-runtime-live.spec.ts",
 ) {
+  const expectedTitles = Object.hasOwn(expectedTitlesByFile, expectedFile)
+    ? expectedTitlesByFile[expectedFile]
+    : undefined;
   const tests = [];
+  let malformed = false;
   function visit(suites) {
-    for (const suite of suites || []) {
-      for (const spec of suite.specs || [])
-        for (const test of spec.tests || [])
-          tests.push({ ...test, file: spec.file });
-      visit(suite.suites);
+    if (!Array.isArray(suites)) {
+      malformed = true;
+      return;
+    }
+    for (const suite of suites) {
+      if (!suite || typeof suite !== "object") {
+        malformed = true;
+        continue;
+      }
+      const specs = suite.specs ?? [];
+      if (!Array.isArray(specs)) {
+        malformed = true;
+        continue;
+      }
+      for (const spec of specs) {
+        if (!spec || !Array.isArray(spec.tests)) {
+          malformed = true;
+          continue;
+        }
+        for (const test of spec.tests) {
+          if (!test || typeof test !== "object") {
+            malformed = true;
+            continue;
+          }
+          tests.push({ ...test, file: spec.file, title: spec.title });
+        }
+      }
+      visit(suite.suites ?? []);
     }
   }
-  visit(report?.suites);
+  visit(report?.suites ?? []);
   const cases = projects.map((project) => {
     const matches = tests.filter((test) => test.projectName === project);
-    const results = matches.flatMap((test) => test.results || []);
+    const results = matches.flatMap((test) =>
+      Array.isArray(test.results) ? test.results : [],
+    );
     const passed =
-      matches.length === 1 &&
-      basename(matches[0].file || "") === expectedFile &&
-      matches[0].expectedStatus === "passed" &&
-      matches[0].status === "expected" &&
-      results.length === 1 &&
-      results[0].status === "passed" &&
-      results[0].retry === 0;
+      Boolean(expectedTitles) &&
+      matches.length === expectedTitles.length &&
+      expectedTitles.every(
+        (title) => matches.filter((test) => test.title === title).length === 1,
+      ) &&
+      matches.every(
+        (test) =>
+          basename(typeof test.file === "string" ? test.file : "") ===
+            expectedFile &&
+          test.expectedStatus === "passed" &&
+          test.status === "expected" &&
+          Array.isArray(test.results) &&
+          test.results.length === 1 &&
+          test.results[0]?.status === "passed" &&
+          test.results[0]?.retry === 0,
+      );
     return {
       project,
       passed,
       attempts: results.length,
       statuses: results.map((result) =>
-        statuses.has(result.status) ? result.status : "unknown",
+        statuses.has(result?.status) ? result.status : "unknown",
       ),
     };
   });
+  const expectedCount = (expectedTitles?.length ?? 0) * projects.length;
   return {
     result:
       report &&
+      !malformed &&
+      (report.errors === undefined || Array.isArray(report.errors)) &&
       !(report.errors || []).length &&
-      tests.length === 2 &&
+      tests.length === expectedCount &&
       cases.every((entry) => entry.passed) &&
-      report.stats?.expected === 2 &&
+      report.stats?.expected === expectedCount &&
       report.stats?.unexpected === 0 &&
       report.stats?.flaky === 0 &&
       report.stats?.skipped === 0

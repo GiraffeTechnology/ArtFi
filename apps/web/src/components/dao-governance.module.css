@@ -1,0 +1,18 @@
+.console,
+.console > *,
+.console :global(.dao-panel),
+.console :global(.dao-panel) > * {
+  min-width: 0;
+}
+
+.console :global(.dao-panel) {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .console :global(.dao-console__grid),
+  .console :global(.dao-composer),
+  .console :global(.dao-metrics) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
