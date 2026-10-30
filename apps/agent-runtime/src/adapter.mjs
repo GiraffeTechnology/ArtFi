@@ -31,6 +31,9 @@ export async function createFixedAdapter(config, { fetchImpl = fetch } = {}) {
   if (token.length < 32) fail("AGENT_ADAPTER_TOKEN_INVALID");
   async function call(method, input, signal) {
     if (!methods.includes(method)) fail("ADAPTER_METHOD_UNSUPPORTED");
+    const requestSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(4000)])
+      : AbortSignal.timeout(4000);
     let response;
     try {
       response = await fetchImpl(`${base}/v1/artfi-agent-test/${method}`, {
@@ -47,18 +50,27 @@ export async function createFixedAdapter(config, { fetchImpl = fetch } = {}) {
         }),
         cache: "no-store",
         redirect: "error",
-        signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(4000)])
-          : AbortSignal.timeout(4000),
+        signal: requestSignal,
       });
     } catch {
       fail("AGENT_ADAPTER_UNAVAILABLE");
     }
     if (!response.ok) {
-      await response.body?.cancel();
+      try {
+        void response.body?.cancel().catch(() => undefined);
+      } catch {
+        // Cleanup must not delay refusal or expose an upstream error.
+      }
       fail("AGENT_ADAPTER_UNAVAILABLE");
     }
-    const body = await readResponseJSON(response);
+    let body;
+    try {
+      body = await readResponseJSON(response, 65536, requestSignal);
+    } catch (error) {
+      if (requestSignal.aborted) fail("AGENT_ADAPTER_UNAVAILABLE");
+      throw error;
+    }
+    if (requestSignal.aborted) fail("AGENT_ADAPTER_UNAVAILABLE");
     if (
       !exactInput(body, ["contract", "mode", "isolated", "result"]) ||
       body.contract !== TEST_ADAPTER_CONTRACT ||

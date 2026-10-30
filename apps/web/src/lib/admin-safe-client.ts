@@ -1,5 +1,6 @@
 import {
   decodeFunctionData,
+  encodeFunctionData,
   isAddress,
   keccak256,
   parseAbi,
@@ -24,25 +25,48 @@ import {
 } from "./admin-safe";
 import { publicSetting } from "./public-runtime-config";
 
-export type SafeFlow = "rwa" | "vault" | "charity";
+export type SafeFlow =
+  "rwa" | "vault" | "charity" | "charity-sellout" | "charity-donation";
 export const safeFlowSpec = {
   rwa: {
     name: "RWA creation",
     role: keccak256(toBytes("REGISTRAR_ROLE")),
     abi: rwaRegistryAbi,
     functionName: "createAssetWithEvidence",
+    operationIdIndex: 0,
+    operatorSessionRequired: true,
   },
   vault: {
     name: "Vault creation",
     role: keccak256(toBytes("CREATOR_ROLE")),
     abi: vaultFactoryAbi,
     functionName: "createVault",
+    operationIdIndex: 0,
+    operatorSessionRequired: true,
   },
   charity: {
     name: "Charity edition creation",
     role: keccak256(toBytes("SERIES_CREATOR_ROLE")),
     abi: charityEditionsAbi,
     functionName: "createSeries",
+    operationIdIndex: 0,
+    operatorSessionRequired: false,
+  },
+  "charity-sellout": {
+    name: "Charity sellout evidence",
+    role: keccak256(toBytes("DONATION_RECORDER_ROLE")),
+    abi: charityEditionsAbi,
+    functionName: "recordSellout",
+    operationIdIndex: 1,
+    operatorSessionRequired: false,
+  },
+  "charity-donation": {
+    name: "Charity physical-donation evidence",
+    role: keccak256(toBytes("DONATION_RECORDER_ROLE")),
+    abi: charityEditionsAbi,
+    functionName: "recordPhysicalDonation",
+    operationIdIndex: 1,
+    operatorSessionRequired: false,
   },
 } as const;
 const roleAbi = parseAbi([
@@ -104,11 +128,12 @@ export async function operatorCallRoute(
   return account;
 }
 
-/** Only the existing creation selector on the deployment-bound target is exposed here. */
+/** Only the exact allowlisted zero-value selector on the deployment-bound target is exposed here. */
 export function reviewSafeSubmission(
   kind: SafeFlow,
   target: Address,
   submission: SafeSubmission,
+  expectedTokenId?: bigint,
 ) {
   if (
     !sameSafeValue(target, submission.target) ||
@@ -122,9 +147,37 @@ export function reviewSafeSubmission(
   const decoded = decodeFunctionData({ abi: spec.abi, data: submission.data });
   if (decoded.functionName !== spec.functionName)
     throw new Error(
-      "This console only handles the existing creation call for this section.",
+      "This console only handles its exact allowlisted call for this section.",
     );
-  const operationId = decoded.args?.[0] as Hex;
+  if (spec.operationIdIndex === 1) {
+    const tokenId = decoded.args?.[0];
+    const evidenceHash = decoded.args?.[1];
+    if (
+      typeof tokenId !== "bigint" ||
+      tokenId <= 0n ||
+      typeof evidenceHash !== "string" ||
+      !/^0x[0-9a-fA-F]{64}$/.test(evidenceHash) ||
+      sameSafeValue(evidenceHash, ZERO_REQUEST_ID) ||
+      (expectedTokenId !== undefined &&
+        (expectedTokenId <= 0n || tokenId !== expectedTokenId)) ||
+      !sameSafeValue(
+        encodeFunctionData({
+          abi: spec.abi,
+          functionName: spec.functionName,
+          args: [tokenId, evidenceHash as Hex],
+        }),
+        submission.data,
+      )
+    )
+      throw new Error(
+        "The evidence proposal must match the exact reviewed series, nonzero evidence and canonical calldata.",
+      );
+  } else if (expectedTokenId !== undefined) {
+    throw new Error(
+      "A series-scoped evidence console cannot review a creation call.",
+    );
+  }
+  const operationId = decoded.args?.[spec.operationIdIndex] as Hex;
   if (
     !operationId ||
     !sameSafeValue(
@@ -172,7 +225,7 @@ export function isSafeRecord(value: unknown): value is SafeRecord {
     v.chainId > 0 &&
     isAddress(v.wallet ?? "") &&
     isAddress(v.safe ?? "") &&
-    v.kind in safeFlowSpec &&
+    Object.hasOwn(safeFlowSpec, v.kind) &&
     Boolean(v.submission) &&
     isAddress(v.submission.target ?? "") &&
     hex(v.submission.requestId, /^0x[\da-fA-F]{64}$/) &&

@@ -43,6 +43,7 @@ contract ArtFiDAOActions {
     error EvidenceRequired();
     error InvalidBuyoutTerms();
     error InvalidExecutor();
+    error InvalidRWA();
     error InvalidPriceEvidence();
     error UnauthorizedExecutor(address caller);
 
@@ -93,6 +94,7 @@ contract ArtFiDAOActions {
 
     modifier onlyExecutor() {
         if (msg.sender != executor) revert UnauthorizedExecutor(msg.sender);
+        _requireVaultCustody();
         _;
     }
 
@@ -174,6 +176,18 @@ contract ArtFiDAOActions {
             terms.evidenceHash,
             terms.evidenceURI
         );
+    }
+
+    /// @dev Check at the action boundary: callers may execute queued operations directly on the timelock.
+    function _requireVaultCustody() private view {
+        if (!rwaVault.deposited() || address(rwaVault.fractionalToken()) == address(0)) {
+            revert InvalidRWA();
+        }
+        try rwaVault.collection().ownerOf(rwaVault.tokenId()) returns (address owner) {
+            if (owner != address(rwaVault)) revert InvalidRWA();
+        } catch {
+            revert InvalidRWA();
+        }
     }
 
     function _requireEvidence(bytes32 evidenceHash, string calldata evidenceURI) private pure {

@@ -49,13 +49,24 @@ export function createActionKernel({
     !Number.isSafeInteger(adapterTimeoutMs) ||
     adapterTimeoutMs < 10 ||
     adapterTimeoutMs > 30000 ||
+    !Number.isSafeInteger(store.operationTimeoutMs) ||
+    !Number.isSafeInteger(store.totalOperationTimeoutMs) ||
+    store.operationTimeoutMs < 10 ||
+    store.operationTimeoutMs > 30000 ||
+    !Number.isSafeInteger(store.leaseDurationMs) ||
+    store.totalOperationTimeoutMs < store.operationTimeoutMs ||
+    store.totalOperationTimeoutMs > 33000 ||
     store.leaseDurationMs <
-      adapterTimeoutMs + 2 * store.operationTimeoutMs + 1000
+      adapterTimeoutMs + 2 * store.totalOperationTimeoutMs + 1000
   )
     throw Error("ACTION_KERNEL_CONFIGURATION_INVALID");
-  async function bounded(call) {
+  async function bounded(
+    call,
+    timeoutMs = adapterTimeoutMs,
+    timeoutCode = "ACTION_ADAPTER_TIMEOUT",
+  ) {
     const controller = new AbortController(),
-      deadline = performance.now() + adapterTimeoutMs;
+      deadline = performance.now() + timeoutMs;
     let timer;
     try {
       const result = await Promise.race([
@@ -63,23 +74,27 @@ export function createActionKernel({
         new Promise((_, reject) => {
           timer = setTimeout(() => {
             controller.abort();
-            reject(Error("ACTION_ADAPTER_TIMEOUT"));
-          }, adapterTimeoutMs);
+            reject(Error(timeoutCode));
+          }, timeoutMs);
         }),
       ]);
-      if (performance.now() >= deadline) throw Error("ACTION_ADAPTER_TIMEOUT");
+      if (performance.now() >= deadline) throw Error(timeoutCode);
       return result;
     } finally {
       clearTimeout(timer);
       controller.abort();
     }
   }
+  const boundedStore = (call) =>
+    bounded(call, store.totalOperationTimeoutMs, "ACTION_STORE_TIMEOUT");
   return async function tick(operationId) {
     let row,
       uncertain = false,
       attempted = false;
     try {
-      row = await bounded(() => store.claim(operationId));
+      // Store work and cleanup have a separate declared total budget. Never
+      // race transaction outcomes against the shorter adapter deadline.
+      row = await boundedStore(() => store.claim(operationId));
     } catch {
       return {
         state: "SAFE_DEGRADED",
@@ -119,7 +134,7 @@ export function createActionKernel({
       check(row);
       uncertain = true;
       try {
-        const next = await bounded(() => call(row));
+        const next = await boundedStore(() => call(row));
         check(next);
         if (next.version <= row.version) throw Error("ACTION_VERSION_INVALID");
         row = next;
@@ -133,7 +148,9 @@ export function createActionKernel({
     async function renew() {
       check(row);
       uncertain = true;
-      const next = await bounded(() => store.renew(row.id, row.version, token));
+      const next = await boundedStore(() =>
+        store.renew(row.id, row.version, token),
+      );
       check(next);
       if (
         next.version !== row.version ||
@@ -231,7 +248,7 @@ export function createActionKernel({
     } finally {
       if (!uncertain) {
         try {
-          await bounded(() => store.release(row.id, token));
+          await boundedStore(() => store.release(row.id, token));
         } catch {
           /* DB lease expiry retains all operation reservations. */
         }

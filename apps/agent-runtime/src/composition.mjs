@@ -213,7 +213,7 @@ export function createRuntimeController({
           quotedUnitPrice: request.sale.price,
         },
       });
-    runtime = createDurableRuntime({
+    const nextRuntime = createDurableRuntime({
       pool,
       kernelOptions: {
         authorize,
@@ -232,7 +232,9 @@ export function createRuntimeController({
         clock,
       },
     });
-    service = runtime.service;
+    let nextService = nextRuntime.service;
+    let nextActionWorker = null,
+      nextPlanner = null;
     if (adapter.actionPolicy) {
       const actionStore = createActionStore({ mode, pool });
       const actionPolicy = createActionPolicy({
@@ -249,12 +251,12 @@ export function createRuntimeController({
         readEvidence: adapter.actionEvidence,
         clock,
       });
-      actionWorker = createActionWorker({
+      nextActionWorker = createActionWorker({
         store: actionStore,
         tick: actionKernel,
       });
       if (adapter.actionPolicy.autonomousPlanning === true) {
-        planner = createAdvisoryPlanner({
+        nextPlanner = createAdvisoryPlanner({
           store: actionStore,
           ethers,
           policy: adapter.actionPolicy,
@@ -278,8 +280,8 @@ export function createRuntimeController({
         });
       }
 
-      service = Object.freeze({
-        ...service,
+      nextService = Object.freeze({
+        ...nextService,
         ...createActionService({
           store: actionStore,
           ethers,
@@ -289,6 +291,12 @@ export function createRuntimeController({
         }),
       });
     }
+    // Publish executable state only after every configured dependency exists.
+    // A failed candidate leaves authenticated read-only recovery available.
+    runtime = nextRuntime;
+    service = nextService;
+    actionWorker = nextActionWorker;
+    planner = nextPlanner;
     status = {
       ...unavailable(),
       state: "TEST_ONLY_READY",
@@ -324,9 +332,9 @@ export function createRuntimeController({
           : item,
       ),
       limitations: [
-        "Isolated ArtFi integration-test adapter; current Wallet still requires owner confirmation for each operation.",
+        "Isolated ArtFi integration-test adapter; no production wallet execution binding is configured in this composition.",
         actionWorker
-          ? "Native multi-action app-side contract is isolated TEST_ONLY; NFT delegated execution remains unavailable."
+          ? "Native multi-action app-side contract is isolated TEST_ONLY; NFT delegated execution is unavailable through this composition."
           : "Only one bounded BUY is configured.",
         "No real autonomous signing or broadcasting is available. Use the existing wallet-reviewed market screens for supported owner-confirmed actions.",
       ],

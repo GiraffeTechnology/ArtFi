@@ -188,7 +188,37 @@ export function assertAuctionUnchanged(
         "Auction terms or bids changed. Refresh and review before confirming.",
       );
 }
+export const AUCTION_BID_READ_TIMEOUT_MS = 12_000;
+
+/** The deadline retires this read result; it does not cancel provider RPCs. */
 export async function auctionBidPreflight(
+  client: AuctionReader,
+  reviewed: AuctionSnapshot,
+  bidder: Address,
+  amount: bigint,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      readAuctionBidPreflight(client, reviewed, bidder, amount),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                "Auction bid checks timed out. Refresh before confirming.",
+              ),
+            ),
+          AUCTION_BID_READ_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+async function readAuctionBidPreflight(
   client: AuctionReader,
   reviewed: AuctionSnapshot,
   bidder: Address,
@@ -196,6 +226,14 @@ export async function auctionBidPreflight(
 ) {
   const current = await loadAuction(client, reviewed.market, reviewed.id);
   assertAuctionUnchanged(reviewed, current);
+  if (
+    typeof current.blockNumber !== "bigint" ||
+    current.blockNumber < 0n ||
+    !/^0x[0-9a-fA-F]{64}$/.test(current.blockHash) ||
+    !Number.isSafeInteger(current.timestamp) ||
+    current.timestamp < 0
+  )
+    throw new Error("The auction observation has no valid mined block.");
   if (!auctionActions(current, bidder).bid)
     throw new Error("This auction is not accepting bids.");
   if (
@@ -234,14 +272,27 @@ export async function auctionBidPreflight(
       blockNumber: current.blockNumber,
     }),
   ]);
-  if (!allowed || balance < amount || used + amount > cap)
+  if (
+    allowed !== true ||
+    [balance, cap, used].some(
+      (value) => typeof value !== "bigint" || value < 0n || value >= 1n << 256n,
+    ) ||
+    balance < amount ||
+    used + amount > cap
+  )
     throw new Error(
       "Payment permission, balance or the current pilot cap prevents this bid.",
     );
   // A removed snapshot must not supply execution authority.
   const block = await client.getBlock({ blockNumber: current.blockNumber });
-  if (block.hash !== current.blockHash)
+  if (
+    block.number !== current.blockNumber ||
+    block.hash !== current.blockHash ||
+    block.timestamp !== BigInt(current.timestamp)
+  )
     throw new Error("The auction observation was reorganized. Refresh it.");
+  if ((await client.getChainId()) !== 560048)
+    throw new Error("The auction chain changed. Refresh before confirming.");
   return current;
 }
 export async function auctionEvents(

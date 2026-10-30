@@ -7,6 +7,19 @@ three distinct sections is [io.artcch.com](https://io.artcch.com).
 This repository contains the ArtFi application. It consumes ERC-8415 capabilities through Oracle
 and does not implement the separate ERC8415-Kit, Oracle, or independent wallet product.
 
+## Current requirements and execution entry
+
+The current complete [product PRD](docs/PRD.md) is version **2026-10-17**. It preserves all
+M1-M6, CH.1-CH.11, XM.1-XM.6, nonfunctional and Stage 2 requirements, including the later
+registry-backed settlement correction. [Agent instructions](AGENTS.md) use the same entry.
+Earlier snapshots remain available in Git history and do not form competing current requirements.
+
+Implementation proceeds through reviewable stage PRs; independent work on the next stage does
+not wait for CI. Required CI and independent review still govern merge. Complete delivery
+requires the applicable integrated runtime, UI, operational and acceptance evidence on the exact
+source/artifact/served versions. A document refresh, isolated check or stage PR does not prove it.
+Private deployment and authorization records remain separate from this public product entry.
+
 ## Install the reusable delivery
 
 Use the precompiled Linux package and its checksum; production installation does
@@ -22,6 +35,10 @@ itself against fresh isolated MySQL, with optional desktop/mobile browser checks
 [Candidate status](docs/DELIVERY_CANDIDATE_2026-10-06.md) distinguishes verified
 features, synthetic evidence and incomplete capabilities. Installing or testing a
 package does not authorize contract deployment or a real-value operation.
+
+Choose an installation input by its current reviewed source, manifest and actual release
+references. The dated candidate report describes that candidate only; it is not a live
+deployment pointer or a substitute for current [status and evidence](docs/STATUS.md).
 
 ## Three product sections
 
@@ -56,6 +73,14 @@ Artwork -> custody and registry record -> ERC-8415 receipt -> applicable market 
 ArtFi preserves the distinction between the token's blockchain state and the registry-confirmed
 holder and asset state. A chain transfer alone is not proof that registry transfer or physical
 delivery has completed. ArtFi's database is a projection, not an authority over rights.
+
+For registry-backed receipts, mint terms fix the registration deadline and the receipt document
+format. Oracle verifies the offline evidence and records the holder and receipt together on
+chain. ArtFi reads that authoritative record rather than verifying a second document itself.
+Registration settlement releases funds already reserved in the wallet; it does not collect a
+fresh buyer payment. Expired registration rolls back the unresolved suffix without undoing
+completed registrations or the settled prefix. These are required semantics, not a claim that
+an unmerged correction candidate has been deployed.
 
 The section retains its applicable ArtFi signed-trading and external-market integration scope.
 The NFT section's venue preference does not reduce the RWA application to external mirroring.

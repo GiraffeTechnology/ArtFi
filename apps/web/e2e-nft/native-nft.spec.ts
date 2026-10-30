@@ -245,6 +245,8 @@ async function fixture(page: Page) {
               json: {
                 wallet: account,
                 chainId: 1,
+                scope,
+                source: "opensea",
                 data: [{ ...token, name: "TEST ONLY private owned edition" }],
                 next: null,
                 observedAt: new Date().toISOString(),
@@ -351,22 +353,27 @@ async function fixture(page: Page) {
           summary: "Sign a TEST ONLY listing for one isolated edition.",
           fees: [],
           orderHash: hash,
-          typedData: {
-            domain: {
-              name: "Seaport",
-              version: "1.6",
-              chainId: 1,
-              verifyingContract: "0x0000000000000068F116a894984e2DB1123eB395",
-            },
-            types: {
-              OrderComponents: [
-                { name: "offerer", type: "address" },
-                { name: "tokenId", type: "uint256" },
-              ],
-            },
-            primaryType: "OrderComponents",
-            message: { offerer: account, tokenId: "7" },
-          },
+          ...(state.planKind === "signature"
+            ? {
+                typedData: {
+                  domain: {
+                    name: "Seaport",
+                    version: "1.6",
+                    chainId: 1,
+                    verifyingContract:
+                      "0x0000000000000068F116a894984e2DB1123eB395",
+                  },
+                  types: {
+                    OrderComponents: [
+                      { name: "offerer", type: "address" },
+                      { name: "tokenId", type: "uint256" },
+                    ],
+                  },
+                  primaryType: "OrderComponents",
+                  message: { offerer: account, tokenId: "7" },
+                },
+              }
+            : {}),
         },
       };
     }

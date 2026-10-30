@@ -6,6 +6,153 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /v1/user/notifications:
+    get:
+      operationId: userNotifications
+      summary: List current notifications for the authenticated wallet and chain
+      description: >-
+        Requires the existing wallet session. All responses are no-store. Query
+        parameters are rejected. The inbox contains at most 99 current direct
+        participant events from the indexed Hoodi chain and one published platform
+        notice. Legacy rows and disabled notice drafts are excluded. Other enabled
+        chains receive no Hoodi events. This projection confers no transaction or
+        receipt authority. Source revisions are unsigned decimal strings.
+      security:
+        - WalletUserSession: []
+      responses:
+        "200":
+          description: Current durable state after source and session validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationInbox"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /v1/user/notifications/read:
+    post:
+      operationId: markNotificationRead
+      summary: Acknowledge the exact current notification source revision
+      description: >-
+        Requires the existing wallet session. All responses are no-store. Query
+        parameters are rejected. The inbox contains at most 99 current direct
+        participant events from the indexed Hoodi chain and one published platform
+        notice. Legacy rows and disabled notice drafts are excluded. Other enabled
+        chains receive no Hoodi events. This projection confers no transaction or
+        receipt authority. Source revisions are unsigned decimal strings.
+      security:
+        - WalletUserSession: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationReadInput"
+      responses:
+        "200":
+          description: Current durable state after source and session validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationInbox"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /v1/user/notification-preferences:
+    get:
+      operationId: userNotificationPreferences
+      summary: Read durable wallet and chain notification preferences
+      description: >-
+        Requires the existing wallet session. All responses are no-store. Query
+        parameters are rejected. The inbox contains at most 99 current direct
+        participant events from the indexed Hoodi chain and one published platform
+        notice. Legacy rows and disabled notice drafts are excluded. Other enabled
+        chains receive no Hoodi events. This projection confers no transaction or
+        receipt authority. Source revisions are unsigned decimal strings.
+      security:
+        - WalletUserSession: []
+      responses:
+        "200":
+          description: Current durable state after source and session validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: saveNotificationPreferences
+      summary: Save both alert preferences using the current revision
+      description: >-
+        Requires the existing wallet session. All responses are no-store. Query
+        parameters are rejected. The inbox contains at most 99 current direct
+        participant events from the indexed Hoodi chain and one published platform
+        notice. Legacy rows and disabled notice drafts are excluded. Other enabled
+        chains receive no Hoodi events. This projection confers no transaction or
+        receipt authority. Source revisions are unsigned decimal strings.
+      security:
+        - WalletUserSession: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPreferenceInput"
+      responses:
+        "200":
+          description: Current durable state after source and session validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationInbox"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        "422":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
   /v1/admin/session:
     get:
       operationId: administrationSession
@@ -654,6 +801,49 @@ paths:
           description: Idempotency, immutable-plan, or revision conflict
         "503":
           description: Durable operation journal is unavailable
+  /v1/user/auth/holder-challenge:
+    post:
+      operationId: registerCharityHolderChallenge
+      description: Register the identity and scope of an original signed charity ownership challenge through the existing server-only authentication bridge before issuing its browser cookie. This grants no user login, payment or property authority. Registration never resets an existing consumed record.
+      security:
+        - WalletAuthBridge: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharityHolderChallengeBinding"
+      responses:
+        "204":
+          description: The original challenge binding was durably registered.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /v1/user/auth/holder-consume:
+    post:
+      operationId: consumeCharityHolderChallenge
+      description: The existing authenticated web bridge calls this only after verifying control of the named wallet and its held edition balance. One conditional durable update consumes the exact original unexpired challenge once. A missing, consumed or mismatched record is refused; an unconfirmed result is not retried. The web layer issues no holder grant without a confirmed response and a still-current original request/challenge.
+      security:
+        - WalletAuthBridge: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharityHolderChallengeBinding"
+      responses:
+        "204":
+          description: Exactly one matching unexpired challenge was consumed.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+
   /v1/user/auth/challenge:
     post:
       operationId: walletUserChallenge
@@ -1297,6 +1487,126 @@ paths:
         "413": { $ref: "#/components/responses/Problem" }
         "415": { $ref: "#/components/responses/Problem" }
         "422": { $ref: "#/components/responses/Problem" }
+  /v1/market/native-analytics:
+    get:
+      operationId: getNativeFractionMarketAnalytics
+      description: >-
+        Read-only indexed native fractional fills matched to stored signed terms and
+        same-transaction transfers. Exact base-unit strings and block/log ordering;
+        no valuation, independent finality, complete chain history or holder-distribution claim.
+      parameters:
+        - name: chainId
+          in: query
+          required: true
+          schema: { type: string, const: "560048" }
+        - name: marketAddress
+          in: query
+          required: true
+          schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        - name: assetToken
+          in: query
+          required: true
+          schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+        - name: paymentToken
+          in: query
+          required: true
+          schema: { type: string, pattern: "^0x[0-9a-fA-F]{40}$" }
+      responses:
+        "200":
+          description: Bounded attributed observations; unavailable totals are null, never a partial market total.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  [
+                    schemaVersion,
+                    chainId,
+                    marketAddress,
+                    assetToken,
+                    paymentToken,
+                    status,
+                    scope,
+                    coverage,
+                    finality,
+                    tradeCount,
+                    quantity,
+                    payment,
+                    distinctParticipants,
+                    pendingFillCount,
+                    removedFillCount,
+                    unmatchedFillCount,
+                    priceHistory,
+                    priceHistoryTruncated,
+                    holderDistribution,
+                    reasons,
+                  ]
+                properties:
+                  schemaVersion: { type: integer, const: 1 }
+                  chainId: { type: integer, const: 560048 }
+                  marketAddress: { type: string }
+                  assetToken: { type: string }
+                  paymentToken: { type: string }
+                  status:
+                    {
+                      type: string,
+                      enum:
+                        [
+                          no_matched_fills,
+                          observed_indexed_subset,
+                          incomplete_indexed_subset,
+                          history_limit_exceeded,
+                          conflicting_indexed_evidence,
+                        ],
+                    }
+                  scope: { type: string, const: indexed_native_fraction_fills }
+                  coverage:
+                    {
+                      type: string,
+                      const: bounded_indexed_projection_not_complete_chain_history,
+                    }
+                  finality:
+                    {
+                      type: string,
+                      const: indexer_confirmed_not_independent_chain_finality,
+                    }
+                  tradeCount: { type: integer, minimum: 0 }
+                  quantity:
+                    { type: [string, "null"], pattern: "^(0|[1-9][0-9]*)$" }
+                  payment:
+                    { type: [string, "null"], pattern: "^(0|[1-9][0-9]*)$" }
+                  distinctParticipants: { type: integer, minimum: 0 }
+                  pendingFillCount: { type: integer, minimum: 0 }
+                  removedFillCount: { type: integer, minimum: 0 }
+                  unmatchedFillCount: { type: integer, minimum: 0 }
+                  priceHistoryTruncated: { type: boolean }
+                  holderDistribution: { type: "null" }
+                  reasons: { type: array, items: { type: string } }
+                  priceHistory:
+                    type: array
+                    maxItems: 200
+                    items:
+                      type: object
+                      required:
+                        [
+                          transactionHash,
+                          blockHash,
+                          blockNumber,
+                          logIndex,
+                          unitPrice,
+                          quantity,
+                          payment,
+                        ]
+                      properties:
+                        transactionHash: { type: string }
+                        blockHash: { type: string }
+                        blockNumber: { type: string, pattern: "^[1-9][0-9]*$" }
+                        logIndex: { type: integer, minimum: 0 }
+                        unitPrice: { type: string, pattern: "^[1-9][0-9]*$" }
+                        quantity: { type: string, pattern: "^[1-9][0-9]*$" }
+                        payment: { type: string, pattern: "^[1-9][0-9]*$" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
   /v1/market/activity:
     get:
       operationId: getExternalMarketActivity
@@ -2233,6 +2543,183 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    CharityHolderChallengeBinding:
+      type: object
+      additionalProperties: false
+      required:
+        [challengeHash, address, chainId, tokenId, origin, issuedAt, expiresAt]
+      properties:
+        challengeHash:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: SHA-256 identity of the original signed holder-challenge cookie. It is not a receipt, payment or transaction digest.
+        address:
+          type: string
+          pattern: "^0x[0-9a-f]{40}$"
+        chainId:
+          type: integer
+          const: 560048
+        tokenId:
+          type: string
+          pattern: "^[1-9][0-9]{0,77}$"
+          maxLength: 78
+          description: Canonical positive decimal uint256; values above 2^256-1 are refused.
+        origin:
+          type: string
+          format: uri
+          description: Must equal the configured web origin.
+        issuedAt:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Original challenge issue time in Unix milliseconds, derived from its fixed five-minute expiry.
+        expiresAt:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Original Unix millisecond expiry; exactly 300000 milliseconds after issuedAt and still in the future.
+
+    NotificationRevision:
+      type: string
+      pattern: "^(0|[1-9][0-9]{0,19})$"
+      description: Canonical uint64 decimal string, at most 18446744073709551615; source revisions must be positive.
+    NotificationPreferences:
+      type: object
+      additionalProperties: false
+      required: [revision, transactionAlerts, systemMessageAlerts]
+      properties:
+        revision:
+          $ref: "#/components/schemas/NotificationRevision"
+        transactionAlerts:
+          type: boolean
+        systemMessageAlerts:
+          type: boolean
+    NotificationPreferenceInput:
+      type: object
+      additionalProperties: false
+      required: [revision, transactionAlerts, systemMessageAlerts]
+      description: >-
+        Revision zero denotes unsaved defaults. Saving uses compare-and-swap and
+        increments once. An exact idempotency replay must still match current
+        preferences; stale receipts return 409 and require a fresh read.
+      properties:
+        revision:
+          $ref: "#/components/schemas/NotificationRevision"
+        transactionAlerts:
+          type: boolean
+        systemMessageAlerts:
+          type: boolean
+    NotificationReadInput:
+      type: object
+      additionalProperties: false
+      required: [id, expectedSourceRevision]
+      description: >-
+        Duplicate or differently cased field names are rejected. A changed or
+        withdrawn source returns 409, including an old idempotency replay.
+        Missing, invisible and other-owner notification identities return 404.
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+        expectedSourceRevision:
+          $ref: "#/components/schemas/NotificationRevision"
+    NotificationEvent:
+      type: object
+      additionalProperties: false
+      required:
+        [transactionHash, logIndex, contractAddress, eventName, blockNumber]
+      properties:
+        transactionHash:
+          type: string
+          pattern: "^0x[0-9a-f]{64}$"
+        logIndex:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+        contractAddress:
+          type: string
+          pattern: "^0x[0-9a-f]{40}$"
+        eventName:
+          type: string
+          pattern: "^[A-Za-z][A-Za-z0-9_]{1,79}$"
+        blockNumber:
+          type: string
+          pattern: "^(0|[1-9][0-9]{0,77})$"
+    InboxNotification:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          id,
+          sourceKey,
+          sourceKind,
+          sourceRevision,
+          state,
+          read,
+          readAt,
+          messageCode,
+          event,
+          text,
+        ]
+      description: >-
+        chain_event sourceKey preserves the complete chainId:transactionHash:logIndex
+        identity. A changed effective block or state advances the source revision
+        and clears read state; an identical ingestion observation does not.
+        system_notice uses platform:service_notice and the published configuration
+        revision. Withdrawn notices carry null text and unread state. readAt is
+        null exactly when read is false. Source payload and private legacy JSON
+        are never returned.
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+        sourceKey:
+          type: string
+          maxLength: 192
+        sourceKind:
+          type: string
+          enum: [chain_event, system_notice]
+        sourceRevision:
+          $ref: "#/components/schemas/NotificationRevision"
+        state:
+          type: string
+          enum: [pending, confirmed, removed, published, withdrawn]
+        read:
+          type: boolean
+        readAt:
+          type: [string, "null"]
+          format: date-time
+        messageCode:
+          type: string
+          enum: [event_pending, event_confirmed, event_removed, service_notice]
+        event:
+          oneOf:
+            - $ref: "#/components/schemas/NotificationEvent"
+            - type: "null"
+        text:
+          type: [string, "null"]
+          maxLength: 500
+    NotificationInbox:
+      type: object
+      additionalProperties: false
+      required:
+        [address, chainId, notifications, preferences, chainEventsAvailable]
+      properties:
+        address:
+          type: string
+          pattern: "^0x[0-9a-f]{40}$"
+        chainId:
+          type: integer
+          minimum: 1
+        notifications:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/InboxNotification"
+        preferences:
+          $ref: "#/components/schemas/NotificationPreferences"
+        chainEventsAvailable:
+          type: boolean
     ApprovedRWASource:
       type: object
       additionalProperties: false

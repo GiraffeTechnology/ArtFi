@@ -19,6 +19,7 @@ type verifiedNFTPrincipal struct {
 	chainID   int
 	sessionID string
 	task      *NFTTaskPrincipal
+	receipt   *verifiedNFTReceiptContext
 }
 type nftOperationStore struct {
 	db  persistenceDB
@@ -105,11 +106,23 @@ func (p verifiedNFTPrincipal) owns(operation nftOperation) bool {
 	if json.Unmarshal(operation.Plan, &plan) != nil {
 		return false
 	}
+	hasReceipt := false
+	for key := range plan {
+		if strings.EqualFold(key, "wholeReceipt") {
+			hasReceipt = true
+		}
+	}
 	if p.task == nil {
-		// Preserve session refresh behavior: a later verified session for the same
-		// wallet can recover its original session record, but cannot adopt a task row.
+		// Preserve session refresh for ordinary session rows. Removing a task
+		// principal must not let a session adopt a receipt, even a null/aliased one.
 		_, hasTask := plan["taskPrincipal"]
-		return !hasTask
+		return !hasTask && !hasReceipt && p.receipt == nil
+	}
+	// Receipt rows are checked before get/idempotent-create under the row
+	// lock, including complete principal, native identity and content digests.
+	// Neither a missing receipt group nor a listing plan can downgrade scope.
+	if hasReceipt || p.receipt != nil {
+		return hasReceipt && p.receipt != nil && p.receipt.principal == *p.task && p.receipt.matches(operation)
 	}
 	if _, hasSession := plan["sessionId"]; hasSession {
 		return false

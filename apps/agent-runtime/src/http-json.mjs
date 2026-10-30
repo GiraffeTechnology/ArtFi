@@ -1,30 +1,62 @@
 import { fail } from "./config.mjs";
-export async function readResponseJSON(response, limit = 65536) {
+function discardResponse(response) {
+  try {
+    void response.body?.cancel().catch(() => undefined);
+  } catch {
+    /* Best effort. */
+  }
+}
+export async function readResponseJSON(response, limit = 65536, signal) {
+  if (signal?.aborted) {
+    discardResponse(response);
+    signal.throwIfAborted();
+  }
   const declared = response.headers.get("content-length");
   if (declared && (!/^\d+$/.test(declared) || Number(declared) > limit)) {
-    await response.body?.cancel();
+    discardResponse(response);
     fail("UPSTREAM_RESPONSE_TOO_LARGE");
   }
   const reader = response.body?.getReader();
   if (!reader) fail("UPSTREAM_RESPONSE_INVALID");
   const chunks = [];
   let size = 0;
+  let ended = false;
+  let onAbort;
+  const interrupted = new Promise((_, reject) => {
+    if (!signal) return;
+    onAbort = () => reject(Error("UPSTREAM_RESPONSE_INTERRUPTED"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
   try {
     for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
+      const { value, done } = await Promise.race([reader.read(), interrupted]);
+      signal?.throwIfAborted();
+      if (done) {
+        ended = true;
+        break;
+      }
       size += value.byteLength;
       if (size > limit) {
-        await reader.cancel();
         fail("UPSTREAM_RESPONSE_TOO_LARGE");
       }
       chunks.push(value);
     }
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)),
+    );
   } catch (error) {
     if (error?.message === "UPSTREAM_RESPONSE_TOO_LARGE") throw error;
     fail("UPSTREAM_RESPONSE_INVALID");
   } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+    if (!ended) {
+      try {
+        void reader.cancel().catch(() => undefined);
+      } catch {
+        /* Best effort. */
+      }
+    }
     reader.releaseLock();
   }
 }
@@ -44,7 +76,9 @@ export async function readRequestJSON(request, limit = 32768) {
     chunks.push(chunk);
   }
   try {
-    const result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const result = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)),
+    );
     if (!result || typeof result !== "object" || Array.isArray(result))
       fail("REQUEST_JSON_INVALID");
     return result;

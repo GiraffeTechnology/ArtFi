@@ -32,6 +32,11 @@ const context = () => ({ params: Promise.resolve({ tokenId: "1" }) });
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubEnv(
+    "ARTFI_CHARITY_EDITIONS_ADDRESS",
+    "0x2222222222222222222222222222222222222222",
+  );
+
   vi.stubEnv("ARTFI_CHARITY_HOLDER_ASSET_MANIFEST", "");
   mocks.cookies.mockResolvedValue({ get: () => ({ value: "test-grant" }) });
   mocks.canonicalTokenId.mockReturnValue("1");
@@ -132,5 +137,79 @@ describe("charity holder descriptor cache boundary", () => {
         "This edition conveys no copyright, physical title, possession, redemption, commercial-use or reproduction right.",
     });
     expect(mocks.resolve).toHaveBeenCalledWith("1", expect.any(Function));
+  });
+});
+
+describe("holder descriptor original grant at return", () => {
+  afterEach(() => vi.useRealTimers());
+  it.each(["expired", "changed-token-key"])(
+    "holder-descriptor regression refuses %s after resolving a descriptor",
+    async (kind) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-10-20T00:00:00Z"));
+      vi.stubEnv(
+        "ARTFI_CHARITY_HOLDER_SESSION_SECRET",
+        "test-only-holder-descriptor-key-not-a-real-credential",
+      );
+      const auth = await vi.importActual<
+        typeof import("./charity-holder-auth")
+      >("./charity-holder-auth");
+      const issued = auth.createHolderGrant(
+        "0x1111111111111111111111111111111111111111",
+        "1",
+      );
+      mocks.cookies.mockResolvedValue({ get: () => ({ value: issued.token }) });
+      mocks.readHolderGrant.mockImplementation(auth.readHolderGrant);
+      mocks.grantCoversEdition.mockImplementation(auth.grantCoversEdition);
+      mocks.resolve.mockImplementation(async () => {
+        if (kind === "expired") vi.setSystemTime(issued.grant.expiresAt);
+        else
+          vi.stubEnv(
+            "ARTFI_CHARITY_HOLDER_SESSION_SECRET",
+            "different-test-only-descriptor-key-not-a-real-credential",
+          );
+        return { ok: true, asset };
+      });
+      const response = await GET(request(), context());
+      expect(response.status).toBe(401);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.text()).not.toContain(asset.objectKey);
+    },
+  );
+  it("returns a still-valid descriptor without another ownership challenge", async () => {
+    const response = await GET(request(), context());
+    expect(response.status).toBe(200);
+    expect(mocks.cookies).toHaveBeenCalledOnce();
+    expect(mocks.resolve).toHaveBeenCalledOnce();
+  });
+});
+
+describe("holder descriptor deployment binding", () => {
+  it("does not reveal a descriptor after the configured charity contract changes", async () => {
+    vi.stubEnv(
+      "ARTFI_CHARITY_HOLDER_SESSION_SECRET",
+      "test-only-holder-deployment-descriptor-hmac-key",
+    );
+    const auth = await vi.importActual<typeof import("./charity-holder-auth")>(
+      "./charity-holder-auth",
+    );
+    const issued = auth.createHolderGrant(
+      "0x1111111111111111111111111111111111111111",
+      "1",
+    );
+    mocks.cookies.mockResolvedValue({ get: () => ({ value: issued.token }) });
+    mocks.readHolderGrant.mockImplementation(auth.readHolderGrant);
+    mocks.grantCoversEdition.mockImplementation(auth.grantCoversEdition);
+    mocks.resolve.mockImplementation(async () => {
+      vi.stubEnv(
+        "ARTFI_CHARITY_EDITIONS_ADDRESS",
+        "0x3333333333333333333333333333333333333333",
+      );
+      return { ok: true, asset };
+    });
+    const response = await GET(request(), context());
+    expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.text()).not.toContain(asset.objectKey);
   });
 });

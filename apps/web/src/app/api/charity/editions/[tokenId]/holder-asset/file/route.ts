@@ -49,7 +49,8 @@ export async function GET(
   }
 
   const cookieStore = await cookies();
-  const grant = readHolderGrant(cookieStore.get(holderGrantCookie)?.value);
+  const originalGrantToken = cookieStore.get(holderGrantCookie)?.value;
+  const grant = readHolderGrant(originalGrantToken);
   if (!grantCoversEdition(grant, tokenId)) {
     return NextResponse.json(
       {
@@ -88,7 +89,26 @@ export async function GET(
   }
 
   const { asset } = decision;
+  // Recheck the same signed token: slow reads must not outlive its existing grant.
+  if (!grantCoversEdition(readHolderGrant(originalGrantToken), tokenId)) {
+    return NextResponse.json(
+      {
+        detail:
+          "Verify ownership of this charity edition to receive the watermarked file.",
+      },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const delivery = await fetchHolderObject(asset);
+  if (!grantCoversEdition(readHolderGrant(originalGrantToken), tokenId)) {
+    return NextResponse.json(
+      {
+        detail:
+          "Verify ownership of this charity edition to receive the watermarked file.",
+      },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   if (!delivery.ok) {
     if (delivery.refusal === "not-configured") {
       return NextResponse.json(

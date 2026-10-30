@@ -187,22 +187,100 @@ export const rwaMintRecoveryAbi = [
   },
 ] as const;
 
-/** An exact registry request is also recoverable after an idempotent replay emits no event. */
+export const mintRecoveryReadTimeoutMs = 12000;
+type MintRecoveryClient = Pick<
+  PublicClient,
+  "getChainId" | "getBlock" | "readContract"
+>;
+
+/** Recover only a chain-bound, stable registry snapshot; late reads cannot publish evidence. */
 export async function recoverMintedAsset(
-  client: Pick<PublicClient, "readContract">,
+  client: MintRecoveryClient,
   intent: MintIntent,
   wallet: Address,
   assertCurrent: () => void,
   blockNumber?: bigint,
   executionAuthority: Address = wallet,
+  expectedBlockHash?: Hash,
+): Promise<MintedAsset> {
+  let retired = false;
+  const deadline = performance.now() + mintRecoveryReadTimeoutMs;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = () =>
+    new Error(
+      "The mint registry read timed out. Keep the original recovery record and check again before submitting.",
+    );
+  const assertActive = () => {
+    assertCurrent();
+    if (retired || performance.now() >= deadline) throw timeout();
+  };
+  try {
+    return await Promise.race([
+      readCanonicalMintedAsset(
+        client,
+        intent,
+        wallet,
+        assertActive,
+        blockNumber,
+        executionAuthority,
+        expectedBlockHash,
+      ),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          retired = true;
+          reject(timeout());
+        }, mintRecoveryReadTimeoutMs);
+      }),
+    ]);
+  } finally {
+    retired = true;
+    clearTimeout(timer);
+  }
+}
+
+/** An exact registry request is also recoverable after an idempotent replay emits no event. */
+async function readCanonicalMintedAsset(
+  client: MintRecoveryClient,
+  intent: MintIntent,
+  wallet: Address,
+  assertCurrent: () => void,
+  blockNumber?: bigint,
+  executionAuthority: Address = wallet,
+  expectedBlockHash?: Hash,
 ): Promise<MintedAsset> {
   assertCurrent();
+  assertMintIntent(intent, wallet, {
+    chainId: intent.chainId,
+    registryAddress: intent.registryAddress,
+  });
+  if ((await client.getChainId()) !== 560048)
+    throw new Error("The mint registry reader is on a different chain.");
+  assertCurrent();
+  const block = await client.getBlock(
+    blockNumber === undefined ? { blockTag: "latest" } : { blockNumber },
+  );
+  assertCurrent();
+  if (
+    typeof block.number !== "bigint" ||
+    block.number < 0n ||
+    (blockNumber !== undefined && block.number !== blockNumber) ||
+    typeof block.hash !== "string" ||
+    !/^0x[0-9a-fA-F]{64}$/.test(block.hash) ||
+    /^0x0{64}$/i.test(block.hash) ||
+    (expectedBlockHash !== undefined &&
+      block.hash.toLowerCase() !== expectedBlockHash.toLowerCase())
+  )
+    throw new Error(
+      "The mint registry block is unavailable or does not match the confirmed receipt.",
+    );
+  const observedBlockNumber = block.number,
+    observedBlockHash = block.hash;
   const asset = await client.readContract({
     abi: rwaMintRecoveryAbi,
     address: intent.registryAddress,
     functionName: "assetByRequest",
     args: [intent.requestId],
-    blockNumber,
+    blockNumber: observedBlockNumber,
   });
   assertCurrent();
   const expectedHash = keccak256(
@@ -227,11 +305,24 @@ export async function recoverMintedAsset(
     abi: rwaMintRecoveryAbi,
     address: intent.registryAddress,
     functionName: "nft",
-    blockNumber,
+    blockNumber: observedBlockNumber,
   });
   assertCurrent();
   if (!nonzeroAddress(collectionAddress))
     throw new Error("The mint registry returned an invalid NFT collection.");
+  const [checked, chainId] = await Promise.all([
+    client.getBlock({ blockNumber: observedBlockNumber }),
+    client.getChainId(),
+  ]);
+  assertCurrent();
+  if (
+    chainId !== 560048 ||
+    checked.number !== observedBlockNumber ||
+    checked.hash?.toLowerCase() !== observedBlockHash.toLowerCase()
+  )
+    throw new Error(
+      "The mint registry chain or observed block changed. Keep the original recovery record and check again.",
+    );
   return {
     chainId: intent.chainId,
     collectionAddress,

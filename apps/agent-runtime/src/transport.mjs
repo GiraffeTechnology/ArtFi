@@ -1,3 +1,4 @@
+import { actionHistoryQuery } from "../../../scripts/agent/action-history-page.mjs";
 import { createServer } from "node:http";
 import { readRequestJSON, exactInput } from "./http-json.mjs";
 import { MODE, stableCode, fail } from "./config.mjs";
@@ -158,22 +159,31 @@ export function createAgentHTTPServer({
           /^\/v1\/agent\/actions\/([^/]+)(?:\/(history))?$/.exec(
             parsed.pathname,
           );
-        if (
-          actionMatch &&
-          id(actionMatch[1]) &&
-          request.method === "GET" &&
-          !parsed.search
-        ) {
-          if (typeof service.getAction !== "function")
-            fail("ACTION_DEPENDENCY_UNAVAILABLE");
-          send(
-            response,
-            200,
-            actionMatch[2]
-              ? await service.actionHistory(session, actionMatch[1])
-              : await service.getAction(session, actionMatch[1]),
-          );
-          return;
+        if (actionMatch && id(actionMatch[1]) && request.method === "GET") {
+          if (actionMatch[2] === "history") {
+            if (typeof service.actionHistory !== "function")
+              fail("ACTION_DEPENDENCY_UNAVAILABLE");
+            send(
+              response,
+              200,
+              await service.actionHistory(
+                session,
+                actionMatch[1],
+                actionHistoryQuery(parsed.searchParams),
+              ),
+            );
+            return;
+          }
+          if (!parsed.search) {
+            if (typeof service.getAction !== "function")
+              fail("ACTION_DEPENDENCY_UNAVAILABLE");
+            send(
+              response,
+              200,
+              await service.getAction(session, actionMatch[1]),
+            );
+            return;
+          }
         }
         const match =
           /^\/v1\/agent\/intents\/([^/]+)(?:\/(history|revocations))?$/.exec(

@@ -1,5 +1,72 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-29 acceptance alignment with the complete PRD
+
+The operative audit checks now preserve the current asset-specific preview boundaries:
+model-permitted previews have their hash mappings, charity public token metadata has no
+artwork preview, and wallet-verified watermarked holder delivery has no browser preview.
+The isolated Hoodi payload does not regenerate the frozen historical charity batch.
+
+Digital NFT acceptance requires the native ArtFi workflow through supported venue interfaces.
+A redirect, iframe or passive feed does not replace discovery, review, listing, purchases,
+offers, eligible cancellation and result tracking. An optional OpenSea website link is
+footer-only. The passive ingestion adapter and ArtFi's applicable whole/fractional trading
+remain separate, continuing requirements.
+
+This corrects contradictory audit prose; it does not implement or verify a previously
+missing screen, holder entitlement, venue operation or chain transaction. No requirement
+status or count is promoted. G1–G4, the six status values and the full M1–M6/CH/XM/NFR/Stage 2
+scope remain unchanged. Current source CI, independent review and real runtime evidence
+remain separate from this documentation increment.
+
+## 2026-10-17 full-product integration candidate
+
+This downstream source candidate combines the exact stage heads listed in `INTEGRATION_CANDIDATE.md`. Aggregate application tests, MySQL integration, browser validation, builds and deployment are NOT_RUN for this candidate. Historical results below apply only to their recorded sources and environments. The operation-history UI includes its required paginated backend contract; the earlier MySQL timeout and degraded-state failure remains unresolved until independently validated on this source.
+
+## 2026-10-16 market analytics availability UI
+
+Asset detail pages now explicitly identify price history, holder distribution, and
+transaction analytics as unavailable when no attributed runtime dataset is wired.
+The note also identifies the existing catalogue values as prototype data, so they
+cannot be read as current market observations. This implements only the explicit
+unavailable-state branch of the inherited market-analytics acceptance gap; it
+does not add or claim live analytics.
+
+Status: **IMPLEMENTED-NOT-VERIFIED**. Regression source is included in this
+stage PR and is **NOT_RUN** by the source author. Runtime source, browser visuals,
+and full market analytics acceptance remain unverified.
+
+## 2026-10-16 registry receipt boundary correction (partial)
+
+Based on main `5e7cc4cd482be71431d904439ef79d1ab5d7eade`, the application now
+isolates source-classified registry whole receipts from the legacy fresh ERC-20
+payment path. New signature, NFT approval, payment approval and fill callbacks
+reread the exact source binding after session awaits. Native publication checks
+the current server catalog. Non-registry whole trading, fractional/charity scope,
+authorization withdrawal and prior-transaction recovery remain. Token owner and
+registration completion labels are distinct. The final independent source review
+closed the callback-refresh and post-approval error-message findings.
+
+Local validation on the final application source: web typecheck PASS; 92 web test
+files / 1,207 tests PASS, including 71 focused cases; lint PASS with one existing
+unused `_query` warning in `native-order-observation.test.ts`; production build
+PASS; changed-file Prettier and `git diff --check` PASS; secret-pattern scan PASS.
+These are isolated local results, not live registration acceptance.
+
+Desktop/mobile Oracle browser cases were attempted but not executed: first the
+bundled browser was absent; the installed Chromium then failed at launch with
+`socket() failed: Operation not permitted`. No sandbox relaxation was attempted.
+Browser behavior remains unverified in this environment. Exact-head CI is tracked
+in the draft PR and must not be inferred from these local checks.
+
+[The correction record](REGISTRATION_BOUNDARY_CORRECTION.md) details the actual
+Oracle/Wallet interfaces and remaining work. Mint-defined deadline/receipt format,
+ERC-20 wallet reservation/release, bounded owner rollback, restart-after-alignment,
+full end-to-end receipt integration, deployment and real transactions remain
+unimplemented or unverified as itemized there. Direct calls to the unchanged
+legacy contract can bypass the application guards. No existing requirement status
+or count is promoted; this is a partial application correction, not task completion.
+
 ## 2026-10-10 bounded runtime supersession note
 
 Historical entries below retain their original source/date and are not current

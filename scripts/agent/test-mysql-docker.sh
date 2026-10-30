@@ -46,4 +46,15 @@ node --input-type=module -e 'import {writeFileSync} from "node:fs"; writeFileSyn
 cd "$ROOT/apps/agent-runtime"
 node --test --test-concurrency=1 test/mysql.integration.mjs test/action-mysql.integration.mjs test/http-mysql.integration.mjs
 
+# Exercise notification source/read/preference transactions against this same
+# isolated test DB. Use only the runner's existing Go; never download a toolchain.
+(
+  cd "$ROOT/apps/api"
+  export GOTOOLCHAIN=local
+  export ARTFI_NOTIFICATION_MYSQL_REQUIRED=1
+  export ARTFI_INTEGRATION_MYSQL_DSN="root:TEST_ONLY_ISOLATED_MYSQL_ROOT@tcp(127.0.0.1:${ARTFI_AGENT_TEST_MYSQL_PORT})/artfi_stage2_isolated_test?parseTime=true"
+  go version
+  go test -race -count=1 -run '^TestMySQLNotifications$' -v ./internal/httpapi
+)
+
 if [[ ${ARTFI_AGENT_RUN_BROWSER:-0} == 1 ]]; then node test/browser-runtime-runner.mjs; fi
