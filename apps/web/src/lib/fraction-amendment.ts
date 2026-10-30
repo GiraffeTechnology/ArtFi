@@ -121,12 +121,20 @@ export async function retireFractionForAmendment({
  * This guard never replays a withdrawal and does not claim chain finality. */
 export async function assertRetiredFractionForReplacement({
   expectedEpoch,
+  refreshGrounding,
   ...observation
-}: AmendmentObservation & { expectedEpoch: bigint }) {
+}: AmendmentObservation & {
+  expectedEpoch: bigint;
+  refreshGrounding: () => Promise<void>;
+}) {
   if (!isUint(expectedEpoch))
     throw new Error("The replacement authorization's epoch is invalid.");
+  const original = Object.freeze({ ...observation.original });
+  await refreshGrounding();
+  observation.assertCurrent();
   const snapshot = await retireFractionForAmendment({
     ...observation,
+    original,
     revoke: async () => {
       throw new Error(
         "The old authorization is live again. Reconcile it before replacement signing.",

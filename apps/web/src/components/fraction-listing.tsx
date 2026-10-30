@@ -604,8 +604,10 @@ function FractionListingScreen({
             original: amendmentOriginal,
             seller: address,
             expectedEpoch: draft.epoch,
+            refreshGrounding: grounding,
             assertCurrent: signingOperation.assertCurrent,
           });
+        else await grounding();
         signingOperation.assertCurrent();
         return signTypedDataAsync({
           ...fractionIntentTypedData(draft, domain),

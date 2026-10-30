@@ -40,13 +40,16 @@ function fixture(filled = 4n, epoch = 0n) {
     consumed = 10n;
   });
   const assertCurrent = vi.fn();
+  const callerOriginal = { ...original };
+  const refreshGrounding = vi.fn(async () => {});
   return {
     client,
     market,
-    original: { ...original },
+    original: callerOriginal,
     seller,
     revoke,
     assertCurrent,
+    refreshGrounding,
     setConsumed: (value: bigint) => {
       consumed = value;
     },
@@ -276,6 +279,50 @@ describe("canonical amendment observations and delayed replacement signing", () 
     });
     expect(result.retired).toBe(true);
     expect(result.epoch).toBe(1n);
+    expect(f.revoke).not.toHaveBeenCalled();
+  });
+  it("refuses withdrawn source evidence before reading replacement authority", async () => {
+    const f = fixture(10n);
+    f.refreshGrounding.mockRejectedValue(new Error("source withdrawn"));
+    await expect(
+      assertRetiredFractionForReplacement({ ...f, expectedEpoch: 0n }),
+    ).rejects.toThrow("source withdrawn");
+    expect(f.client.readContract).not.toHaveBeenCalled();
+    expect(f.revoke).not.toHaveBeenCalled();
+  });
+  it("checks retirement after the source refresh rather than before its wait", async () => {
+    const f = fixture(10n);
+    f.refreshGrounding.mockImplementation(async () => {
+      f.setConsumed(4n);
+    });
+    await expect(
+      assertRetiredFractionForReplacement({ ...f, expectedEpoch: 0n }),
+    ).rejects.toThrow("old authorization is live again");
+    expect(f.refreshGrounding).toHaveBeenCalledOnce();
+    expect(f.revoke).not.toHaveBeenCalled();
+  });
+  it("stops after a source refresh retires the current session", async () => {
+    const f = fixture(10n);
+    f.refreshGrounding.mockImplementation(async () => {
+      f.assertCurrent.mockImplementation(() => {
+        throw new Error("session changed");
+      });
+    });
+    await expect(
+      assertRetiredFractionForReplacement({ ...f, expectedEpoch: 0n }),
+    ).rejects.toThrow("session changed");
+    expect(f.client.getChainId).not.toHaveBeenCalled();
+    expect(f.revoke).not.toHaveBeenCalled();
+  });
+  it("preserves original terms when the caller mutates them during source refresh", async () => {
+    const f = fixture(4n);
+    f.refreshGrounding.mockImplementation(async () => {
+      f.original.maxAmount = 4n;
+      f.original.epoch = 1n;
+    });
+    await expect(
+      assertRetiredFractionForReplacement({ ...f, expectedEpoch: 0n }),
+    ).rejects.toThrow("old authorization is live again");
     expect(f.revoke).not.toHaveBeenCalled();
   });
 });

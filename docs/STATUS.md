@@ -5,8 +5,9 @@
 M2.5/M2.6 replacement orders now snapshot the original sale terms before asynchronous reads.
 Each retirement observation reads the original intent consumption and seller epoch at one
 mined block, validates those integer values, and rechecks that block identity and chain.
-The UI repeats the read-only retirement check inside the actual signing callback, after
-grounding and the trading-session gate, and refuses a changed replacement epoch. A stale
+Inside the actual signing callback, after the trading-session gate, the UI refreshes the
+current source grounding before repeating the read-only retirement check and refusing a
+changed replacement epoch. A stale
 observation stops replacement signing; it never replays an earlier withdrawal. This is a
 current canonicality check, not a finality guarantee.
 
@@ -1249,4 +1250,3 @@ install a daemon, enable supervision or establish continuous operations acceptan
 No shared bridge, database, SSH, model-provider or other-task configuration is
 changed by this source integration. Actual installed channels, least privilege,
 restart/fault behavior and measured soak evidence remain separate pending work.
-
