@@ -22,6 +22,8 @@ import { type RawData, WebSocket } from "ws";
 
 import {
   MARKET_EVENT_SCHEMA_VERSION,
+  MarketplaceHealthTracker,
+  type MarketplaceHealthSnapshot,
   type MarketEventFamily,
   type MarketEventSink,
   type MarketplaceBackfillLease,
@@ -221,6 +223,8 @@ export interface OpenSeaAdapterConfig {
   retryBaseDelayMs?: number;
   requestTimeoutMs?: number;
   spoolParentDirectory?: string;
+  staleAfterMs?: number;
+  now?: () => Date;
   streamJoinTimeoutMs?: number;
   sleep?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
 }
@@ -362,6 +366,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
   } as const;
 
   readonly #config: OpenSeaAdapterConfig;
+  readonly #health: MarketplaceHealthTracker;
   readonly #fetch: typeof fetch;
   readonly #retryAttempts: number;
   readonly #retryBaseDelayMs: number;
@@ -396,6 +401,11 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     ) {
       throw new Error("OpenSea backfill configuration is invalid");
     }
+    this.#health = new MarketplaceHealthTracker(
+      this.source,
+      config.staleAfterMs ?? 60_000,
+      config.now,
+    );
     this.#config = config;
     this.#fetch = config.fetchImpl ?? fetch;
     this.#retryAttempts = retryAttempts;
@@ -406,11 +416,17 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
     this.#sleep = config.sleep ?? sleepWithAbort;
   }
 
+  health(now?: Date): MarketplaceHealthSnapshot {
+    return this.#health.snapshot(now);
+  }
+
   async backfill(
     sink: MarketEventSink,
     signal?: AbortSignal,
     options?: MarketplaceBackfillOptions,
   ): Promise<void | MarketplaceBackfillLease> {
+    signal?.throwIfAborted();
+    const healthEpoch = this.#health.beginWork();
     const transientParent = this.#spoolParentDirectory
       ? undefined
       : await mkdtemp(join(tmpdir(), "artfi-opensea-backfill-"));
@@ -667,14 +683,25 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
       await spool.sync();
       await spool.close();
       spool = undefined;
+      let healthLeaseClosed = false;
       const deferredLease: MarketplaceBackfillLease | undefined =
         options?.deferFinalize
           ? {
               commit: async () => {
                 leaseActive = false;
-                await finalizeBackfill(true);
+                try {
+                  await finalizeBackfill(true);
+                  if (!healthLeaseClosed) {
+                    healthLeaseClosed = true;
+                    this.#health.markBackfillSuccess(healthEpoch);
+                  }
+                } catch (error) {
+                  if (!signal?.aborted) this.#health.markFailure(healthEpoch);
+                  throw error;
+                }
               },
               abort: async () => {
+                healthLeaseClosed = true;
                 leaseActive = false;
                 await finalizeBackfill(false);
               },
@@ -710,6 +737,9 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
         leaseActive = true;
         return deferredLease;
       }
+    } catch (error) {
+      if (!signal?.aborted) this.#health.markFailure(healthEpoch);
+      throw error;
     } finally {
       await spool?.close();
       await checkpointLog?.close();
@@ -717,6 +747,7 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
         await finalizeBackfill(completed || transientParent !== undefined);
       }
     }
+    this.#health.markBackfillSuccess(healthEpoch);
   }
 
   async #fetchBackfillPage(
@@ -789,16 +820,29 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
   ): Promise<() => void> {
     const storagePath =
       process.env.OPENSEA_STREAM_STORAGE_PATH ?? ".opensea-stream";
+    const health = this.#health;
+    health.start();
+    let healthGeneration = 0;
     const readiness = new OpenSeaJoinReadiness(
       this.#config.collectionSlugs,
       this.#streamJoinTimeoutMs,
-      lifecycle?.onReconnectReady,
-      lifecycle?.onFatal,
+      async () => {
+        const generation = healthGeneration;
+        await lifecycle?.onReconnectReady();
+        health.markRealtimeReady(generation);
+      },
+      (error) => {
+        health.markRealtimeFailure(healthGeneration);
+        lifecycle?.onFatal(error);
+      },
     );
     class AcknowledgedOpenSeaWebSocket extends WebSocket {
       constructor(address: string | URL, protocols?: string | string[]) {
         super(address, protocols);
         const generation = readiness.beginConnection();
+        const ownHealthGeneration = health.beginConnection();
+        healthGeneration = ownHealthGeneration;
+        this.on("close", () => health.markRealtimeFailure(ownHealthGeneration));
         this.on("message", (data) => readiness.observe(data, generation));
       }
     }
@@ -808,27 +852,45 @@ export class OpenSeaAdapter implements MarketplaceAdapter {
         transport: AcknowledgedOpenSeaWebSocket,
         sessionStorage: LocalStorage,
       },
-      onError: (error) => readiness.reject(error),
+      onError: (error) => {
+        health.markRealtimeFailure(healthGeneration);
+        readiness.reject(error);
+      },
     });
     // The SDK constructs LocalStorage internally; an explicit path keeps session state out of
     // source directories when the implementation requests it.
     process.env.NODE_LOCALSTORAGE = storagePath;
     const unsubscribe = this.#config.collectionSlugs.map((slug) =>
       client.onEvents(slug, [...STREAM_EVENTS], (event) => {
-        void sink(normalizeOpenSeaEvent(event)).catch((error: unknown) => {
+        const generation = healthGeneration;
+        let normalized: NormalizedMarketEvent;
+        try {
+          normalized = normalizeOpenSeaEvent(event);
+        } catch (error) {
+          health.markEventFailure(generation);
           console.error("OpenSea mirror event rejected", error);
-        });
+          return;
+        }
+        void sink(normalized)
+          .then(() => health.markEvent(generation))
+          .catch((error: unknown) => {
+            health.markEventFailure(generation);
+            console.error("OpenSea mirror event rejected", error);
+          });
       }),
     );
-    client.connect();
     try {
+      client.connect();
       await readiness.wait();
+      health.markRealtimeReady(healthGeneration);
     } catch (error) {
+      health.markRealtimeFailure(healthGeneration);
       for (const stop of unsubscribe) stop();
       client.disconnect();
       throw error;
     }
     return () => {
+      health.stop();
       for (const stop of unsubscribe) stop();
       client.disconnect();
     };
