@@ -81,18 +81,26 @@ describe("standalone public read proxy", () => {
     }
   });
   it.each([404, 503])("retains provider health status %i", async (status) => {
+    const old = process.env.ARTFI_API_URL;
+    process.env.ARTFI_API_URL = "https://bridge.example.test/artfi";
     const detail = "Provider health is unavailable.";
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(Response.json({ detail }, { status })),
-    );
-    const response = await GET(
-      new Request("https://web.example.test/v1/market/health?source=opensea"),
-      { params: Promise.resolve({ path: ["market", "health"] }) },
-    );
-    expect(response.status).toBe(status);
-    expect(await response.json()).toEqual({ detail });
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(Response.json({ detail }, { status }));
+    vi.stubGlobal("fetch", fetch);
+    try {
+      const response = await GET(
+        new Request("https://web.example.test/v1/market/health?source=opensea"),
+        { params: Promise.resolve({ path: ["market", "health"] }) },
+      );
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(response.status).toBe(status);
+      expect(await response.json()).toEqual({ detail });
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    } finally {
+      if (old === undefined) delete process.env.ARTFI_API_URL;
+      else process.env.ARTFI_API_URL = old;
+    }
   });
   it("reports upstream failure without revealing configuration", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("secret")));
