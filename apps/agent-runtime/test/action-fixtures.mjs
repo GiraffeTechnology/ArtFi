@@ -199,6 +199,7 @@ export async function actionFixture({
         startsAt: String(seconds - 60),
         endsAt: String(seconds + 3600),
         minimumBid: "10",
+        amountRemaining: "1", // Explicit synthetic single-unit observation.
         priorBidByWallet: true,
         hasBid: false,
         expectedBuyer: leg.expected.args.buyer,

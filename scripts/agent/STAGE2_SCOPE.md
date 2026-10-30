@@ -48,3 +48,9 @@ These are issue #84 section 38's acceptance dimensions, not extra conditions on 
 5. Run the missing original acceptance campaigns against those real interfaces. Configuration labels, secrets, a precompiled binary and synthetic adapter tests do not replace this work.
 
 The reusable multi-action modules are parameterized by immutable mode and configured domain/chain. `BOUNDED_SIGNED_AUTHORITY` still has no executable external adapter in the delivered composition; only historical reads are possible. This is an explicit remaining implementation/interface boundary, not a claim that changing credentials alone completes Stage 2.
+
+## Auction bid quantity and signed unit limits
+
+For `BID` and `REBID`, `bidAmount` is the total payment for the lot. The optional canonical positive uint256 `amount` records the expected asset quantity; the original three-field request defaults to one unit. Before dispatch, the trusted fresh listing observation must provide an exactly matching `amountRemaining`, together with the existing listing, seller, asset and payment-token bindings. Missing or changed quantity is refused, including on legacy requests.
+
+The compiled unit price is the ceiling of total payment divided by quantity. Signed minimum and maximum unit limits also compare the exact total against each bound multiplied by quantity, so rounding cannot admit a below-minimum bid. Transaction value, slippage and aggregate exposure continue to use total payment. The native two-argument `placeBid` call and `BidPlaced.amount` remain unchanged. Unit tests use explicit synthetic observations; SQL recovery tests use a real isolated database with synthetic chain evidence, not live auction acceptance.

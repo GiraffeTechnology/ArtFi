@@ -637,3 +637,86 @@ test("auction amendment survives real MySQL store restart and never recreates be
       ),
   );
 });
+
+test("multi-unit bids reserve total payment in real SQL and reconcile lost responses without replay after store recreation", async () => {
+  for (const action of ["BID", "REBID"]) {
+    const f = await actionFixture({
+      kind: "AUCTION",
+      action,
+      intentPatch: {
+        minUnitPrice: "10",
+        maxUnitPrice: "10",
+        maxExecutions: "1",
+        maxAggregateExposure: "20",
+      },
+    });
+    const plan = f.compile({
+      listingId: "77",
+      bidAmount: "20",
+      seller: f.seller.address,
+      amount: "2",
+    });
+    await store.prepare(f.verified, plan);
+    let sends = 0,
+      proof = null;
+    const tick = () =>
+      createActionKernel({
+        store: createActionStore(options),
+        authorize: f.authorize,
+        adapterTimeoutMs: 150,
+        observe: async (leg) => {
+          const o = f.observe(leg);
+          o.auction.amountRemaining = "2";
+          return o;
+        },
+        execute: async (leg, context) => {
+          sends++;
+          assert.equal(leg.quantity, "2");
+          assert.equal(leg.value, "20");
+          proof = syntheticEvidence(leg, context.operationId, context.legIndex);
+          throw Error("TEST_BID_RESPONSE_LOST");
+        },
+        readEvidence: async () => proof,
+      });
+    assert.equal((await tick()(plan.operationId)).state, "SAFE_DEGRADED");
+    assert.equal(sends, 1);
+    const held = await store.getBudgets(plan.operationId);
+    assert.equal(held.wallet.reservedValue, "20");
+    const saved = proof;
+    proof = null;
+    assert.equal((await tick()(plan.operationId)).state, "SAFE_DEGRADED");
+    assert.equal(sends, 1);
+    proof = saved;
+    await assertCompleted(tick(), plan.operationId);
+    await assertCompleted(tick(), plan.operationId);
+    assert.equal(sends, 1);
+    const budget = await store.getBudgets(plan.operationId);
+    assert.equal(budget.authority.executions, "1");
+    assert.equal(budget.wallet.reservedValue, "20");
+  }
+});
+
+test("real SQL bid dispatch refuses changed lot quantity before any payment reservation", async () => {
+  for (const expected of ["1", "2"]) {
+    const f = await actionFixture({ kind: "AUCTION", action: "BID" });
+    const terms = {
+      listingId: "77",
+      bidAmount: "20",
+      seller: f.seller.address,
+    };
+    if (expected === "2") terms.amount = "2";
+    const plan = f.compile(terms);
+    await store.prepare(f.verified, plan);
+    const o = f.observe(plan.legs[0]);
+    o.auction.amountRemaining = "3";
+    const run = runtime(f, { observePatch: { auction: o.auction } });
+    const refused = await run.tick(plan.operationId);
+    assert.equal(refused.state, "SAFE_DEGRADED");
+    assert.equal(refused.reason, "AUCTION_BID_REFUSED");
+    assert.equal(refused.executionAttempted, false);
+    assert.equal(run.sends(), 0);
+    const budget = await store.getBudgets(plan.operationId);
+    assert.equal(budget.authority.executions, "0");
+    assert.equal(budget.wallet.reservedValue, "0");
+  }
+});

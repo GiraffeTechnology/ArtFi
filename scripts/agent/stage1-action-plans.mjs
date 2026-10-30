@@ -456,16 +456,23 @@ export function compileStage1Action(
         ];
       } else legs = [replacement];
     } else if (["BID", "REBID"].includes(action)) {
-      if (!exact(t, ["listingId", "bidAmount", "seller"]))
+      if (
+        !exact(t, ["listingId", "bidAmount", "seller"]) &&
+        !exact(t, ["listingId", "bidAmount", "seller", "amount"])
+      )
         fail("ACTION_TERMS_INVALID");
       uint(t.listingId, true);
-      uint(t.bidAmount, true);
+      const bidAmount = uint(t.bidAmount, true);
+      // This is an expected lot size, not an authoritative listing observation.
+      // Policy independently requires the current listing's exact amountRemaining.
+      const amount = Object.hasOwn(t, "amount") ? t.amount : "1";
+      const quantity = uint(amount, true);
       if (!address(t.seller) || same(t.seller, request.wallet))
         fail("BID_SELLER_REFUSED");
       legs = [
         leg("BID", "placeBid", [t.listingId, t.bidAmount], {
-          price: t.bidAmount,
-          quantity: "1",
+          price: ((bidAmount + quantity - 1n) / quantity).toString(),
+          quantity: amount,
           value: t.bidAmount,
           counterparty: t.seller,
           orderKey: t.listingId,
