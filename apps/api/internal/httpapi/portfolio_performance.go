@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -103,13 +104,19 @@ type portfolioEvidence struct {
 	Order           *signedOrder
 }
 
-const portfolioEvidenceLimit = 20000
+const (
+	portfolioEvidenceLimit     = 20000
+	portfolioPayloadByteLimit  = 64 << 10
+	portfolioOrderByteLimit    = 32 << 10
+	portfolioEvidenceByteLimit = 4 << 20
+)
 
 func readPortfolioPerformance(ctx context.Context, tx *sql.Tx, address string) (portfolioPerformance, error) {
 	predicate, args := portfolioWalletPredicate("e.", address)
 	rows, err := tx.QueryContext(ctx, `SELECT LOWER(e.transaction_hash), e.log_index, e.block_number,
  LOWER(e.block_hash), LOWER(e.contract_address), e.event_name, e.confirmed, e.removed,
- e.payload, COALESCE(o.envelope_json, 'null')
+ LEFT(CAST(e.payload AS BINARY), 65537),
+		       LEFT(CAST(COALESCE(o.envelope_json, 'null') AS BINARY), 32769)
  FROM chain_events e LEFT JOIN native_signed_orders o
  ON e.event_name = 'IntentFilled' AND o.chain_id = e.chain_id
  AND o.market_address = LOWER(e.contract_address)
@@ -121,16 +128,14 @@ func readPortfolioPerformance(ctx context.Context, tx *sql.Tx, address string) (
 	}
 	defer rows.Close()
 	events := make([]portfolioEvidence, 0)
+	usedBytes := 0
 	for rows.Next() {
 		var event portfolioEvidence
 		var payload, order []byte
 		if err := rows.Scan(&event.TransactionHash, &event.LogIndex, &event.BlockNumber, &event.BlockHash, &event.ContractAddress, &event.EventName, &event.Confirmed, &event.Removed, &payload, &order); err != nil {
 			return portfolioPerformance{}, err
 		}
-		if err := json.Unmarshal(payload, &event.Payload); err != nil {
-			return portfolioPerformance{}, err
-		}
-		if err := json.Unmarshal(order, &event.Order); err != nil {
+		if err := decodePortfolioPerformanceRow(&event, payload, order, &usedBytes); err != nil {
 			return portfolioPerformance{}, err
 		}
 		events = append(events, event)
@@ -145,6 +150,29 @@ func readPortfolioPerformance(ctx context.Context, tx *sql.Tx, address string) (
 		return result, nil
 	}
 	return calculatePortfolioPerformance(address, events), nil
+}
+
+func decodePortfolioPerformanceRow(event *portfolioEvidence, payload, order []byte, used *int) error {
+	// SQL returns at most one byte beyond each limit, allowing rejection without
+	// transferring an unbounded JSON value from the database.
+	if len(payload) > portfolioPayloadByteLimit || len(order) > portfolioOrderByteLimit ||
+		*used < 0 || *used > portfolioEvidenceByteLimit-len(payload)-len(order) {
+		return errors.New("portfolio performance evidence byte budget exceeded")
+	}
+	var decodedPayload map[string]json.RawMessage
+	var decodedOrder *signedOrder
+	if err := json.Unmarshal(payload, &decodedPayload); err != nil {
+		return err
+	}
+	if decodedPayload == nil {
+		return errors.New("portfolio performance event payload is not an object")
+	}
+	if err := json.Unmarshal(order, &decodedOrder); err != nil {
+		return err
+	}
+	event.Payload, event.Order = decodedPayload, decodedOrder
+	*used += len(payload) + len(order)
+	return nil
 }
 
 func newPortfolioPerformance() portfolioPerformance {

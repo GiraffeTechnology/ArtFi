@@ -273,3 +273,19 @@ concurrent transactional snapshot consistency; replica write rejection;
 replica restart/catch-up; and primary outage/restart with truthful degraded
 status and no promotion. Delivery evidence must name the exact source hashes
 and actual run results rather than carrying these claims to an untested edit.
+
+## Optional read-only backup monitoring
+
+The durable monitor's optional `backup-integrity` check reuses this format and
+these exact complete-file/schema integrity checks. Its additional freshness
+observation uses the manifest's canonical UTC `createdAt`, not filesystem mtime.
+Only the sanitized availability/freshness/current-observation timestamp enters
+the incident queue. It neither connects to MySQL nor executes SQL, creates a
+backup, restores a database or alters the backup directory.
+
+`observeBackup` explicitly reports `authenticityVerified: false` and
+`restoreVerified: false`. A healthy integrity check never waives `--trusted-backup`,
+origin verification, isolated restoration or operator acceptance. No new storage
+provider, credential, permission, schedule or default directory follows from enabling
+an observation. See the packaged `tools/ops/README.md` for the explicit check fields
+and signal/slow-storage limitations.

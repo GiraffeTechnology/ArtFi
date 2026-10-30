@@ -352,7 +352,9 @@ test("missing moderation role and account switch cannot retain private admin con
   await page.goto("/admin");
   await connect(page);
   await expect(
-    page.getByText("No moderation role.", { exact: true }),
+    page.getByText("This wallet does not have the required permission.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByText("TEST ONLY private report evidence", { exact: true }),

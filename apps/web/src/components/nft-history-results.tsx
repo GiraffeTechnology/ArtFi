@@ -105,8 +105,8 @@ export function NftHistoryResults({
           {rows.map((item) => (
             <li key={item.id} className="nft-market-card">
               <h4>
-                {item.action} · {item.collection} · token{" "}
-                <span data-no-translate>{item.tokenId}</span>
+                {item.action} · <span data-no-translate>{item.collection}</span>{" "}
+                · token <span data-no-translate>{item.tokenId}</span>
               </h4>
               <p>Recorded status: {item.status}</p>
               <p>{nftHistoryMeaning(item)}</p>

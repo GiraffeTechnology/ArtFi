@@ -8,6 +8,12 @@ import { createPublicClient, http, isAddress } from "viem";
 import { hoodi } from "viem/chains";
 import { decodeNativeOrder, type NativeOrder } from "./native-order";
 
+import { readRwaCatalog } from "./rwa-catalog-server";
+import {
+  assertRwaAssetBinding,
+  assertLegacyWholeSettlement,
+} from "./rwa-catalog";
+
 export class OrderVerificationUnavailable extends Error {}
 
 function contractWalletReader() {
@@ -36,6 +42,37 @@ export async function verifyNativeOrderSale(order: NativeOrder) {
     );
   if (order.marketAddress.toLowerCase() !== configured.toLowerCase())
     throw new Error("The order targets a different market deployment.");
+  if (decoded.kind === "whole") {
+    // The current server-owned catalog, rather than a caller-supplied flag,
+    // determines whether the legacy direct-payment market can be used.
+    const binding = {
+      section: "whole" as const,
+      chainId: order.chainId,
+      marketAddress: order.marketAddress,
+      collectionAddress: decoded.intent.collection,
+      tokenId: String(decoded.intent.tokenId),
+    };
+    try {
+      const page = await readRwaCatalog(
+        new URLSearchParams({
+          section: "whole",
+          chainId: String(order.chainId),
+          collectionAddress: binding.collectionAddress,
+          tokenId: binding.tokenId,
+          page: "1",
+          pageSize: "2",
+        }),
+      );
+      if (page.total !== 1 || page.data.length !== 1)
+        throw new Error("No unique current asset binding.");
+      assertRwaAssetBinding(page.data[0], binding);
+      assertLegacyWholeSettlement(page.data[0]);
+    } catch {
+      throw new OrderVerificationUnavailable(
+        "The legacy whole-artwork market is unavailable for this current source binding.",
+      );
+    }
+  }
   const address = decoded.intent.seller;
   // Strict local ECDSA admission does not claim the address currently has no code or that
   // settlement will succeed. The buyer performs the mandatory current-chain branch check.

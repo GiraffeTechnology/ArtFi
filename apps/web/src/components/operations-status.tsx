@@ -113,7 +113,7 @@ export function OperationsStatus() {
         id: "web",
         label: "Web runtime",
         scope: "This application",
-        verdict: classifyWebRuntime(web),
+        verdict: classifyWebRuntime(web, supportedChain.id),
       },
       {
         id: "api",

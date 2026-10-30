@@ -1,4 +1,6 @@
+import { nftPaymentAddress } from "../native-nft-currency.mjs";
 import { kernelRequestDigest } from "./agent-kernel.mjs";
+import { readNativeNftTaskPrincipal } from "./native-nft-principal.mjs";
 import { uint } from "./stage1-action-plans.mjs";
 const fail = (code) => {
   throw Error(code);
@@ -50,6 +52,19 @@ export function compileNativeNftReference(
     !Number.isSafeInteger(p.orderExpiresAt)
   )
     fail("NATIVE_NFT_PLAN_BINDING_REFUSED");
+  let taskPrincipal;
+  if (Object.hasOwn(p, "taskPrincipal")) {
+    taskPrincipal = readNativeNftTaskPrincipal(p.taskPrincipal);
+    if (
+      Object.hasOwn(p, "sessionId") ||
+      r.action !== "list" ||
+      p.kind !== "signature"
+    )
+      fail("NATIVE_NFT_TASK_PLAN_BINDING_REFUSED");
+  }
+  const paymentToken = nftPaymentAddress(chainId, p.paymentToken);
+  if (paymentToken === null || !same(request.paymentToken, paymentToken))
+    fail("NATIVE_NFT_PAYMENT_TOKEN_REFUSED");
   const quantity = uint(r.quantity, true);
   if (quantity > 1000000n || (p.scope.standard === "erc721" && quantity !== 1n))
     fail("NATIVE_NFT_QUANTITY_REFUSED");
@@ -97,6 +112,7 @@ export function compileNativeNftReference(
       nativeOperationId: p.operationId,
       nativePlanId: p.id,
       reviewDigest,
+      ...(taskPrincipal ? { taskPrincipal } : {}),
     },
   };
   return {
@@ -115,6 +131,7 @@ export function compileNativeNftReference(
       : e.keccak256(p.transaction.data),
     transactionValue: creating ? "0" : p.transaction.value,
     nativeReviewDigest: reviewDigest,
+    ...(taskPrincipal ? { nativeTaskPrincipal: taskPrincipal } : {}),
     nativePlanExpiresAt: p.expiresAt,
     nativeAction: r.action,
     unitPrice:

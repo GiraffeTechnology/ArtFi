@@ -1,6 +1,23 @@
 export const daoGovernorAbi = [
   {
     type: "function",
+    name: "proposalSnapshot",
+    stateMutability: "view",
+    inputs: [{ name: "proposalId", type: "uint256" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "getVotes",
+    stateMutability: "view",
+    inputs: [
+      { name: "account", type: "address" },
+      { name: "timepoint", type: "uint256" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "rwaEligible",
     stateMutability: "view",
     inputs: [],

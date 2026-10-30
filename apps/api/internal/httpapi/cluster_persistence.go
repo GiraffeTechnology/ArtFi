@@ -45,6 +45,7 @@ func (service *rwaService) readVaultIntent(ctx context.Context, id string) (*vau
 		defer service.mu.RUnlock()
 		if value := service.vaultIntents[id]; value != nil {
 			copy := *value
+			copy.Presentation = cloneDAOPresentation(value.Presentation)
 			return &copy, nil
 		}
 		return nil, sql.ErrNoRows
@@ -59,7 +60,7 @@ func (service *rwaService) readVaultBy(ctx context.Context, column, value string
 	if column == "idempotency_key_hash" {
 		predicate = column + "=UNHEX(?)"
 	}
-	rows, err := service.db.QueryContext(ctx, `SELECT vault_id,CONCAT('0x',LOWER(HEX(request_id))),LOWER(HEX(idempotency_key_hash)),LOWER(HEX(payload_hash)),factory_address,collection_address,token_id,vault_name,admin_address,pauser_address,fractionalizer_address,status,COALESCE(transaction_hash,''),created_at FROM vaults WHERE `+predicate, value)
+	rows, err := service.db.QueryContext(ctx, `SELECT vault_id,CONCAT('0x',LOWER(HEX(request_id))),LOWER(HEX(idempotency_key_hash)),LOWER(HEX(payload_hash)),factory_address,collection_address,token_id,vault_name,admin_address,pauser_address,fractionalizer_address,status,COALESCE(transaction_hash,''),created_at,presentation_profile_json FROM vaults WHERE `+predicate, value)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +73,12 @@ func (service *rwaService) readVaultBy(ctx context.Context, column, value string
 	}
 	intent := &vaultIntent{ChainID: hoodiChainID, ContractFunction: "createVault(bytes32,string,address,uint256,address,address,address)"}
 	var created time.Time
-	if err = rows.Scan(&intent.IntentID, &intent.RequestID, &intent.idempotencyKeyHash, &intent.payloadHash, &intent.FactoryAddress, &intent.CollectionAddress, &intent.TokenID, &intent.VaultName, &intent.AdminAddress, &intent.PauserAddress, &intent.FractionalizerAddress, &intent.Status, &intent.TransactionHash, &created); err != nil {
+	var presentationRaw []byte
+	if err = rows.Scan(&intent.IntentID, &intent.RequestID, &intent.idempotencyKeyHash, &intent.payloadHash, &intent.FactoryAddress, &intent.CollectionAddress, &intent.TokenID, &intent.VaultName, &intent.AdminAddress, &intent.PauserAddress, &intent.FractionalizerAddress, &intent.Status, &intent.TransactionHash, &created, &presentationRaw); err != nil {
+		return nil, err
+	}
+	intent.Presentation, err = decodeDAOPresentation(presentationRaw)
+	if err != nil {
 		return nil, err
 	}
 	intent.CreatedAt = created.UTC().Format(time.RFC3339)

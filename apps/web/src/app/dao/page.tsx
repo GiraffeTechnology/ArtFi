@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { DaoCreationFlow } from "@/components/dao-creation-flow";
 import { DaoGovernance } from "@/components/dao-governance";
+import { DaoProposalExplorer } from "@/components/dao-proposal-explorer";
 
 export const metadata: Metadata = { title: "DAO" };
 
@@ -55,6 +56,10 @@ export default function DaoPage() {
       </section>
 
       <DaoCreationFlow />
+
+      <DaoProposalExplorer
+        governorAddress={publicSetting("NEXT_PUBLIC_ARTFI_GOVERNOR_ADDRESS")}
+      />
 
       <DaoGovernance
         deployment={{

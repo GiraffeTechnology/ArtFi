@@ -43,7 +43,8 @@ export function authenticatedSession(
     session &&
     wallet.status === "connected" &&
     sameWallet(session, wallet.address, wallet.chainId) &&
-    session.expiresAt > Date.now(),
+    session.expiresAt > Date.now() &&
+    session.accessExpiresAt > Date.now(),
   );
 }
 export const initialUserSessionState: UserSessionState = {

@@ -1,3 +1,4 @@
+import { snapshotFractionMatches } from "./fraction-match-snapshot";
 import type {
   FractionMatch,
   ObservedFractionMatchPlan,
@@ -12,10 +13,12 @@ export async function executeFractionMatches(
     onConfirmed: (match: FractionMatch, count: number) => void;
   },
 ) {
-  for (const [index, match] of plan.matches.entries()) {
-    actions.assertCurrent();
-    await actions.settle(match);
-    actions.assertCurrent();
-    actions.onConfirmed(match, index + 1);
+  const matches = snapshotFractionMatches(plan.matches);
+  const { assertCurrent, settle, onConfirmed } = actions;
+  for (const [index, match] of matches.entries()) {
+    assertCurrent();
+    await settle(match);
+    assertCurrent();
+    onConfirmed(match, index + 1);
   }
 }
