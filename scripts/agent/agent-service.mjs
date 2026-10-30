@@ -196,7 +196,8 @@ export function createAgentService({
       fail("OPERATION_NOT_FOUND");
     return row;
   }
-  async function revocationProof(row, transactionHash) {
+  async function revocationProof(row, transactionHash, signal) {
+    signal?.throwIfAborted();
     if (
       typeof transactionHash !== "string" ||
       !/^0x[0-9a-fA-F]{64}$/.test(transactionHash) ||
@@ -205,8 +206,13 @@ export function createAgentService({
       fail("REVOCATION_HASH_INVALID");
     const normalizedHash = transactionHash.toLowerCase();
     const proof = structuredClone(
-      await inspectRevocation(structuredClone(row.request), normalizedHash),
+      await inspectRevocation(
+        structuredClone(row.request),
+        normalizedHash,
+        signal,
+      ),
     );
+    signal?.throwIfAborted();
     const request = row.request;
     if (
       !proof ||
@@ -330,15 +336,34 @@ export function createAgentService({
       let row = await owned(operationId, wallet);
       if (row.revocation?.state === "PENDING") {
         // Attestor outage does not fabricate confirmation or destroy the pending record.
+        const inspectionAbort = new AbortController();
+        let inspectionTimer;
         try {
-          const proof = await revocationProof(
-            row,
-            row.revocation.transactionHash,
-          );
+          const proof = await Promise.race([
+            Promise.resolve().then(() =>
+              revocationProof(
+                row,
+                row.revocation.transactionHash,
+                inspectionAbort.signal,
+              ),
+            ),
+            new Promise((_, reject) => {
+              inspectionTimer = setTimeout(() => {
+                inspectionAbort.abort();
+                reject(Error("REVOCATION_INSPECTION_TIMEOUT"));
+              }, sourceObservationTimeoutMs);
+            }),
+          ]);
+          inspectionAbort.signal.throwIfAborted();
           recheck(session, wallet);
           if (proof.state === "CONFIRMED")
             row = await note(operationId, wallet, proof);
-        } catch {}
+        } catch {
+          // Preserve the saved pending record. A late read cannot authorize a write.
+        } finally {
+          clearTimeout(inspectionTimer);
+          inspectionAbort.abort();
+        }
       }
       let observation;
       let sourceTimer;
