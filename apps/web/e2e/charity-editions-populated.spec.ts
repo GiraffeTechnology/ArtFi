@@ -39,14 +39,14 @@ const series = {
   metadataURI: "ipfs://charity/1",
 };
 
-function answer(data: Hex): Hex {
+function answer(data: Hex, count = 1n): Hex {
   const call = decodeFunctionData({ abi: charityEditionsAbi, data });
   switch (call.functionName) {
     case "seriesCount":
       return encodeFunctionResult({
         abi: charityEditionsAbi,
         functionName: "seriesCount",
-        result: 1n,
+        result: count,
       });
     case "EDITIONS_PER_ARTWORK":
       return encodeFunctionResult({
@@ -109,7 +109,7 @@ const result3Type = [
 ] as const;
 const aggregate3Selector = "0x82ad56cb";
 
-function answerCall(to: string | undefined, data: Hex): Hex {
+function answerCall(to: string | undefined, data: Hex, count = 1n): Hex {
   if (
     to?.toLowerCase() === multicall3Address.toLowerCase() &&
     data.startsWith(aggregate3Selector)
@@ -121,17 +121,17 @@ function answerCall(to: string | undefined, data: Hex): Hex {
     return encodeAbiParameters(result3Type, [
       calls.map((call) => ({
         success: true,
-        returnData: answer(call.callData),
+        returnData: answer(call.callData, count),
       })),
     ]);
   }
-  return answer(data);
+  return answer(data, count);
 }
 
 type RpcRequest = { id: number; method: string; params?: unknown[] };
 
 /** Answer the whole JSON-RPC conversation, not only `eth_call`: an unanswered probe hangs. */
-function rpcResult(request: RpcRequest): unknown {
+function rpcResult(request: RpcRequest, count = 1n): unknown {
   switch (request.method) {
     case "eth_chainId":
       return `0x${supportedChain.id.toString(16)}`;
@@ -163,7 +163,7 @@ function rpcResult(request: RpcRequest): unknown {
       };
     case "eth_call": {
       const call = request.params?.[0] as { to?: string; data: Hex };
-      return answerCall(call.to, call.data);
+      return answerCall(call.to, call.data, count);
     }
     default:
       throw new Error(`unexpected RPC method ${request.method}`);
@@ -204,13 +204,50 @@ test("an edition renders the supply the contract reports", async ({ page }) => {
     !process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS,
     "No editions address is configured for this run.",
   );
+  await page.route("**/*", async (route) => {
+    const request = route.request(),
+      body = request.postData();
+    if (request.method() !== "POST" || !body?.includes("jsonrpc"))
+      return route.fallback();
+    const payload = JSON.parse(body) as RpcRequest | RpcRequest[];
+    const respond = (single: RpcRequest) => ({
+      jsonrpc: "2.0",
+      id: single.id,
+      result: rpcResult(single, 21n),
+    });
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        Array.isArray(payload) ? payload.map(respond) : respond(payload),
+      ),
+    });
+  });
   await page.goto("/charity");
+  await expect(page.locator(".charity-edition-card")).toHaveCount(20);
   const card = page.locator(".charity-edition-card").first();
   await expect(card).toContainText("Edition #1");
   await expect(card).toContainText("63 of 100");
   await expect(card).toContainText("Not recorded");
   await expect(page.getByTestId("charity-edition-terms")).toContainText(
     "0.01 ETH",
+  );
+  await page
+    .getByRole("button", { name: "Next editions", exact: true })
+    .click();
+  await expect(page.locator(".charity-edition-card")).toHaveCount(1);
+  await expect(page.locator(".charity-edition-card")).toContainText(
+    "Edition #21",
+  );
+  await expect(
+    page.getByRole("button", { name: "Next editions", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Previous editions", exact: true })
+    .click();
+  await expect(page.locator(".charity-edition-card")).toHaveCount(20);
+  await expect(page.locator(".charity-edition-card").first()).toContainText(
+    "Edition #1",
   );
 });
 
