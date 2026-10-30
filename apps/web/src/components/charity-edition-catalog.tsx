@@ -3,11 +3,15 @@
 import { publicSetting } from "@/lib/public-runtime-config";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatEther, isAddress, type Address, type Hex } from "viem";
 import { usePublicClient } from "wagmi";
 
-import { charityEditionsAbi } from "@/lib/contracts";
+import {
+  readCharityCatalogPage,
+  charityCatalogPageSize,
+  type CharityCatalogPage,
+} from "@/lib/charity-catalog-page";
 import { supportedChain } from "@/lib/wagmi";
 
 import { CharityEditionRightsNotice } from "./charity-edition-rights-notice";
@@ -35,13 +39,6 @@ export type CharityEdition = {
   physicalDonationRecordedAt: number;
 };
 
-type SeriesTuple = {
-  artworkId: Hex;
-  distributionWallet: Address;
-  soldOutAt: bigint;
-  physicalDonationRecordedAt: bigint;
-};
-
 type LoadState = "loading" | "ready" | "unconfigured" | "error";
 
 export function editionAvailability(edition: CharityEdition): string {
@@ -63,86 +60,69 @@ export function CharityEditionCatalog() {
   ) as Address | undefined;
   const publicClient = usePublicClient({ chainId: supportedChain.id });
 
-  const [state, setState] = useState<LoadState>(
-    contractAddress ? "loading" : "unconfigured",
-  );
-  const [editions, setEditions] = useState<CharityEdition[]>([]);
-  const [unitPriceWei, setUnitPriceWei] = useState<bigint>();
-  const [editionsPerArtwork, setEditionsPerArtwork] = useState<bigint>();
-
+  const [pageStart, setPageStart] = useState(1n);
+  const context = `${contractAddress?.toLowerCase() ?? "unconfigured"}:${publicClient?.uid ?? "no-reader"}:${pageStart}`;
+  const [reading, setReading] = useState<{
+    context: string;
+    state: LoadState;
+    page?: CharityCatalogPage;
+  }>({
+    context,
+    state: contractAddress ? "loading" : "unconfigured",
+  });
+  const request = useRef<AbortController | null>(null);
+  const state: LoadState =
+    reading.context === context
+      ? reading.state
+      : !contractAddress
+        ? "unconfigured"
+        : publicClient
+          ? "loading"
+          : "error";
+  const page =
+    reading.context === context && state === "ready" ? reading.page : undefined;
+  const editions = page?.editions ?? [];
+  const unitPriceWei = page?.unitPriceWei;
+  const editionsPerArtwork = page?.editionsPerArtwork;
   const load = useCallback(async () => {
-    if (!contractAddress || !publicClient) return;
-    setState("loading");
-    try {
-      const contract = { abi: charityEditionsAbi, address: contractAddress };
-      const [seriesCount, perArtwork, priceWei] = await Promise.all([
-        publicClient.readContract({ ...contract, functionName: "seriesCount" }),
-        publicClient.readContract({
-          ...contract,
-          functionName: "EDITIONS_PER_ARTWORK",
-        }),
-        publicClient.readContract({
-          ...contract,
-          functionName: "PRIMARY_PRICE_WEI",
-        }),
-      ]);
-
-      // Token IDs are assigned sequentially from 1 by `createSeries`, so the count enumerates them.
-      const tokenIds = Array.from({ length: Number(seriesCount) }, (_, index) =>
-        BigInt(index + 1),
-      );
-      const loaded = await Promise.all(
-        tokenIds.map(async (tokenId) => {
-          const series = (await publicClient.readContract({
-            ...contract,
-            functionName: "series",
-            args: [tokenId],
-          })) as unknown as SeriesTuple;
-          const [mintedUnits, distributorUnits] = await Promise.all([
-            publicClient.readContract({
-              ...contract,
-              functionName: "totalSupply",
-              args: [tokenId],
-            }),
-            publicClient.readContract({
-              ...contract,
-              functionName: "balanceOf",
-              args: [series.distributionWallet, tokenId],
-            }),
-          ]);
-          return {
-            tokenId: tokenId.toString(),
-            artworkId: series.artworkId,
-            distributionWallet: series.distributionWallet,
-            mintedUnits: mintedUnits as bigint,
-            distributorUnits: distributorUnits as bigint,
-            soldOutAt: Number(series.soldOutAt),
-            physicalDonationRecordedAt: Number(
-              series.physicalDonationRecordedAt,
-            ),
-          } satisfies CharityEdition;
-        }),
-      );
-
-      setEditionsPerArtwork(perArtwork as bigint);
-      setUnitPriceWei(priceWei as bigint);
-      setEditions(loaded);
-      setState("ready");
-    } catch {
-      setEditions([]);
-      setUnitPriceWei(undefined);
-      setEditionsPerArtwork(undefined);
-      setState("error");
+    request.current?.abort();
+    request.current = null;
+    if (!contractAddress || !publicClient) {
+      setReading({
+        context,
+        state: contractAddress ? "error" : "unconfigured",
+      });
+      return;
     }
-  }, [contractAddress, publicClient]);
-
-  // `contractAddress` comes from the build-time environment and never changes at runtime, so the
-  // unconfigured case is already the initial state and the effect only has to handle the read.
+    const controller = new AbortController();
+    request.current = controller;
+    const current = () =>
+      request.current === controller && !controller.signal.aborted;
+    setReading({ context, state: "loading" });
+    try {
+      const result = await readCharityCatalogPage({
+        client: publicClient,
+        contractAddress,
+        expectedChainId: supportedChain.id,
+        start: pageStart,
+        signal: controller.signal,
+        isCurrent: current,
+      });
+      if (current()) setReading({ context, state: "ready", page: result });
+    } catch {
+      if (current()) setReading({ context, state: "error" });
+    } finally {
+      if (request.current === controller) request.current = null;
+    }
+  }, [context, contractAddress, publicClient, pageStart]);
   useEffect(() => {
-    if (!contractAddress) return;
     const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
-  }, [contractAddress, load]);
+    return () => {
+      window.clearTimeout(timer);
+      request.current?.abort();
+      request.current = null;
+    };
+  }, [load]);
 
   return (
     <section className="charity-catalog">
@@ -201,6 +181,11 @@ export function CharityEditionCatalog() {
           <strong>Charity editions unavailable</strong>
           <span>The charity editions could not be read. Please retry.</span>
           <span>No fixture is shown as live data.</span>
+          {pageStart > 1n && (
+            <button className="secondary" onClick={() => setPageStart(1n)}>
+              First editions
+            </button>
+          )}
           <button className="secondary" onClick={() => void load()}>
             Retry
           </button>
@@ -248,6 +233,36 @@ export function CharityEditionCatalog() {
             </li>
           ))}
         </ul>
+      )}
+      {page && page.seriesCount > 0n && (
+        <nav
+          aria-label="Charity edition pages"
+          className="market-runtime-state"
+        >
+          <span>
+            Showing editions {page.start.toString()}–
+            {(page.start + BigInt(editions.length) - 1n).toString()} of{" "}
+            {page.seriesCount.toString()}
+          </span>
+          <div>
+            <button
+              type="button"
+              className="secondary"
+              disabled={page.start === 1n}
+              onClick={() => setPageStart(page.start - charityCatalogPageSize)}
+            >
+              Previous editions
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={page.start + BigInt(editions.length) > page.seriesCount}
+              onClick={() => setPageStart(page.start + charityCatalogPageSize)}
+            >
+              Next editions
+            </button>
+          </div>
+        </nav>
       )}
     </section>
   );

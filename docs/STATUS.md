@@ -1271,3 +1271,9 @@ restart/fault behavior and measured soak evidence remain separate pending work.
 The charity detail page now retires earlier refreshes and edition/provider contexts before publishing facts. All four existing contract observations use one mined block; the reader checks the block identity and chain again before returning a bounded, validated projection. Existing contract and CH.1/CH.2 constraints, timestamp display bounds, and sellout/donation ordering are checked without adding holder grants, previews, signatures or transaction authority. Canonicality at read completion is not finality.
 
 New regression cases cover stale/aborted/timed-out reads, chain and block replacement, mutable provider records, malformed observations and edition/quantity/timestamp bounds. Source authored; affected tests and CI are NOT_RUN at submission. Full real deployment, holder delivery and product acceptance remain open.
+
+### Charity catalog reads are bounded and paged
+
+The charity catalog reads at most 20 editions per page with four concurrent edition readers, preserving access to every sequential series without converting the chain count into an allocation size. Each page captures one mined block and keeps the existing detail fact validation, chain and block checks. New page/reader/address contexts retire earlier work and hide earlier figures before replacement. No holder access, preview, signature or transaction authority is added.
+
+New unit cases cover uint256-scale counts, page boundaries, malformed terms, rejected rows, concurrency, context retirement, aborts, deadlines and block/chain replacement. The existing populated browser scenario now navigates a 21-series fixture. These are authored source regressions; affected tests and CI are NOT_RUN at submission. Live provider, holder and complete product acceptance remain separate.
