@@ -13,6 +13,7 @@ const titles = {
     "charity read failures stay private and retry on /charity",
     "charity read failures stay private and retry on /charity/1",
     "a failed charity refresh removes the earlier edition facts until recovery",
+    "a replaced charity facts block stays unavailable until a stable retry",
   ],
 };
 
@@ -42,7 +43,7 @@ function report(file = agentFile) {
   };
 }
 
-test("conditional evidence requires the exact agent two and charity eight first-attempt passes", () => {
+test("conditional evidence requires the exact agent two and charity ten first-attempt passes", () => {
   for (const file of [agentFile, charityFile]) {
     const summary = summarizeReport(report(file), file);
     assert.equal(summary.result, "PASSED");
