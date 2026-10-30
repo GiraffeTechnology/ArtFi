@@ -324,6 +324,7 @@ export function createActionPolicy({ ethers: e, policy, clock = Date.now }) {
         !same(auction.asset, leg.asset.contract) ||
         !same(auction.paymentToken, leg.paymentToken) ||
         auction.listingId !== leg.orderKey ||
+        auction.amountRemaining !== leg.quantity ||
         seconds < uint(auction.startsAt) ||
         seconds >= uint(auction.endsAt) ||
         value < uint(auction.minimumBid) ||
