@@ -99,6 +99,67 @@ test("configuration creates unique operator-side secrets, retaining existing one
     first.ARTFI_USER_SESSION_SECRET,
   );
 });
+
+test("disabled agent configuration does not create an optional bridge token", () => {
+  for (const config of [
+    configure(),
+    configure({ ARTFI_AGENT_ENABLED: "false" }),
+  ]) {
+    assert.equal(Object.hasOwn(config, "ARTFI_AGENT_BRIDGE_TOKEN"), false);
+    assert.deepEqual(validate(config).errors, []);
+    for (const key of secretKeys) assert.ok(config[key].length >= 32);
+    assert.equal(
+      Object.hasOwn(
+        configure({ PORT: "3900" }, config),
+        "ARTFI_AGENT_BRIDGE_TOKEN",
+      ),
+      false,
+    );
+  }
+});
+
+test("explicit agent enablement creates a token and subsequent updates retain it", () => {
+  const first = configure({
+    ARTFI_AGENT_ENABLED: "true",
+    ARTFI_AGENT_CONFIG_FILE: "/private/agent.json",
+    ARTFI_AGENT_API_URL: "http://127.0.0.1:31001",
+  });
+  assert.ok(first.ARTFI_AGENT_BRIDGE_TOKEN.length >= 32);
+  assert.deepEqual(validate(first).errors, []);
+  const updated = configure({ PORT: "3900" }, first);
+  assert.equal(
+    updated.ARTFI_AGENT_BRIDGE_TOKEN,
+    first.ARTFI_AGENT_BRIDGE_TOKEN,
+  );
+  for (const value of [undefined, "short"]) {
+    const invalid = { ...first, ARTFI_AGENT_BRIDGE_TOKEN: value };
+    if (value === undefined) delete invalid.ARTFI_AGENT_BRIDGE_TOKEN;
+    assert.ok(
+      validate(invalid).errors.some((message) =>
+        message.startsWith("ARTFI_AGENT_BRIDGE_TOKEN"),
+      ),
+    );
+  }
+});
+
+test("supplied and existing bridge tokens survive disabling and re-enabling the agent", () => {
+  const supplied = "TEST_ONLY_EXISTING_BRIDGE_" + "x".repeat(40);
+  const disabled = configure({ ARTFI_AGENT_BRIDGE_TOKEN: supplied });
+  assert.equal(disabled.ARTFI_AGENT_ENABLED, "false");
+  assert.equal(disabled.ARTFI_AGENT_BRIDGE_TOKEN, supplied);
+  const enabled = configure(
+    {
+      ARTFI_AGENT_ENABLED: "true",
+      ARTFI_AGENT_CONFIG_FILE: "/private/agent.json",
+      ARTFI_AGENT_API_URL: "http://127.0.0.1:31001",
+    },
+    disabled,
+  );
+  assert.equal(enabled.ARTFI_AGENT_BRIDGE_TOKEN, supplied);
+  const offAgain = configure({ ARTFI_AGENT_ENABLED: "false" }, enabled);
+  assert.equal(offAgain.ARTFI_AGENT_BRIDGE_TOKEN, supplied);
+  assert.deepEqual(validate(offAgain).errors, []);
+});
 test("URLs and ports are configurable without vendor host restrictions", () => {
   const config = configure({
     PORT: "8443",
