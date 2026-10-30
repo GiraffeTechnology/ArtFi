@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { type Hex } from "viem";
-import { editionCall } from "../src/test/flow-chain-fixture";
+import { editionBlock, editionCall } from "../src/test/flow-chain-fixture";
 
 const walletA = "0x1000000000000000000000000000000000000010";
 const walletB = "0x1000000000000000000000000000000000000020";
@@ -76,18 +76,16 @@ async function walletFixture(page: Page) {
       id: number;
       method: string;
       params?: unknown[];
-    }) => ({
-      id: request.id,
-      jsonrpc: "2.0",
-      result:
-        request.method === "eth_chainId"
-          ? "0x88bb0"
-          : request.method === "eth_blockNumber"
-            ? "0x64"
-            : request.method === "eth_call"
-              ? editionCall((request.params?.[0] as { data: Hex }).data)
-              : "0x0",
-    });
+    }) => {
+      let result: unknown = "0x0";
+      if (request.method === "eth_chainId") result = "0x88bb0";
+      else if (request.method === "eth_blockNumber") result = "0x64";
+      else if (request.method === "eth_getBlockByNumber")
+        result = editionBlock();
+      else if (request.method === "eth_call")
+        result = editionCall((request.params?.[0] as { data: Hex }).data);
+      return { id: request.id, jsonrpc: "2.0", result };
+    };
     const body = route.request().postDataJSON();
     await route.fulfill({
       json: Array.isArray(body) ? body.map(answer) : answer(body),

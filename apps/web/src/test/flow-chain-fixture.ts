@@ -47,9 +47,9 @@ export function editionCall(data: Hex): Hex {
         abi: charityEditionsAbi,
         functionName,
         result: {
-          artworkId: zeroHash,
-          masterArtworkHash: zeroHash,
-          metadataHash: zeroHash,
+          artworkId: `0x${"11".repeat(32)}`,
+          masterArtworkHash: `0x${"22".repeat(32)}`,
+          metadataHash: `0x${"33".repeat(32)}`,
           distributionWallet: "0x1000000000000000000000000000000000000030",
           createdAt: 1760000000n,
           soldOutAt: 0n,
@@ -80,4 +80,31 @@ export function editionCall(data: Hex): Hex {
     default:
       throw new Error(`Unexpected charity fixture read: ${functionName}`);
   }
+}
+
+// Stable JSON-RPC block for the same immutable edition observation used by the UI fixtures.
+export function editionBlock() {
+  return {
+    number: "0x64",
+    hash: `0x${"aa".repeat(32)}`,
+    parentHash: zeroHash,
+    timestamp: `0x${(1760000100).toString(16)}`,
+    nonce: "0x0000000000000000",
+    difficulty: "0x0",
+    totalDifficulty: "0x0",
+    gasLimit: "0x1c9c380",
+    gasUsed: "0x0",
+    size: "0x1",
+    baseFeePerGas: "0x1",
+    extraData: "0x",
+    logsBloom: `0x${"00".repeat(256)}`,
+    miner: "0x1000000000000000000000000000000000000030",
+    mixHash: zeroHash,
+    receiptsRoot: zeroHash,
+    stateRoot: zeroHash,
+    transactionsRoot: zeroHash,
+    sha3Uncles: zeroHash,
+    transactions: [],
+    uncles: [],
+  };
 }
