@@ -57,6 +57,13 @@ function AuthenticatedPortfolioWallet({
     query: { enabled: chainId === supportedChain.id, gcTime: 0 },
   });
   const isSupported = chainId === supportedChain.id;
+  const balanceText = !isSupported
+    ? "Unavailable on this network"
+    : balance.isError
+      ? "Unavailable"
+      : balance.data
+        ? Number(balance.data.formatted).toFixed(4)
+        : "Loading";
 
   return (
     <section className="wallet-panel" aria-live="polite">
@@ -75,13 +82,23 @@ function AuthenticatedPortfolioWallet({
         </div>
         <div>
           <dt>Test ETH</dt>
-          <dd>
-            {balance.data
-              ? Number(balance.data.formatted).toFixed(4)
-              : "Loading"}
-          </dd>
+          <dd>{balanceText}</dd>
         </div>
       </dl>
+      {isSupported && balance.isError ? (
+        <div role="alert">
+          <p>Test ETH balance is unavailable. Retry the read-only request.</p>
+          <button
+            type="button"
+            disabled={balance.isFetching}
+            onClick={() => {
+              void balance.refetch();
+            }}
+          >
+            Retry balance
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

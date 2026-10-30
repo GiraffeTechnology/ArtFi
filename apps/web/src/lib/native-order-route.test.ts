@@ -272,3 +272,89 @@ describe("native order HTTP boundary", () => {
     expect(fetcher.mock.calls[0][1].headers).toBeUndefined();
   });
 });
+
+describe("linked order response identity admission", () => {
+  const query = `chainId=560048&marketAddress=${market}`;
+  const linked = async (hash: string = order.intentHash, scope = query) =>
+    detailGET(
+      new Request(`https://io.artcch.com/api/orders/${hash}?${scope}`),
+      { params: Promise.resolve({ intentHash: hash }) },
+    );
+  it("admits the original linked signed order with its server timestamp", async () => {
+    const response = await linked();
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      ...order,
+      createdAt: "2026-10-02T10:00:00Z",
+    });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(session).not.toHaveBeenCalled();
+    expect(verification).not.toHaveBeenCalled();
+  });
+  it("accepts case-insensitive hash and market identity without an authorization prompt", async () => {
+    const response = await linked(
+      `0x${order.intentHash.slice(2).toUpperCase()}`,
+    );
+    expect(response.status).toBe(201);
+    expect((await response.json()).intentHash).toBe(order.intentHash);
+  });
+  it.each(["wrong-hash", "wrong-market", "extra-fields"])(
+    "linked-response regression %s",
+    async (kind) => {
+      if (kind === "wrong-hash") {
+        const different = nativeOrderFromAuthorization(
+          "whole",
+          JSON.stringify({
+            intent: { ...order.intent, salt: "99" },
+            signature: "0x",
+          }),
+          market,
+        );
+        fetcher.mockResolvedValue(Response.json(different));
+      } else if (kind === "extra-fields")
+        fetcher.mockResolvedValue(
+          Response.json({
+            ...order,
+            internalCredential: "private-origin-secret",
+          }),
+        );
+      const response = await linked(
+        order.intentHash,
+        kind === "wrong-market"
+          ? `chainId=560048&marketAddress=${asset}`
+          : query,
+      );
+      expect(response.status).toBe(503);
+      expect(await response.text()).not.toContain("private-origin-secret");
+    },
+  );
+  it.each([
+    { ...order, chainId: 1 },
+    { ...order, intent: { ...order.intent, price: "3" } },
+    { ...order, signature: "0x1" },
+    { ...order, createdAt: "not-a-time" },
+    { data: [order] },
+  ])(
+    "rejects a malformed linked record before serialization",
+    async (value) => {
+      fetcher.mockResolvedValue(Response.json(value));
+      const response = await linked();
+      expect(response.status).toBe(503);
+    },
+  );
+  it("preserves a missing linked order without returning its private error body", async () => {
+    fetcher.mockResolvedValue(
+      Response.json({ detail: "private-index-state" }, { status: 404 }),
+    );
+    const response = await linked();
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain("private-index-state");
+  });
+  it("keeps exact chain/market query validation before any upstream request", async () => {
+    expect(
+      (await linked(order.intentHash, `${query}&marketAddress=${market}`))
+        .status,
+    ).toBe(400);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});

@@ -36,6 +36,7 @@ for (const recovery of ["manual", "polling"] as const) {
     let releaseRetry: (() => void) | undefined;
     await page.route("**/v1/market/assets**", async (route) => {
       requests += 1;
+      const query = new URL(route.request().url()).searchParams;
       if (recovery === "manual" && !unavailable && requests > 1) {
         await new Promise<void>((resolve) => {
           releaseRetry = resolve;
@@ -49,6 +50,13 @@ for (const recovery of ["manual", "polling"] as const) {
             ? { detail: "Market persistence is unavailable." }
             : {
                 runtime: true,
+                schemaVersion: "1",
+                source: "opensea",
+                page: Number(query.get("page")),
+                pageSize: 12,
+                q: query.get("q"),
+                listingStatus: query.get("listingStatus"),
+                sort: query.get("sort"),
                 total: 1,
                 data: [
                   {
@@ -111,12 +119,15 @@ for (const recovery of ["manual", "polling"] as const) {
     const failedRequests = requests;
     unavailable = false;
     if (recovery === "manual") {
+      // Start between poll ticks: crossing the next tick must not also expire
+      // the independent 15-second request deadline while this fixture is held.
+      await page.clock.fastForward(5_000);
       await page.getByRole("button", { name: "Retry market data" }).click();
       await expect(
         page.getByRole("button", { name: "Retrying…" }),
       ).toBeDisabled();
       await expect.poll(() => requests).toBe(failedRequests + 1);
-      await page.clock.fastForward(15_000);
+      await page.clock.fastForward(10_000);
       expect(requests).toBe(failedRequests + 1);
       await expect(cards).toHaveCount(0);
       releaseRetry?.();

@@ -43,7 +43,8 @@ export async function GET(
   }
 
   const cookieStore = await cookies();
-  const grant = readHolderGrant(cookieStore.get(holderGrantCookie)?.value);
+  const originalGrantToken = cookieStore.get(holderGrantCookie)?.value;
+  const grant = readHolderGrant(originalGrantToken);
   if (!grantCoversEdition(grant, tokenId)) {
     // A grant for another edition is no better than no grant at all.
     return NextResponse.json(
@@ -85,6 +86,16 @@ export async function GET(
   }
 
   const { asset } = decision;
+  // Recheck the same signed token: slow reads must not outlive its existing grant.
+  if (!grantCoversEdition(readHolderGrant(originalGrantToken), tokenId)) {
+    return NextResponse.json(
+      {
+        detail:
+          "Verify ownership of this charity edition to receive the watermarked file.",
+      },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   return NextResponse.json(
     {
       tokenId: asset.tokenId,

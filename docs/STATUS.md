@@ -1,5 +1,104 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-30 current signing state for ordinary sale orders
+
+M2.5 ordinary whole-artwork and fractional sale authorizations now recheck the captured
+seller epoch and sale window at a mined chain snapshot inside the wallet signing callback,
+after the existing grounding and session checks. The snapshot block and chain are checked
+again before returning. Stale epochs, a closed window, a changed operation or a reorganized
+observation stop the request without changing the signed terms or submitting a transaction.
+Late provider results after the existing read deadline cannot start further signing-check
+RPCs. These are current observations, not a reservation or finality guarantee.
+
+The existing fractional amendment callback keeps its final old-authorization retirement
+check; no extra asynchronous read is inserted after that check. At submission, new signing
+regressions and the two changed UI paths are **NOT_RUN** and require new-head Linux CI.
+Live wallet, chain and complete-product acceptance remain separate and open.
+
+## 2026-10-30 fraction amendment observation and signing guard candidate
+
+M2.5/M2.6 replacement orders now snapshot the original sale terms before asynchronous reads.
+Each retirement observation reads the original intent consumption and seller epoch at one
+mined block, validates those integer values, and rechecks that block identity and chain.
+Inside the actual signing callback, after the trading-session gate, the UI refreshes the
+current source grounding before repeating the read-only retirement check and refusing a
+changed replacement epoch. A stale
+observation stops replacement signing; it never replays an earlier withdrawal. This is a
+current canonicality check, not a finality guarantee.
+
+The existing fraction amendment regression suite adds block/chain changes, unavailable
+state, caller/provider mutation, and authorization restored during a wait. At source submission,
+these additions and the changed UI path are **NOT_RUN**; the new-head Linux CI and independent
+review remain required. No live wallet signature, revocation transaction, production deployment
+or complete-product acceptance is claimed. The full PRD remains in scope.
+
+## 2026-10-29 acceptance alignment with the complete PRD
+
+The operative audit checks now preserve the current asset-specific preview boundaries:
+model-permitted previews have their hash mappings, charity public token metadata has no
+artwork preview, and wallet-verified watermarked holder delivery has no browser preview.
+The isolated Hoodi payload does not regenerate the frozen historical charity batch.
+
+Digital NFT acceptance requires the native ArtFi workflow through supported venue interfaces.
+A redirect, iframe or passive feed does not replace discovery, review, listing, purchases,
+offers, eligible cancellation and result tracking. An optional OpenSea website link is
+footer-only. The passive ingestion adapter and ArtFi's applicable whole/fractional trading
+remain separate, continuing requirements.
+
+This corrects contradictory audit prose; it does not implement or verify a previously
+missing screen, holder entitlement, venue operation or chain transaction. No requirement
+status or count is promoted. G1–G4, the six status values and the full M1–M6/CH/XM/NFR/Stage 2
+scope remain unchanged. Current source CI, independent review and real runtime evidence
+remain separate from this documentation increment.
+
+## 2026-10-17 full-product integration candidate
+
+This downstream source candidate combines the exact stage heads listed in `INTEGRATION_CANDIDATE.md`. Aggregate application tests, MySQL integration, browser validation, builds and deployment are NOT_RUN for this candidate. Historical results below apply only to their recorded sources and environments. The operation-history UI includes its required paginated backend contract; the earlier MySQL timeout and degraded-state failure remains unresolved until independently validated on this source.
+
+## 2026-10-16 market analytics availability UI
+
+Asset detail pages now explicitly identify price history, holder distribution, and
+transaction analytics as unavailable when no attributed runtime dataset is wired.
+The note also identifies the existing catalogue values as prototype data, so they
+cannot be read as current market observations. This implements only the explicit
+unavailable-state branch of the inherited market-analytics acceptance gap; it
+does not add or claim live analytics.
+
+Status: **IMPLEMENTED-NOT-VERIFIED**. Regression source is included in this
+stage PR and is **NOT_RUN** by the source author. Runtime source, browser visuals,
+and full market analytics acceptance remain unverified.
+
+## 2026-10-16 registry receipt boundary correction (partial)
+
+Based on main `5e7cc4cd482be71431d904439ef79d1ab5d7eade`, the application now
+isolates source-classified registry whole receipts from the legacy fresh ERC-20
+payment path. New signature, NFT approval, payment approval and fill callbacks
+reread the exact source binding after session awaits. Native publication checks
+the current server catalog. Non-registry whole trading, fractional/charity scope,
+authorization withdrawal and prior-transaction recovery remain. Token owner and
+registration completion labels are distinct. The final independent source review
+closed the callback-refresh and post-approval error-message findings.
+
+Local validation on the final application source: web typecheck PASS; 92 web test
+files / 1,207 tests PASS, including 71 focused cases; lint PASS with one existing
+unused `_query` warning in `native-order-observation.test.ts`; production build
+PASS; changed-file Prettier and `git diff --check` PASS; secret-pattern scan PASS.
+These are isolated local results, not live registration acceptance.
+
+Desktop/mobile Oracle browser cases were attempted but not executed: first the
+bundled browser was absent; the installed Chromium then failed at launch with
+`socket() failed: Operation not permitted`. No sandbox relaxation was attempted.
+Browser behavior remains unverified in this environment. Exact-head CI is tracked
+in the draft PR and must not be inferred from these local checks.
+
+[The correction record](REGISTRATION_BOUNDARY_CORRECTION.md) details the actual
+Oracle/Wallet interfaces and remaining work. Mint-defined deadline/receipt format,
+ERC-20 wallet reservation/release, bounded owner rollback, restart-after-alignment,
+full end-to-end receipt integration, deployment and real transactions remain
+unimplemented or unverified as itemized there. Direct calls to the unchanged
+legacy contract can bypass the application guards. No existing requirement status
+or count is promoted; this is a partial application correction, not task completion.
+
 ## 2026-10-10 bounded runtime supersession note
 
 Historical entries below retain their original source/date and are not current
@@ -1166,3 +1265,15 @@ install a daemon, enable supervision or establish continuous operations acceptan
 No shared bridge, database, SSH, model-provider or other-task configuration is
 changed by this source integration. Actual installed channels, least privilege,
 restart/fault behavior and measured soak evidence remain separate pending work.
+
+### Charity edition facts remain bound to the current read
+
+The charity detail page now retires earlier refreshes and edition/provider contexts before publishing facts. All four existing contract observations use one mined block; the reader checks the block identity and chain again before returning a bounded, validated projection. Existing contract and CH.1/CH.2 constraints, timestamp display bounds, and sellout/donation ordering are checked without adding holder grants, previews, signatures or transaction authority. Canonicality at read completion is not finality.
+
+New regression cases cover stale/aborted/timed-out reads, chain and block replacement, mutable provider records, malformed observations and edition/quantity/timestamp bounds. Source authored; affected tests and CI are NOT_RUN at submission. Full real deployment, holder delivery and product acceptance remain open.
+
+### Charity catalog reads are bounded and paged
+
+The charity catalog reads at most 20 editions per page with four concurrent edition readers, preserving access to every sequential series without converting the chain count into an allocation size. Each page captures one mined block and keeps the existing detail fact validation, chain and block checks. New page/reader/address contexts retire earlier work and hide earlier figures before replacement. No holder access, preview, signature or transaction authority is added.
+
+New unit cases cover uint256-scale counts, page boundaries, malformed terms, rejected rows, concurrency, context retirement, aborts, deadlines and block/chain replacement. The existing populated browser scenario now navigates a 21-series fixture. These are authored source regressions; affected tests and CI are NOT_RUN at submission. Live provider, holder and complete product acceptance remain separate.

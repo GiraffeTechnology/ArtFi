@@ -1,10 +1,15 @@
 import "server-only";
+import {
+  MAX_TRANSLATION_RESPONSE_BYTES,
+  MAX_TRANSLATED_TEXT_BYTES,
+  readTranslationJson,
+} from "./translation-json";
 
 import {
   isTranslatableSource,
   needsTranslation,
   proofreaderWarningsAreSafe,
-  protectedTermsIntact,
+  isSafeUiTranslation,
   translationSourceFor,
   translationTargetFor,
   type UiLocale,
@@ -68,7 +73,14 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
     return sourceText;
   const key = `${targetLanguage}\u0000${sourceText}`;
   const cached = cache.get(key);
-  if (cached) return cached;
+  if (
+    cached &&
+    isSafeUiTranslation(sourceText, cached) &&
+    cached.length <= MAX_TRANSLATED_TEXT_BYTES &&
+    new TextEncoder().encode(cached).byteLength <= MAX_TRANSLATED_TEXT_BYTES
+  )
+    return cached;
+  if (cached) cache.delete(key);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), translationTimeoutMs());
@@ -91,11 +103,17 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
     });
     if (!response.ok) throw new Error("TRANSLATION_UPSTREAM_FAILED");
 
-    const body = (await response.json()) as UpstreamTranslation;
+    const body = (await readTranslationJson(
+      response,
+      MAX_TRANSLATION_RESPONSE_BYTES,
+      controller.signal,
+    )) as UpstreamTranslation;
     const translated = body.translated_text;
     if (
       typeof translated !== "string" ||
       !translated.trim() ||
+      new TextEncoder().encode(translated).byteLength >
+        MAX_TRANSLATED_TEXT_BYTES ||
       translated.trim() === sourceText.trim() ||
       typeof body.provider !== "string" ||
       !body.provider.trim() ||
@@ -103,7 +121,7 @@ async function translateText(sourceText: string, targetLanguage: UiLocale) {
       !body.model.trim() ||
       !Array.isArray(body.warnings) ||
       !proofreaderWarningsAreSafe(body.proofreader, body.warnings) ||
-      !protectedTermsIntact(sourceText, translated)
+      !isSafeUiTranslation(sourceText, translated)
     ) {
       throw new Error("INVALID_TRANSLATION_RESPONSE");
     }

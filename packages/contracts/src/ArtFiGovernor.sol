@@ -40,6 +40,7 @@ contract ArtFiGovernor is
 
     error InvalidProposalAction();
     error InvalidProposalKind();
+    error InvalidProposalThreshold(uint256 provided, uint256 minimum);
     error InvalidRWA();
     error UnclassifiedProposalDisabled();
 
@@ -48,6 +49,7 @@ contract ArtFiGovernor is
     );
 
     uint256 public constant APPROVAL_DENOMINATOR = 1_000_000;
+    uint256 public constant PROPOSAL_THRESHOLD_NUMERATOR = 100_000;
     uint256 public constant MARKET_MIGRATION_APPROVAL = 500_000;
     uint256 public constant PHYSICAL_ACTION_APPROVAL = 666_667;
     uint256 public constant FORCED_BUYOUT_APPROVAL = 800_000;
@@ -76,6 +78,16 @@ contract ArtFiGovernor is
             address(vault_) == address(0) || address(actionRegistry_) == address(0)
                 || address(actionRegistry_.rwaVault()) != address(vault_) || !_isRWAEligible(vault_)
         ) revert InvalidRWA();
+        // Fractional supply is fixed at issuance; use all issued units, not delegated votes.
+        uint256 minimumThreshold = Math.mulDiv(
+            vault_.fractionalSupply(),
+            PROPOSAL_THRESHOLD_NUMERATOR,
+            APPROVAL_DENOMINATOR,
+            Math.Rounding.Ceil
+        );
+        if (proposalThresholdTokens < minimumThreshold) {
+            revert InvalidProposalThreshold(proposalThresholdTokens, minimumThreshold);
+        }
         rwaVault = vault_;
         actionRegistry = actionRegistry_;
     }

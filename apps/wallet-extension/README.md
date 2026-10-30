@@ -49,3 +49,17 @@ pnpm --filter @giraffetechnology/artfi-wallet-extension build
 
 Load `apps/wallet-extension/dist` as an unpacked development extension only after reviewing the
 current commit. The Alpha has no browser-store, production-signing, or mainnet approval.
+
+## Popup language and privacy
+
+The popup offers English, Simplified and Traditional Chinese, French, Spanish, German, Korean,
+and Japanese. It uses bundled interface text only; it does not contact a translation service.
+A browser-language match is used initially, with English as the fallback. A selected language is
+saved as the public string `artfi.popup.locale.v1` in extension-local storage, separate from the
+encrypted connector vault. A failed save affects persistence only and is shown explicitly.
+The original English Hoodi/signing notice remains visible in every language. Origin strings and
+all interface messages are inserted as text, never HTML. Language changes do not send coordinator
+messages, request site permission, change accounts, unlock the vault, or sign anything.
+
+This initial interface implementation does not establish extension-specific browser/store,
+accessibility, multilingual review, independent security, or signing acceptance.

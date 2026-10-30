@@ -21,6 +21,7 @@ const session = {
   address,
   chainId: 560048,
   expiresAt: Date.now() + 60000,
+  accessExpiresAt: Date.now() + 60000,
 };
 
 describe("portfolio rendering and balance cache", () => {
@@ -65,39 +66,47 @@ describe("portfolio rendering and balance cache", () => {
       }),
     );
   });
-  it.each(["logout", "expiry", "account-change", "chain-change"])(
-    "cannot reveal cached balance after %s",
-    (change) => {
-      renderToStaticMarkup(createElement(PortfolioWallet));
-      mocks.balance.mockClear();
-      if (change === "logout")
-        mocks.auth.mockReturnValue({ session: null, authenticated: false });
-      if (change === "expiry")
-        mocks.auth.mockReturnValue({
-          session: { ...session, expiresAt: 1 },
-          authenticated: true,
-        });
-      if (change === "account-change")
-        mocks.account.mockReturnValue({
-          address: "0x2000000000000000000000000000000000000002",
-          chainId: 560048,
-          status: "connected",
-          isConnected: true,
-        });
-      if (change === "chain-change")
-        mocks.account.mockReturnValue({
-          address,
-          chainId: 1,
-          status: "connected",
-          isConnected: true,
-        });
-      const html = renderToStaticMarkup(createElement(PortfolioWallet));
-      expect(html).not.toContain("123.4567");
-      expect(html).toContain("Sign in to view wallet assets");
-      expect(mocks.balance).not.toHaveBeenCalled();
-      expect(renderToStaticMarkup(createElement(PortfolioRecords))).toContain(
-        "Sign in with the connected wallet",
-      );
-    },
-  );
+  it.each([
+    "logout",
+    "expiry",
+    "access-expiry",
+    "account-change",
+    "chain-change",
+  ])("cannot reveal cached balance after %s", (change) => {
+    renderToStaticMarkup(createElement(PortfolioWallet));
+    mocks.balance.mockClear();
+    if (change === "logout")
+      mocks.auth.mockReturnValue({ session: null, authenticated: false });
+    if (change === "expiry")
+      mocks.auth.mockReturnValue({
+        session: { ...session, expiresAt: 1 },
+        authenticated: true,
+      });
+    if (change === "access-expiry")
+      mocks.auth.mockReturnValue({
+        session: { ...session, accessExpiresAt: 1 },
+        authenticated: true,
+      });
+    if (change === "account-change")
+      mocks.account.mockReturnValue({
+        address: "0x2000000000000000000000000000000000000002",
+        chainId: 560048,
+        status: "connected",
+        isConnected: true,
+      });
+    if (change === "chain-change")
+      mocks.account.mockReturnValue({
+        address,
+        chainId: 1,
+        status: "connected",
+        isConnected: true,
+      });
+    const html = renderToStaticMarkup(createElement(PortfolioWallet));
+    expect(html).not.toContain("123.4567");
+    expect(html).toContain("Sign in to view wallet assets");
+    expect(mocks.balance).not.toHaveBeenCalled();
+    expect(renderToStaticMarkup(createElement(PortfolioRecords))).toContain(
+      "Sign in with the connected wallet",
+    );
+  });
 });

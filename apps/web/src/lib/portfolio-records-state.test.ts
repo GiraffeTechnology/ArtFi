@@ -14,7 +14,7 @@ const records = (owner = address) => ({
       assetToken: address,
       symbol: "TEST",
       balance: "2",
-      updatedAt: "2026-10-02",
+      updatedAt: "2026-10-02T00:00:00Z",
     },
   ],
   transactions: [],
@@ -64,9 +64,24 @@ describe("portfolio wallet context and retry", () => {
     const body = deferred<ReturnType<typeof records>>();
     const controller = new AbortController();
     const oldUpdate = vi.fn();
-    const request = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: () => body.promise });
+    const request = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            void body.promise.then((value) => {
+              try {
+                controller.enqueue(
+                  new TextEncoder().encode(JSON.stringify(value)),
+                );
+                controller.close();
+              } catch {
+                /* The prior wallet stream was already cancelled. */
+              }
+            });
+          },
+        }),
+      ),
+    );
     const oldRequest = load(request, oldUpdate, controller.signal);
     await vi.waitFor(() => expect(request).toHaveBeenCalled());
     controller.abort();

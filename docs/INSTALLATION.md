@@ -149,6 +149,15 @@ Take the database/configuration/object-store backup required by the deployment's
 operations procedure, record the current release and check that the new forward schema is
 compatible with the intended application rollback. Inspect the new manifest and migrations.
 
+The combined `upgrade` command requires this installer's existing managed `current`
+release link and verifies the active release before staging the candidate. A missing,
+external, damaged or mismatched active release is rejected without writing installation
+state. `--release` is not an upgrade selector; the old release comes from `current`.
+For a new host or an unmanaged populated installation, follow the separately authorized
+installation and baseline/restore procedure instead of using `upgrade` as a first install.
+This filesystem check does not prove database compatibility, backup recovery or readiness.
+The checks and data-preservation requirements above still apply.
+
 For processes started by this utility, run the command from the verified new extracted bundle:
 
 ```sh

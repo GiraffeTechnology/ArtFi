@@ -8,6 +8,8 @@ import {
   mkdtemp,
   readFile,
   readlink,
+  readdir,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -335,6 +337,171 @@ test("unit generation reports systemd's unsupported executable-path characters",
       assert.notEqual(result.status, 0);
       assert.match(result.stderr, /without quotes or backslashes/);
     }
+  } finally {
+    await rm(f.directory, { recursive: true, force: true });
+  }
+});
+
+// TEST_ONLY fixtures never connect to a database or start an application service.
+async function installerTreeSnapshot(directory) {
+  const rows = [];
+  async function walk(path, name) {
+    const info = await lstat(path);
+    const row = { name, mode: info.mode & 0o777 };
+    if (info.isSymbolicLink()) row.link = await readlink(path);
+    else if (info.isDirectory()) {
+      row.directory = true;
+      rows.push(row);
+      for (const child of (await readdir(path)).sort())
+        await walk(join(path, child), name ? `${name}/${child}` : child);
+      return;
+    } else
+      row.sha256 = createHash("sha256")
+        .update(await readFile(path))
+        .digest("hex");
+    rows.push(row);
+  }
+  await walk(directory, "");
+  return rows;
+}
+async function nextFixtureRelease(f) {
+  const file = join(f.bundle, "manifest.json");
+  const value = JSON.parse(await readFile(file, "utf8"));
+  value.release = "next-release";
+  await writeFile(file, JSON.stringify(value));
+}
+async function managedFixture(f) {
+  for (const args of [
+    ["configure"],
+    ["install"],
+    ["activate", "--release", "test-release"],
+  ]) {
+    const result = f.cli(...args);
+    assert.equal(result.status, 0, result.stderr);
+  }
+}
+
+for (const variant of [
+  "missing-prefix",
+  "configured-only",
+  "regular-current",
+  "external-current",
+  "traversing-current",
+]) {
+  test(`upgrade refuses ${variant} without changing any fixture file`, async () => {
+    const f = await fixture();
+    try {
+      if (variant !== "missing-prefix")
+        assert.equal(f.cli("configure").status, 0);
+      if (variant === "regular-current")
+        await writeFile(join(f.prefix, "current"), "releases/test-release");
+      if (variant === "external-current")
+        await symlink(f.bundle, join(f.prefix, "current"));
+      if (variant === "traversing-current")
+        await symlink("releases/../outside", join(f.prefix, "current"));
+      const before = await installerTreeSnapshot(f.directory);
+      const result = f.cli("upgrade");
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /existing managed active release/);
+      assert.deepEqual(await installerTreeSnapshot(f.directory), before);
+    } finally {
+      await rm(f.directory, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const variant of [
+  "damaged-current",
+  "manifest-directory-mismatch",
+  "linked-releases",
+  "linked-release",
+  "release-override",
+]) {
+  test(`upgrade refuses ${variant} before candidate staging or service changes`, async () => {
+    const f = await fixture();
+    try {
+      await managedFixture(f);
+      const active = join(f.prefix, "releases/test-release");
+      if (variant === "damaged-current")
+        await writeFile(
+          join(active, "tools/install/config.mjs"),
+          "TEST_ONLY damaged bytes",
+        );
+      if (variant === "manifest-directory-mismatch") {
+        const file = join(active, "manifest.json");
+        const value = JSON.parse(await readFile(file, "utf8"));
+        value.release = "different-release";
+        await writeFile(file, JSON.stringify(value));
+      }
+      if (variant === "linked-releases") {
+        const destination = join(f.directory, "retained-releases");
+        await rename(join(f.prefix, "releases"), destination);
+        await symlink(destination, join(f.prefix, "releases"));
+      }
+      if (variant === "linked-release") {
+        const destination = join(f.directory, "retained-active");
+        await rename(active, destination);
+        await symlink(destination, active);
+      }
+      await nextFixtureRelease(f);
+      const before = await installerTreeSnapshot(f.directory);
+      const result = f.cli(
+        "upgrade",
+        ...(variant === "release-override"
+          ? ["--release", "test-release"]
+          : []),
+      );
+      assert.notEqual(result.status, 0);
+      assert.match(
+        result.stderr,
+        /existing managed active release|checksum mismatch|does not match its managed directory|not an upgrade option/,
+      );
+      assert.deepEqual(await installerTreeSnapshot(f.directory), before);
+    } finally {
+      await rm(f.directory, { recursive: true, force: true });
+    }
+  });
+}
+
+test("a verified managed prefix reaches ordinary candidate staging and migration-status handling", async () => {
+  const f = await fixture();
+  try {
+    await managedFixture(f);
+    const configFile = join(f.prefix, "shared/config.json");
+    const settings = JSON.parse(await readFile(configFile, "utf8"));
+    settings.MYSQL_DSN = "test_only@tcp(127.0.0.1:1)/not_connected";
+    await writeFile(configFile, JSON.stringify(settings));
+    const originalConfig = await readFile(configFile, "utf8");
+    await nextFixtureRelease(f);
+    await mkdir(join(f.bundle, "runtime/bin"), { recursive: true });
+    const stub =
+      "#!/bin/sh\nprintf 'TEST_ONLY migration status reached\\n' >&2\nexit 9\n";
+    await writeFile(join(f.bundle, "runtime/bin/artfi-migrate"), stub, {
+      mode: 0o755,
+    });
+    const manifestFile = join(f.bundle, "manifest.json");
+    const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+    manifest.files["runtime/bin/artfi-migrate"] = createHash("sha256")
+      .update(stub)
+      .digest("hex");
+    await writeFile(manifestFile, JSON.stringify(manifest));
+    const result = f.cli("upgrade");
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /TEST_ONLY migration status reached/);
+    assert.equal(
+      await readlink(join(f.prefix, "current")),
+      "releases/test-release",
+    );
+    assert.equal(await readFile(configFile, "utf8"), originalConfig);
+    assert.equal(
+      JSON.parse(
+        await readFile(
+          join(f.prefix, "releases/next-release/manifest.json"),
+          "utf8",
+        ),
+      ).release,
+      "next-release",
+    );
   } finally {
     await rm(f.directory, { recursive: true, force: true });
   }

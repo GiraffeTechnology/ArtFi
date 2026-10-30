@@ -1,3 +1,4 @@
+import { testReceipt, testReceiptClient } from "./market-receipt-test-client";
 import { describe, expect, it, vi } from "vitest";
 import {
   type Address,
@@ -151,11 +152,9 @@ describe("canonical Vault submission logging", () => {
       creationHash: original,
       submissionPending: true,
     });
-    const timeout = {
-      waitForTransactionReceipt: async () => {
-        throw new Error("RPC timeout");
-      },
-    } as unknown as Pick<PublicClient, "waitForTransactionReceipt">;
+    const timeout = testReceiptClient(async () => {
+      throw new Error("RPC timeout");
+    });
     await expect(confirmMarketReceipt(timeout, original)).rejects.toThrow(
       "not yet confirmed",
     );
@@ -174,13 +173,9 @@ describe("canonical Vault submission logging", () => {
     session.finish(manualRetry);
     expect(session.begin()).toBeUndefined();
     const checking = session.begin(true)!;
-    const receipt = {
-      transactionHash: canonical,
-      status: "success",
-      logs: [],
-    } as unknown as TransactionReceipt;
-    const repriced = {
-      waitForTransactionReceipt: async ({
+    const receipt = testReceipt(canonical);
+    const repriced = testReceiptClient(
+      async ({
         onReplaced,
       }: {
         onReplaced: (replacement: unknown) => void;
@@ -188,7 +183,7 @@ describe("canonical Vault submission logging", () => {
         onReplaced({ reason: "repriced", transactionReceipt: receipt });
         return receipt;
       },
-    } as unknown as Pick<PublicClient, "waitForTransactionReceipt">;
+    );
     const confirmed = await confirmMarketReceipt(repriced, original, (hash) =>
       session.repriced(checking, hash),
     );

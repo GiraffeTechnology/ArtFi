@@ -3,11 +3,8 @@ import { isAddress } from "viem";
 import { NFT_CHAINS, NftError, object, type NftScope } from "./model";
 
 export const SEAPORT = "0x0000000000000068F116a894984e2DB1123eB395";
-export const ZERO = "0x0000000000000000000000000000000000000000";
-export const WETH = {
-  ethereum: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-  base: "0x4200000000000000000000000000000000000006",
-};
+import { ZERO, WETH } from "../../../../../scripts/native-nft-currency.mjs";
+export { ZERO, WETH };
 export function nftScopes(): NftScope[] {
   try {
     const raw: unknown = JSON.parse(

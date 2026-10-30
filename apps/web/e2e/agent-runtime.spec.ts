@@ -169,9 +169,12 @@ async function fixture(page: Page) {
         json: {
           id: "TEST_ONLY-workflow",
           mode,
+          page: { version: 1, after: "0", limit: 100 },
           events: [
             {
               id: "1",
+              operationId: "TEST_ONLY-workflow",
+              mode,
               state: "STARTED",
               kind: "RETIRE",
               observedAt: Date.now(),
@@ -179,6 +182,8 @@ async function fixture(page: Page) {
             },
             {
               id: "2",
+              operationId: "TEST_ONLY-workflow",
+              mode,
               state: "COMPLETED",
               kind: "REPLACE",
               observedAt: Date.now(),

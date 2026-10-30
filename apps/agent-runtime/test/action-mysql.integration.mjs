@@ -325,7 +325,14 @@ test("an unconfirmed cancellation holds its open-order slot; canonical proof rel
   );
   const second = f.compile(await f.order({ owner: f.user, salt: "2" }));
   await store.prepare(f.verified, second);
-  assert.equal((await run.tick(second.operationId)).state, "REJECTED");
+  const refused = await run.tick(second.operationId);
+  assert.equal(
+    refused.state,
+    "REJECTED",
+    refused.state === "REJECTED"
+      ? undefined
+      : await actionFailureDiagnostics(refused, second.operationId),
+  );
   const cancel = f.compile(original, { action: "CANCEL_ORDER" });
   await store.prepare(f.verified, cancel);
   const lost = runtime(f, { loseResponse: true });
@@ -406,6 +413,8 @@ test("recovery during source failure preserves historical settlement and blocks 
     observePatch: { groundingCurrent: true },
   });
   assert.equal((await run.tick(a.operationId)).state, "SAFE_DEGRADED");
+  assert.equal(run.sends(), 1);
+  assert.ok(run.evidence.has(`${a.operationId}:0`));
   const b = f.compile({ ...quote, quantity: "1" });
   await store.prepare(f.verified, b);
   const unavailable = runtime(f, {
@@ -418,7 +427,7 @@ test("recovery during source failure preserves historical settlement and blocks 
     0,
     run.evidence.get(`${a.operationId}:0`),
   );
-  assert.equal((await unavailable.tick(a.operationId)).state, "COMPLETED");
+  await assertCompleted(unavailable.tick, a.operationId);
   assert.equal(unavailable.sends(), 0);
 });
 
@@ -466,7 +475,7 @@ test("autonomous planner resumes from durable intent, rejects unsafe advice, and
     next = pending.find((row) => row.authorityKey === f.verified.authorityKey);
   assert.ok(next);
   assert.match(next.id, /^auto-/);
-  assert.equal((await run.tick(next.id)).state, "COMPLETED");
+  await assertCompleted(run.tick, next.id);
   assert.equal(run.sends(), 2);
   assert.equal((await store.getBudgets(next.id)).authority.executions, "2");
   for (let i = 0; i < 4; i++)
@@ -502,4 +511,212 @@ test("stored TEST_ONLY authority cannot be silently promoted into a configured b
     bounded.get(initial.operationId),
     /ACTION_PROFILE_MISMATCH/,
   );
+});
+
+test("auction amendment survives real MySQL store restart and never recreates before canonical cancellation", async () => {
+  const f = await actionFixture({
+    kind: "AUCTION",
+    action: "CREATE_ORDER",
+    intentPatch: { maxExecutions: "3", maxOpenOrders: "1" },
+  });
+  const now = Math.floor(Date.now() / 1000);
+  const originalTerms = {
+    requestId: ethers.id(`OFFLINE_ORIGINAL_AUCTION_${f.user.address}`),
+    amount: "2",
+    openingBid: "20",
+    startsAt: String(now - 1),
+    endsAt: String(now + 300),
+    reservePrice: "25",
+    minimumBidIncrement: "1",
+    extensionWindow: "10",
+    extensionDuration: "10",
+  };
+  const original = f.compile(originalTerms);
+  await store.prepare(f.verified, original);
+  const created = runtime(f);
+  await assertCompleted(created.tick, original.operationId);
+  assert.equal(
+    (await store.getBudgets(original.operationId)).wallet.openOrders,
+    "1",
+  );
+
+  const plan = f.compile(
+    {
+      listingId: "77",
+      replacement: {
+        ...originalTerms,
+        requestId: ethers.id(`OFFLINE_REPLACEMENT_AUCTION_${f.user.address}`),
+        openingBid: "22",
+      },
+    },
+    { action: "AMEND_ORDER" },
+  );
+  await store.prepare(f.verified, plan);
+  const evidence = new Map();
+  let sends = 0,
+    cancelled = false;
+  function restartedTick() {
+    // A new store/kernel instance reads the same real SQL state. External chain
+    // observations remain explicit synthetic fixtures, not live RPC evidence.
+    const restartedStore = createActionStore(options);
+    return createActionKernel({
+      store: restartedStore,
+      adapterTimeoutMs: 150,
+      authorize: f.authorize,
+      observe: async (leg) => {
+        const observed = f.observe(leg);
+        observed.auction = {
+          ...observed.auction,
+          state: cancelled ? "CANCELLED" : "ACTIVE",
+          listingId: "77",
+          seller: f.user.address,
+          hasBid: false,
+        };
+        observed.originalOrderRetired = cancelled;
+        return observed;
+      },
+      execute: async (leg, context) => {
+        sends++;
+        if (leg.name === "REPLACE") assert.equal(cancelled, true);
+        const proof = syntheticEvidence(
+          leg,
+          context.operationId,
+          context.legIndex,
+        );
+        if (leg.name === "CANCEL") cancelled = true;
+        else proof.events[0].args.listingId = "78";
+        evidence.set(context.legIndex, proof);
+        throw Error("TEST_AUCTION_RESPONSE_LOST");
+      },
+      readEvidence: async (_leg, row) => evidence.get(row.cursor) ?? null,
+    });
+  }
+  assert.equal(
+    (await restartedTick()(plan.operationId)).state,
+    "SAFE_DEGRADED",
+  );
+  assert.equal(sends, 1);
+  const cancellation = evidence.get(0);
+  evidence.delete(0);
+  assert.equal(
+    (await restartedTick()(plan.operationId)).state,
+    "SAFE_DEGRADED",
+  );
+  assert.equal(sends, 1);
+  assert.equal((await store.get(plan.operationId)).cursor, 0);
+  assert.equal(
+    (await store.getBudgets(plan.operationId)).wallet.openOrders,
+    "1",
+  );
+
+  evidence.set(0, cancellation);
+  assert.equal((await restartedTick()(plan.operationId)).state, "PLANNED");
+  assert.equal(sends, 1);
+  assert.equal((await store.get(plan.operationId)).cursor, 1);
+  assert.equal(
+    (await store.getBudgets(plan.operationId)).wallet.openOrders,
+    "0",
+  );
+  assert.equal(
+    (await restartedTick()(plan.operationId)).state,
+    "SAFE_DEGRADED",
+  );
+  assert.equal(sends, 2);
+  assert.equal((await restartedTick()(plan.operationId)).state, "COMPLETED");
+  assert.equal(sends, 2);
+  const budget = await store.getBudgets(plan.operationId);
+  assert.equal(budget.authority.executions, "3");
+  assert.equal(budget.wallet.openOrders, "1");
+  const events = await store.history(plan.operationId);
+  assert.ok(
+    events.findIndex(
+      (event) => event.leg === "CANCEL" && event.state === "COMPLETED",
+    ) <
+      events.findIndex(
+        (event) => event.leg === "REPLACE" && event.state === "STARTED",
+      ),
+  );
+});
+
+test("multi-unit bids reserve total payment in real SQL and reconcile lost responses without replay after store recreation", async () => {
+  for (const action of ["BID", "REBID"]) {
+    const f = await actionFixture({
+      kind: "AUCTION",
+      action,
+      intentPatch: {
+        minUnitPrice: "10",
+        maxUnitPrice: "10",
+        maxExecutions: "1",
+        maxAggregateExposure: "20",
+      },
+    });
+    const plan = f.compile({
+      listingId: "77",
+      bidAmount: "20",
+      seller: f.seller.address,
+      amount: "2",
+    });
+    await store.prepare(f.verified, plan);
+    let sends = 0,
+      proof = null;
+    const tick = () =>
+      createActionKernel({
+        store: createActionStore(options),
+        authorize: f.authorize,
+        adapterTimeoutMs: 150,
+        observe: async (leg) => {
+          const o = f.observe(leg);
+          o.auction.amountRemaining = "2";
+          return o;
+        },
+        execute: async (leg, context) => {
+          sends++;
+          assert.equal(leg.quantity, "2");
+          assert.equal(leg.value, "20");
+          proof = syntheticEvidence(leg, context.operationId, context.legIndex);
+          throw Error("TEST_BID_RESPONSE_LOST");
+        },
+        readEvidence: async () => proof,
+      });
+    assert.equal((await tick()(plan.operationId)).state, "SAFE_DEGRADED");
+    assert.equal(sends, 1);
+    const held = await store.getBudgets(plan.operationId);
+    assert.equal(held.wallet.reservedValue, "20");
+    const saved = proof;
+    proof = null;
+    assert.equal((await tick()(plan.operationId)).state, "SAFE_DEGRADED");
+    assert.equal(sends, 1);
+    proof = saved;
+    await assertCompleted(tick(), plan.operationId);
+    await assertCompleted(tick(), plan.operationId);
+    assert.equal(sends, 1);
+    const budget = await store.getBudgets(plan.operationId);
+    assert.equal(budget.authority.executions, "1");
+    assert.equal(budget.wallet.reservedValue, "20");
+  }
+});
+
+test("real SQL bid dispatch refuses changed lot quantity before any payment reservation", async () => {
+  for (const expected of ["1", "2"]) {
+    const f = await actionFixture({ kind: "AUCTION", action: "BID" });
+    const terms = {
+      listingId: "77",
+      bidAmount: "20",
+      seller: f.seller.address,
+    };
+    if (expected === "2") terms.amount = "2";
+    const plan = f.compile(terms);
+    await store.prepare(f.verified, plan);
+    const o = f.observe(plan.legs[0]);
+    o.auction.amountRemaining = "3";
+    const run = runtime(f, { observePatch: { auction: o.auction } });
+    const refused = await run.tick(plan.operationId);
+    assert.equal(refused.state, "SAFE_DEGRADED");
+    assert.equal(refused.reason, "AUCTION_BID_REFUSED");
+    assert.equal(refused.executionAttempted, false);
+    assert.equal(run.sends(), 0);
+    const budget = await store.getBudgets(plan.operationId);
+    assert.equal(budget.authority.executions, "0");
+    assert.equal(budget.wallet.reservedValue, "0");
+  }
 });

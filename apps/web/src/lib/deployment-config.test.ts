@@ -36,10 +36,18 @@ describe("deployment configuration", () => {
     ];
     expect(names).toContain("NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_MARKET_ADDRESS");
     expect(names).toContain("NEXT_PUBLIC_ARTFI_FRACTION_MARKET_ADDRESS");
-    for (const name of names) {
-      expect(publicRuntimeKeys).toContain(name);
-      expect(dockerfile).toContain(`ARG ${name}=""`);
-      expect(dockerfile).toContain(`${name}=$${name}`);
+    for (const name of names) expect(publicRuntimeKeys).toContain(name);
+    // Both image stages need the same reviewed public defaults: a build-stage
+    // ARG alone does not make that value available to the final runtime image.
+    const stages = dockerfile.split(
+      /^FROM \$\{NODE_IMAGE\} AS (?:build|runtime)\s*$/m,
+    );
+    expect(stages).toHaveLength(3);
+    for (const stage of stages.slice(1)) {
+      for (const name of publicRuntimeKeys) {
+        expect(stage).toContain(`ARG ${name}=""`);
+        expect(stage).toContain(`${name}=$${name}`);
+      }
     }
     expect(sources(sourceRoot).join("\n")).not.toMatch(
       /process\.env\.NEXT_PUBLIC_/,

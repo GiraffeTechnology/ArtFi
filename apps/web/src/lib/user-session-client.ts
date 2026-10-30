@@ -2,6 +2,7 @@
 
 import { isAddress, type Hex } from "viem";
 import { isSessionChain } from "./auth-chains";
+import { readUserJSON } from "./user-auth-json";
 import {
   authenticatedSession,
   initialUserSessionState,
@@ -77,6 +78,7 @@ export function subscribeToUserSessionChanges(listener: () => void) {
 
 export const browserSessionAPI: SessionAPI = async (action, body) => {
   let response: Response;
+  const signal = AbortSignal.timeout(25_000);
   try {
     response = await fetch(`/api/user/auth/${action}`, {
       method: action === "session" ? "GET" : "POST",
@@ -88,7 +90,7 @@ export const browserSessionAPI: SessionAPI = async (action, body) => {
           ? undefined
           : { "content-type": "application/json" },
       body: action === "session" ? undefined : JSON.stringify(body ?? {}),
-      signal: AbortSignal.timeout(25_000),
+      signal,
     });
   } catch {
     throw new ClientSessionError(
@@ -98,7 +100,7 @@ export const browserSessionAPI: SessionAPI = async (action, body) => {
     );
   }
   if (!response.ok) {
-    await response.body?.cancel();
+    void response.body?.cancel().catch(() => undefined);
     throw new ClientSessionError(
       response.status,
       response.status === 401
@@ -106,16 +108,11 @@ export const browserSessionAPI: SessionAPI = async (action, body) => {
         : "Wallet sign-in is unavailable. Try again.",
     );
   }
-  const text = await response.text();
-  if (text.length > 16_384)
-    throw new ClientSessionError(
-      503,
-      "Invalid wallet-session response.",
-      action !== "session",
-    );
   try {
-    return JSON.parse(text);
+    return await readUserJSON(response, { signal, timeoutMs: 25_000 });
   } catch {
+    // A successful HTTP response may already have changed HttpOnly cookies.
+    // A failed or ambiguous body must keep the existing retirement barrier.
     throw new ClientSessionError(
       503,
       "Invalid wallet-session response.",
@@ -129,12 +126,15 @@ function sessionFrom(value: unknown): UserSession {
   if (
     !session ||
     typeof session.id !== "string" ||
+    session.id.length === 0 ||
+    session.id.length > 128 ||
     !isAddress(session.address) ||
     !isSessionChain(session.chainId) ||
     !Number.isSafeInteger(session.expiresAt) ||
     session.expiresAt <= Date.now() ||
     !Number.isSafeInteger(session.accessExpiresAt) ||
-    session.accessExpiresAt <= Date.now()
+    session.accessExpiresAt <= Date.now() ||
+    session.accessExpiresAt > session.expiresAt
   )
     throw new ClientSessionError(401, "Sign in with your wallet to continue.");
   // Only the public session fields cross into React state.
@@ -249,6 +249,29 @@ export class ClientSessionController {
       Date.now() >= expiresAt
     )
       this.invalidate("Your wallet session expired. Sign in again.");
+  };
+  /** A deadline from an older token or wallet cannot change the current session. */
+  checkSessionDeadline = (
+    id: string,
+    accessExpiresAt: number,
+    expiresAt: number,
+  ): Promise<UserSession | null> => {
+    const session = this.state.session;
+    if (
+      !session ||
+      session.id !== id ||
+      session.accessExpiresAt !== accessExpiresAt ||
+      session.expiresAt !== expiresAt
+    )
+      return Promise.resolve(null);
+    if (Date.now() >= expiresAt) {
+      this.expireSession(id, expiresAt);
+      return Promise.resolve(null);
+    }
+    if (Date.now() < accessExpiresAt) return Promise.resolve(session);
+    // Hide expired access immediately, while keeping the durable refresh eligible.
+    this.publish({});
+    return this.recheck();
   };
   private restoreSession(background: boolean): Promise<UserSession | null> {
     if (this.restoreFlight) return this.restoreFlight;

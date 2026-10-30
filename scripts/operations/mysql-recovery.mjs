@@ -236,6 +236,59 @@ class Session {
   }
 }
 
+// Exact application-owned trigger support; this is not a general SQL allowlist.
+const notificationBody = `SET NEW.notification_revision = OLD.notification_revision + IF(
+    OLD.block_number <> NEW.block_number
+    OR LOWER(OLD.block_hash) <> LOWER(NEW.block_hash)
+    OR OLD.removed <> NEW.removed
+    OR OLD.confirmed <> NEW.confirmed, 1, 0)`;
+const normalized = (value) => value.replace(/\s+/g, "").toLowerCase();
+
+export const triggerSchemaQuery =
+  "SELECT JSON_OBJECT('name',TRIGGER_NAME,'event',EVENT_MANIPULATION,'table',EVENT_OBJECT_TABLE,'order',ACTION_ORDER,'body',ACTION_STATEMENT,'orientation',ACTION_ORIENTATION,'timing',ACTION_TIMING,'sqlMode',SQL_MODE,'definer',DEFINER,'characterSet',CHARACTER_SET_CLIENT,'connectionCollation',COLLATION_CONNECTION,'databaseCollation',DATABASE_COLLATION) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME";
+
+export function validateApplicationTriggers(triggers, ledger = []) {
+  if (!Array.isArray(triggers) || triggers.length > 1)
+    throw new Error(
+      "Unsupported schema trigger: only the exact application notification revision trigger is supported.",
+    );
+  for (const trigger of triggers) {
+    if (
+      !trigger ||
+      trigger.name !== "chain_event_notification_revision" ||
+      trigger.event !== "UPDATE" ||
+      trigger.table !== "chain_events" ||
+      trigger.order !== 1 ||
+      trigger.orientation !== "ROW" ||
+      trigger.timing !== "BEFORE" ||
+      typeof trigger.body !== "string" ||
+      normalized(trigger.body) !== normalized(notificationBody) ||
+      ![
+        "sqlMode",
+        "definer",
+        "characterSet",
+        "connectionCollation",
+        "databaseCollation",
+      ].every(
+        (key) =>
+          typeof trigger[key] === "string" &&
+          (key === "sqlMode" || trigger[key].length > 0),
+      )
+    )
+      throw new Error(
+        "Unsupported schema trigger: notification revision definition or execution metadata does not match.",
+      );
+  }
+  if (
+    ledger.some((entry) => entry.name === "000015_notification_inbox.up.sql") &&
+    triggers.length !== 1
+  )
+    throw new Error(
+      "Unsupported schema trigger: applied notification migration requires its revision trigger.",
+    );
+  return triggers;
+}
+
 const schemaQueries = {
   database:
     "SELECT JSON_OBJECT('characterSet',DEFAULT_CHARACTER_SET_NAME,'collation',DEFAULT_COLLATION_NAME) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=DATABASE()",
@@ -264,18 +317,20 @@ async function objectCounts(session) {
 
 async function snapshot(session) {
   const counts = await objectCounts(session);
-  if (
-    counts.unsupportedTables ||
-    counts.triggers ||
-    counts.routines ||
-    counts.events
-  )
+  if (counts.unsupportedTables || counts.routines || counts.events)
     throw fail(
-      "Unsupported schema: backup requires only InnoDB base tables and no views, triggers, routines or events; nothing was omitted silently.",
+      "Unsupported schema: backup requires only InnoDB base tables, the exact application notification trigger, and no views, routines or events; nothing was omitted silently.",
     );
+  const triggers = validateApplicationTriggers(
+    await session.json(triggerSchemaQuery),
+  );
+  if (triggers.length !== counts.triggers)
+    throw fail("Schema trigger count changed during snapshot.");
   const schema = {};
   for (const [key, sql] of Object.entries(schemaQueries))
     schema[key] = await session.json(sql);
+  // Keep the historical no-trigger schema digest unchanged.
+  if (triggers.length) schema.triggers = triggers;
   if (!schema.tables.some((table) => table.name === "artfi_schema_migrations"))
     throw fail(
       "Migration ledger is missing; backup requires an installer-managed application database.",
@@ -295,6 +350,7 @@ async function snapshot(session) {
     throw fail(
       "Migration ledger is empty, dirty or invalid; recover the schema before backup.",
     );
+  validateApplicationTriggers(triggers, ledger);
   return { schema, ledger, schemaSha256: hash(JSON.stringify(schema)) };
 }
 
@@ -380,16 +436,19 @@ async function runLockedClient(session, binary, args, io) {
   if (problem) throw problem;
 }
 
-async function digestFile(handle) {
+async function digestFile(handle, signal) {
+  if (signal?.aborted) throw fail("Backup verification interrupted.");
   const digest = createHash("sha256");
   let bytes = 0;
   for await (const chunk of handle.createReadStream({
     start: 0,
     autoClose: false,
+    signal,
   })) {
     digest.update(chunk);
     bytes += chunk.length;
   }
+  if (signal?.aborted) throw fail("Backup verification interrupted.");
   return { sha256: digest.digest("hex"), bytes };
 }
 
@@ -407,7 +466,8 @@ async function privateBackupDirectory(directory) {
     );
 }
 
-async function openBackup(directory) {
+async function openBackup(directory, signal) {
+  if (signal?.aborted) throw fail("Backup verification interrupted.");
   await privateBackupDirectory(directory);
   await requirePrivateFile(join(directory, MANIFEST_FILE), "backup manifest");
   let manifest;
@@ -415,7 +475,10 @@ async function openBackup(directory) {
     const stat = await lstat(join(directory, MANIFEST_FILE));
     if (stat.size > MAX_QUERY_BYTES) throw fail("too large");
     manifest = JSON.parse(
-      await readFile(join(directory, MANIFEST_FILE), "utf8"),
+      await readFile(join(directory, MANIFEST_FILE), {
+        encoding: "utf8",
+        signal,
+      }),
     );
   } catch {
     throw fail("Invalid or missing backup manifest.");
@@ -439,7 +502,7 @@ async function openBackup(directory) {
     constants.O_RDONLY | constants.O_NOFOLLOW,
   );
   try {
-    const actual = await digestFile(handle);
+    const actual = await digestFile(handle, signal);
     if (actual.sha256 !== manifest.sha256 || actual.bytes !== manifest.bytes)
       throw fail("Backup checksum or size mismatch; restore refused.");
     return { manifest, handle };
@@ -503,7 +566,7 @@ export async function backup(options) {
           "--skip-add-locks",
           "--skip-disable-keys",
           "--skip-comments",
-          "--skip-triggers",
+          "--triggers",
           "--hex-blob",
           "--tz-utc",
           "--column-statistics=0",
@@ -593,6 +656,33 @@ export async function verify(options) {
     schemaSha256: manifest.schemaSha256,
     authenticityVerified: false,
   };
+}
+
+// Read-only telemetry reuses the existing complete backup checks. Integrity and
+// creation time never establish publisher authenticity or a successful restore.
+export async function observeBackup(options, { signal } = {}) {
+  const { manifest, handle } = await openBackup(
+    resolve(options.backup),
+    signal,
+  );
+  let result;
+  try {
+    if (signal?.aborted) throw fail("Backup verification interrupted.");
+    result = {
+      integrityVerified: true,
+      createdAt:
+        Object.hasOwn(manifest, "createdAt") &&
+        typeof manifest.createdAt === "string"
+          ? manifest.createdAt
+          : null,
+      authenticityVerified: false,
+      restoreVerified: false,
+    };
+  } finally {
+    await handle.close();
+  }
+  if (signal?.aborted) throw fail("Backup verification interrupted.");
+  return result;
 }
 
 export async function restore(options) {

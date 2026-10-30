@@ -7,6 +7,7 @@ export type SetupRecord<T> = {
   pending?: { id: string; step: string; hash?: Hash };
 };
 type Snapshot<T> = {
+  ready: boolean;
   record?: SetupRecord<T>;
   busy: boolean;
   blocked: boolean;
@@ -21,7 +22,12 @@ export function createSetupRecoverySession<T>(
   context: string,
   validate: (data: unknown) => data is T,
 ) {
-  const empty: Snapshot<T> = { busy: false, blocked: false, error: "" };
+  const empty: Snapshot<T> = {
+    ready: false,
+    busy: false,
+    blocked: false,
+    error: "",
+  };
   let snapshot = empty;
   let restored = false;
   let storage: (() => Store) | undefined;
@@ -103,6 +109,10 @@ export function createSetupRecoverySession<T>(
           error:
             "Browser setup recovery could not be read. Check the original wallet activity before continuing; new writes remain blocked.",
         });
+      } finally {
+        // Restoration is synchronous, including empty or inaccessible storage.
+        // Readiness never removes the separate blocked/pending write guards.
+        publish({ ready: true });
       }
     },
     begin(checking = false) {
@@ -180,12 +190,12 @@ export function createSetupRecoverySession<T>(
         }
       }
     },
-    fail(lease: number, error: unknown) {
+    fail(lease: number, _error: unknown) {
       if (!current(lease)) return;
+      // Wallet/RPC exceptions can include calldata, signatures or storage details.
+      // Keep public guidance bounded without changing the saved request or lease.
       const reason =
-        error instanceof Error
-          ? error.message
-          : "Setup could not be completed.";
+        "Setup could not be completed. Check the saved setup and any existing transaction before retrying.";
       publish({
         error:
           snapshot.record?.pending && !snapshot.record.pending.hash

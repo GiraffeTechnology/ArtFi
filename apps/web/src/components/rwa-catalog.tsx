@@ -1,16 +1,25 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
+import { type RwaCatalogPage, type RwaSection } from "@/lib/rwa-catalog";
 import {
-  rwaCatalogPageSchema,
-  type RwaCatalogPage,
-  type RwaSection,
-} from "@/lib/rwa-catalog";
+  catalogFilterQuery,
+  catalogFilterPage,
+  emptyCatalogFilters,
+} from "@/lib/rwa-catalog-filters";
 export function RwaCatalog({ section }: { section: RwaSection }) {
+  return <CatalogSection key={section} section={section} />;
+}
+function CatalogSection({ section }: { section: RwaSection }) {
+  const chainSelectId = useId();
+  const chainLabelId = `${chainSelectId}-label`;
   const [page, setPage] = useState(1),
     [query, setQuery] = useState(""),
     [draft, setDraft] = useState(""),
     [sort, setSort] = useState("updated"),
+    [filterDraft, setFilterDraft] = useState(emptyCatalogFilters),
+    [filters, setFilters] = useState(""),
+    [filterError, setFilterError] = useState(""),
     [attempt, setAttempt] = useState(0),
     [data, setData] = useState<RwaCatalogPage>(),
     [error, setError] = useState(""),
@@ -26,6 +35,8 @@ export function RwaCatalog({ section }: { section: RwaSection }) {
         q: query,
         sort,
       });
+      for (const [key, value] of new URLSearchParams(filters))
+        queryString.set(key, value);
       const response = await fetch(`/api/rwa/assets?${queryString}`, {
         cache: "no-store",
         credentials: "omit",
@@ -36,7 +47,7 @@ export function RwaCatalog({ section }: { section: RwaSection }) {
         throw new Error(
           "The approved-source asset catalog is unavailable. No sample is shown as live inventory.",
         );
-      const result = rwaCatalogPageSchema.parse(await response.json());
+      const result = catalogFilterPage(await response.json(), queryString);
       if (active) {
         setData(result);
         setError("");
@@ -59,11 +70,23 @@ export function RwaCatalog({ section }: { section: RwaSection }) {
       active = false;
       controller.abort();
     };
-  }, [section, page, query, sort, attempt]);
+  }, [section, page, query, sort, filters, attempt]);
   function search(event: FormEvent) {
     event.preventDefault();
+    let nextFilters: string;
+    try {
+      nextFilters = catalogFilterQuery(section, filterDraft).toString();
+    } catch (reason) {
+      setFilterError(
+        reason instanceof Error ? reason.message : "Invalid asset filters.",
+      );
+      return;
+    }
+    setFilterError("");
+    setFilters(nextFilters);
     setLoading(true);
     setData(undefined);
+    setError("");
     setPage(1);
     setQuery(draft.trim());
     setAttempt((value) => value + 1);
@@ -111,7 +134,84 @@ export function RwaCatalog({ section }: { section: RwaSection }) {
             <option value="title">Title</option>
           </select>
         </label>
+        <label htmlFor={chainSelectId}>
+          <span id={chainLabelId}>Chain</span>{" "}
+          <select
+            id={chainSelectId}
+            aria-labelledby={chainLabelId}
+            value={filterDraft.chainId}
+            onChange={(event) =>
+              setFilterDraft({ ...filterDraft, chainId: event.target.value })
+            }
+          >
+            <option value="">All catalog chains</option>
+            <option value="560048">Hoodi (560048)</option>
+          </select>
+        </label>
+        <label>
+          Collection address{" "}
+          <input
+            value={filterDraft.collectionAddress}
+            maxLength={42}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(event) =>
+              setFilterDraft({
+                ...filterDraft,
+                collectionAddress: event.target.value,
+              })
+            }
+          />
+        </label>
+        <label>
+          Token ID{" "}
+          <input
+            value={filterDraft.tokenId}
+            maxLength={78}
+            inputMode="numeric"
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(event) =>
+              setFilterDraft({ ...filterDraft, tokenId: event.target.value })
+            }
+          />
+        </label>
+        {section === "fractional" && (
+          <label>
+            Fraction token address{" "}
+            <input
+              value={filterDraft.fractionTokenAddress}
+              maxLength={42}
+              spellCheck={false}
+              autoComplete="off"
+              onChange={(event) =>
+                setFilterDraft({
+                  ...filterDraft,
+                  fractionTokenAddress: event.target.value,
+                })
+              }
+            />
+          </label>
+        )}
         <button disabled={loading}>Search</button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            setDraft("");
+            setQuery("");
+            setFilterDraft(emptyCatalogFilters());
+            setFilters("");
+            setFilterError("");
+            setError("");
+            setLoading(true);
+            setData(undefined);
+            setPage(1);
+            setAttempt((value) => value + 1);
+          }}
+        >
+          Clear search and filters
+        </button>
         <button
           type="button"
           disabled={loading}
@@ -123,6 +223,18 @@ export function RwaCatalog({ section }: { section: RwaSection }) {
           Refresh asset records
         </button>
       </form>
+      {filterError && <p role="alert">{filterError}</p>}
+      {(query || filters) && (
+        <p aria-label="Applied catalog filters">
+          Applied search: {query || "all text"}.
+          {Array.from(new URLSearchParams(filters)).map(([key, value]) => (
+            <span key={key} data-no-translate>
+              {" "}
+              {key}: {value}.
+            </span>
+          ))}
+        </p>
+      )}
       {loading && <p role="status">Loading source-bound assets…</p>}
       {error && <p role="status">{error}</p>}
       {data && !loading && (
