@@ -1265,3 +1265,9 @@ install a daemon, enable supervision or establish continuous operations acceptan
 No shared bridge, database, SSH, model-provider or other-task configuration is
 changed by this source integration. Actual installed channels, least privilege,
 restart/fault behavior and measured soak evidence remain separate pending work.
+
+### Charity edition facts remain bound to the current read
+
+The charity detail page now retires earlier refreshes and edition/provider contexts before publishing facts. All four existing contract observations use one mined block; the reader checks the block identity and chain again before returning a bounded, validated projection. Existing contract and CH.1/CH.2 constraints, timestamp display bounds, and sellout/donation ordering are checked without adding holder grants, previews, signatures or transaction authority. Canonicality at read completion is not finality.
+
+New regression cases cover stale/aborted/timed-out reads, chain and block replacement, mutable provider records, malformed observations and edition/quantity/timestamp bounds. Source authored; affected tests and CI are NOT_RUN at submission. Full real deployment, holder delivery and product acceptance remain open.

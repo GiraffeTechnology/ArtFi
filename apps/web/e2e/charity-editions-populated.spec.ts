@@ -137,6 +137,30 @@ function rpcResult(request: RpcRequest): unknown {
       return `0x${supportedChain.id.toString(16)}`;
     case "eth_blockNumber":
       return "0x1";
+    case "eth_getBlockByNumber":
+      return {
+        number: "0x1",
+        hash: `0x${"aa".repeat(32)}`,
+        parentHash: zeroHash,
+        timestamp: `0x${(series.createdAt + 100n).toString(16)}`,
+        nonce: "0x0000000000000000",
+        difficulty: "0x0",
+        totalDifficulty: "0x0",
+        gasLimit: "0x1c9c380",
+        gasUsed: "0x0",
+        size: "0x1",
+        baseFeePerGas: "0x1",
+        extraData: "0x",
+        logsBloom: `0x${"00".repeat(256)}`,
+        miner: distributionWallet,
+        mixHash: zeroHash,
+        receiptsRoot: zeroHash,
+        stateRoot: zeroHash,
+        transactionsRoot: zeroHash,
+        sha3Uncles: zeroHash,
+        transactions: [],
+        uncles: [],
+      };
     case "eth_call": {
       const call = request.params?.[0] as { to?: string; data: Hex };
       return answerCall(call.to, call.data);
@@ -299,6 +323,55 @@ test("a failed charity refresh removes the earlier edition facts until recovery"
   await error.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(facts).toBeVisible();
   await expect(facts).toContainText("100");
+  await expect(error).toHaveCount(0);
+  await expectBoundedPublicError(page);
+});
+
+test("a replaced charity facts block stays unavailable until a stable retry", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS,
+    "No editions address is configured for this run.",
+  );
+  let unstable = true;
+  await page.route("**/*", async (route) => {
+    const request = route.request(),
+      body = request.postData();
+    if (request.method() !== "POST" || !body?.includes("jsonrpc"))
+      return route.fallback();
+    const payload = JSON.parse(body) as RpcRequest | RpcRequest[];
+    const respond = (single: RpcRequest) => {
+      let result = rpcResult(single);
+      if (
+        unstable &&
+        single.method === "eth_getBlockByNumber" &&
+        single.params?.[0] !== "latest"
+      )
+        result = {
+          ...(result as Record<string, unknown>),
+          hash: `0x${"bb".repeat(32)}`,
+        };
+      return { jsonrpc: "2.0", id: single.id, result };
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        Array.isArray(payload) ? payload.map(respond) : respond(payload),
+      ),
+    });
+  });
+  await page.goto("/charity/1");
+  const error = page.getByTestId("charity-edition-read-error");
+  await expect(error).toBeVisible();
+  await expect(page.getByTestId("charity-edition-facts")).toHaveCount(0);
+  await expect(page.getByTestId("charity-holder-access")).toHaveCount(0);
+  await expectBoundedPublicError(page);
+  unstable = false;
+  await error.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByTestId("charity-edition-facts")).toBeVisible();
+  await expect(page.getByTestId("charity-edition-facts")).toContainText("100");
   await expect(error).toHaveCount(0);
   await expectBoundedPublicError(page);
 });
