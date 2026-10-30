@@ -1,0 +1,65 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(15rem, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.panel {
+  border: 1px solid var(--line, #d5d8d0);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  background: var(--surface, #fff);
+  min-width: 0;
+}
+.panel h2 {
+  margin-top: 0;
+}
+.panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1.2rem 0;
+  font-weight: 600;
+}
+.panel textarea,
+.panel input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line, #bcc4ba);
+  border-radius: 0.5rem;
+  padding: 0.7rem;
+  font: inherit;
+  background: var(--surface, #fff);
+  color: inherit;
+  box-sizing: border-box;
+}
+.panel textarea {
+  resize: vertical;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.panel small,
+.note {
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+.panel dd {
+  margin: 0 0 1rem;
+  overflow-wrap: anywhere;
+}
+.panel dt {
+  font-weight: 600;
+}
+.actions {
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .panel {
+    padding: 1rem;
+  }
+}

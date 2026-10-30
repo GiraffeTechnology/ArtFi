@@ -1,0 +1,18 @@
+[Unit]
+Description=ArtFi @SERVICE@ service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@WORKING_DIRECTORY@
+ExecStart=:@NODE@ @CLI@ run --prefix @PREFIX@ --service @SERVICE@
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

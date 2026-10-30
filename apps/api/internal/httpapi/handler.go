@@ -82,8 +82,17 @@ func NewHandler() http.Handler {
 
 func newHandler(rwa *rwaService) http.Handler {
 	mux := http.NewServeMux()
+	userAuth := registerUserAuthRoutes(mux, rwa)
+	registerNFTOperations(mux, userAuth)
+	registerAdministration(mux, userAuth)
+	registerNotifications(mux, userAuth)
+	registerRWACatalog(mux, rwa, userAuth)
+	mux.HandleFunc("GET /v1/orders", rwa.getSignedOrders)
+	mux.HandleFunc("GET /v1/orders/fraction-book", rwa.getFractionBook)
+	mux.HandleFunc("GET /v1/orders/{intentHash}", rwa.getSignedOrder)
+	mux.HandleFunc("POST /v1/indexer/signed-orders", func(w http.ResponseWriter, r *http.Request) { rwa.ingestSignedOrder(w, r, userAuth) })
 	mux.HandleFunc("GET /healthz", status("ok"))
-	mux.HandleFunc("GET /readyz", status("ready"))
+	mux.HandleFunc("GET /readyz", rwa.readiness)
 	mux.HandleFunc("GET /v1/config", func(writer http.ResponseWriter, _ *http.Request) {
 		writeJSON(writer, http.StatusOK, configResponse{
 			API:                 "v1",
@@ -100,11 +109,13 @@ func newHandler(rwa *rwaService) http.Handler {
 	mux.HandleFunc("GET /v1/assets/{slug}", getAsset)
 	mux.HandleFunc("GET /v1/nfts", rwa.getMintedNFTs)
 	mux.HandleFunc("GET /v1/projects", getProjects)
-	mux.HandleFunc("GET /v1/portfolio/{address}", rwa.getPortfolio)
+	mux.HandleFunc("GET /v1/portfolio/{address}", protectedPortfolio(rwa, userAuth))
 	mux.HandleFunc("POST /v1/uploads/intents", rwa.createUploadIntent)
 	mux.HandleFunc("PUT /v1/uploads/{uploadID}", rwa.uploadObject)
+	mux.HandleFunc("POST /v1/rwa/metadata-preparations", rwa.prepareRWAMetadata)
 	mux.HandleFunc("POST /v1/rwa/intents", rwa.createMintIntent)
 	mux.HandleFunc("GET /v1/rwa/intents/{intentID}", rwa.getMintIntent)
+	mux.HandleFunc("POST /v1/rwa/intents/{intentID}/evidence", rwa.renewMintEvidence)
 	mux.HandleFunc("POST /v1/rwa/intents/{intentID}/submission", rwa.recordSubmission)
 	mux.HandleFunc("POST /v1/rwa/discovery-checks", rwa.checkOpenSeaDiscovery)
 	mux.HandleFunc("POST /v1/vault/intents", rwa.createVaultIntent)
@@ -112,6 +123,8 @@ func newHandler(rwa *rwaService) http.Handler {
 	mux.HandleFunc("POST /v1/vault/intents/{intentID}/submission", rwa.recordVaultSubmission)
 	mux.HandleFunc("POST /v1/indexer/events", rwa.ingestChainEvent)
 	mux.HandleFunc("POST /v1/indexer/market-events", rwa.ingestMarketEvent)
+	mux.HandleFunc("POST /v1/indexer/market-snapshots", rwa.ingestMarketSnapshot)
+	mux.HandleFunc("GET /v1/market/native-analytics", rwa.getNativeMarketAnalytics)
 	mux.HandleFunc("GET /v1/market/activity", rwa.getMarketActivity)
 	mux.HandleFunc("GET /v1/market/assets", rwa.getMarketAssets)
 	mux.HandleFunc("POST /v1/market/intents", rwa.createMarketIntent)
@@ -123,10 +136,13 @@ func newHandler(rwa *rwaService) http.Handler {
 }
 
 func middleware(next http.Handler, service *rwaService) http.Handler {
-	allowedOrigin := os.Getenv("ARTFI_WEB_ORIGIN")
-	if allowedOrigin == "" {
-		allowedOrigin = "http://localhost:3000"
-	}
+	// No default origin, and therefore no default port. This used to fall back to
+	// http://localhost:3000, which in a real deployment allowed a loopback origin nobody uses and
+	// blocked the configured one, with no error naming the cause: every browser call failed CORS
+	// while the service looked healthy. An unset origin now sends no
+	// Access-Control-Allow-Origin header at all, so the browser reports a plain CORS failure and
+	// the missing configuration stays visible instead of being replaced by a guess.
+	allowedOrigin := strings.TrimSpace(os.Getenv("ARTFI_WEB_ORIGIN"))
 
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		started := time.Now()
@@ -135,7 +151,11 @@ func middleware(next http.Handler, service *rwaService) http.Handler {
 			requestID = newRequestID()
 		}
 		writer.Header().Set("X-Request-ID", requestID)
-		writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		// Omitted rather than sent empty when unconfigured: an empty value is still a header, and
+		// a browser reads it as an origin that matches nothing while looking deliberate.
+		if allowedOrigin != "" {
+			writer.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		}
 		writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Content-SHA256, Idempotency-Key, X-Indexer-Key, X-Request-ID")
 		writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 		writer.Header().Set("Vary", "Origin")

@@ -1,0 +1,74 @@
+.workspace {
+  display: grid;
+  gap: 1.5rem;
+  margin-block: 1.5rem;
+}
+.panel {
+  border: 1px solid var(--border, #d6d3d1);
+  border-radius: 1rem;
+  padding: clamp(1rem, 3vw, 2rem);
+  min-width: 0;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.heading h2,
+.heading h3 {
+  margin: 0;
+}
+.identity,
+.message,
+.details dd {
+  overflow-wrap: anywhere;
+}
+.message {
+  white-space: pre-wrap;
+}
+.list {
+  display: grid;
+  gap: 1rem;
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+}
+.notice {
+  padding: 1rem;
+  border: 1px solid var(--border, #d6d3d1);
+  border-radius: 0.75rem;
+  min-width: 0;
+}
+.details {
+  display: grid;
+  grid-template-columns: minmax(6rem, 1fr) minmax(0, 4fr);
+  gap: 0.5rem 1rem;
+}
+.details dd {
+  margin: 0;
+}
+.preferences {
+  display: grid;
+  gap: 1rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.preferences label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.preferences button {
+  justify-self: start;
+}
+@media (max-width: 40rem) {
+  .details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .details dd {
+    margin-bottom: 0.5rem;
+  }
+}

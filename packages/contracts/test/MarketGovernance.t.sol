@@ -79,39 +79,54 @@ contract MarketGovernanceTest {
         payment.approve(address(market), type(uint256).max);
     }
 
-    function testFixedOrderPartialFillAndSellerClaim() public {
-        uint256 listingId = market.createListing(
-            keccak256("fixed"),
-            asset,
-            payment,
-            100,
-            3,
-            uint48(block.timestamp),
-            uint48(block.timestamp + 10),
-            ArtFiMarket.ListingKind.FixedPrice
+    /// `PRD.md` §4.2.2 removed the pull at listing time from the fixed-price path. Creating an
+    /// escrowed fixed-price listing is therefore refused here; that path is `fillIntent`, covered
+    /// in `FractionSaleIntent.t.sol`. The escrow this test used to assert is what the ruling closed.
+    function testFixedPriceListingIsRefusedBecauseItSettlesBySignature() public {
+        uint256 sellerBefore = asset.balanceOf(address(this));
+        (bool ok, bytes memory reason) = address(market)
+            .call(
+                abi.encodeCall(
+                    market.createListing,
+                    (
+                        keccak256("fixed"),
+                        asset,
+                        payment,
+                        100,
+                        3,
+                        uint48(block.timestamp),
+                        uint48(block.timestamp + 10),
+                        ArtFiMarket.ListingKind.FixedPrice
+                    )
+                )
+            );
+        require(!ok, "an escrowed fixed-price listing was created");
+        require(
+            _revertSelector(reason) == ArtFiMarket.FixedPriceSettlesBySignature.selector,
+            "fixed-price listing did not fail closed"
         );
-        VM.prank(BUYER_A);
-        market.buyFixed(listingId, 40);
-        require(asset.balanceOf(BUYER_A) == 40, "fixed asset amount");
-        require(market.credits(address(this), address(payment)) == 120, "seller credit");
-        market.withdrawCredit(payment);
-        require(payment.balanceOf(address(this)) == 120, "seller withdrawal");
+        require(asset.balanceOf(address(this)) == sellerBefore, "the refused listing took tokens");
+        require(asset.balanceOf(address(market)) == 0, "the market escrowed on a refused listing");
     }
 
+    /// The auction path keeps escrow, which §4.2.2 retains, so the pilot cap is checked there.
     function testPilotCapFailsClosed() public {
         market.setPilotCap(BUYER_A, address(payment), 10);
-        uint256 listingId = market.createListing(
+        uint256 listingId = market.createAuctionListing(
             keccak256("pilot-cap"),
             asset,
             payment,
             100,
-            3,
+            12,
             uint48(block.timestamp),
             uint48(block.timestamp + 10),
-            ArtFiMarket.ListingKind.FixedPrice
+            12,
+            1,
+            2,
+            5
         );
         VM.prank(BUYER_A);
-        (bool ok,) = address(market).call(abi.encodeCall(market.buyFixed, (listingId, 4)));
+        (bool ok,) = address(market).call(abi.encodeCall(market.placeBid, (listingId, 12)));
         require(!ok, "pilot cap bypassed");
     }
 
@@ -179,26 +194,29 @@ contract MarketGovernanceTest {
         VM.prank(BUYER_B);
         market.placeBid(listingId, 101);
 
-        uint256 fixedListingId = market.createListing(
-            keccak256("legacy-fixed-defaults"),
-            asset,
-            payment,
-            1,
-            1,
-            uint48(block.timestamp),
-            uint48(block.timestamp + 1 hours),
-            ArtFiMarket.ListingKind.FixedPrice
-        );
-        (bool fixedTermsOk, bytes memory fixedTermsRevert) =
-            address(market).staticcall(abi.encodeCall(market.auctionTerms, (fixedListingId)));
-        require(!fixedTermsOk, "fixed listing exposed auction terms");
+        // The legacy auction defaults above are unchanged by §4.2.2. What the same call no longer
+        // does is create an escrowed fixed-price listing.
+        (bool fixedOk, bytes memory fixedRevert) = address(market)
+            .call(
+                abi.encodeCall(
+                    market.createListing,
+                    (
+                        keccak256("legacy-fixed-defaults"),
+                        asset,
+                        payment,
+                        1,
+                        1,
+                        uint48(block.timestamp),
+                        uint48(block.timestamp + 1 hours),
+                        ArtFiMarket.ListingKind.FixedPrice
+                    )
+                )
+            );
+        require(!fixedOk, "the legacy fixed-price path still escrows");
         require(
-            _revertSelector(fixedTermsRevert) == ArtFiMarket.InvalidState.selector,
-            "fixed auction terms did not fail closed"
+            _revertSelector(fixedRevert) == ArtFiMarket.FixedPriceSettlesBySignature.selector,
+            "legacy fixed-price path did not fail closed"
         );
-        VM.prank(BUYER_A);
-        market.buyFixed(fixedListingId, 1);
-        require(asset.balanceOf(BUYER_A) == 1, "fixed purchase behavior changed");
     }
 
     function testLegacyAuctionLateBidExtendsAndOriginalEndCannotSettle() public {
@@ -565,26 +583,17 @@ contract MarketGovernanceTest {
         uint48 start = uint48(block.timestamp);
         uint48 end = uint48(block.timestamp + 10);
         uint256 first = market.createListing(
-            requestId, asset, payment, 20, 2, start, end, ArtFiMarket.ListingKind.FixedPrice
+            requestId, asset, payment, 20, 2, start, end, ArtFiMarket.ListingKind.Auction
         );
         uint256 replay = market.createListing(
-            requestId, asset, payment, 20, 2, start, end, ArtFiMarket.ListingKind.FixedPrice
+            requestId, asset, payment, 20, 2, start, end, ArtFiMarket.ListingKind.Auction
         );
         require(first == replay, "listing replay changed id");
         (bool ok,) = address(market)
             .call(
                 abi.encodeCall(
                     market.createListing,
-                    (
-                        requestId,
-                        asset,
-                        payment,
-                        21,
-                        2,
-                        start,
-                        end,
-                        ArtFiMarket.ListingKind.FixedPrice
-                    )
+                    (requestId, asset, payment, 21, 2, start, end, ArtFiMarket.ListingKind.Auction)
                 )
             );
         require(!ok, "listing conflict accepted");
@@ -1054,9 +1063,12 @@ contract MarketGovernanceTest {
     /// `PRD.md` §4.2 forbids outright. Every other exit — settleAuction,
     /// finalizeOffering, claimOffering, refundOffering, withdrawCredit — is
     /// already unpausable by design; this closes the one that was not.
+    /// PR #46's property, now carried on the only path that still escrows. `PRD.md` §4.2.2 keeps
+    /// escrow for auctions and removed it from the fixed-price path, so an auction with no bidder
+    /// is where `cancelListing` is the seller's sole exit and must survive a pause.
     function testPauseDoesNotTrapEscrowedListing() public {
         uint256 before = asset.balanceOf(address(this));
-        uint256 listingId = market.createListing(
+        uint256 listingId = market.createAuctionListing(
             keccak256("paused-exit"),
             asset,
             payment,
@@ -1064,7 +1076,10 @@ contract MarketGovernanceTest {
             3,
             uint48(block.timestamp),
             uint48(block.timestamp + 10),
-            ArtFiMarket.ListingKind.FixedPrice
+            3,
+            1,
+            2,
+            5
         );
         require(asset.balanceOf(address(this)) == before - 100, "escrow not taken");
 

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -17,21 +18,24 @@ type mintedNFT struct {
 }
 
 func (service *rwaService) getMintedNFTs(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Set("Cache-Control", "no-store")
+	query, queryErr := url.ParseQuery(request.URL.RawQuery)
+	where, filterArgs, order, filterErr := mintedNFTFilters(query)
+	if queryErr != nil || filterErr != nil {
+		writeProblem(writer, request, http.StatusBadRequest, "Invalid NFT catalog query", "Use supported mint filters and bounded pagination.")
+		return
+	}
 	page, pageSize := pagination(request)
 	if service.db == nil {
-		writeJSON(writer, http.StatusOK, map[string]any{
-			"data": []mintedNFT{}, "total": 0, "page": page, "pageSize": pageSize,
-			"chainId": hoodiChainID, "runtime": true,
-		})
+		writeProblem(writer, request, http.StatusServiceUnavailable, "NFT catalog unavailable", "The indexed NFT catalog is not connected to persistence.")
 		return
 	}
 
-	const eventFilter = "chain_id = ? AND removed = FALSE AND event_name IN ('AssetCreated', 'SeriesCreated')"
 	var total int
 	countRows, err := service.db.QueryContext(
 		request.Context(),
-		"SELECT COUNT(*) FROM chain_events WHERE "+eventFilter,
-		hoodiChainID,
+		"SELECT COUNT(*) FROM chain_events WHERE "+where,
+		filterArgs...,
 	)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "NFT catalog unavailable", "The indexed NFT catalog could not be counted.")
@@ -40,12 +44,16 @@ func (service *rwaService) getMintedNFTs(writer http.ResponseWriter, request *ht
 	if countRows.Next() {
 		err = countRows.Scan(&total)
 	}
+	if err == nil {
+		err = countRows.Err()
+	}
 	countRows.Close()
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "NFT catalog unavailable", "The indexed NFT catalog count could not be decoded.")
 		return
 	}
 
+	queryArgs := append(append([]any{}, filterArgs...), pageSize, (page-1)*pageSize)
 	rows, err := service.db.QueryContext(request.Context(), `
 		SELECT event_name, LOWER(contract_address),
 		       LOWER(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.collectionAddress')), ''), '')),
@@ -61,9 +69,9 @@ func (service *rwaService) getMintedNFTs(writer http.ResponseWriter, request *ht
 		       LOWER(transaction_hash), block_number,
 		       DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%sZ')
 		FROM chain_events
-		WHERE `+eventFilter+`
-		ORDER BY block_number DESC, log_index DESC
-		LIMIT ? OFFSET ?`, hoodiChainID, pageSize, (page-1)*pageSize)
+		WHERE `+where+`
+		ORDER BY `+order+`
+		LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		writeProblem(writer, request, http.StatusServiceUnavailable, "NFT catalog unavailable", "The indexed NFT catalog could not be queried.")
 		return

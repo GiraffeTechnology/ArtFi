@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -22,26 +23,29 @@ func (service *rwaService) attachPersistence(dsn string) {
 	if dsn == "" {
 		return
 	}
-	db, err := sql.Open("mysql", dsn)
+	options, err := persistencePoolOptionsFromEnv(os.Getenv)
 	if err != nil {
-		slog.Error("open persistence", "error", err)
+		slog.Error("persistence unavailable", "stage", "configuration", "code", "DB_POOL_CONFIGURATION_REFUSED")
 		return
 	}
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	db, err := sql.Open("mysql", dsn)
+	if err != nil {
+		slog.Error("persistence unavailable", "stage", "open", "code", "DB_OPEN_FAILED")
+		return
+	}
+	options.apply(db)
+	ctx, cancel := context.WithTimeout(context.Background(), options.connectTimeout)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
-		slog.Error("ping persistence", "error", err)
+		slog.Error("persistence unavailable", "stage", "ping", "code", "DB_PING_FAILED")
 		return
 	}
 	service.db = db
 	if err := service.hydratePersistence(ctx); err != nil {
 		service.db = nil
 		_ = db.Close()
-		slog.Error("hydrate persistence", "error", err)
+		slog.Error("persistence unavailable", "stage", "hydrate", "code", "DB_HYDRATE_FAILED")
 	}
 }
 
@@ -120,13 +124,14 @@ func (service *rwaService) hydratePersistence(ctx context.Context) error {
 		SELECT vault_id, CONCAT('0x', LOWER(HEX(request_id))), LOWER(HEX(idempotency_key_hash)),
 		       LOWER(HEX(payload_hash)), factory_address, collection_address, token_id, vault_name,
 		       admin_address, pauser_address, fractionalizer_address, status,
-		       COALESCE(transaction_hash, ''), created_at
+		       COALESCE(transaction_hash, ''), created_at, presentation_profile_json
 		FROM vaults`)
 	if err != nil {
 		return err
 	}
 	defer vaultRows.Close()
 	for vaultRows.Next() {
+		var presentationRaw []byte
 		intent := &vaultIntent{
 			ChainID:          hoodiChainID,
 			ContractFunction: "createVault(bytes32,string,address,uint256,address,address,address)",
@@ -147,7 +152,12 @@ func (service *rwaService) hydratePersistence(ctx context.Context) error {
 			&intent.Status,
 			&intent.TransactionHash,
 			&createdAt,
+			&presentationRaw,
 		); err != nil {
+			return err
+		}
+		intent.Presentation, err = decodeDAOPresentation(presentationRaw)
+		if err != nil {
 			return err
 		}
 		intent.ContractArguments = []string{
@@ -158,7 +168,11 @@ func (service *rwaService) hydratePersistence(ctx context.Context) error {
 		service.vaultIntents[intent.IntentID] = intent
 		service.vaultIntentByKey[intent.idempotencyKeyHash] = intent.IntentID
 	}
-	return vaultRows.Err()
+	if err := vaultRows.Err(); err != nil {
+		return err
+	}
+	vaultRows.Close()
+	return service.hydrateMintEvidence(ctx)
 }
 
 func (service *rwaService) persistUpload(ctx context.Context, upload *uploadSession) error {
@@ -243,12 +257,33 @@ func (service *rwaService) persistSubmission(ctx context.Context, intentID, tran
 		return err
 	}
 	if rows != 1 {
-		return errors.New("submission persistence conflict")
+		current, err := service.db.QueryContext(ctx, "SELECT transaction_hash FROM rwa_mint_intents WHERE intent_id=?", intentID)
+		if err != nil {
+			return err
+		}
+		defer current.Close()
+		var stored string
+		if current.Next() {
+			if err = current.Scan(&stored); err != nil {
+				return err
+			}
+			if strings.EqualFold(stored, transactionHash) {
+				return nil
+			}
+		}
+		if err = current.Err(); err != nil {
+			return err
+		}
+		return adminError(409, "A different submission is already bound to this mint intent.")
 	}
 	return nil
 }
 
 func (service *rwaService) persistVaultIntent(ctx context.Context, intent *vaultIntent) error {
+	profileJSON, err := daoPresentationJSON(intent.Presentation)
+	if err != nil {
+		return err
+	}
 	if service.db == nil {
 		return service.persistenceRequirement()
 	}
@@ -260,8 +295,8 @@ func (service *rwaService) persistVaultIntent(ctx context.Context, intent *vault
 		INSERT INTO vaults
 		    (vault_id, request_id, idempotency_key_hash, payload_hash, factory_address,
 		     collection_address, token_id, vault_name, admin_address, pauser_address,
-		     fractionalizer_address, status, created_at)
-		VALUES (?, UNHEX(?), UNHEX(?), UNHEX(?), ?, ?, ?, ?, ?, ?, ?, 'prepared', ?)`,
+		     fractionalizer_address, status, created_at, presentation_profile_json)
+		VALUES (?, UNHEX(?), UNHEX(?), UNHEX(?), ?, ?, ?, ?, ?, ?, ?, 'prepared', ?, ?)`,
 		intent.IntentID,
 		strings.TrimPrefix(intent.RequestID, "0x"),
 		intent.idempotencyKeyHash,
@@ -274,6 +309,7 @@ func (service *rwaService) persistVaultIntent(ctx context.Context, intent *vault
 		intent.PauserAddress,
 		intent.FractionalizerAddress,
 		createdAt,
+		profileJSON,
 	)
 	return err
 }
@@ -294,7 +330,13 @@ func (service *rwaService) persistVaultSubmission(ctx context.Context, intentID,
 		return err
 	}
 	if rows != 1 {
-		return errors.New("vault submission persistence conflict")
+		current, err := service.readVaultIntent(ctx, intentID)
+		if err != nil {
+			return err
+		}
+		if !strings.EqualFold(current.TransactionHash, transactionHash) {
+			return errVaultSubmissionConflict
+		}
 	}
 	return nil
 }

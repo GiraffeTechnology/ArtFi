@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { ProjectCard } from "@/components/project-card";
+import { PrototypeDataNotice } from "@/components/prototype-data-notice";
 import { projects } from "@/lib/catalog";
 
 export const metadata: Metadata = { title: "Projects" };
@@ -8,6 +9,7 @@ export const metadata: Metadata = { title: "Projects" };
 export default function ProjectsPage() {
   return (
     <main className="page-shell page-main">
+      <PrototypeDataNotice />
       <header className="page-intro">
         <p className="eyebrow">Curated projects</p>
         <h1>Context assembled before assets move.</h1>

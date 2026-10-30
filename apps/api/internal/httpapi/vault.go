@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -13,30 +15,32 @@ import (
 var uint256Pattern = regexp.MustCompile(`^(0|[1-9][0-9]{0,77})$`)
 
 type vaultIntentRequest struct {
-	CollectionAddress     string `json:"collectionAddress"`
-	TokenID               string `json:"tokenId"`
-	VaultName             string `json:"vaultName"`
-	AdminAddress          string `json:"adminAddress"`
-	PauserAddress         string `json:"pauserAddress"`
-	FractionalizerAddress string `json:"fractionalizerAddress"`
+	CollectionAddress     string           `json:"collectionAddress"`
+	TokenID               string           `json:"tokenId"`
+	VaultName             string           `json:"vaultName"`
+	AdminAddress          string           `json:"adminAddress"`
+	PauserAddress         string           `json:"pauserAddress"`
+	FractionalizerAddress string           `json:"fractionalizerAddress"`
+	Presentation          *daoPresentation `json:"presentation,omitempty"`
 }
 
 type vaultIntent struct {
-	IntentID              string   `json:"intentId"`
-	RequestID             string   `json:"requestId"`
-	FactoryAddress        string   `json:"factoryAddress"`
-	CollectionAddress     string   `json:"collectionAddress"`
-	TokenID               string   `json:"tokenId"`
-	VaultName             string   `json:"vaultName"`
-	AdminAddress          string   `json:"adminAddress"`
-	PauserAddress         string   `json:"pauserAddress"`
-	FractionalizerAddress string   `json:"fractionalizerAddress"`
-	ChainID               int      `json:"chainId"`
-	ContractFunction      string   `json:"contractFunction"`
-	ContractArguments     []string `json:"contractArguments"`
-	Status                string   `json:"status"`
-	TransactionHash       string   `json:"transactionHash,omitempty"`
-	CreatedAt             string   `json:"createdAt"`
+	IntentID              string           `json:"intentId"`
+	RequestID             string           `json:"requestId"`
+	FactoryAddress        string           `json:"factoryAddress"`
+	CollectionAddress     string           `json:"collectionAddress"`
+	TokenID               string           `json:"tokenId"`
+	VaultName             string           `json:"vaultName"`
+	AdminAddress          string           `json:"adminAddress"`
+	PauserAddress         string           `json:"pauserAddress"`
+	FractionalizerAddress string           `json:"fractionalizerAddress"`
+	ChainID               int              `json:"chainId"`
+	ContractFunction      string           `json:"contractFunction"`
+	ContractArguments     []string         `json:"contractArguments"`
+	Status                string           `json:"status"`
+	TransactionHash       string           `json:"transactionHash,omitempty"`
+	CreatedAt             string           `json:"createdAt"`
+	Presentation          *daoPresentation `json:"presentation,omitempty"`
 	payloadHash           string
 	idempotencyKeyHash    string
 }
@@ -47,8 +51,10 @@ func (service *rwaService) vaultWriteEnabled() bool {
 }
 
 func (service *rwaService) createVaultIntent(writer http.ResponseWriter, request *http.Request) {
+	service.mintMu.Lock()
+	defer service.mintMu.Unlock()
 	if !service.vaultWriteEnabled() {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Vault write path unavailable", "A reviewed Sepolia VaultFactory and durable persistence are required.")
+		writeProblem(writer, request, http.StatusServiceUnavailable, "Vault write path unavailable", "A reviewed Hoodi VaultFactory and durable persistence are required.")
 		return
 	}
 	idempotencyKey := strings.TrimSpace(request.Header.Get("Idempotency-Key"))
@@ -62,7 +68,12 @@ func (service *rwaService) createVaultIntent(writer http.ResponseWriter, request
 		return
 	}
 	if !validVaultIntent(input) {
-		writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid vault configuration", "Addresses, token ID, and vault name failed validation.")
+		writeProblem(writer, request, http.StatusUnprocessableEntity, "Invalid vault configuration", "Addresses, token ID, vault name, or descriptive presentation failed validation.")
+		return
+	}
+
+	if err := service.requireGroundedUnderlying(request.Context(), input.CollectionAddress, input.TokenID); err != nil {
+		service.writeRWAError(writer, request, err)
 		return
 	}
 
@@ -75,7 +86,7 @@ func (service *rwaService) createVaultIntent(writer http.ResponseWriter, request
 	service.mu.RLock()
 	existing := service.vaultIntents[service.vaultIntentByKey[keyHash]]
 	service.mu.RUnlock()
-	if existing != nil {
+	if existing != nil && service.db == nil {
 		if existing.payloadHash != payloadHash {
 			writeProblem(writer, request, http.StatusConflict, "Idempotency conflict", "The key was already used with a different vault configuration.")
 			return
@@ -93,6 +104,7 @@ func (service *rwaService) createVaultIntent(writer http.ResponseWriter, request
 		CollectionAddress:     input.CollectionAddress,
 		TokenID:               input.TokenID,
 		VaultName:             input.VaultName,
+		Presentation:          cloneDAOPresentation(input.Presentation),
 		AdminAddress:          input.AdminAddress,
 		PauserAddress:         input.PauserAddress,
 		FractionalizerAddress: input.FractionalizerAddress,
@@ -107,21 +119,29 @@ func (service *rwaService) createVaultIntent(writer http.ResponseWriter, request
 		payloadHash:        payloadHash,
 		idempotencyKeyHash: keyHash,
 	}
-	if err := service.persistVaultIntent(request.Context(), intent); err != nil {
-		writeProblem(writer, request, http.StatusServiceUnavailable, "Persistence unavailable", "The vault intent could not be recorded durably.")
+	stored, created, err := service.persistOrReadVault(request.Context(), intent)
+	if err != nil {
+		service.writeRWAError(writer, request, err)
 		return
 	}
+	intent = stored
 	service.mu.Lock()
 	service.vaultIntents[intent.IntentID] = intent
 	service.vaultIntentByKey[keyHash] = intent.IntentID
 	service.mu.Unlock()
-	writeJSON(writer, http.StatusCreated, intent)
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(writer, status, intent)
 }
 
 func (service *rwaService) getVaultIntent(writer http.ResponseWriter, request *http.Request) {
-	service.mu.RLock()
-	intent := service.vaultIntents[request.PathValue("intentID")]
-	service.mu.RUnlock()
+	intent, err := service.readVaultIntent(request.Context(), request.PathValue("intentID"))
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		service.writeRWAError(writer, request, err)
+		return
+	}
 	if intent == nil {
 		writeProblem(writer, request, http.StatusNotFound, "Vault intent not found", "No vault intent matches the requested identifier.")
 		return
@@ -135,9 +155,11 @@ func (service *rwaService) recordVaultSubmission(writer http.ResponseWriter, req
 		writeProblem(writer, request, http.StatusBadRequest, "Invalid transaction hash", "Use a 32-byte 0x-prefixed transaction hash.")
 		return
 	}
-	service.mu.Lock()
-	defer service.mu.Unlock()
-	intent := service.vaultIntents[request.PathValue("intentID")]
+	intent, err := service.readVaultIntent(request.Context(), request.PathValue("intentID"))
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		service.writeRWAError(writer, request, err)
+		return
+	}
 	if intent == nil {
 		writeProblem(writer, request, http.StatusNotFound, "Vault intent not found", "No vault intent matches the requested identifier.")
 		return
@@ -147,11 +169,18 @@ func (service *rwaService) recordVaultSubmission(writer http.ResponseWriter, req
 		return
 	}
 	if err := service.persistVaultSubmission(request.Context(), intent.IntentID, input.TransactionHash); err != nil {
+		if errors.Is(err, errVaultSubmissionConflict) {
+			writeProblem(writer, request, 409, "Submission conflict", "A different transaction is already attached to this Vault intent.")
+			return
+		}
 		writeProblem(writer, request, http.StatusServiceUnavailable, "Persistence unavailable", "The vault transaction could not be recorded durably.")
 		return
 	}
 	intent.TransactionHash = input.TransactionHash
 	intent.Status = "submitted"
+	service.mu.Lock()
+	service.vaultIntents[intent.IntentID] = intent
+	service.mu.Unlock()
 	writeJSON(writer, http.StatusOK, intent)
 }
 
@@ -161,5 +190,5 @@ func validVaultIntent(input vaultIntentRequest) bool {
 		addressPattern.MatchString(input.PauserAddress) &&
 		addressPattern.MatchString(input.FractionalizerAddress) &&
 		uint256Pattern.MatchString(input.TokenID) &&
-		len(strings.TrimSpace(input.VaultName)) >= 2 && len(input.VaultName) <= 80
+		len(strings.TrimSpace(input.VaultName)) >= 2 && len(input.VaultName) <= 80 && validDAOPresentation(input.Presentation)
 }

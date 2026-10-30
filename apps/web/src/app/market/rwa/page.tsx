@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { LiveMarketCatalog } from "@/components/live-market-catalog";
 
@@ -15,11 +16,17 @@ export default function RwaMarketPage() {
         <p className="approved-eyebrow">Market mirror</p>
         <h1>Live market signals.</h1>
         <p>
-          Read-only listings and sale context from approved external venues.
-          ArtFi does not provide an OpenSea redirect, transaction initiation,
-          wallet submission, matching, custody or settlement.
+          Read-only listings and sale context from approved external venues,
+          each attributed to its source with the time it was observed, how fresh
+          that observation is, and the reference the source reported. This
+          activity catalog does not submit orders. Configured digital
+          collections can be browsed and traded through ArtFi’s native NFT
+          marketplace.
         </p>
       </header>
+      <Link className="secondary" href="/nft">
+        Open the native NFT marketplace
+      </Link>
       <LiveMarketCatalog />
     </main>
   );

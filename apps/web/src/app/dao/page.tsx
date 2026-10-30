@@ -1,7 +1,10 @@
+import { publicSetting } from "@/lib/public-runtime-config";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { DaoCreationFlow } from "@/components/dao-creation-flow";
 import { DaoGovernance } from "@/components/dao-governance";
+import { DaoProposalExplorer } from "@/components/dao-proposal-explorer";
 
 export const metadata: Metadata = { title: "DAO" };
 
@@ -23,6 +26,11 @@ const governanceRules = [
 export default function DaoPage() {
   return (
     <main className="approved-page approved-page--dao page-shell">
+      <nav className="breadcrumb" aria-label="Breadcrumb">
+        <Link href="/market/fractionals">Fractions &amp; DAO</Link>
+        <span aria-hidden="true">/</span>
+        <span>DAO</span>
+      </nav>
       <div className="module-banner">
         <span>DAO / Hoodi governance</span>
         <strong>RWA ownership verification required</strong>
@@ -49,13 +57,20 @@ export default function DaoPage() {
 
       <DaoCreationFlow />
 
+      <DaoProposalExplorer
+        governorAddress={publicSetting("NEXT_PUBLIC_ARTFI_GOVERNOR_ADDRESS")}
+      />
+
       <DaoGovernance
         deployment={{
-          actionRegistryAddress:
-            process.env.NEXT_PUBLIC_ARTFI_DAO_ACTIONS_ADDRESS,
-          governorAddress: process.env.NEXT_PUBLIC_ARTFI_GOVERNOR_ADDRESS,
-          tokenAddress: process.env.NEXT_PUBLIC_ARTFI_GOVERNANCE_TOKEN_ADDRESS,
-          vaultAddress: process.env.NEXT_PUBLIC_ARTFI_RWA_VAULT_ADDRESS,
+          actionRegistryAddress: publicSetting(
+            "NEXT_PUBLIC_ARTFI_DAO_ACTIONS_ADDRESS",
+          ),
+          governorAddress: publicSetting("NEXT_PUBLIC_ARTFI_GOVERNOR_ADDRESS"),
+          tokenAddress: publicSetting(
+            "NEXT_PUBLIC_ARTFI_GOVERNANCE_TOKEN_ADDRESS",
+          ),
+          vaultAddress: publicSetting("NEXT_PUBLIC_ARTFI_RWA_VAULT_ADDRESS"),
         }}
       />
     </main>
