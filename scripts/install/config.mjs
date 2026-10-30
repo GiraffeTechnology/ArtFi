@@ -1,4 +1,35 @@
 import { randomBytes, ECDH } from "node:crypto";
+import { readFile } from "node:fs/promises";
+
+export async function readConfigurationFile(path) {
+  let contents;
+  try {
+    contents = await readFile(path, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT")
+      throw new Error(
+        "Configuration file was not found. Check the selected --config or --input path.",
+      );
+    if (["EACCES", "EPERM"].includes(error.code))
+      throw new Error(
+        "Configuration file could not be read. Check file access for this account.",
+      );
+    throw new Error(
+      "Configuration file could not be read. Select a readable regular JSON file.",
+    );
+  }
+  try {
+    return JSON.parse(contents);
+  } catch {
+    throw new Error(
+      "Configuration file must contain valid JSON. No configuration contents were printed.",
+    );
+  }
+}
+
+function settingName(key) {
+  return /^[A-Z][A-Z0-9_]{0,127}$/.test(key) ? key : "Configuration entry";
+}
 
 export const secretKeys = [
   "ARTFI_INDEXER_SHARED_KEY",
@@ -56,21 +87,23 @@ export function validate(config) {
       typeof value !== "string" ||
       /[\0\r\n]/.test(value)
     )
-      errors.push(`${key}: expected a single-line string environment setting.`);
+      errors.push(
+        `${settingName(key)}: expected a single-line string environment setting.`,
+      );
     if (/(?:PRIVATE_KEY|MNEMONIC|SEED_PHRASE)/.test(key) && value)
       errors.push(
-        `${key}: signing material is not supported in the ArtFi service configuration.`,
+        `${settingName(key)}: signing material is not supported in the ArtFi service configuration.`,
       );
     if (
       key.startsWith("NEXT_PUBLIC_") &&
       /(?:SECRET|TOKEN$|KEY|PASSWORD)/.test(key) &&
       !key.endsWith("_TOKEN_ID")
     )
-      errors.push(`${key}: credentials must never be public.`);
+      errors.push(`${settingName(key)}: credentials must never be public.`);
   }
   for (const key of secretKeys)
     if (typeof config[key] !== "string" || config[key].length < 32)
-      errors.push(`${key}: at least 32 characters are required.`);
+      errors.push(`${settingName(key)}: at least 32 characters are required.`);
   const port = Number(config.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     errors.push("PORT: must be an integer from 1 to 65535.");
@@ -122,7 +155,7 @@ export function validate(config) {
         throw new Error();
     } catch {
       errors.push(
-        `${key}: use a complete HTTP(S) URL without embedded credentials or fragments; wallet URL requires HTTPS and no query.`,
+        `${settingName(key)}: use a complete HTTP(S) URL without embedded credentials or fragments; wallet URL requires HTTPS and no query.`,
       );
     }
   }
@@ -136,7 +169,7 @@ export function validate(config) {
   }
   for (const [key, value] of Object.entries(config))
     if (key.endsWith("_ADDRESS") && value && !/^0x[0-9a-fA-F]{40}$/.test(value))
-      errors.push(`${key}: expected an EVM address.`);
+      errors.push(`${settingName(key)}: expected an EVM address.`);
   if (
     config.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID &&
     !/^(0|[1-9][0-9]*)$/.test(config.NEXT_PUBLIC_ARTFI_WHOLE_ARTWORK_TOKEN_ID)
@@ -150,7 +183,7 @@ export function validate(config) {
     "ARTFI_MIRROR_ENABLED",
   ])
     if (!["true", "false"].includes(config[key]))
-      errors.push(`${key}: expected true or false.`);
+      errors.push(`${settingName(key)}: expected true or false.`);
   if (
     !/^(?:1|8453|560048)(?:,(?:1|8453|560048))*$/.test(
       config.ARTFI_USER_AUTH_CHAIN_IDS || "",
@@ -322,7 +355,9 @@ export function validate(config) {
       "ARTFI_INDEXER_SHARED_KEY",
     ])
       if (!config[key])
-        errors.push(`${key}: required by the enabled market mirror.`);
+        errors.push(
+          `${settingName(key)}: required by the enabled market mirror.`,
+        );
     if (config.ARTFI_PUBLIC_CHAIN_EXECUTION_ZONE !== "sin")
       errors.push(
         "The existing market mirror requires the configured SIN execution zone.",
@@ -336,7 +371,7 @@ export function validate(config) {
       const key = `ARTFI_${feature}_CONFIG_FILE`;
       if (!config[key]?.startsWith("/"))
         errors.push(
-          `${key}: an explicit absolute configuration-file path is required.`,
+          `${settingName(key)}: an explicit absolute configuration-file path is required.`,
         );
       if (
         feature === "AGENT" &&

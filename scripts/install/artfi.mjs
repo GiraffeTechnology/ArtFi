@@ -30,7 +30,7 @@ import {
 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readProcessIdentity, isSameProcess } from "./process-info.mjs";
-import { configure, validate } from "./config.mjs";
+import { configure, validate, readConfigurationFile } from "./config.mjs";
 
 const ownRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2),
@@ -92,7 +92,7 @@ const writeJSON = async (path, data, mode = 0o600) => {
   await rename(tmp, path);
 };
 async function config() {
-  const value = await json(configPath),
+  const value = await readConfigurationFile(configPath),
     result = validate(value);
   if (result.errors.length) throw new Error(result.errors.join("\n"));
   return value;
@@ -545,8 +545,12 @@ async function main() {
       throw new Error(
         "Keep private configuration outside the extracted bundle or source checkout.",
       );
-    const previous = (await exists(configPath)) ? await json(configPath) : {};
-    const input = options.input ? await json(resolve(options.input)) : {};
+    const previous = (await exists(configPath))
+      ? await readConfigurationFile(configPath)
+      : {};
+    const input = options.input
+      ? await readConfigurationFile(resolve(options.input))
+      : {};
     const value = configure(input, previous),
       result = validate(value);
     if (result.errors.length) throw new Error(result.errors.join("\n"));
@@ -561,7 +565,7 @@ async function main() {
     return;
   }
   if (command === "validate") {
-    const result = validate(await json(configPath));
+    const result = validate(await readConfigurationFile(configPath));
     console.log(JSON.stringify(result, null, 2));
     if (result.errors.length) process.exitCode = 1;
     return;
