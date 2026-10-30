@@ -70,8 +70,8 @@ importers:
         specifier: 12.12.0
         version: 12.12.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)(viem@2.56.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.6.5))
       '@opensea/seaport-js':
-        specifier: 4.3.0
-        version: 4.3.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+        specifier: 4.4.0
+        version: 4.4.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       '@rainbow-me/rainbowkit':
         specifier: 2.2.11
         version: 2.2.11(@tanstack/react-query@5.101.4(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@5.9.3)(viem@2.56.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.6.5))(wagmi@2.17.5(@tanstack/query-core@5.101.4)(@tanstack/react-query@5.101.4(react@19.3.1))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.1)(supports-color@10.2.2)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.56.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.6.5))(zod@4.6.5))
@@ -765,8 +765,8 @@ packages:
       viem:
         optional: true
 
-  '@opensea/seaport-js@4.3.0':
-    resolution: {integrity: sha512-rRUiqMX9Dqo7bj+UYRZtO5mOZeRTfFQpCan21qgWCWDNno+PV7KYHsGJCWsxJc5ga84+o60uAxPP6achZE6C3g==}
+  '@opensea/seaport-js@4.4.0':
+    resolution: {integrity: sha512-KxObdPbLzSyFC4Yw4WmnOetI9RnbbaBrdNid0hn22QA/SIIlm73mFDOP8KCimt73OVl/MeLMApXNiiUk1rLZ/A==}
     engines: {node: '>=20.0.0'}
 
   '@opensea/stream-js@0.4.0':
@@ -4575,7 +4575,7 @@ snapshots:
     dependencies:
       '@noble/hashes': 2.4.0
       '@opensea/api-types': 0.16.1
-      '@opensea/seaport-js': 4.3.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      '@opensea/seaport-js': 4.4.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
     optionalDependencies:
       viem: 2.56.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.6.5)
@@ -4583,7 +4583,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@opensea/seaport-js@4.3.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)':
+  '@opensea/seaport-js@4.4.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)':
     dependencies:
       ethers: 6.17.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       merkletreejs: 0.6.0
