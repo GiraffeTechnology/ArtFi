@@ -1,5 +1,21 @@
 # ArtCCH:ArtFi — Evidence Snapshot
 
+## 2026-10-30 fraction amendment observation and signing guard candidate
+
+M2.5/M2.6 replacement orders now snapshot the original sale terms before asynchronous reads.
+Each retirement observation reads the original intent consumption and seller epoch at one
+mined block, validates those integer values, and rechecks that block identity and chain.
+The UI repeats the read-only retirement check inside the actual signing callback, after
+grounding and the trading-session gate, and refuses a changed replacement epoch. A stale
+observation stops replacement signing; it never replays an earlier withdrawal. This is a
+current canonicality check, not a finality guarantee.
+
+The existing fraction amendment regression suite adds block/chain changes, unavailable
+state, caller/provider mutation, and authorization restored during a wait. At source submission,
+these additions and the changed UI path are **NOT_RUN**; the new-head Linux CI and independent
+review remain required. No live wallet signature, revocation transaction, production deployment
+or complete-product acceptance is claimed. The full PRD remains in scope.
+
 ## 2026-10-29 acceptance alignment with the complete PRD
 
 The operative audit checks now preserve the current asset-specific preview boundaries:
@@ -1233,3 +1249,4 @@ install a daemon, enable supervision or establish continuous operations acceptan
 No shared bridge, database, SSH, model-provider or other-task configuration is
 changed by this source integration. Actual installed channels, least privilege,
 restart/fault behavior and measured soak evidence remain separate pending work.
+
