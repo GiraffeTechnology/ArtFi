@@ -5,7 +5,7 @@ import {
 
 export const dynamic = "force-dynamic";
 const publicRead =
-  /^(?:config|assets(?:\/[a-zA-Z0-9_-]+)?|projects|nfts|market\/(?:assets|activity)|governance\/(?:config|proposals)|orders(?:\/(?:fraction-book|0x[0-9a-fA-F]{64}))?)$/;
+  /^(?:config|assets(?:\/[a-zA-Z0-9_-]+)?|projects|nfts|market\/(?:assets|activity|health)|governance\/(?:config|proposals)|orders(?:\/(?:fraction-book|0x[0-9a-fA-F]{64}))?)$/;
 
 /** Standalone installs retain same-origin public reads without a separately assembled proxy. */
 export async function GET(
