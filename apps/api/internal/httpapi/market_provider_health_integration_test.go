@@ -77,8 +77,8 @@ func TestMySQLMarketProviderHealthReplayConflictAndServerStaleness(t *testing.T)
 	degraded := map[string]any{
 		"schemaVersion": "1", "source": "opensea", "state": "degraded",
 		"stale": false, "realtimeConnected": true, "consecutiveFailures": 1,
-		"observedAt": base.Add(40 * time.Second).Format(time.RFC3339Nano), "lastBackfillSuccessAt": base.Add(0*time.Second).Format(time.RFC3339Nano),
-		"lastEventAt": base.Add(20*time.Second).Format(time.RFC3339Nano), "lastFailureAt": base.Add(40 * time.Second).Format(time.RFC3339Nano),
+		"observedAt": base.Add(40 * time.Second).Format(time.RFC3339Nano), "lastBackfillSuccessAt": base.Add(0 * time.Second).Format(time.RFC3339Nano),
+		"lastEventAt": base.Add(20 * time.Second).Format(time.RFC3339Nano), "lastFailureAt": base.Add(40 * time.Second).Format(time.RFC3339Nano),
 		"freshnessLagSeconds": 20, "staleAfterSeconds": 60,
 	}
 	updated := jsonRequest(t, handler, http.MethodPost, "/v1/indexer/market-health", degraded, headers)
