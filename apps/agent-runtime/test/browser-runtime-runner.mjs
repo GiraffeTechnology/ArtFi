@@ -1,6 +1,7 @@
 // Runs current or precompiled package code against a fresh harness-owned DB.
 // Only wallet/venue/chain payloads are synthetic; session/BFF/runtime/SQL are real.
 import { spawn } from "node:child_process";
+import { waitForOwnedListener } from "./owned-fixture-listener.mjs";
 import { readFile, writeFile, open } from "node:fs/promises";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,14 +64,18 @@ const startupCodes = new Set([
   "ENOMEM",
   "ENOSPC",
 ]);
-async function run(command, args, cwd, label) {
+async function run(command, args, cwd, label, { ipc = false } = {}) {
   const log = await open(join(data, `${label}.log`), "w", 0o600);
   const child = spawn(command, args, {
     cwd,
     env,
-    stdio: ["ignore", log.fd, log.fd],
+    stdio: ipc ? ["ignore", log.fd, log.fd, "ipc"] : ["ignore", log.fd, log.fd],
   });
   const state = { label, path: join(data, `${label}.log`), failure: null };
+  if (ipc) {
+    state.listener = waitForOwnedListener(child);
+    void state.listener.catch(() => {});
+  }
   startup.set(child, state);
   child.once("error", (error) => {
     state.failure = startupCodes.has(error.code) ? error.code : "SPAWN_FAILED";
@@ -168,8 +173,16 @@ try {
     [join(root, "apps/agent-runtime/test/browser-adapter-fixture.mjs")],
     root,
     "agent-browser-adapter",
+    { ipc: true },
   );
-  await wait("http://127.0.0.1:33328/test-only/info", adapterChild);
+  let adapterURL;
+  try {
+    adapterURL = await startup.get(adapterChild).listener;
+  } catch (error) {
+    await startupFailure(adapterChild, error.message, null);
+  }
+  await wait(`${adapterURL}/test-only/info`, adapterChild);
+  env.ARTFI_AGENT_TEST_ADAPTER_URL = adapterURL;
   const tokenFile = join(data, "browser-adapter-token");
   await writeFile(tokenFile, env.ARTFI_AGENT_TEST_ADAPTER_TOKEN, {
     mode: 0o600,
@@ -186,7 +199,7 @@ try {
       database,
       adapter: {
         kind: "artfi-isolated-test-v1",
-        baseURL: "http://127.0.0.1:33328",
+        baseURL: adapterURL,
         tokenFile,
       },
       worker: { intervalMs: 100 },

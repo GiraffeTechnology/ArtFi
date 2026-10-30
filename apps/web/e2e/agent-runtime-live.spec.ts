@@ -60,8 +60,25 @@ test("real signed session → BFF → durable agent → lost-ack recovery → ow
 }) => {
   // Random test identity exists only in this Node closure. No private key is
   // passed to page scripts, application storage, the API or the agent runtime.
+  const adapter = new URL(
+    process.env.ARTFI_AGENT_TEST_ADAPTER_URL || "http://invalid",
+  );
+  if (
+    adapter.protocol !== "http:" ||
+    adapter.hostname !== "127.0.0.1" ||
+    !adapter.port ||
+    Number(adapter.port) < 1 ||
+    adapter.username ||
+    adapter.password ||
+    adapter.pathname !== "/" ||
+    adapter.search ||
+    adapter.hash
+  ) {
+    throw Error("ISOLATED_OWNED_ADAPTER_REQUIRED");
+  }
+  const adapterURL = adapter.origin;
   const user = Wallet.createRandom();
-  const response = await fetch("http://127.0.0.1:33328/test-only/info");
+  const response = await fetch(`${adapterURL}/test-only/info`);
   const fixture = await response.json();
   expect(fixture.mode).toBe("TEST_ONLY_NO_REAL_VALUE");
   await installReadOnlyWallet(page, user.address);
@@ -160,7 +177,7 @@ test("real signed session → BFF → durable agent → lost-ack recovery → ow
       terms: { ...fixture.quote, quantity: "1" },
     },
   };
-  await fetch("http://127.0.0.1:33328/test-only/control", {
+  await fetch(`${adapterURL}/test-only/control`, {
     method: "POST",
     headers: {
       authorization: "Bearer TEST_ONLY_LOCAL_BROWSER_ADAPTER_CREDENTIAL",
@@ -256,9 +273,7 @@ test("real signed session → BFF → durable agent → lost-ack recovery → ow
     path: test.info().outputPath("agent-runtime-verified.png"),
     fullPage: true,
   });
-  const latest = await (
-    await fetch("http://127.0.0.1:33328/test-only/info")
-  ).json();
+  const latest = await (await fetch(`${adapterURL}/test-only/info`)).json();
   expect(latest.executeCalls - fixture.executeCalls).toBe(1);
   await page
     .getByRole("link", {
