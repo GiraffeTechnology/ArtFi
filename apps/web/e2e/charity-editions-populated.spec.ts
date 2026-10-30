@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   decodeAbiParameters,
   decodeFunctionData,
@@ -39,14 +39,14 @@ const series = {
   metadataURI: "ipfs://charity/1",
 };
 
-function answer(data: Hex): Hex {
+function answer(data: Hex, count = 1n): Hex {
   const call = decodeFunctionData({ abi: charityEditionsAbi, data });
   switch (call.functionName) {
     case "seriesCount":
       return encodeFunctionResult({
         abi: charityEditionsAbi,
         functionName: "seriesCount",
-        result: 1n,
+        result: count,
       });
     case "EDITIONS_PER_ARTWORK":
       return encodeFunctionResult({
@@ -109,7 +109,7 @@ const result3Type = [
 ] as const;
 const aggregate3Selector = "0x82ad56cb";
 
-function answerCall(to: string | undefined, data: Hex): Hex {
+function answerCall(to: string | undefined, data: Hex, count = 1n): Hex {
   if (
     to?.toLowerCase() === multicall3Address.toLowerCase() &&
     data.startsWith(aggregate3Selector)
@@ -121,25 +121,49 @@ function answerCall(to: string | undefined, data: Hex): Hex {
     return encodeAbiParameters(result3Type, [
       calls.map((call) => ({
         success: true,
-        returnData: answer(call.callData),
+        returnData: answer(call.callData, count),
       })),
     ]);
   }
-  return answer(data);
+  return answer(data, count);
 }
 
 type RpcRequest = { id: number; method: string; params?: unknown[] };
 
 /** Answer the whole JSON-RPC conversation, not only `eth_call`: an unanswered probe hangs. */
-function rpcResult(request: RpcRequest): unknown {
+function rpcResult(request: RpcRequest, count = 1n): unknown {
   switch (request.method) {
     case "eth_chainId":
       return `0x${supportedChain.id.toString(16)}`;
     case "eth_blockNumber":
       return "0x1";
+    case "eth_getBlockByNumber":
+      return {
+        number: "0x1",
+        hash: `0x${"aa".repeat(32)}`,
+        parentHash: zeroHash,
+        timestamp: `0x${(series.createdAt + 100n).toString(16)}`,
+        nonce: "0x0000000000000000",
+        difficulty: "0x0",
+        totalDifficulty: "0x0",
+        gasLimit: "0x1c9c380",
+        gasUsed: "0x0",
+        size: "0x1",
+        baseFeePerGas: "0x1",
+        extraData: "0x",
+        logsBloom: `0x${"00".repeat(256)}`,
+        miner: distributionWallet,
+        mixHash: zeroHash,
+        receiptsRoot: zeroHash,
+        stateRoot: zeroHash,
+        transactionsRoot: zeroHash,
+        sha3Uncles: zeroHash,
+        transactions: [],
+        uncles: [],
+      };
     case "eth_call": {
       const call = request.params?.[0] as { to?: string; data: Hex };
-      return answerCall(call.to, call.data);
+      return answerCall(call.to, call.data, count);
     }
     default:
       throw new Error(`unexpected RPC method ${request.method}`);
@@ -180,7 +204,27 @@ test("an edition renders the supply the contract reports", async ({ page }) => {
     !process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS,
     "No editions address is configured for this run.",
   );
+  await page.route("**/*", async (route) => {
+    const request = route.request(),
+      body = request.postData();
+    if (request.method() !== "POST" || !body?.includes("jsonrpc"))
+      return route.fallback();
+    const payload = JSON.parse(body) as RpcRequest | RpcRequest[];
+    const respond = (single: RpcRequest) => ({
+      jsonrpc: "2.0",
+      id: single.id,
+      result: rpcResult(single, 21n),
+    });
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        Array.isArray(payload) ? payload.map(respond) : respond(payload),
+      ),
+    });
+  });
   await page.goto("/charity");
+  await expect(page.locator(".charity-edition-card")).toHaveCount(20);
   const card = page.locator(".charity-edition-card").first();
   await expect(card).toContainText("Edition #1");
   await expect(card).toContainText("63 of 100");
@@ -188,4 +232,183 @@ test("an edition renders the supply the contract reports", async ({ page }) => {
   await expect(page.getByTestId("charity-edition-terms")).toContainText(
     "0.01 ETH",
   );
+  await page
+    .getByRole("button", { name: "Next editions", exact: true })
+    .click();
+  await expect(page.locator(".charity-edition-card")).toHaveCount(1);
+  await expect(page.locator(".charity-edition-card")).toContainText(
+    "Edition #21",
+  );
+  await expect(
+    page.getByRole("button", { name: "Next editions", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Previous editions", exact: true })
+    .click();
+  await expect(page.locator(".charity-edition-card")).toHaveCount(20);
+  await expect(page.locator(".charity-edition-card").first()).toContainText(
+    "Edition #1",
+  );
+});
+
+// These failures remain explicit read-only transport fixtures. No wallet
+// authorization, holder entitlement, transaction or live-chain claim follows.
+const transportFailureMarker = "TEST_ONLY_UPSTREAM_DETAIL";
+const transportFailureMessage =
+  transportFailureMarker + " https://rpc.test.invalid/" + "x".repeat(12_000);
+
+async function controlReadFailures(page: Page, control: { failing: boolean }) {
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const body = request.postData();
+    if (request.method() !== "POST" || !body?.includes("jsonrpc")) {
+      return route.fallback();
+    }
+    if (!control.failing) return route.fallback();
+    const payload = JSON.parse(body) as RpcRequest | RpcRequest[];
+    const respond = (single: RpcRequest) =>
+      single.method === "eth_call"
+        ? {
+            jsonrpc: "2.0",
+            id: single.id,
+            error: { code: -32000, message: transportFailureMessage },
+          }
+        : { jsonrpc: "2.0", id: single.id, result: rpcResult(single) };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        Array.isArray(payload) ? payload.map(respond) : respond(payload),
+      ),
+    });
+  });
+}
+
+async function expectBoundedPublicError(page: Page) {
+  const body = await page.locator("body").innerText();
+  expect(body).not.toContain(transportFailureMarker);
+  expect(body).not.toContain("rpc.test.invalid");
+  expect(body).not.toContain("Contract Call:");
+  expect(body).not.toContain("Request body:");
+  const geometry = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    scroll: document.documentElement.scrollWidth,
+  }));
+  expect(geometry.scroll).toBeLessThanOrEqual(geometry.viewport + 1);
+  await expect(page.getByTestId("charity-edition-rights-notice")).toBeVisible();
+}
+
+for (const surface of [
+  {
+    path: "/charity",
+    errorId: "charity-catalog-read-error",
+    ready: ".charity-edition-card",
+    message: "The charity editions could not be read. Please retry.",
+  },
+  {
+    path: "/charity/1",
+    errorId: "charity-edition-read-error",
+    ready: '[data-testid="charity-edition-facts"]',
+    message: "This charity edition could not be read. Please retry.",
+  },
+]) {
+  test(`charity read failures stay private and retry on ${surface.path}`, async ({
+    page,
+  }) => {
+    test.skip(
+      !process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS,
+      "No editions address is configured for this run.",
+    );
+    const control = { failing: true };
+    await controlReadFailures(page, control);
+    await page.goto(surface.path);
+    const error = page.getByTestId(surface.errorId);
+    await expect(error).toBeVisible({ timeout: 20_000 });
+    await expect(error).toContainText(surface.message);
+    await expect(page.locator(surface.ready)).toHaveCount(0);
+    await expectBoundedPublicError(page);
+    control.failing = false;
+    await error.getByRole("button", { name: "Retry", exact: true }).click();
+    await expect(page.locator(surface.ready).first()).toBeVisible();
+    await expect(error).toHaveCount(0);
+    await expectBoundedPublicError(page);
+  });
+}
+
+test("a failed charity refresh removes the earlier edition facts until recovery", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS,
+    "No editions address is configured for this run.",
+  );
+  const control = { failing: false };
+  await controlReadFailures(page, control);
+  await page.goto("/charity/1");
+  const facts = page.getByTestId("charity-edition-facts");
+  await expect(facts).toBeVisible();
+  await expect(facts).toContainText("100");
+  control.failing = true;
+  await page
+    .getByRole("button", { name: "Refresh edition facts", exact: true })
+    .click();
+  const error = page.getByTestId("charity-edition-read-error");
+  await expect(error).toBeVisible({ timeout: 20_000 });
+  await expect(facts).toHaveCount(0);
+  await expectBoundedPublicError(page);
+  control.failing = false;
+  await error.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(facts).toBeVisible();
+  await expect(facts).toContainText("100");
+  await expect(error).toHaveCount(0);
+  await expectBoundedPublicError(page);
+});
+
+test("a replaced charity facts block stays unavailable until a stable retry", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.NEXT_PUBLIC_ARTFI_CHARITY_EDITIONS_ADDRESS,
+    "No editions address is configured for this run.",
+  );
+  let unstable = true;
+  await page.route("**/*", async (route) => {
+    const request = route.request(),
+      body = request.postData();
+    if (request.method() !== "POST" || !body?.includes("jsonrpc"))
+      return route.fallback();
+    const payload = JSON.parse(body) as RpcRequest | RpcRequest[];
+    const respond = (single: RpcRequest) => {
+      let result = rpcResult(single);
+      if (
+        unstable &&
+        single.method === "eth_getBlockByNumber" &&
+        single.params?.[0] !== "latest"
+      )
+        result = {
+          ...(result as Record<string, unknown>),
+          hash: `0x${"bb".repeat(32)}`,
+        };
+      return { jsonrpc: "2.0", id: single.id, result };
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        Array.isArray(payload) ? payload.map(respond) : respond(payload),
+      ),
+    });
+  });
+  await page.goto("/charity/1");
+  const error = page.getByTestId("charity-edition-read-error");
+  await expect(error).toBeVisible();
+  await expect(page.getByTestId("charity-edition-facts")).toHaveCount(0);
+  await expect(page.getByTestId("charity-holder-access")).toHaveCount(0);
+  await expectBoundedPublicError(page);
+  unstable = false;
+  await error.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByTestId("charity-edition-facts")).toBeVisible();
+  await expect(page.getByTestId("charity-edition-facts")).toContainText("100");
+  await expect(error).toHaveCount(0);
+  await expectBoundedPublicError(page);
 });

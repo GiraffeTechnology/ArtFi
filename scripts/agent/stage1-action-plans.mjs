@@ -179,7 +179,11 @@ export function compileStage1Action(
     ) ||
     !address(request.market) ||
     !address(request.wallet) ||
-    !address(request.paymentToken) ||
+    !(
+      address(request.paymentToken) ||
+      (request.marketKind === "NFT" &&
+        same(request.paymentToken, e.ZeroAddress))
+    ) ||
     !exact(request.asset, ["contract", "tokenId"]) ||
     !address(request.asset.contract)
   )
@@ -373,7 +377,14 @@ export function compileStage1Action(
       ];
     } else fail("ACTION_MARKET_UNSUPPORTED");
   } else if (kind === "AUCTION") {
-    if (action === "CREATE_ORDER") {
+    if (["CREATE_ORDER", "AMEND_ORDER"].includes(action)) {
+      const amend = action === "AMEND_ORDER";
+      if (amend) {
+        if (!exact(t, ["listingId", "replacement"]))
+          fail("ACTION_TERMS_INVALID");
+        uint(t.listingId, true);
+      }
+      const terms = amend ? t.replacement : t;
       const keys = [
         "requestId",
         "amount",
@@ -385,55 +396,83 @@ export function compileStage1Action(
         "extensionWindow",
         "extensionDuration",
       ];
-      if (!exact(t, keys) || !hash(t.requestId)) fail("ACTION_TERMS_INVALID");
+      if (
+        !exact(terms, keys) ||
+        !hash(terms.requestId) ||
+        /^0x0{64}$/i.test(terms.requestId)
+      )
+        fail("ACTION_TERMS_INVALID");
       for (const key of keys.slice(1))
-        uint(t[key], !["reservePrice", "startsAt"].includes(key));
+        uint(terms[key], !["reservePrice", "startsAt"].includes(key));
       if (
         ["startsAt", "endsAt", "extensionWindow", "extensionDuration"].some(
-          (key) => uint(t[key]) >= 2n ** 48n,
+          (key) => uint(terms[key]) >= 2n ** 48n,
         ) ||
-        uint(t.startsAt) >= uint(t.endsAt)
+        uint(terms.startsAt) >= uint(terms.endsAt) ||
+        uint(terms.extensionWindow) > uint(terms.endsAt) - uint(terms.startsAt)
       )
         fail("AUCTION_WINDOW_INVALID");
-      legs = [
-        leg(
-          "CREATE",
-          "createAuctionListing",
-          [
-            t.requestId,
-            request.asset.contract,
-            request.paymentToken,
-            ...keys.slice(1).map((key) => t[key]),
-          ],
-          {
-            price: (
-              (uint(t.openingBid) + uint(t.amount) - 1n) /
-              uint(t.amount)
-            ).toString(),
-            quantity: t.amount,
-            value: t.openingBid,
-            opensOrder: true,
-            orderKey: t.requestId,
-            expected: {
-              name: "ListingCreated",
-              args: { requestId: t.requestId, seller: request.wallet },
-              startsAt: t.startsAt,
-              endsAt: t.endsAt,
-            },
+      if (uint(terms.reservePrice) < uint(terms.openingBid))
+        fail("AUCTION_RESERVE_PRICE_INVALID");
+      const replacement = leg(
+        amend ? "REPLACE" : "CREATE",
+        "createAuctionListing",
+        [
+          terms.requestId,
+          request.asset.contract,
+          request.paymentToken,
+          ...keys.slice(1).map((key) => terms[key]),
+        ],
+        {
+          price: (
+            (uint(terms.openingBid) + uint(terms.amount) - 1n) /
+            uint(terms.amount)
+          ).toString(),
+          quantity: terms.amount,
+          value: terms.openingBid,
+          opensOrder: true,
+          orderKey: terms.requestId,
+          ...(amend ? { dependsOn: "CANCEL" } : {}),
+          expected: {
+            name: "ListingCreated",
+            args: { requestId: terms.requestId, seller: request.wallet },
+            startsAt: terms.startsAt,
+            endsAt: terms.endsAt,
           },
-        ),
-      ];
+        },
+      );
+      if (amend) {
+        replacement.replacesOrderKey = t.listingId;
+        legs = [
+          leg("CANCEL", "cancelListing", [t.listingId], {
+            exit: true,
+            orderKey: t.listingId,
+            expected: {
+              name: "ListingCancelled",
+              args: { listingId: t.listingId },
+            },
+          }),
+          replacement,
+        ];
+      } else legs = [replacement];
     } else if (["BID", "REBID"].includes(action)) {
-      if (!exact(t, ["listingId", "bidAmount", "seller"]))
+      if (
+        !exact(t, ["listingId", "bidAmount", "seller"]) &&
+        !exact(t, ["listingId", "bidAmount", "seller", "amount"])
+      )
         fail("ACTION_TERMS_INVALID");
       uint(t.listingId, true);
-      uint(t.bidAmount, true);
+      const bidAmount = uint(t.bidAmount, true);
+      // This is an expected lot size, not an authoritative listing observation.
+      // Policy independently requires the current listing's exact amountRemaining.
+      const amount = Object.hasOwn(t, "amount") ? t.amount : "1";
+      const quantity = uint(amount, true);
       if (!address(t.seller) || same(t.seller, request.wallet))
         fail("BID_SELLER_REFUSED");
       legs = [
         leg("BID", "placeBid", [t.listingId, t.bidAmount], {
-          price: t.bidAmount,
-          quantity: "1",
+          price: ((bidAmount + quantity - 1n) / quantity).toString(),
+          quantity: amount,
           value: t.bidAmount,
           counterparty: t.seller,
           orderKey: t.listingId,

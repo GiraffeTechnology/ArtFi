@@ -37,7 +37,12 @@ export const holderChallengeCookie = "artfi_charity_holder_challenge";
 export const holderGrantCookie = "artfi_charity_holder_grant";
 export const holderCookiePath = "/api/charity";
 
-type HolderChallenge = {
+type HolderDeployment = {
+  chainId: number;
+  contractAddress: Address;
+};
+
+type HolderChallenge = HolderDeployment & {
   type: "holder-challenge";
   address: Address;
   tokenId: string;
@@ -45,7 +50,7 @@ type HolderChallenge = {
   expiresAt: number;
 };
 
-export type HolderGrant = {
+export type HolderGrant = HolderDeployment & {
   type: "holder-grant";
   address: Address;
   tokenId: string;
@@ -66,7 +71,7 @@ export function canonicalTokenId(value: string | undefined) {
     return undefined;
   try {
     const parsed = BigInt(value);
-    if (parsed <= 0n) return undefined;
+    if (parsed <= 0n || parsed >= 1n << 256n) return undefined;
     return parsed.toString();
   } catch {
     return undefined;
@@ -107,6 +112,7 @@ function decode<T extends HolderChallenge | HolderGrant>(
     ) as T;
     if (
       decoded.type !== type ||
+      !matchesCurrentDeployment(decoded) ||
       !isAddress(decoded.address) ||
       canonicalTokenId(decoded.tokenId) !== decoded.tokenId ||
       !Number.isSafeInteger(decoded.expiresAt) ||
@@ -130,6 +136,7 @@ export function createHolderChallenge(
   const canonicalId = canonicalTokenId(tokenId);
   if (!canonicalId)
     throw new Error("A valid charity edition token ID is required.");
+  const deployment = holderDeployment();
   const canonicalAddress = address.toLowerCase() as Address;
   const expiresAt = Date.now() + 5 * 60_000;
   const issuedAt = new Date().toISOString();
@@ -145,11 +152,14 @@ Verify ownership of ArtCCH:ArtFi charity edition ${canonicalId} to receive the w
 
 URI: ${authority.origin}/charity/editions/${canonicalId}
 Version: 1
-Chain ID: ${hoodi.id}
+Chain ID: ${deployment.chainId}
 Nonce: ${nonce}
 Issued At: ${issuedAt}
-Expiration Time: ${expirationTime}`;
+Expiration Time: ${expirationTime}
+Resources:
+- eip155:${deployment.chainId}/erc1155:${deployment.contractAddress}/${canonicalId}`;
   const challenge: HolderChallenge = {
+    ...deployment,
     type: "holder-challenge",
     address: canonicalAddress,
     tokenId: canonicalId,
@@ -168,6 +178,7 @@ export function createHolderGrant(address: Address, tokenId: string) {
   if (!canonicalId)
     throw new Error("A valid charity edition token ID is required.");
   const grant: HolderGrant = {
+    ...holderDeployment(),
     type: "holder-grant",
     address: address.toLowerCase() as Address,
     tokenId: canonicalId,
@@ -186,7 +197,12 @@ export function grantCoversEdition(
   tokenId: string,
 ) {
   const canonicalId = canonicalTokenId(tokenId);
-  return Boolean(grant && canonicalId && grant.tokenId === canonicalId);
+  return Boolean(
+    grant &&
+    canonicalId &&
+    grant.tokenId === canonicalId &&
+    matchesCurrentDeployment(grant),
+  );
 }
 
 function publicClient() {
@@ -213,7 +229,29 @@ function charityEditionsAddress() {
   return value;
 }
 
+/** A token ID has meaning only within the exact charity contract and chain. */
+function holderDeployment(): HolderDeployment {
+  const contractAddress = charityEditionsAddress().toLowerCase() as Address;
+  if (/^0x0{40}$/.test(contractAddress)) {
+    throw new Error("The charity editions contract is unavailable.");
+  }
+  return { chainId: hoodi.id, contractAddress };
+}
+
+function matchesCurrentDeployment(value: HolderDeployment) {
+  try {
+    const current = holderDeployment();
+    return (
+      value.chainId === current.chainId &&
+      value.contractAddress === current.contractAddress
+    );
+  } catch {
+    return false;
+  }
+}
+
 export type OwnershipReader = {
+  getChainId: () => Promise<number>;
   verifyMessage: (input: {
     address: Address;
     message: string;
@@ -226,6 +264,7 @@ function chainReader(): OwnershipReader {
   const client = publicClient();
   const address = charityEditionsAddress();
   return {
+    getChainId: () => client.getChainId(),
     verifyMessage: (input) => client.verifyMessage(input),
     balanceOf: (holder, tokenId) =>
       client.readContract({
@@ -249,12 +288,16 @@ export async function verifyHolderOwnership(
   tokenId: string,
   message: string,
   signature: Hex,
-  reader: OwnershipReader = chainReader(),
+  reader?: OwnershipReader,
 ) {
   const canonicalId = canonicalTokenId(tokenId);
   if (!canonicalId) return false;
-  const signed = await reader.verifyMessage({ address, message, signature });
+  const selected = reader ?? chainReader();
+  // A configured chain name does not prove the remote RPC is serving that chain.
+  if ((await selected.getChainId()) !== hoodi.id) return false;
+  const signed = await selected.verifyMessage({ address, message, signature });
   if (!signed) return false;
-  const balance = await reader.balanceOf(address, BigInt(canonicalId));
-  return balance > 0n;
+  const balance = await selected.balanceOf(address, BigInt(canonicalId));
+  // Preserve chain identity through asynchronous verification and balance reads.
+  return balance > 0n && (await selected.getChainId()) === hoodi.id;
 }

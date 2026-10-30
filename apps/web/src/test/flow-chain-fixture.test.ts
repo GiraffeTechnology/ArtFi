@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeFunctionResult, encodeFunctionData, multicall3Abi } from "viem";
 import { charityEditionsAbi, fractionTokenAbi } from "../lib/contracts";
-import { editionCall } from "./flow-chain-fixture";
+import { editionBlock, editionCall } from "./flow-chain-fixture";
 const collection = "0x1000000000000000000000000000000000000006";
 const wallet = "0x1000000000000000000000000000000000000010";
 
@@ -19,6 +19,9 @@ describe("configured flow browser RPC fixture", () => {
       ),
     });
     expect(series).toMatchObject({
+      artworkId: `0x${"11".repeat(32)}`,
+      masterArtworkHash: `0x${"22".repeat(32)}`,
+      metadataHash: `0x${"33".repeat(32)}`,
       metadataURI: "ipfs://TEST_ONLY-edition-1",
       createdAt: 1760000000n,
       soldOutAt: 0n,
@@ -61,6 +64,13 @@ describe("configured flow browser RPC fixture", () => {
         ),
       }),
     ).toBe(10000000000000000n);
+  });
+  it("provides a stable mined block after the recorded series creation", () => {
+    const block = editionBlock();
+    expect(BigInt(block.number)).toBe(100n);
+    expect(block.hash).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(BigInt(block.timestamp)).toBeGreaterThan(1760000000n);
+    expect(editionBlock()).toEqual(block);
   });
   it("handles mixed Multicall3 native balance, ERC-20 balance and edition reads", () => {
     const calls = [

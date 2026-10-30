@@ -1,6 +1,6 @@
 # ArtCCH ArtFi Product Requirements Document
 
-Version: 2026-10-04  
+Version: 2026-10-17  
 Repository: `GiraffeTechnology/ArtFi`  
 Delivery destination: `https://io.artcch.com`  
 Companions: `ACCEPTANCE.md` for evidence and promotion, `STATUS.md` for current evidence
@@ -53,6 +53,13 @@ supersede an explicit client instruction. Record genuine conflicts and their sou
 an unanswered technical question into a new approval requirement.
 
 ### 0.2 Continuity and identifiers
+
+This is the current complete repository entry. It retains the full 2026-10-04 coordinated
+baseline, the 2026-10-16 registry-backed settlement correction, and the client's current
+instruction to continue implementation by stage through complete delivery. Earlier snapshots
+remain in Git history and retain their evidence provenance; they are not parallel current PRDs.
+Read this document together with current client instructions and `AGENTS.md` when work starts,
+resumes, changes executor, or is handed over. A document refresh is not implementation acceptance.
 
 Keep the existing M1–M6, CH.1–CH.11, XM.1–XM.6, NFR, and stage identifiers. The product ordering
 in this document does not renumber requirement IDs, erase prior evidence, or promote any status.
@@ -134,6 +141,38 @@ The receipt model does not make `ownerOf`, an ArtFi balance, or a successful tok
 that physical delivery or a registry change has completed. Show the relevant chain and registry
 states separately. Preserve the existing lifecycle requirements; this clarification does not add
 a separate logistics platform or a new global delivery prerequisite.
+
+#### Registry-backed receipt settlement clarification (2026-10-16)
+
+The client's registration-boundary correction applies to registry-backed whole receipts:
+
+- Mint terms fix the registration deadline and the format of the offline registration-change
+  document. That document is the receipt; it is not a later independent deliverable.
+- Oracle alone ingests and verifies that offline evidence and writes the authorized holder and
+  receipt record together on chain. ArtFi consumes the authorized chain record. It does not
+  independently verify the offline receipt or wait for a second receipt after holder change.
+- Token owner and registered holder may differ during continuous trading. Owner transfer alone
+  does not establish completed registration or authorize final release of reserved funds.
+- Funds are frozen in the wallet before settlement. Registration completion settles/releases
+  those existing funds; it must not request a fresh buyer payment. Technical failures retain
+  their original operation identity and recover idempotently from authoritative evidence.
+- Registration beyond the mint-defined deadline fails and triggers bounded rollback of the
+  unresolved suffix. Rollback restores token owner to the current valid holder; it never undoes
+  completed holder registrations or the settled prefix. Once owner equals holder and the NFT is
+  not burned, new trading is permitted while previous rollback history and replay protection remain.
+- Receipt data belongs in NFT/mint metadata. EX retains encrypted pickup secrets with only the
+  NFT mapping; no secret belongs in public metadata, ArtFi logs, or an example payload. EX handles
+  document transfer only. Pickup terms remain in the document; this adds no shipping, physical
+  pickup, or burn workflow to ArtFi.
+
+This correction does not remove charity NFTs, fractional trading/DAO, or the existing
+non-registry whole-asset path. A catalog's source-authenticated `registryBacked` classification
+must be preserved across review and action; a caller-supplied flag cannot opt a receipt out.
+The existing ERC-721/ERC-20 direct-payment market cannot provide registration settlement for
+that classified receipt. Its token-transfer confirmation must not be labeled as registration
+completion. [The correction candidate](https://github.com/GiraffeTechnology/ArtFi/pull/202) records
+the application protections and remaining on-chain integration work. Its publication does not
+establish merge, deployment or completed registration settlement.
 
 ### 1.3 Fractional trading and DAO
 
@@ -277,6 +316,13 @@ Keep these existing stage labels as groupings of requirements, not new scope or 
 | S-FR  | Inherited fractionalization, issuance, holdings and trading, plus the governance workflow defined by the asset model                             |
 | S-OPS | The monitoring, alerting, and operator functions applicable to the delivered stage                                                               |
 | S-MKT | The complete market combining all applicable product and final operational requirements                                                          |
+
+Complete implementation in reviewable stages and open a PR for each completed source increment.
+Independent work on the next stage continues without waiting for the previous PR's CI.
+Required CI, independent review, actual integration and the applicable acceptance evidence still
+govern merge and delivery. A pending job or a dependency that blocks one path must not stop
+unrelated authorized work. These stage increments do not reduce the full requirement set or
+substitute for complete product delivery.
 
 M5 applies throughout. A stage's finite requirement set and actual test environment are recorded
 before its handover. Later valid work remains visible without becoming an unrelated prerequisite.
@@ -656,6 +702,15 @@ opinion about blockchain transactions.
    confused with a real work.
 4. Never include the test payload in a production or mainnet asset manifest.
 5. Do not associate the test payload with real CCHS donation, receipt, valuation, or holder-benefit claims.
+
+Within the separately recorded test authority, implementation tasks may mint their own
+no-value test NFTs corresponding to a simulated warehouse receipt or a digital-native artwork.
+Keep the source/task identity, chain, deployed contract, actual runtime code hash, metadata,
+mint transaction and receipt, token identity and actor attributable to that isolated run.
+A simulated receipt does not require a real institution's document format as a technical mint
+prerequisite, and it cannot substitute for approved-source evidence for a real RWA.
+This test-data provision does not select a wallet, create signing authority, change authentication,
+or authorize a new chain or real-value operation.
 
 No CCHS or ArtCCH issued document is required to run this isolated technical payload. The real
 charity release retains its separate evidence requirements. A test result proves only the path

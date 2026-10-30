@@ -7,7 +7,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { assertRwaTradingEvidence } from "@/lib/rwa-catalog";
+import {
+  assertRwaTradingEvidence,
+  assertLegacyWholeSettlement,
+} from "@/lib/rwa-catalog";
 import type { Address, PublicClient } from "viem";
 import { currentOperation } from "@/lib/current-operation";
 import { useUserSession } from "@/components/user-session-provider";
@@ -23,6 +26,7 @@ import {
   type NativeOrderKind,
 } from "@/lib/native-order";
 import type { NativeOrderState } from "@/lib/native-order-state";
+import { readNativeOrderPage } from "@/lib/native-order-page";
 import {
   readNativeOrderObservation,
   type NativeOrderObservation,
@@ -174,22 +178,11 @@ export function NativeOrderPanel({
           onSelectRef.current(nativeOrderAuthorization(order));
         }
         const body: unknown = await read(`/api/orders?${query}`);
-        if (
-          !body ||
-          typeof body !== "object" ||
-          !("data" in body) ||
-          !Array.isArray(body.data) ||
-          !("total" in body) ||
-          typeof body.total !== "number" ||
-          !Number.isSafeInteger(body.total) ||
-          body.total < 0 ||
-          body.data.length > 20
-        )
-          throw new Error("The order list response is malformed.");
-        const list = body.data.map(accept);
+        const result = readNativeOrderPage(body, query);
+        const list = result.data.map(accept);
         if (!active()) return;
         setOrders(list);
-        setTotal(body.total);
+        setTotal(result.total);
         if (publicClient && list.length) {
           try {
             const snapshot = await readNativeOrderObservation(
@@ -270,7 +263,7 @@ export function NativeOrderPanel({
       );
       await assertTradingSession(String(order.intent.seller), order.chainId);
       assertCurrent();
-      await assertRwaTradingEvidence({
+      const record = await assertRwaTradingEvidence({
         section: kind === "whole" ? "whole" : "fractional",
         chainId: order.chainId,
         marketAddress: market,
@@ -280,6 +273,7 @@ export function NativeOrderPanel({
         slug: catalogSlug,
         identity: catalogIdentity,
       });
+      assertLegacyWholeSettlement(record);
       assertCurrent();
       const response = await fetch("/api/orders", {
         method: "POST",

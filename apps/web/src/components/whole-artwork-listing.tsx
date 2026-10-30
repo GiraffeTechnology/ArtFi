@@ -1,6 +1,10 @@
 "use client";
 
-import { assertRwaTradingEvidence } from "@/lib/rwa-catalog";
+import {
+  assertRwaTradingEvidence,
+  assertLegacyWholeSettlement,
+  registrationSettlementUnavailable,
+} from "@/lib/rwa-catalog";
 import { publicSetting } from "@/lib/public-runtime-config";
 
 import { reconcileCurrentView } from "@/lib/current-operation";
@@ -25,7 +29,10 @@ import {
   decodeNativeOrder,
   nativeOrderFromAuthorization,
 } from "@/lib/native-order";
-import { verifyWholeArtworkSale } from "@/lib/signed-market-preflight";
+import {
+  verifyWholeArtworkSale,
+  verifyWholeArtworkSigningState,
+} from "@/lib/signed-market-preflight";
 import { assetDeploymentBinding } from "@/lib/asset-binding";
 import {
   fractionTokenAbi,
@@ -60,7 +67,7 @@ const stageLabels: Record<Stage, string> = {
   signed: "Sale authorized, not published",
   approving: "Waiting for the approval transaction",
   filling: "Waiting for the settlement transaction",
-  filled: "Settled on chain",
+  filled: "Legacy token transfer confirmed; registration not established",
   revoking: "Waiting for the withdrawal receipt",
   error: "This step needs attention",
 };
@@ -140,6 +147,7 @@ export function WholeArtworkListing(
     marketAddress?: string;
     catalogSlug?: string;
     catalogIdentity?: string;
+    registryBacked?: boolean;
   }>,
 ) {
   const { address, chainId } = useAccount();
@@ -159,6 +167,7 @@ function WholeArtworkListingScreen({
   marketAddress: boundMarket,
   catalogSlug,
   catalogIdentity,
+  registryBacked = false,
 }: Readonly<{
   slug?: string;
   collection?: string;
@@ -166,6 +175,7 @@ function WholeArtworkListingScreen({
   marketAddress?: string;
   catalogSlug?: string;
   catalogIdentity?: string;
+  registryBacked?: boolean;
 }>) {
   const { address, chainId, isConnected } = useAccount();
   const { authenticated, revision } = useUserSession();
@@ -240,7 +250,7 @@ function WholeArtworkListingScreen({
   const grounding = useCallback(async () => {
     if (!market || !collectionAddress || artworkId === undefined)
       throw new Error("The artwork binding is unavailable.");
-    await assertRwaTradingEvidence({
+    const record = await assertRwaTradingEvidence({
       section: "whole",
       chainId: supportedChain.id,
       marketAddress: market,
@@ -249,9 +259,10 @@ function WholeArtworkListingScreen({
       slug: catalogSlug,
       identity: catalogIdentity,
     });
+    assertLegacyWholeSettlement(record);
   }, [market, collectionAddress, artworkId, catalogSlug, catalogIdentity]);
 
-  const { data: holder, refetch: refetchHolder } = useReadContract({
+  const { data: tokenOwner, refetch: refetchOwner } = useReadContract({
     abi: wholeArtworkCollectionAbi,
     address: collectionAddress,
     functionName: "ownerOf",
@@ -315,8 +326,8 @@ function WholeArtworkListingScreen({
     query: { enabled: Boolean(collectionAddress && address && market) },
   });
 
-  const isHolder = Boolean(
-    address && holder && address.toLowerCase() === holder.toLowerCase(),
+  const isTokenOwner = Boolean(
+    address && tokenOwner && address.toLowerCase() === tokenOwner.toLowerCase(),
   );
 
   /**
@@ -460,12 +471,23 @@ function WholeArtworkListingScreen({
       const hash = saleIntentHash(draft, domain, supportedChain.id);
       await grounding();
       operation.assertCurrent();
-      const signature = await operation.authorize(() =>
-        signTypedDataAsync({
+      const signingOperation = operation;
+      const signature = await signingOperation.authorize(async () => {
+        await grounding();
+        signingOperation.assertCurrent();
+        await verifyWholeArtworkSigningState({
+          client: publicClient,
+          intent: draft,
+          domain,
+          expectedChainId: supportedChain.id,
+          assertCurrent: signingOperation.assertCurrent,
+        });
+        signingOperation.assertCurrent();
+        return signTypedDataAsync({
           ...saleIntentTypedData(draft, domain),
           account: address,
-        }),
-      );
+        });
+      });
       operation.assertCurrent();
       setDigest(hash);
       setAuthorization(encodeAuthorization(draft, signature));
@@ -511,16 +533,18 @@ function WholeArtworkListingScreen({
       await grounding();
       operation.assertCurrent();
       setStage("approving");
-      await operation.write("approval", () =>
-        writeContractAsync({
+      await operation.write("approval", async () => {
+        await grounding();
+        operation!.assertCurrent();
+        return writeContractAsync({
           abi: wholeArtworkCollectionAbi,
           address: collectionAddress,
           functionName: "setApprovalForAll",
           args: [market, true],
           chainId: supportedChain.id,
           account: address,
-        }),
-      );
+        });
+      });
       await refetchApproval();
       operation.assertCurrent();
       setStage(authorization ? "signed" : "idle");
@@ -718,28 +742,34 @@ function WholeArtworkListingScreen({
       await grounding();
       operation.assertCurrent();
       setStage("approving");
-      await verifyWholeArtworkSale({
-        client: publicClient,
-        intent,
-        signature,
-        buyer: address,
-        expectedChainId: supportedChain.id,
-        domain: { chainId: supportedChain.id, verifyingContract: market },
-      });
+      const checkSale = () =>
+        verifyWholeArtworkSale({
+          client: publicClient,
+          intent,
+          signature,
+          buyer: address,
+          expectedChainId: supportedChain.id,
+          domain: { chainId: supportedChain.id, verifyingContract: market },
+        });
       operation.assertCurrent();
       await operation.settle({
         onStage: setStage,
-        approvePayment: () =>
-          writeContractAsync({
+        approvePayment: async () => {
+          await grounding();
+          await checkSale();
+          operation!.assertCurrent();
+          return writeContractAsync({
             abi: fractionTokenAbi,
             address: intent.paymentToken,
             functionName: "approve",
             args: [market, intent.price],
             chainId: supportedChain.id,
             account: address,
-          }),
+          });
+        },
         settle: async () => {
           await grounding();
+          await checkSale();
           operation!.assertCurrent();
           return writeContractAsync({
             abi: wholeArtworkMarketAbi,
@@ -751,7 +781,7 @@ function WholeArtworkListingScreen({
           });
         },
       });
-      await refetchHolder();
+      await refetchOwner();
       operation.assertCurrent();
       setStage("filled");
     } catch (error) {
@@ -774,7 +804,7 @@ function WholeArtworkListingScreen({
     market,
     pasted,
     publicClient,
-    refetchHolder,
+    refetchOwner,
     writeContractAsync,
   ]);
 
@@ -818,13 +848,21 @@ function WholeArtworkListingScreen({
         The receipt token stays in your wallet until it sells.
       </h2>
       <p>
-        A token sale is authorized by signature. The receipt token moves in the
-        transaction that pays you, only against the terms you signed. Physical
-        pickup and registry-confirmed rights remain separate from this chain
-        settlement. You can withdraw the authorization before settlement.
+        The legacy market exchanges a token and payment in one transaction. That
+        transaction does not establish registered holdership. A registry-backed
+        receipt requires its Oracle registration record and release of funds
+        already frozen in the wallet. Token owner and registered holder may
+        differ during continuous trading. Existing authorizations can still be
+        withdrawn.
       </p>
 
+      {registryBacked && (
+        <p role="status" className="dao-alert dao-alert--warning">
+          {registrationSettlementUnavailable}
+        </p>
+      )}
       <NativeOrderPanel
+        disabled={registryBacked}
         catalogSlug={catalogSlug}
         catalogIdentity={catalogIdentity}
         kind="whole"
@@ -860,8 +898,8 @@ function WholeArtworkListingScreen({
           <dd>{stageLabels[stage]}</dd>
         </div>
         <div>
-          <dt>Chain token holder</dt>
-          <dd>{holder ?? "Reading from chain"}</dd>
+          <dt>Chain token owner</dt>
+          <dd>{tokenOwner ?? "Reading from chain"}</dd>
         </div>
         <div>
           <dt>Market can move it</dt>
@@ -882,7 +920,7 @@ function WholeArtworkListingScreen({
         </p>
       )}
 
-      {isConnected && isHolder && (
+      {isConnected && isTokenOwner && (
         <div className="dao-composer">
           <div className="field-grid">
             <label>
@@ -946,7 +984,9 @@ function WholeArtworkListingScreen({
                 type="button"
                 className="secondary"
                 onClick={grantApproval}
-                disabled={!canTransact || busy || Boolean(pending)}
+                disabled={
+                  registryBacked || !canTransact || busy || Boolean(pending)
+                }
               >
                 Approve the market
               </button>
@@ -960,6 +1000,7 @@ function WholeArtworkListingScreen({
                 busy ||
                 Boolean(pending) ||
                 epoch === undefined ||
+                registryBacked ||
                 problems.length > 0
               }
             >
@@ -1003,7 +1044,7 @@ function WholeArtworkListingScreen({
         </div>
       )}
 
-      {isConnected && !isHolder && (
+      {isConnected && !isTokenOwner && (
         <div className="dao-composer">
           <p className="dao-note">
             Paste a seller&apos;s authorization to settle it. Payment leaves
@@ -1057,7 +1098,11 @@ function WholeArtworkListingScreen({
               className="primary"
               onClick={fill}
               disabled={
-                !canTransact || busy || Boolean(pending) || !pastedAuthorization
+                registryBacked ||
+                !canTransact ||
+                busy ||
+                Boolean(pending) ||
+                !pastedAuthorization
               }
             >
               Settle this sale
@@ -1068,8 +1113,9 @@ function WholeArtworkListingScreen({
 
       {stage === "filled" && (
         <p className="dao-alert">
-          Settled. The receipt token and payment moved in the same chain
-          transaction. Physical pickup and registry rights remain separate.
+          The legacy token-transfer transaction was confirmed. This does not
+          establish Oracle registration or release of previously frozen funds.
+          Registered holdership is shown separately in the Oracle record.
         </p>
       )}
 
@@ -1097,7 +1143,7 @@ function WholeArtworkListingScreen({
                   refresh: () =>
                     Promise.all([
                       refetchEpoch(),
-                      refetchHolder(),
+                      refetchOwner(),
                       refetchApproval(),
                     ]),
                   publish: (checked) => {

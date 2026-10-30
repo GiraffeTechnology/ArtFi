@@ -265,7 +265,16 @@ test("adapter timeout preserves durable reservation and later reconciliation nev
   });
   assert.equal((await kernel(req)).state, "SAFE_DEGRADED");
   await delay(200);
-  assert.equal((await kernel(req)).state, "SETTLED");
+  const reconciled = await kernel(req);
+  assert.equal(
+    reconciled.state,
+    "SETTLED",
+    JSON.stringify({
+      state: reconciled.state,
+      reason: reconciled.reason,
+      storeOutcome: reconciled.storeOutcome,
+    }),
+  );
   assert.equal(sends, 1);
 });
 
@@ -287,18 +296,22 @@ test("revocation is durably identity-bound and survives a fresh driver pool", as
     const other = createDurableStore({ ...options, pool: otherPool });
     assert.deepEqual((await other.get(req.operationId)).revocation, proof);
     let sends = 0;
+    const revoked = await kernelFor(
+      {
+        execute: async () => {
+          sends++;
+        },
+      },
+      other,
+    )(req);
     assert.equal(
-      (
-        await kernelFor(
-          {
-            execute: async () => {
-              sends++;
-            },
-          },
-          other,
-        )(req)
-      ).state,
+      revoked.state,
       "TERMINAL_REJECTED",
+      JSON.stringify({
+        state: revoked.state,
+        reason: revoked.reason,
+        storeOutcome: revoked.storeOutcome,
+      }),
     );
     assert.equal(sends, 0);
   } finally {

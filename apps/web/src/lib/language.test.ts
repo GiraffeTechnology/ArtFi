@@ -4,6 +4,8 @@ import {
   accessibleLanguageNameFor,
   htmlLangFor,
   isTranslatableSource,
+  isSafeUiTranslation,
+  maxUiTranslationBytes,
   isUiLocale,
   needsTranslation,
   protectedTermsIntact,
@@ -82,5 +84,60 @@ describe("ArtFi language contract", () => {
         { code: "PROOFREAD_REJECTED" },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("authoritative translation literals", () => {
+  it.each([
+    "Seller: 0xFa67da006Fc31b00e3a8ED94098230F895b0FAd8",
+    `Transaction: 0x${"a".repeat(64)}`,
+    "Evidence: https://example.invalid/record/123",
+    "Contact: owner@example.invalid",
+    "Help: mailto:owner@example.invalid",
+  ])("does not submit embedded technical identities: %s", (text) => {
+    expect(isTranslatableSource(text)).toBe(false);
+  });
+  it.each([
+    ["Buy 10 fractions for 0.01 ETH", "Acheter 10 fractions pour 0.01 ETH"],
+    [
+      "Maximum 100 USDC for 2 fractions",
+      "2 fractions pour un maximum de 100 USDC",
+    ],
+    ["10 units and 10 units", "10 unités et 10 unités"],
+    ["No claim is available", "청구할 수 없습니다"],
+  ])(
+    "retains exact literal facts while allowing translated grammar",
+    (source, candidate) => {
+      expect(isSafeUiTranslation(source, candidate)).toBe(true);
+    },
+  );
+  it.each([
+    ["Pay 0.01 ETH", "Payer 0.1 ETH"],
+    ["Pay 0.010 ETH", "Payer 0.01 ETH"],
+    ["Pay 100 USDC", "Payer 100 USDT"],
+    ["Pay 100USDC", "Payer 100USDT"],
+    ["Cost 100gwei", "Coût 100wei"],
+    ["Pay 100 USDC", "Payer 100"],
+    ["10 units and 10 units", "10 unités"],
+    ["No claim is available", "1 réclamation disponible"],
+    ["Change -5 USD", "Variation 5 USD"],
+    ["Threshold 80%", "Seuil 8%"],
+    ["OpenSea order", "Autre marché"],
+    ["Review current order", "Voir https://example.invalid/order"],
+  ])("refuses added, altered or lost facts", (source, candidate) => {
+    expect(isSafeUiTranslation(source, candidate)).toBe(false);
+  });
+  it("bounds actual UTF-8 bytes and rejects empty or nonstring cache entries", () => {
+    expect(isSafeUiTranslation("English source", "界".repeat(3000))).toBe(
+      false,
+    );
+    expect(
+      isSafeUiTranslation(
+        "English source",
+        "x".repeat(maxUiTranslationBytes + 1),
+      ),
+    ).toBe(false);
+    expect(isSafeUiTranslation("English source", " ")).toBe(false);
+    expect(isSafeUiTranslation("English source", undefined)).toBe(false);
   });
 });

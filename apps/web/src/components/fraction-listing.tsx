@@ -19,6 +19,7 @@ import { FractionOrderBook } from "./fraction-order-book";
 import {
   freshFractionSalt,
   retireFractionForAmendment,
+  assertRetiredFractionForReplacement,
 } from "@/lib/fraction-amendment";
 import { NativeOrderPanel } from "./native-order-panel";
 import { useUserSession } from "./user-session-provider";
@@ -31,7 +32,10 @@ import {
   nativeOrderFromAuthorization,
   type NativeOrder,
 } from "@/lib/native-order";
-import { verifyFractionSale } from "@/lib/signed-market-preflight";
+import {
+  verifyFractionSale,
+  verifyFractionSigningState,
+} from "@/lib/signed-market-preflight";
 import { assetDeploymentBinding } from "@/lib/asset-binding";
 import { artFiFractionMarketAbi, fractionTokenAbi } from "@/lib/contracts";
 import {
@@ -533,6 +537,7 @@ function FractionListingScreen({
       operation = begin(amending?.intentHash);
       await grounding();
       operation.assertCurrent();
+      let amendmentOriginal: FractionSaleIntent | undefined;
       let amendmentSnapshot:
         Awaited<ReturnType<typeof retireFractionForAmendment>> | undefined;
       if (amending) {
@@ -544,11 +549,12 @@ function FractionListingScreen({
           throw new Error(
             "The original order belongs to a different fraction token.",
           );
+        amendmentOriginal = Object.freeze({ ...original.intent });
         setStage("revoking");
         amendmentSnapshot = await retireFractionForAmendment({
           client: publicClient,
           market,
-          original: original.intent,
+          original: amendmentOriginal,
           seller: address,
           assertCurrent: operation.assertCurrent,
           revoke: () =>
@@ -557,7 +563,7 @@ function FractionListingScreen({
                 abi: artFiFractionMarketAbi,
                 address: market,
                 functionName: "revokeIntent",
-                args: [original.intent],
+                args: [amendmentOriginal!],
                 chainId: supportedChain.id,
                 account: address,
               }),
@@ -592,12 +598,35 @@ function FractionListingScreen({
       const hash = fractionIntentHash(draft, domain, supportedChain.id);
       await grounding();
       operation.assertCurrent();
-      const signature = await operation.authorize(() =>
-        signTypedDataAsync({
+      const signingOperation = operation;
+      const signature = await signingOperation.authorize(async () => {
+        if (amendmentOriginal)
+          await assertRetiredFractionForReplacement({
+            client: publicClient,
+            market,
+            original: amendmentOriginal,
+            seller: address,
+            expectedEpoch: draft.epoch,
+            refreshGrounding: grounding,
+            assertCurrent: signingOperation.assertCurrent,
+          });
+        else {
+          await grounding();
+          signingOperation.assertCurrent();
+          await verifyFractionSigningState({
+            client: publicClient,
+            intent: draft,
+            domain,
+            expectedChainId: supportedChain.id,
+            assertCurrent: signingOperation.assertCurrent,
+          });
+        }
+        signingOperation.assertCurrent();
+        return signTypedDataAsync({
           ...fractionIntentTypedData(draft, domain),
           account: address,
-        }),
-      );
+        });
+      });
       operation.assertCurrent();
       setDigest(hash);
       setSigned(draft);
@@ -860,29 +889,35 @@ function FractionListingScreen({
       await grounding();
       operation.assertCurrent();
       setStage("approving");
-      await verifyFractionSale({
-        client: publicClient,
-        intent,
-        signature,
-        buyer: address,
-        expectedChainId: supportedChain.id,
-        domain: { chainId: supportedChain.id, verifyingContract: market },
-        amount,
-      });
+      const checkSale = () =>
+        verifyFractionSale({
+          client: publicClient,
+          intent,
+          signature,
+          buyer: address,
+          expectedChainId: supportedChain.id,
+          domain: { chainId: supportedChain.id, verifyingContract: market },
+          amount,
+        });
       operation.assertCurrent();
       await operation.settle({
         onStage: setStage,
-        approvePayment: () =>
-          writeContractAsync({
+        approvePayment: async () => {
+          await grounding();
+          await checkSale();
+          operation!.assertCurrent();
+          return writeContractAsync({
             abi: fractionTokenAbi,
             address: intent.paymentToken,
             functionName: "approve",
             args: [market, payment],
             chainId: supportedChain.id,
             account: address,
-          }),
+          });
+        },
         settle: async () => {
           await grounding();
+          await checkSale();
           operation!.assertCurrent();
           return writeContractAsync({
             abi: artFiFractionMarketAbi,

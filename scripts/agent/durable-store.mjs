@@ -431,6 +431,9 @@ export function createDurableStore({
     withTransaction: transaction,
     leaseDurationMs: leaseMs,
     operationTimeoutMs,
+    // Work has one shared deadline; failure may then roll back, release, and
+    // discard a failed release, each with one independent cleanup budget.
+    totalOperationTimeoutMs: operationTimeoutMs + 3 * cleanupTimeoutMs,
     async listEvents(operationId, { after = "0", limit = 50 } = {}) {
       if (
         !id(operationId) ||

@@ -124,13 +124,14 @@ func (service *rwaService) hydratePersistence(ctx context.Context) error {
 		SELECT vault_id, CONCAT('0x', LOWER(HEX(request_id))), LOWER(HEX(idempotency_key_hash)),
 		       LOWER(HEX(payload_hash)), factory_address, collection_address, token_id, vault_name,
 		       admin_address, pauser_address, fractionalizer_address, status,
-		       COALESCE(transaction_hash, ''), created_at
+		       COALESCE(transaction_hash, ''), created_at, presentation_profile_json
 		FROM vaults`)
 	if err != nil {
 		return err
 	}
 	defer vaultRows.Close()
 	for vaultRows.Next() {
+		var presentationRaw []byte
 		intent := &vaultIntent{
 			ChainID:          hoodiChainID,
 			ContractFunction: "createVault(bytes32,string,address,uint256,address,address,address)",
@@ -151,7 +152,12 @@ func (service *rwaService) hydratePersistence(ctx context.Context) error {
 			&intent.Status,
 			&intent.TransactionHash,
 			&createdAt,
+			&presentationRaw,
 		); err != nil {
+			return err
+		}
+		intent.Presentation, err = decodeDAOPresentation(presentationRaw)
+		if err != nil {
 			return err
 		}
 		intent.ContractArguments = []string{
@@ -274,6 +280,10 @@ func (service *rwaService) persistSubmission(ctx context.Context, intentID, tran
 }
 
 func (service *rwaService) persistVaultIntent(ctx context.Context, intent *vaultIntent) error {
+	profileJSON, err := daoPresentationJSON(intent.Presentation)
+	if err != nil {
+		return err
+	}
 	if service.db == nil {
 		return service.persistenceRequirement()
 	}
@@ -285,8 +295,8 @@ func (service *rwaService) persistVaultIntent(ctx context.Context, intent *vault
 		INSERT INTO vaults
 		    (vault_id, request_id, idempotency_key_hash, payload_hash, factory_address,
 		     collection_address, token_id, vault_name, admin_address, pauser_address,
-		     fractionalizer_address, status, created_at)
-		VALUES (?, UNHEX(?), UNHEX(?), UNHEX(?), ?, ?, ?, ?, ?, ?, ?, 'prepared', ?)`,
+		     fractionalizer_address, status, created_at, presentation_profile_json)
+		VALUES (?, UNHEX(?), UNHEX(?), UNHEX(?), ?, ?, ?, ?, ?, ?, ?, 'prepared', ?, ?)`,
 		intent.IntentID,
 		strings.TrimPrefix(intent.RequestID, "0x"),
 		intent.idempotencyKeyHash,
@@ -299,6 +309,7 @@ func (service *rwaService) persistVaultIntent(ctx context.Context, intent *vault
 		intent.PauserAddress,
 		intent.FractionalizerAddress,
 		createdAt,
+		profileJSON,
 	)
 	return err
 }

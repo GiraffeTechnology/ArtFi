@@ -374,6 +374,7 @@ function RwaCreateForm() {
     if (!saved.intent || !publicClient) return;
     let confirmedHash = hash;
     let blockNumber: bigint | undefined;
+    let blockHash: Hex | undefined;
     if (hash) {
       const receipt = await confirmMarketReceipt(publicClient, hash, (next) =>
         session.repriced(lease, next),
@@ -381,6 +382,7 @@ function RwaCreateForm() {
       op.assertCurrent();
       confirmedHash = receipt.transactionHash;
       blockNumber = receipt.blockNumber;
+      blockHash = receipt.blockHash;
     }
     const executionAuthority = saved.executionAuthority ?? saved.wallet;
     if (
@@ -397,6 +399,7 @@ function RwaCreateForm() {
       op.assertCurrent,
       blockNumber,
       executionAuthority,
+      blockHash,
     );
     op.assertCurrent();
     session.resolved(lease, { ...saved, hash: confirmedHash, minted });

@@ -1,3 +1,4 @@
+import { fixtureMining } from "./fixture-mining";
 import {
   decodeFunctionData,
   encodeAbiParameters,
@@ -83,6 +84,7 @@ const readAbi = parseAbi([
 ]);
 
 export function createSetupChainFixture() {
+  const mining = fixtureMining(blockHash);
   const state = {
     transactions: [] as SetupTransaction[],
     outcomes: {
@@ -440,9 +442,7 @@ export function createSetupChainFixture() {
       value: "0x0",
       gas: "0x5208",
       gasPrice: "0x1",
-      blockHash: null,
-      blockNumber: null,
-      transactionIndex: null,
+      ...mining.inclusion(hash),
       type: "0x2",
       chainId: "0x88bb0",
       v: "0x0",
@@ -486,6 +486,7 @@ export function createSetupChainFixture() {
             result = null;
             break;
           }
+          mining.observeReceipt(entry.hash);
           markMined(entry);
           result = {
             transactionHash: entry.hash,
@@ -507,8 +508,7 @@ export function createSetupChainFixture() {
         }
         case "eth_getBlockByNumber":
           result = {
-            number: `0x${state.block.toString(16)}`,
-            hash: blockHash,
+            ...mining.block(params[0], state.block),
             parentHash: blockHash,
             transactions: [],
             gasLimit: "0x1000000",

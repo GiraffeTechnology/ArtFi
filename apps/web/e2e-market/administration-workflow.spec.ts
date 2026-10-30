@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { editionCall } from "../src/test/flow-chain-fixture";
+import { editionBlock, editionCall } from "../src/test/flow-chain-fixture";
 import type { Hex } from "viem";
 import type { ModerationCase } from "../src/lib/administration";
 const wallet = "0x1000000000000000000000000000000000000010";
@@ -70,16 +70,15 @@ async function fixture(page: Page) {
   );
   await page.route("**/test-hoodi-rpc", async (route) => {
     const raw = route.request().postDataJSON();
-    const answer = (q: { id: number; method: string; params?: unknown[] }) => ({
-      id: q.id,
-      jsonrpc: "2.0",
-      result:
-        q.method === "eth_chainId"
-          ? "0x88bb0"
-          : q.method === "eth_call"
-            ? editionCall((q.params![0] as { data: Hex }).data)
-            : "0x0",
-    });
+    const answer = (q: { id: number; method: string; params?: unknown[] }) => {
+      let result: unknown = "0x0";
+      if (q.method === "eth_chainId") result = "0x88bb0";
+      else if (q.method === "eth_blockNumber") result = "0x64";
+      else if (q.method === "eth_getBlockByNumber") result = editionBlock();
+      else if (q.method === "eth_call")
+        result = editionCall((q.params![0] as { data: Hex }).data);
+      return { id: q.id, jsonrpc: "2.0", result };
+    };
     await route.fulfill({
       json: Array.isArray(raw) ? raw.map(answer) : answer(raw),
     });
@@ -352,7 +351,9 @@ test("missing moderation role and account switch cannot retain private admin con
   await page.goto("/admin");
   await connect(page);
   await expect(
-    page.getByText("No moderation role.", { exact: true }),
+    page.getByText("This wallet does not have the required permission.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     page.getByText("TEST ONLY private report evidence", { exact: true }),

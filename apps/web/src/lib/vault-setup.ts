@@ -1,4 +1,9 @@
 import {
+  isDaoPresentation,
+  sameDaoPresentation,
+  type DaoPresentation,
+} from "./dao-presentation";
+import {
   encodeAbiParameters,
   isAddress,
   keccak256,
@@ -27,6 +32,7 @@ export const vaultRecoveryAbi = parseAbi([
   "function fractionalSupply() view returns (uint256)",
 ]);
 export type VaultConfiguration = {
+  presentation?: DaoPresentation;
   collectionAddress: Address;
   tokenId: string;
   vaultName: string;
@@ -39,6 +45,7 @@ export type VaultConfiguration = {
   recipient: Address;
 };
 export type VaultIntent = {
+  presentation?: DaoPresentation;
   intentId: string;
   requestId: Hex;
   factoryAddress: Address;
@@ -133,10 +140,11 @@ export function assertVaultBinding(
     !same(intent.pauserAddress, c.pauserAddress) ||
     !addr(intent.fractionalizerAddress) ||
     !same(intent.fractionalizerAddress, c.fractionalizerAddress) ||
+    !sameDaoPresentation(intent.presentation, c.presentation) ||
     (intent.transactionHash !== undefined && !hash(intent.transactionHash))
   ) {
     throw new Error(
-      "The Vault intent does not match every reviewed factory, asset, name and role binding.",
+      "The Vault intent does not match every reviewed factory, asset, name, role and presentation binding.",
     );
   }
 }
@@ -159,6 +167,7 @@ export function isVaultSetup(value: unknown): value is VaultSetup {
     !uint(c.tokenSupply) ||
     BigInt(c.tokenSupply) < 10n ** 18n ||
     BigInt(c.tokenSupply) > 10n ** 30n ||
+    (c.presentation !== undefined && !isDaoPresentation(c.presentation)) ||
     !boundedText(c.vaultName, 80) ||
     !boundedText(c.tokenName, 80) ||
     !boundedText(c.tokenSymbol, 12) ||

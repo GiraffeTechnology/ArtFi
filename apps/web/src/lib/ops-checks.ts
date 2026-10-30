@@ -29,20 +29,54 @@ export const mirrorStaleAfterSeconds = 15 * 60;
 /** Block age beyond which the chain view is reported as lagging. */
 export const chainLagAfterSeconds = 5 * 60;
 
-export function classifyWebRuntime(payload: unknown): CheckVerdict {
-  if (typeof payload !== "object" || payload === null) {
+function nonnegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function chainIdentity(value: unknown): value is number {
+  return nonnegativeInteger(value) && value > 0;
+}
+
+export function classifyWebRuntime(
+  payload: unknown,
+  expectedChainId?: number,
+): CheckVerdict {
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    Array.isArray(payload)
+  ) {
     return { state: "unavailable", detail: "The web runtime did not answer." };
   }
-  const body = payload as { status?: string; chainId?: number };
+  const body = payload as { status?: unknown; chainId?: unknown };
   if (body.status !== "ok") {
+    // Never reflect arbitrary upstream status text into the public status page.
     return {
       state: "unavailable",
-      detail: `The web runtime reports status ${body.status ?? "unknown"}.`,
+      detail: "The web runtime did not report a healthy status.",
+    };
+  }
+  if (
+    !chainIdentity(body.chainId) ||
+    (expectedChainId !== undefined && !chainIdentity(expectedChainId))
+  ) {
+    return {
+      state: "unavailable",
+      detail: "The web runtime chain identity could not be verified.",
+    };
+  }
+  if (expectedChainId !== undefined && body.chainId !== expectedChainId) {
+    return {
+      state: "unavailable",
+      detail: "The web runtime reports a different chain from this build.",
     };
   }
   return {
     state: "ok",
-    detail: "Serving, and reporting its configured chain.",
+    detail:
+      expectedChainId === undefined
+        ? "Serving, and reporting its chain identity."
+        : "Serving, and reporting its configured chain.",
   };
 }
 
@@ -55,6 +89,12 @@ export function classifyApiRuntime(
     return {
       state: "unavailable",
       detail: "The API did not answer this runtime's health request.",
+    };
+  }
+  if (!nonnegativeInteger(httpStatus) || httpStatus < 100 || httpStatus > 599) {
+    return {
+      state: "unavailable",
+      detail: "The API supplied no valid HTTP status for this check.",
     };
   }
   if (httpStatus !== 200) {
@@ -78,10 +118,24 @@ export function classifyChain(
   expectedChainId: number,
   nowSeconds: number,
 ): CheckVerdict {
-  if (!observed) {
+  if (!observed || typeof observed !== "object" || Array.isArray(observed)) {
     return {
       state: "unavailable",
       detail: "No chain endpoint answered, so no block was read.",
+    };
+  }
+  if (
+    !chainIdentity(expectedChainId) ||
+    !chainIdentity(observed.chainId) ||
+    typeof observed.blockNumber !== "bigint" ||
+    observed.blockNumber < 0n ||
+    !nonnegativeInteger(observed.blockTimestampSeconds) ||
+    !nonnegativeInteger(nowSeconds)
+  ) {
+    return {
+      state: "unavailable",
+      detail:
+        "The chain observation has no valid chain, block or time identity.",
     };
   }
   if (observed.chainId !== expectedChainId) {
@@ -90,10 +144,13 @@ export function classifyChain(
       detail: `The endpoint reports chain ${observed.chainId}; this build is configured for ${expectedChainId}.`,
     };
   }
-  const age = Math.max(
-    0,
-    Math.round(nowSeconds - observed.blockTimestampSeconds),
-  );
+  if (observed.blockTimestampSeconds > nowSeconds) {
+    return {
+      state: "degraded",
+      detail: "The chain head is timestamped in the future.",
+    };
+  }
+  const age = nowSeconds - observed.blockTimestampSeconds;
   if (age > chainLagAfterSeconds) {
     return {
       state: "degraded",
@@ -114,26 +171,35 @@ export function classifyMirror(
   newestObservationISO: string | undefined,
   nowMilliseconds: number,
 ): CheckVerdict {
-  if (!newestObservationISO) {
+  if (!nonnegativeInteger(nowMilliseconds)) {
+    return {
+      state: "unavailable",
+      detail: "The observation time could not be verified.",
+    };
+  }
+  if (newestObservationISO === undefined || newestObservationISO === "") {
     return {
       state: "not-checked",
       detail: "No mirrored observation exists to measure freshness against.",
     };
   }
-  const observed = Date.parse(newestObservationISO);
-  if (!Number.isFinite(observed)) {
+  const observed =
+    typeof newestObservationISO === "string"
+      ? Date.parse(newestObservationISO)
+      : NaN;
+  if (!Number.isFinite(observed) || observed < 0) {
     return {
       state: "unavailable",
       detail: "The newest mirrored observation carries no readable timestamp.",
     };
   }
-  const age = Math.round((nowMilliseconds - observed) / 1000);
-  if (age < 0) {
+  if (observed > nowMilliseconds) {
     return {
       state: "degraded",
       detail: "The newest observation is timestamped in the future.",
     };
   }
+  const age = Math.round((nowMilliseconds - observed) / 1000);
   if (age > mirrorStaleAfterSeconds) {
     return {
       state: "degraded",

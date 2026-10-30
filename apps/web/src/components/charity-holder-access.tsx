@@ -57,10 +57,12 @@ function HolderAccessSession({ tokenId }: { tokenId: string }) {
     useState<HolderState>({ step: "idle" });
   const active = useRef(false);
   const inFlight = useRef(false);
+  const requestController = useRef<AbortController | null>(null);
   useEffect(() => {
     active.current = true;
     return () => {
       active.current = false;
+      requestController.current?.abort();
     };
   }, []);
   useEffect(() => {
@@ -80,16 +82,21 @@ function HolderAccessSession({ tokenId }: { tokenId: string }) {
   async function verify() {
     if (!address || !isConnected || inFlight.current) return;
     inFlight.current = true;
+    const controller = new AbortController();
+    requestController.current = controller;
     try {
       await verifyHolderAccess({
         address,
         tokenId,
+        signal: controller.signal,
         signMessage: (message) =>
           signMessageAsync({ message, account: address }),
         isCurrent: () => active.current,
         update: setState,
       });
     } finally {
+      if (requestController.current === controller)
+        requestController.current = null;
       inFlight.current = false;
     }
   }

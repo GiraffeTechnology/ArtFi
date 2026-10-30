@@ -30,7 +30,15 @@ const unavailableStorage = {
 };
 
 export function useMarketTransactions(
-  client: Pick<PublicClient, "waitForTransactionReceipt"> | undefined,
+  client:
+    | Pick<
+        PublicClient,
+        | "getChainId"
+        | "getTransaction"
+        | "getBlock"
+        | "waitForTransactionReceipt"
+      >
+    | undefined,
   context: string,
   onHash: (hash: Hash) => void,
   options: {

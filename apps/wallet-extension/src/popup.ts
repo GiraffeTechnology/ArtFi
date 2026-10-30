@@ -1,4 +1,15 @@
 import { vaultSubmission } from "./vault-form.js";
+import {
+  isPopupLocale,
+  popupLanguages,
+  popupLanguageStorageKey,
+  popupMessageKeys,
+  popupMessage,
+  resolvePopupLocale,
+  vaultProblemKey,
+  type PopupLocale,
+  type PopupMessageKey,
+} from "./popup-language.js";
 
 /**
  * The popup is where a person grants a site access, because a site must not be able to grant
@@ -42,6 +53,114 @@ let activeOrigin: string | null = null;
 let activeTabId: number | null = null;
 let grants: StoredGrant[] = [];
 let vaultStatus: VaultStatus = { configured: false, locked: true };
+let locale: PopupLocale = resolvePopupLocale(undefined, navigator.languages);
+let vaultErrorKey: PopupMessageKey | null = null;
+let statusOverride: PopupMessageKey | null = "checking";
+let tabRead = false;
+let siteFailed = false;
+let languageRevision = 0;
+let languageSave = Promise.resolve();
+let preferenceNotice: PopupMessageKey | null = null;
+const language = document.querySelector<HTMLSelectElement>("#language");
+const languageStatus =
+  document.querySelector<HTMLParagraphElement>("#language-status");
+const translatedBoundary = document.querySelector<HTMLParagraphElement>(
+  "#translated-boundary",
+);
+const emptyGrants =
+  document.querySelector<HTMLParagraphElement>("#grants-empty");
+const message = (key: PopupMessageKey, origin = "") =>
+  popupMessage(locale, key, origin);
+
+function renderStatus(): void {
+  if (statusElement)
+    statusElement.textContent = message(
+      statusOverride ??
+        (!vaultStatus.configured
+          ? "unconfigured"
+          : vaultStatus.locked
+            ? "locked"
+            : "unlocked"),
+    );
+}
+function renderLanguage(): void {
+  document.documentElement.lang = locale;
+  document
+    .querySelectorAll<HTMLElement>("[data-popup-message]")
+    .forEach((element) => {
+      const key = element.dataset.popupMessage;
+      if (key && popupMessageKeys.some((known) => known === key)) {
+        // Keys are fixed by this extension's own markup, never supplied by a page.
+        element.textContent = message(key as PopupMessageKey);
+      }
+    });
+  if (language) language.value = locale;
+  if (translatedBoundary) translatedBoundary.hidden = locale === "en";
+  if (languageStatus)
+    languageStatus.textContent = preferenceNotice
+      ? message(preferenceNotice)
+      : "";
+  renderStatus();
+  renderVault();
+  renderSite();
+  renderGrants();
+  showVaultError(vaultErrorKey);
+}
+if (language) {
+  language.replaceChildren(
+    ...popupLanguages.map(({ value, label }) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.lang = value;
+      option.textContent = label;
+      return option;
+    }),
+  );
+  language.addEventListener("change", () => {
+    if (!isPopupLocale(language.value)) return;
+    locale = language.value;
+    const selected = locale;
+    const revision = ++languageRevision;
+    preferenceNotice = null;
+    renderLanguage();
+    // Serialize writes so an older selection cannot overwrite a newer one.
+    languageSave = languageSave
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          await chrome.storage.local.set({
+            [popupLanguageStorageKey]: selected,
+          });
+          if (revision === languageRevision)
+            preferenceNotice = "preferenceSaved";
+        } catch {
+          if (revision === languageRevision)
+            preferenceNotice = "preferenceUnsaved";
+        }
+        if (revision === languageRevision && languageStatus)
+          languageStatus.textContent = preferenceNotice
+            ? message(preferenceNotice)
+            : "";
+      });
+  });
+}
+renderLanguage();
+const initialLanguageRevision = languageRevision;
+void chrome.storage.local
+  .get(popupLanguageStorageKey)
+  .then((stored) => {
+    if (languageRevision !== initialLanguageRevision) return;
+    locale = resolvePopupLocale(
+      stored[popupLanguageStorageKey],
+      navigator.languages,
+    );
+    renderLanguage();
+  })
+  .catch(() => {
+    if (languageRevision !== initialLanguageRevision) return;
+    preferenceNotice = "preferenceUnsaved";
+    renderLanguage();
+  });
 
 async function send<T>(message: Record<string, unknown>): Promise<T> {
   const response = (await chrome.runtime.sendMessage(message)) as {
@@ -69,24 +188,35 @@ function readableOrigin(url: string | undefined): string | null {
 
 function renderSite(): void {
   if (!siteElement || !toggle) return;
+  if (!tabRead) {
+    siteElement.textContent = message("readingTab");
+    toggle.hidden = true;
+    return;
+  }
   if (!activeOrigin) {
-    siteElement.textContent = "This tab cannot use the wallet (HTTPS only).";
+    siteElement.textContent = message("unsupportedSite");
+    toggle.hidden = true;
+    return;
+  }
+  if (siteFailed || statusOverride) {
+    siteElement.textContent = message("siteFailure");
     toggle.hidden = true;
     return;
   }
   const enabled = grants.some((grant) => grant.origin === activeOrigin);
-  siteElement.textContent = enabled
-    ? `${activeOrigin} is enabled.`
-    : `${activeOrigin} is not enabled.`;
+  siteElement.textContent = message(
+    enabled ? "siteEnabled" : "siteDisabled",
+    activeOrigin,
+  );
   toggle.hidden = false;
-  toggle.textContent = enabled
-    ? "Disable for this site"
-    : "Enable for this site";
+  toggle.textContent = message(enabled ? "disable" : "enable");
   toggle.dataset.action = enabled ? "disable" : "enable";
 }
 
 function renderGrants(): void {
   if (!grantList) return;
+  if (emptyGrants)
+    emptyGrants.hidden = grants.length !== 0 || statusOverride !== null;
   grantList.replaceChildren(
     ...grants.map((grant) => {
       const item = document.createElement("li");
@@ -115,42 +245,45 @@ function renderVault(): void {
   ) {
     return;
   }
-  if (!vaultStatus.locked) {
+  if (statusOverride || !vaultStatus.locked) {
     vaultForm.hidden = true;
     return;
   }
   vaultForm.hidden = false;
   const creating = !vaultStatus.configured;
   vaultAccountFields.hidden = !creating;
-  vaultSubmit.textContent = creating
-    ? "Create coordinator vault"
-    : "Unlock coordinator";
-  vaultPasswordLabel.textContent = creating
-    ? "New vault password (12 characters or more)"
-    : "Vault password";
+  vaultSubmit.textContent = message(creating ? "create" : "unlock");
+  vaultPasswordLabel.textContent = message(
+    creating ? "newPassword" : "password",
+  );
   if (vaultPassword) {
     vaultPassword.autocomplete = creating ? "new-password" : "current-password";
   }
   if (vaultAddress) vaultAddress.required = creating;
 }
 
-function showVaultError(message: string | null): void {
+function showVaultError(key: PopupMessageKey | null): void {
+  vaultErrorKey = key;
   if (!vaultError) return;
-  vaultError.hidden = message === null;
-  vaultError.textContent = message ?? "";
+  vaultError.hidden = key === null;
+  vaultError.textContent = key ? message(key) : "";
+}
+function showRefreshFailure(): void {
+  statusOverride = "refreshFailure";
+  grants = [];
+  renderLanguage();
 }
 
 async function refresh(): Promise<void> {
-  vaultStatus = await send<VaultStatus>({ type: "vault.status" });
-  if (statusElement) {
-    statusElement.textContent = !vaultStatus.configured
-      ? "No encrypted connector vault configured."
-      : vaultStatus.locked
-        ? "Coordinator locked. Unlock it before a site can read an account."
-        : "Coordinator unlocked for this browser session.";
-  }
-  grants = (await send<{ grants: StoredGrant[] }>({ type: "site.list" }))
-    .grants;
+  const nextStatus = await send<VaultStatus>({ type: "vault.status" });
+  const nextGrants = (
+    await send<{ grants: StoredGrant[] }>({ type: "site.list" })
+  ).grants;
+  vaultStatus = nextStatus;
+  grants = nextGrants;
+  statusOverride = null;
+  siteFailed = false;
+  renderStatus();
   renderVault();
   renderSite();
   renderGrants();
@@ -166,7 +299,7 @@ vaultForm?.addEventListener("submit", (event) => {
     connector: vaultConnector?.value ?? "hardware",
   });
   if (submission.kind === "problem") {
-    showVaultError(submission.reason);
+    showVaultError(vaultProblemKey(submission.reason));
     return;
   }
   const { password } = submission;
@@ -193,9 +326,7 @@ vaultForm?.addEventListener("submit", (event) => {
       return refresh();
     })
     .catch(() => {
-      showVaultError(
-        "The vault could not be opened. Check the password and try again.",
-      );
+      showVaultError("vaultFailure");
     })
     .finally(() => {
       if (vaultSubmit) vaultSubmit.disabled = false;
@@ -216,11 +347,9 @@ toggle?.addEventListener("click", () => {
       : {}),
   })
     .then(refresh)
-    .catch((error: unknown) => {
-      if (siteElement) {
-        siteElement.textContent =
-          error instanceof Error ? error.message : "site access failed";
-      }
+    .catch(() => {
+      siteFailed = true;
+      renderSite();
     })
     .finally(() => {
       toggle.disabled = false;
@@ -228,7 +357,10 @@ toggle?.addEventListener("click", () => {
 });
 
 lock?.addEventListener("click", () => {
-  void chrome.runtime.sendMessage({ type: "vault.lock" }).then(refresh);
+  void chrome.runtime
+    .sendMessage({ type: "vault.lock" })
+    .then(refresh)
+    .catch(showRefreshFailure);
 });
 
 void chrome.tabs
@@ -242,5 +374,6 @@ void chrome.tabs
     activeTabId = null;
   })
   .finally(() => {
-    void refresh();
+    tabRead = true;
+    void refresh().catch(showRefreshFailure);
   });

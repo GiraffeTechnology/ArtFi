@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import "@rainbow-me/rainbowkit/styles.css";
@@ -47,6 +48,7 @@ export default function RootLayout({
             <p>
               ArtCCH:ArtFi · Where living traditions become contemporary art.
             </p>
+            <Link href="/help">Help and FAQ</Link>
             <a
               href="https://opensea.io/"
               target="_blank"

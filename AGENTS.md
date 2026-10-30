@@ -11,6 +11,11 @@ baseline and incorporates [Issue #84](https://github.com/GiraffeTechnology/ArtFi
 Explicit later client instructions amend the affected provisions and control a conflict.
 Unchanged incorporated requirements remain binding.
 
+The current complete entry is `docs/PRD.md`, version 2026-10-17. Current README and execution
+instructions must point to it. Remove superseded requirements from the active execution list
+when an explicit client correction replaces them; retain their Git history and source-bound
+evidence. Do not restore an older PRD from a handoff, cached context or dated package.
+
 The 2026-10-02 client clarification and delivery task define the three sections in this order:
 
 1. Digital NFTs without physical-asset backing, linked to CCHS at `https://cchsc.ca`, with
@@ -82,6 +87,13 @@ or global prerequisite. Writing a proposal into a PRD or acceptance file does no
   question from ArtFi's database or silently equate token transfer with registry transfer.
 - Registry authority belongs to the source role, not to ArtCCH as platform operator.
   ArtFi consumes registries and does not become a registry in this application.
+- For registry-backed receipts, mint terms fix the registration deadline and receipt document
+  format. Oracle verifies the offline registration evidence and writes the authorized holder
+  and receipt record together on chain; ArtFi consumes it and does not demand a second receipt.
+  Owner transfer alone is not registration completion. Settlement releases the already reserved
+  wallet funds rather than asking for a new buyer payment. Recovery rolls back only the
+  unresolved suffix, preserving completed registrations, settled history and replay protection.
+  Source-authenticated asset classification cannot be bypassed with a caller-supplied flag.
 - Disclose own-account sales, but grant ArtCCH no seller, matching, fee, visibility,
   settlement, or administrative property privilege.
 - Fixed-price and order-book trading use the existing valid signed intents and atomic
@@ -253,9 +265,21 @@ indefinitely expanding pre-delivery project.
 
 ## Current deployment execution and port allocation
 
-The client's current delivery instruction assigns ArtFi iteration, installation and joint testing to Artfi control. Development-only restrictions and older task-specific scheduling do not prohibit that authorized work. Historical Charity A-I closure, full Wallet V3 acceptance and Stage 2 completion are not global prerequisites for independent Stage 1 web/Beta installation and testing. Retain their valid scoped evidence gaps without replaying completed batches or unknown transaction outcomes.
+ArtFi implementation, integration and verification follow the assigned implementation and test
+owners. The delivery coordinator owns overall progress, interfaces, dependency resolution and
+final delivery; that coordination role is not a replacement ArtFi implementation owner.
+Existing authorization is not cancelled by a task, source or executor transition. Historical
+Charity A-I closure, full independent Wallet acceptance and Stage 2 completion are not global
+prerequisites for independent Stage 1 installation and testing. Retain their valid scoped gaps
+without replaying completed batches or unknown transaction outcomes.
 
-Use the client-supplied Wallet Beta handoff on branch `delivery/install-handoff-20261004`; verify its immutable archive and exact source identity before installation. Beta installation and production-like testing are authorized within the existing approved Linux and test-asset boundaries; publication, page navigation and CI do not prove genuine-wallet or full-product acceptance. Public entry navigation may skip login; protected wallet data still requires verified login.
+Use the current owner-supplied, source-bound installation handoff and existing deployment parameters.
+Verify its exact source, artifact checksums and actual service references before installation.
+The historical 2026-10-04 Wallet Beta handoff is provenance for that package, not a mandatory
+current input or proof that a later wallet interface is available. Approved installation and
+integration testing retain their actual Linux and test-asset authority. Publication, navigation
+and CI do not establish genuine-wallet or complete-product acceptance. Public entry navigation
+may skip login; protected wallet data still requires verified login.
 
 Port allocations and reservations belong to the target deployment configuration, not the product requirements. Preserve SSH, shared bridges and other-task services. Inspect current listeners and configured reservations; reuse a suitable confirmed allocation or select an actually free, unreserved port within the client's existing deployment authority. Do not infer a reservation from an environment name or hardcode a port in product behavior. Actual firewall/ingress authorization still applies to its target rule.
 
@@ -272,36 +296,37 @@ Publication does not establish a merge, deployment, general release, current-hea
 CI pass or genuine-device acceptance. Existing product, security and port rules
 remain in force.
 
-## Stage-Based Delivery Rule
+## Complete-product execution through stages
 
-Current stage: **Stage 1 — Demonstrable Capability**, as approved by the client in [#100](https://github.com/GiraffeTechnology/ArtFi/issues/100). ArtFi's bounded scope is cultural asset application delivery: artist management, artwork management, exhibition workflow, marketplace workflow, verified asset presentation, and the Oracle integration boundary. Token economics, secondary market infrastructure, and advanced RWA mechanisms do not block this stage. Preserve useful later-stage code without adding it to current-stage acceptance.
+Use the current complete [PRD](docs/PRD.md), version 2026-10-17, with explicit later client
+instructions. The inherited M1-M6, CH.1-CH.11, XM.1-XM.6, NFR and Stage 2 requirements remain
+in scope. The historical [stage framework](https://github.com/GiraffeTechnology/ArtFi/issues/100)
+separates acceptance evidence; it is not a standing instruction to remain on Stage 1 or stop
+after a demonstrable subset.
 
-Agents must work on the current stage only.
+Implement, verify and integrate reviewable increments, open stage PRs and continue independent
+work on the next stage without waiting for CI. Required current-head CI and independent review
+still apply to merge. An open PR, green job, source package or local check is not full delivery.
+Do not add a document-first, all-projects-ready or repeated per-item authorization gate.
 
-Agents MUST NOT:
+The ArtFi implementation owner retains ArtFi coding and integration. The delivery coordinator
+retains overall progress, interface/dependency coordination, complete delivery and owner reporting.
+The independent review/CI owner retains its assigned review, evidence and merge work. Separate
+Wallet, Oracle and other-product source owners remain responsible for their implementations;
+do not duplicate or transfer their work through an ArtFi stage.
 
-- move future-stage requirements into current acceptance;
-- create additional gates;
-- redefine protocol semantics;
-- expand PRD scope.
+At startup, recovery and handover, load the existing private execution records for the exact
+current PRD identity, owner allocation, unfinished work, effective authorization and evidence.
+Keep each authorization's original source, scope, expiry and explicit revocation/replacement.
+A task, version or executor change alone does not revoke it. Record exact local blockers,
+completed unchanged checks and tool refusals so recovery neither repeats work nor broadens a
+partial dependency into global inactivity. These checks assist continuation; they add no global gate
+or duplicate scheduler. Private parameters, credentials and operational receipts stay private.
 
-Agents MUST:
-
-- implement;
-- test;
-- provide evidence;
-- freeze completed stages.
-
-Preserve existing code.
-
-Classification:
-
-- KEEP
-- FINISH-NOW
-- FREEZE-LATER
-- REMOVE
-
-The client-approved [ArtFi + Oracle Delivery Stage Framework v1.1](https://github.com/GiraffeTechnology/ArtFi/issues/100) separates stage acceptance without lowering engineering standards or expanding product scope. Each stage has independent acceptance. Future-stage capabilities MUST NOT block current-stage delivery.
+Follow actual tool restrictions. A rejected action remains stopped while its scope or authorization
+conflict is resolved; do not change paths, identities or executors to perform the same denied action.
+Continue authorized work that does not require it. Report actual commands, versions and outcomes,
+including NOT_RUN, without promoting an authored test or a partial stage to product acceptance.
 
 ## Current public installation-asset policy
 

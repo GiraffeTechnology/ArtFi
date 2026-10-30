@@ -2,7 +2,7 @@
 /** Close the real task runtime from the existing frozen pnpm installation. No resolver/install step. */
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { builtinModules, createRequire } from "node:module";
+import { createRequire } from "node:module";
 import {
   cp,
   lstat,
@@ -17,25 +17,13 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import {
-  dirname,
-  extname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-} from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { bundleNodePackage } from "./bundle-node-package.mjs";
+import { emitTaskRuntimeSources } from "./emit-task-runtime-sources.mjs";
 
 const DEFAULT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const builtin = (name) =>
-  name.startsWith("node:") || builtinModules.includes(name);
-const packageName = (name) =>
-  name.startsWith("@")
-    ? name.split("/").slice(0, 2).join("/")
-    : name.split("/")[0];
 const marker = "server-only";
 
 function lockedPackageSources(bytes) {
@@ -269,108 +257,13 @@ export async function buildTaskListingRuntime({
   await mkdir(destination, { recursive: false });
   const stage = await mkdtemp(join(tmpdir(), "artfi-task-runtime-stage-"));
   const closed = await mkdtemp(join(tmpdir(), "artfi-task-runtime-closed-"));
-  const sourceFiles = {},
-    external = new Set(),
-    visited = new Set();
-  async function visit(path) {
-    path = await realpath(path);
-    const sourcePath = relative(root, path);
-    if (sourcePath.startsWith("..") || sourcePath.includes("node_modules"))
-      throw Error("Runtime source escapes the application.");
-    if (visited.has(path)) return;
-    visited.add(path);
-    const body = await readFile(path, "utf8");
-    sourceFiles[sourcePath] = digest(body);
-    let output = body;
-    if (extname(path) === ".ts") {
-      const result = ts.transpileModule(body, {
-        fileName: path,
-        reportDiagnostics: true,
-        compilerOptions: {
-          target: ts.ScriptTarget.ES2022,
-          module: ts.ModuleKind.CommonJS,
-          esModuleInterop: true,
-          isolatedModules: true,
-          sourceMap: false,
-          declaration: false,
-        },
-      });
-      if (
-        result.diagnostics?.some(
-          (item) => item.category === ts.DiagnosticCategory.Error,
-        )
-      )
-        throw Error(`Task runtime compilation failed: ${sourcePath}`);
-      output = result.outputText;
-    } else if (extname(path) !== ".mjs")
-      throw Error(`Unsupported runtime module: ${sourcePath}`);
-    const syntax = ts.createSourceFile(
-      path,
-      output,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.JS,
-    );
-    const imports = [];
-    function scan(node) {
-      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-        if (node.moduleSpecifier) imports.push(node.moduleSpecifier);
-      } else if (
-        ts.isCallExpression(node) &&
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) &&
-            node.expression.text === "require"))
-      ) {
-        if (
-          node.arguments.length !== 1 ||
-          !ts.isStringLiteralLike(node.arguments[0])
-        )
-          throw Error(`Computed runtime imports are prohibited: ${sourcePath}`);
-        imports.push(node.arguments[0]);
-      }
-      ts.forEachChild(node, scan);
-    }
-    scan(syntax);
-    const replacements = [];
-    for (const specifier of imports) {
-      const name = specifier.text;
-      if (builtin(name)) continue;
-      if (!name.startsWith(".")) {
-        if (!Object.hasOwn(template.dependencies, packageName(name)))
-          throw Error(`Undeclared runtime dependency: ${name}`);
-        external.add(packageName(name));
-        continue;
-      }
-      const base = resolve(dirname(path), name);
-      let target;
-      for (const candidate of [base, `${base}.ts`, `${base}.mjs`]) {
-        try {
-          if ((await lstat(candidate)).isFile()) {
-            target = candidate;
-            break;
-          }
-        } catch {}
-      }
-      if (!target)
-        throw Error(`Runtime module missing: ${sourcePath} -> ${name}`);
-      await visit(target);
-      if (name.endsWith(".ts"))
-        replacements.push([
-          specifier.getStart(syntax),
-          specifier.getEnd(),
-          JSON.stringify(name.replace(/\.ts$/, ".js")),
-        ]);
-    }
-    for (const [start, end, replacement] of replacements.sort(
-      (a, b) => b[0] - a[0],
-    ))
-      output = output.slice(0, start) + replacement + output.slice(end);
-    const target = join(stage, "dist", sourcePath.replace(/\.ts$/, ".js"));
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, output);
-  }
   try {
-    await visit(join(root, "scripts/task-runtime/server.mjs"));
+    const { sourceFiles, external } = await emitTaskRuntimeSources({
+      root,
+      destination: join(stage, "dist"),
+      typescript: ts,
+      dependencies: template.dependencies,
+    });
     if (Object.keys(template.dependencies).some((name) => !external.has(name)))
       throw Error("Unused or missing runtime dependency declaration.");
     await mkdir(join(stage, "node_modules"), { recursive: true });
@@ -465,6 +358,7 @@ export async function buildTaskListingRuntime({
     for (const path of [
       "scripts/task-runtime/package.json",
       "scripts/install/build-task-listing-runtime.mjs",
+      "scripts/install/emit-task-runtime-sources.mjs",
       "scripts/install/bundle-node-package.mjs",
       "docs/TASK_LISTING_RUNTIME.md",
       "LICENSE",
