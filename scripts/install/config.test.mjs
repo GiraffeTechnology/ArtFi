@@ -1,6 +1,90 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { configure, validate, secretKeys } from "./config.mjs";
+import {
+  configure,
+  validate,
+  secretKeys,
+  readConfigurationFile,
+} from "./config.mjs";
+
+test("configuration reads preserve supplied values without generating settings", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "artfi-config-read-"));
+  try {
+    const path = join(directory, "settings.json");
+    const body = JSON.stringify({ PORT: "3900" });
+    await writeFile(path, body);
+    assert.deepEqual(await readConfigurationFile(path), { PORT: "3900" });
+    assert.equal(await readFile(path, "utf8"), body);
+    assert.deepEqual(await readdir(directory), ["settings.json"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("missing configuration reports a path selection error without creating files", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "artfi-config-missing-"));
+  try {
+    await assert.rejects(
+      readConfigurationFile(join(directory, "LEAKVALUE.json")),
+      (error) => {
+        assert.match(error.message, /not found.*--config or --input/);
+        assert.ok(!error.message.includes("LEAKVALUE"));
+        return true;
+      },
+    );
+    assert.deepEqual(await readdir(directory), []);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("invalid JSON diagnostics never reflect private configuration contents", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "artfi-config-json-"));
+  try {
+    const path = join(directory, "settings.json");
+    await writeFile(path, "LEAKVALUE");
+    await assert.rejects(readConfigurationFile(path), (error) => {
+      assert.match(error.message, /must contain valid JSON/);
+      assert.ok(!error.message.includes("LEAKVALUE"));
+      return true;
+    });
+    assert.equal(await readFile(path, "utf8"), "LEAKVALUE");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a directory cannot be used as a configuration file", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "artfi-config-directory-"));
+  try {
+    await assert.rejects(readConfigurationFile(directory), (error) => {
+      assert.match(error.message, /readable regular JSON file/);
+      assert.ok(!error.message.includes(directory));
+      return true;
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("invalid setting names and oversized labels cannot enter diagnostics", () => {
+  const invalidName = "bad-key-LEAKVALUE";
+  const longName = "NEXT_PUBLIC_" + "X".repeat(200) + "_SECRET";
+  const result = validate({
+    ...configure(),
+    [invalidName]: "LEAKVALUE",
+    [longName]: "LEAKVALUE",
+  });
+  assert.ok(result.errors.length >= 2);
+  const text = JSON.stringify(result);
+  assert.ok(!text.includes(invalidName));
+  assert.ok(!text.includes(longName));
+  assert.ok(!text.includes("LEAKVALUE"));
+  assert.ok(text.includes("Configuration entry"));
+});
 
 test("configuration creates unique operator-side secrets, retaining existing ones", () => {
   const first = configure(),

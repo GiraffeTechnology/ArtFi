@@ -65,6 +65,68 @@ async function fixture({ nodeStub = false } = {}) {
   return { directory, bundle, prefix, cli };
 }
 
+test("missing install configuration is actionable and leaves no staged state", async () => {
+  const f = await fixture();
+  try {
+    const result = f.cli("install");
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /not found.*--config or --input/);
+    assert.equal(result.stdout, "");
+    assert.ok(!result.stderr.includes(f.prefix));
+    await assert.rejects(lstat(f.prefix));
+    assert.equal(f.cli("check-bundle").status, 0);
+  } finally {
+    await rm(f.directory, { recursive: true, force: true });
+  }
+});
+
+test("install and validate keep malformed configuration contents out of logs", async () => {
+  const f = await fixture();
+  try {
+    const shared = join(f.prefix, "shared");
+    const path = join(shared, "config.json");
+    await mkdir(shared, { recursive: true });
+    await writeFile(path, "LEAKVALUE", { mode: 0o600 });
+    for (const command of ["install", "validate"]) {
+      const result = f.cli(command);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /must contain valid JSON/);
+      assert.ok(!result.stderr.includes("LEAKVALUE"));
+      assert.equal(result.stdout, "");
+      assert.equal(await readFile(path, "utf8"), "LEAKVALUE");
+    }
+    assert.deepEqual(await readdir(shared), ["config.json"]);
+    await assert.rejects(lstat(join(f.prefix, "releases")));
+    assert.equal(f.cli("check-bundle").status, 0);
+  } finally {
+    await rm(f.directory, { recursive: true, force: true });
+  }
+});
+
+test("malformed configure input preserves the existing private configuration", async () => {
+  const f = await fixture();
+  try {
+    assert.equal(f.cli("configure").status, 0);
+    const path = join(f.prefix, "shared/config.json");
+    const original = await readFile(path, "utf8");
+    const input = join(f.directory, "input.json");
+    await writeFile(input, "LEAKVALUE", { mode: 0o600 });
+    const result = f.cli("configure", "--input", input);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must contain valid JSON/);
+    assert.equal(result.stdout, "");
+    assert.ok(!result.stderr.includes("LEAKVALUE"));
+    for (const value of Object.values(JSON.parse(original)))
+      if (typeof value === "string" && value.length >= 32)
+        assert.ok(!result.stderr.includes(value));
+    assert.equal(await readFile(path, "utf8"), original);
+    assert.deepEqual(await readdir(join(f.prefix, "shared")), ["config.json"]);
+    await assert.rejects(lstat(join(f.prefix, "releases")));
+  } finally {
+    await rm(f.directory, { recursive: true, force: true });
+  }
+});
+
 test("isolated install preserves private config and requires explicit activation", async () => {
   const f = await fixture();
   try {
