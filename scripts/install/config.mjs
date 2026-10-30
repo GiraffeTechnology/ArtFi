@@ -71,8 +71,10 @@ export const defaults = {
 };
 export function configure(input = {}, previous = {}) {
   const config = { ...defaults, ...previous, ...input };
-  for (const key of [...secretKeys, "ARTFI_AGENT_BRIDGE_TOKEN"])
+  for (const key of secretKeys)
     if (!config[key]) config[key] = randomBytes(48).toString("base64url");
+  if (config.ARTFI_AGENT_ENABLED === "true" && !config.ARTFI_AGENT_BRIDGE_TOKEN)
+    config.ARTFI_AGENT_BRIDGE_TOKEN = randomBytes(48).toString("base64url");
   config.ARTFI_WEB_ORIGIN = new URL(config.ARTFI_WEB_URL).origin;
   return config;
 }
