@@ -12,6 +12,7 @@ const expectedTitlesByFile = {
     "charity read failures stay private and retry on /charity",
     "charity read failures stay private and retry on /charity/1",
     "a failed charity refresh removes the earlier edition facts until recovery",
+    "a replaced charity facts block stays unavailable until a stable retry",
   ],
 };
 

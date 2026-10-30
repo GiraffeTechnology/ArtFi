@@ -212,9 +212,18 @@ test("real signed session → BFF → durable agent → lost-ack recovery → ow
     page.getByRole("heading", { name: "Runtime capabilities" }),
   ).toBeVisible();
   await expect(
-    page.getByText("No production wallet execution binding is configured", {
-      exact: false,
-    }),
+    page
+      .locator("section")
+      .filter({
+        has: page.getByRole("heading", {
+          name: "Runtime capabilities",
+          exact: true,
+        }),
+      })
+      .getByRole("listitem")
+      .filter({
+        hasText: "No production wallet execution binding is configured",
+      }),
   ).toBeVisible();
   await page.getByLabel("Operation ID", { exact: true }).fill(operationId);
   await expect
