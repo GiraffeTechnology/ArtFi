@@ -46,6 +46,45 @@ describe("ArtFi API client", () => {
       createArtFiClient("http://localhost:8080", fetcher).asset("missing"),
     ).rejects.toBeInstanceOf(ArtFiAPIError);
   });
+
+  it("reads durable external market provider health", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          schemaVersion: "1",
+          source: "opensea",
+          state: "healthy",
+          stale: false,
+          realtimeConnected: true,
+          consecutiveFailures: 0,
+          observedAt: "2026-09-14T00:00:30Z",
+          lastEventAt: "2026-09-14T00:00:20Z",
+          freshnessLagSeconds: 10,
+          staleAfterSeconds: 60,
+          receivedAt: "2026-09-14T00:00:31Z",
+          reportLagSeconds: 1,
+          reportingStale: false,
+          available: true,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const health = await createArtFiClient(
+      "http://localhost:8080",
+      fetcher,
+    ).marketProviderHealth();
+
+    expect(health).toMatchObject({
+      source: "opensea",
+      available: true,
+      reportingStale: false,
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      new URL("http://localhost:8080/v1/market/health?source=opensea"),
+      expect.any(Object),
+    );
+  });
 });
 
 describe("public native order reads", () => {

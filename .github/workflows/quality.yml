@@ -113,7 +113,8 @@ jobs:
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000016_dao_presentation.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000017_whole_receipt_principal_observations.up.sql
       - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000018_charity_holder_challenges.up.sql
-      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "52"
+      - run: docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < apps/api/migrations/000019_external_market_provider_health.up.sql
+      - run: test "$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "53"
       - name: MySQL restart, replay, conflict, reorg, and projection tests
         working-directory: apps/api
         env:
@@ -125,10 +126,10 @@ jobs:
         run: go test -race -v ./...
       - name: Verify forward-only refusal and preserve current data
         run: |
-          snapshot='CHECKSUM TABLE notifications,notification_preferences,chain_events,vaults,whole_receipt_principal_observations,whole_receipt_principal_observation_events EXTENDED;'
+          snapshot='CHECKSUM TABLE notifications,notification_preferences,chain_events,vaults,whole_receipt_principal_observations,whole_receipt_principal_observation_events,external_market_provider_health EXTENDED;'
           before="$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot artfi -e "$snapshot")"
           [[ -n "$before" && "$before" != *NULL* ]] || exit 1
-          for migration in 000015_notification_inbox 000016_dao_presentation 000017_whole_receipt_principal_observations; do
+          for migration in 000015_notification_inbox 000016_dao_presentation 000017_whole_receipt_principal_observations 000019_external_market_provider_health; do
             if output="$(docker compose exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot artfi < "apps/api/migrations/$migration.down.sql" 2>&1)"; then
               echo 'Forward-only migration unexpectedly allowed downgrade' >&2
               exit 1
@@ -322,7 +323,7 @@ jobs:
             --mysql-basedir "$RUNNER_TEMP/artfi-mysql-runtime/mysql-8.4.11-linux-glibc2.28-x86_64-minimal" \
             --playwright-module "$GITHUB_WORKSPACE/apps/web/node_modules/@playwright/test/index.mjs" \
             --evidence-dir "$RUNNER_TEMP/artfi-installed-acceptance" \
-            --expected-migrations 18 \
+            --expected-migrations 19 \
             --require-browser
       - name: Verify existing conditional agent and charity browser cases
         timeout-minutes: 8

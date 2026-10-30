@@ -854,13 +854,13 @@ test(
       },
     );
     await step(
-      "unchanged installer sees exactly eight pending migrations, then safely applies 11–18",
+      "unchanged installer sees exactly nine pending migrations, then safely applies 11–19",
       async () => {
-        assert.equal(JSON.parse((await migrated("status")).stdout).pending, 8);
+        assert.equal(JSON.parse((await migrated("status")).stdout).pending, 9);
         assert.equal(JSON.parse((await migrated("up")).stdout).pending, 0);
         assert.equal(
           await sql(source, "SELECT COUNT(*) FROM artfi_schema_migrations", db),
-          "18",
+          "19",
         );
         assert.equal(
           await sql(

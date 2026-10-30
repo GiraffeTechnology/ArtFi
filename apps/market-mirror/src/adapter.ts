@@ -47,6 +47,7 @@ export interface MarketplaceHealthSnapshot {
   lastEventAt?: string;
   lastFailureAt?: string;
   freshnessLagSeconds?: number;
+  staleAfterSeconds: number;
 }
 
 export class MarketplaceHealthTracker {
@@ -67,7 +68,9 @@ export class MarketplaceHealthTracker {
     if (
       !source ||
       !Number.isSafeInteger(staleAfterMs) ||
-      staleAfterMs < 1_000
+      staleAfterMs < 1_000 ||
+      staleAfterMs > 86_400_000 ||
+      staleAfterMs % 1_000 !== 0
     ) {
       throw new Error("Marketplace health configuration is invalid");
     }
@@ -162,6 +165,7 @@ export class MarketplaceHealthTracker {
     return {
       schemaVersion: "1",
       source: this.#source,
+      staleAfterSeconds: this.#staleAfterMs / 1_000,
       state,
       stale,
       realtimeConnected: this.#realtimeConnected,

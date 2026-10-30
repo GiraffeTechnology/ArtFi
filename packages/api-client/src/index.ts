@@ -6,6 +6,8 @@ export type MintedNFT = components["schemas"]["MintedNFT"];
 export type Project = components["schemas"]["Project"];
 export type Portfolio = components["schemas"]["Portfolio"];
 export type NativeSignedOrder = components["schemas"]["NativeSignedOrder"];
+export type ExternalMarketProviderHealth =
+  components["schemas"]["ExternalMarketProviderHealth"];
 export type Problem = components["schemas"]["Problem"];
 
 export class ArtFiAPIError extends Error {
@@ -57,6 +59,10 @@ export function createArtFiClient(
     nativeOrder: (intentHash: string, chainId: 560048, marketAddress: string) =>
       request<NativeSignedOrder>(
         `/v1/orders/${encodeURIComponent(intentHash)}?${new URLSearchParams({ chainId: String(chainId), marketAddress })}`,
+      ),
+    marketProviderHealth: (source = "opensea") =>
+      request<ExternalMarketProviderHealth>(
+        `/v1/market/health?source=${encodeURIComponent(source)}`,
       ),
     config: () => request<ArtFiConfig>("/v1/config"),
     assets: () => request<{ data: Asset[]; total: number }>("/v1/assets"),

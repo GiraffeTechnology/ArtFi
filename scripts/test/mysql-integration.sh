@@ -37,6 +37,7 @@ migrations=(
   000016_dao_presentation
   000017_whole_receipt_principal_observations
   000018_charity_holder_challenges
+  000019_external_market_provider_health
 )
 for migration in "${migrations[@]}"; do
   for direction in up down; do
@@ -66,7 +67,7 @@ for migration in "${migrations[@]}"; do
 done
 
 test "$("${compose[@]}" exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot "$test_database" \
-  -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "52"
+  -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE();')" = "53"
 
 docker run --rm --network host \
   -e GOPROXY=off \
@@ -80,10 +81,10 @@ docker run --rm --network host \
   sh -lc '/usr/local/go/bin/go test -race -v ./...'
 
 # New schemas are forward-only: their exact refusal must preserve all data.
-snapshot_sql='CHECKSUM TABLE notifications,notification_preferences,chain_events,vaults,whole_receipt_principal_observations,whole_receipt_principal_observation_events EXTENDED;'
+snapshot_sql='CHECKSUM TABLE notifications,notification_preferences,chain_events,vaults,whole_receipt_principal_observations,whole_receipt_principal_observation_events,external_market_provider_health EXTENDED;'
 before="$("${compose[@]}" exec -T -e MYSQL_PWD=local-root-only mysql mysql -N -uroot "$test_database" -e "$snapshot_sql")"
 [[ -n "$before" && "$before" != *NULL* ]] || { echo "Unavailable preservation checksum" >&2; exit 1; }
-for i in 14 15 16; do
+for i in 14 15 16 18; do
   if output="$("${compose[@]}" exec -T -e MYSQL_PWD=local-root-only mysql mysql -uroot "$test_database" < "apps/api/migrations/${migrations[i]}.down.sql" 2>&1)"; then
     echo "Forward-only migration unexpectedly allowed downgrade" >&2
     exit 1

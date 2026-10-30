@@ -27,10 +27,22 @@ import {
   marketCatalogQuery,
 } from "@/lib/market-catalog-query";
 
+type MarketProviderHealth = {
+  source: string;
+  state: "starting" | "healthy" | "degraded" | "stale" | "stopped";
+  stale: boolean;
+  realtimeConnected: boolean;
+  receivedAt: string;
+  reportLagSeconds: number;
+  reportingStale: boolean;
+  available: boolean;
+};
 export function LiveMarketCatalog() {
   const [assets, setAssets] = useState<readonly MarketAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string>();
+  const [providerHealth, setProviderHealth] = useState<MarketProviderHealth>();
+  const [providerHealthError, setProviderHealthError] = useState<string>();
   const [query, setQuery] = useState("");
   const [draftQuery, setDraftQuery] = useState("");
   const [inputError, setInputError] = useState<string>();
@@ -100,6 +112,76 @@ export function LiveMarketCatalog() {
       pending?.abort();
     };
   }, [loadCatalog]);
+
+  useEffect(() => {
+    let pending: AbortController | undefined;
+    let disposed = false;
+    async function refreshHealth() {
+      if (pending) return;
+      const controller = new AbortController();
+      pending = controller;
+      const timeout = window.setTimeout(() => controller.abort(), 15_000);
+      try {
+        const response = await fetch(
+          `${apiURL}/v1/market/health?source=opensea`,
+          {
+            cache: "no-store",
+            credentials: "omit",
+            redirect: "error",
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok)
+          throw new Error(
+            `Provider health unavailable (HTTP ${response.status}).`,
+          );
+        const body = (await response.json()) as MarketProviderHealth;
+        if (
+          body.source !== "opensea" ||
+          !["starting", "healthy", "degraded", "stale", "stopped"].includes(
+            body.state,
+          ) ||
+          [
+            body.available,
+            body.stale,
+            body.reportingStale,
+            body.realtimeConnected,
+          ].some((value) => typeof value !== "boolean") ||
+          !Number.isSafeInteger(body.reportLagSeconds) ||
+          body.reportLagSeconds < 0 ||
+          !Number.isFinite(Date.parse(body.receivedAt)) ||
+          (body.available &&
+            (body.stale ||
+              body.reportingStale ||
+              !body.realtimeConnected ||
+              body.state !== "healthy"))
+        ) {
+          throw new Error("The provider health response is invalid.");
+        }
+        if (disposed || controller.signal.aborted) return;
+        setProviderHealth(body);
+        setProviderHealthError(undefined);
+      } catch (error) {
+        if (disposed) return;
+        setProviderHealth(undefined);
+        setProviderHealthError(
+          error instanceof Error
+            ? error.message
+            : "Provider health unavailable.",
+        );
+      } finally {
+        window.clearTimeout(timeout);
+        if (pending === controller) pending = undefined;
+      }
+    }
+    void refreshHealth();
+    const interval = window.setInterval(() => void refreshHealth(), 15_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      pending?.abort();
+    };
+  }, []);
 
   const lastObserved = useMemo(() => {
     const values = assets
@@ -232,6 +314,30 @@ export function LiveMarketCatalog() {
         </span>
       </div>
 
+      <div
+        className="market-provider-health"
+        role="status"
+        aria-label="Marketplace provider health"
+      >
+        <strong>
+          {providerHealth?.available
+            ? `Provider live · report ${providerHealth.reportLagSeconds}s old`
+            : providerHealth?.reportingStale
+              ? "Provider report stale"
+              : providerHealth?.stale
+                ? "Provider data stale"
+                : providerHealth
+                  ? `Provider ${providerHealth.state}`
+                  : "Provider status unavailable"}
+        </strong>
+        {!providerHealth?.available && (
+          <p>
+            {providerHealthError ||
+              "No current healthy provider report is available."}{" "}
+            Mirrored records remain observations and may be out of date.
+          </p>
+        )}
+      </div>
       <p>
         Search, status and sorting are applied across the mirrored catalog
         before pagination. Each page is an observation; source records can
