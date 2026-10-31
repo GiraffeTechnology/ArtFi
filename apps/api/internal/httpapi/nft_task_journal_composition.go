@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -110,6 +111,28 @@ func (v *nftTaskHTTPVerifier) ConsumeCapability(ctx context.Context, capability 
 // used by cmd/task-journal. It is separate from the public API listener. All
 // settings below are installation inputs; no defaults create persistent access.
 func NewNFTTaskJournalServerFromEnvironment(getenv func(string) string) (*http.Server, *sql.DB, error) {
+	return newNFTTaskJournalServerFromEnvironment(getenv, nil)
+}
+
+// NewNFTTaskJournalServerWithReceiptAuthorityFromEnvironment connects a fixed,
+// installation-owned receipt authority to the internal journal. The authority
+// is never selected from an environment value, HTTP request, or capability.
+// Its source verification and the existing DB/mTLS requirements remain intact.
+func NewNFTTaskJournalServerWithReceiptAuthorityFromEnvironment(getenv func(string) string, authority NFTReceiptAuthority) (*http.Server, *sql.DB, error) {
+	if authority == nil {
+		return nil, nil, errors.New("internal NFT task journal requires an explicit receipt authority")
+	}
+	value := reflect.ValueOf(authority)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		if value.IsNil() {
+			return nil, nil, errors.New("internal NFT task journal requires an explicit receipt authority")
+		}
+	}
+	return newNFTTaskJournalServerFromEnvironment(getenv, authority)
+}
+
+func newNFTTaskJournalServerFromEnvironment(getenv func(string) string, authority NFTReceiptAuthority) (*http.Server, *sql.DB, error) {
 	unavailable := errors.New("internal NFT task journal is unavailable: explicit configuration is required")
 	if getenv == nil || getenv("ARTFI_TASK_JOURNAL_ENABLED") != "true" {
 		return nil, nil, unavailable
@@ -182,7 +205,7 @@ func NewNFTTaskJournalServerFromEnvironment(getenv func(string) string) (*http.S
 		_ = db.Close()
 		return nil, nil, unavailable
 	}
-	handler := NewNFTTaskJournalHandler(NFTTaskJournalConfig{DB: db, PeerAuthenticator: peer, CapabilityVerifier: verifier})
+	handler := NewNFTTaskJournalHandler(NFTTaskJournalConfig{DB: db, PeerAuthenticator: peer, CapabilityVerifier: verifier, ReceiptAuthority: authority})
 	server := &http.Server{Addr: values["ARTFI_TASK_JOURNAL_ADDR"], Handler: handler, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: clientCA, Certificates: []tls.Certificate{serverCertificate}}, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	return server, db, nil
 }
